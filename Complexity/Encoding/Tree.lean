@@ -19,7 +19,7 @@ In the other direction, a bit string is represented by its existing list tree.
 namespace Complexity
 
 /-- Raw trees use the identity encoding. -/
-instance treeSelfEncoding : UniqueEncoding Tree Tree := UniqueEncoding.refl Tree
+instance : UniqueEncoding Tree Tree := UniqueEncoding.refl Tree
 
 @[simp] theorem Tree.encode_self (a : Tree) : encode Tree a = a := rfl
 
@@ -80,7 +80,7 @@ theorem decodeBitList_eq_some_iff {a : Tree} {xs : List Bool} :
 end Tree
 
 /-- The existing prefix code, with exactly one complete tree per string. -/
-instance treeEncoding : UniqueEncoding (List Bool) Tree :=
+instance : UniqueEncoding (List Bool) Tree :=
   UniqueEncoding.ofOption BitList.encodeTree BitList.decodeTree fun _ _ ↦
     BitList.decodeTree_eq_some_iff
 

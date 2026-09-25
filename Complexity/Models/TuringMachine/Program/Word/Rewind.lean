@@ -105,7 +105,7 @@ theorem spec_rewind_credit (c : Cfg κ (Option Bool) Unit xs) (j : κ) (bs : Lis
     rcases ht with ⟨rfl, rfl, rfl⟩
     obtain ⟨hc, hF, hb⟩ := hs
     refine ⟨?_, ?_, by omega⟩
-    · simpa only [apply_cfg, moveAction, hc, hp, SignType.cast, sub_eq_add_neg] using
+    · simpa only [TrackedCfg.apply_cfg, moveAction, hc, hp, SignType.cast, sub_eq_add_neg] using
         moveAction_apply j .neg s.cfg
     · apply moveAction_within j .neg s L R hF
       simpa [hc, hp, SignType.cast, sub_eq_add_neg] using hstart
@@ -114,7 +114,7 @@ theorem spec_rewind_credit (c : Cfg κ (Option Bool) Unit xs) (j : κ) (bs : Lis
     rcases hy with ⟨rfl, rfl, rfl⟩
     obtain ⟨hc, hF, hb⟩ := hv
     refine ⟨?_, ?_, by omega⟩
-    · simpa only [apply_cfg, moveAction, hc, Cfg.setWorkPos_workPos,
+    · simpa only [TrackedCfg.apply_cfg, moveAction, hc, Cfg.setWorkPos_workPos,
         Function.update_self, Cfg.setWorkPos_setWorkPos, SignType.cast, neg_add_cancel] using
         moveAction_apply j .pos v.cfg
     · apply moveAction_within j .pos v L R hF

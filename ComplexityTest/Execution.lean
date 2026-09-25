@@ -47,7 +47,7 @@ private instance : Controller.Observe (Bool × ℕ) Unit where
 private instance : Controller.Apply (Bool × ℕ) Unit where
   apply _ cfg := (true, cfg.2 + 1)
 
-private instance counter : Controller.Execution (Bool × ℕ) Bool
+private instance : Controller.Execution (Bool × ℕ) Bool
     (Output := ℕ) (input := ()) where
   init q := (q, 0)
   state_init _ := rfl

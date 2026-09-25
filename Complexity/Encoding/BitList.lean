@@ -14,7 +14,7 @@ public import Complexity.Encoding.Basic
 namespace Complexity
 
 /-- Raw bit strings use the identity encoding. -/
-instance bitListSelfEncoding : UniqueEncoding (List Bool) (List Bool) :=
+instance : UniqueEncoding (List Bool) (List Bool) :=
   UniqueEncoding.refl (List Bool)
 
 @[simp] theorem BitList.encode_self (xs : List Bool) : encode (List Bool) xs = xs := rfl

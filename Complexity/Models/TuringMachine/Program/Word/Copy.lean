@@ -150,7 +150,7 @@ theorem spec_copy (c : TM.Cfg κ (Option Bool) Unit xs) (i j : κ)
         apply (s.within_apply_iff _ L R).mpr
         refine ⟨hs.2, ?_⟩
         intro l
-        rw [← apply_cfg, hc]
+        rw [← TrackedCfg.apply_cfg, hc]
         simpa only [copied_workPos, List.length_take, Nat.min_eq_left hr, Set.mem_Icc]
           using hF l (r + 1) hr
       unfold copyBody

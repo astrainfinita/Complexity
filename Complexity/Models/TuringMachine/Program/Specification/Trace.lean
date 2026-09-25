@@ -40,7 +40,7 @@ theorem apply_idle {xs : Array Γ} (s : TrackedCfg κ Γ Unit xs) :
     apply (idle (κ := κ) (Γ := Γ)) s = s := by
   apply TrackedCfg.ext (idle_apply s.cfg)
   funext i
-  rw [apply_visited, idle_apply]
+  rw [TrackedCfg.apply_visited, idle_apply]
   exact sup_eq_left.mpr (s.head_mem i)
 
 /-- A head move preserves a footprint whenever its new position remains inside it. -/

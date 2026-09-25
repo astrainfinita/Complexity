@@ -36,7 +36,7 @@ namespace TreeMachine
 variable {F : Type u → Type*} {k : ℕ} {Q : Type u}
 
 /-- Initialize register zero and read the result from the same register. -/
-instance execution [NeZero k] (a : Tree) :
+instance [NeZero k] (a : Tree) :
     Controller.Execution (Cfg k Q) Q (Output := Tree) (input := a) where
   init q := ⟨q, input 0 a⟩
   state_init _ := rfl

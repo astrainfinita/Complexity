@@ -151,19 +151,23 @@ theorem Action.writeAt_ne_nop (a : Action k Q) (i : Fin k) : a.writeAt i ≠ som
   regs : Fin k → Tree
   deriving Inhabited
 
+namespace Cfg
+
 @[simps]
-instance Cfg.instHasState : Controller.HasState (Cfg k Q) Q where
+instance : Controller.HasState (Cfg k Q) Q where
   state := Cfg.state
 
 /-- The finite vector of observations passed to the transition function. -/
 @[simps]
-instance Cfg.instObserve : Controller.Observe (Cfg k Q) (Fin k → Bool) where
+instance : Controller.Observe (Cfg k Q) (Fin k → Bool) where
   observe c i := Tree.root (c.regs i)
 
 /-- Apply one instruction, including its next state. `nop` is not skipped. -/
 @[simps -fullyApplied]
 instance : Controller.Apply (Cfg k Q) (Action k Q) where
   apply a c := ⟨a.state, a.op.eval c.regs⟩
+
+end Cfg
 
 /-- Put the input tree in one register, leaving all other registers empty. -/
 def input (i : Fin k) (a : Tree) : Fin k → Tree :=

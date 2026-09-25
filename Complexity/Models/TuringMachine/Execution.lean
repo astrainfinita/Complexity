@@ -15,7 +15,7 @@ public import Complexity.Models.TuringMachine.Deterministic
 namespace Complexity.TM
 
 /-- Execute on lists while recording visited work cells for resource accounting. -/
-instance execution {κ Γ Q : Type*} [Inhabited Γ] (xs : List Γ) :
+instance {κ Γ Q : Type*} [Inhabited Γ] (xs : List Γ) :
     Controller.Execution (TrackedCfg κ Γ Q xs.toArray)
       Q (Output := List Γ) (input := xs) where
   init q := ((rawExecution xs).init q).track
@@ -23,7 +23,7 @@ instance execution {κ Γ Q : Type*} [Inhabited Γ] (xs : List Γ) :
   hasOutput cfg ys := cfg.cfg.output = ys.toArray
 
 /-- Represent external bits by nonblank symbols on the input and output tapes. -/
-instance bitExecution {κ Q : Type*} (xs : List Bool) :
+instance {κ Q : Type*} (xs : List Bool) :
     Controller.Execution
       (TrackedCfg κ (Option Bool) Q ((xs.map some).toArray))
       Q (Output := List Bool) (input := xs) where

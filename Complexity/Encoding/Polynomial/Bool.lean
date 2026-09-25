@@ -59,7 +59,7 @@ private theorem pair_mem_treeFP : (fun a => Tree.pair a Tree.nil) ∈ TreeFP := 
 
 /-- Singleton bit strings and the leaf/pair encoding of Booleans admit
 polynomial-time conversions in both directions. -/
-instance boolPolytimeCompatible : PolytimeCompatible Bool :=
+instance : PolytimeCompatible Bool :=
   PolytimeCompatible.ofEncode left_mem_treeFP pair_mem_treeFP (fun _ => rfl) (fun _ => rfl)
 
 end Complexity.Encoding

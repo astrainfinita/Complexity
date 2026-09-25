@@ -44,12 +44,14 @@ variable {κ : Type*} {Γ Q : Type*} [Inhabited Γ] {xs : Array Γ}
 def Cfg.track (c : Cfg κ Γ Q xs) : TrackedCfg κ Γ Q xs :=
   ⟨c, fun i ↦ NonemptyInterval.pure (c.workPos i), fun _ ↦ ⟨le_rfl, le_rfl⟩⟩
 
+namespace TrackedCfg
+
 @[simps]
-instance TrackedCfg.instHasState : Controller.HasState (TrackedCfg κ Γ Q xs) Q where
+instance : Controller.HasState (TrackedCfg κ Γ Q xs) Q where
   state s := Controller.state s.cfg
 
 @[simps]
-instance TrackedCfg.instObserve : Controller.Observe (TrackedCfg κ Γ Q xs) (Γ × (κ → Γ)) where
+instance : Controller.Observe (TrackedCfg κ Γ Q xs) (Γ × (κ → Γ)) where
   observe s := observe s.cfg
 
 /-- Apply an action and extend the recorded intervals to include the new heads. -/
@@ -59,8 +61,6 @@ instance : Controller.Apply (TrackedCfg κ Γ Q xs) (Action κ Γ Q) where
     let c := apply a s.cfg
     ⟨c, fun i ↦ s.visited i ⊔ NonemptyInterval.pure (c.workPos i),
       fun _ ↦ ⟨min_le_right _ _, le_max_right _ _⟩⟩
-
-namespace TrackedCfg
 
 /-- Relabel the control state while preserving tape data and the complete visit history. -/
 @[simps -fullyApplied cfg visited]

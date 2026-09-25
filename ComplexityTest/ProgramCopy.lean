@@ -66,7 +66,7 @@ private theorem at_step (xs : List Bool) (i : ℕ) (h : i < xs.length) :
       (apply { Program.idle (κ := Fin 0) (Γ := Symbol) with output := some (.some xs[i]) }
         (state xs i h.le)) = state xs (i + 1) h := by
   apply trace_ext
-  · simp only [apply_cfg, apply_inputPos]
+  · simp only [TrackedCfg.apply_cfg, apply_inputPos]
     apply Fin.ext
     simp [Program.idle, state, moveInputPos, input]
     omega

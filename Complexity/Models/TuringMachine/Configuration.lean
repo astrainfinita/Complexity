@@ -91,15 +91,15 @@ def inputSymbol (c : Cfg κ Γ Q xs) : Γ :=
 def workSymbols (c : Cfg κ Γ Q xs) (i : κ) : Γ :=
   (c.workTapes i)[c.workPos i]
 
-end Cfg
-
 @[simps]
-instance Cfg.instHasState : Controller.HasState (Cfg κ Γ Q xs) Q where
+instance : Controller.HasState (Cfg κ Γ Q xs) Q where
   state := Cfg.state
 
 @[simps]
-instance Cfg.instObserve : Controller.Observe (Cfg κ Γ Q xs) (Γ × (κ → Γ)) where
+instance : Controller.Observe (Cfg κ Γ Q xs) (Γ × (κ → Γ)) where
   observe c := (c.inputSymbol, c.workSymbols)
+
+end Cfg
 
 /-- Simultaneous local updates for an ordinary configuration. -/
 @[simps]

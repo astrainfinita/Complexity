@@ -43,9 +43,9 @@ def initInput {F : Type u → Type*} (M : Controller F Observation Action Q) (in
 
 @[simp] theorem state_initInput {F : Type u → Type*}
     (M : Controller F Observation Action Q) (input : Input)
-    [exe : Execution Config Q Output input] :
+    [Execution Config Q Output input] :
     state (M.initInput (Config := Config) input) = M.q₀ :=
-  exe.state_init M.q₀
+  Execution.state_init M.q₀
 
 variable [Observe Config Observation] [Apply Config Action]
 

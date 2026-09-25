@@ -144,7 +144,7 @@ def result : {u : Kind} → (p : Syntax O A Op Ret α u) → p.Exit → Kind.Val
   | _, .loop _ _ _ k => fun e ↦ result (k e.1) e.2
   | _, .call _ k => fun e ↦ result (k e.1) e.2
 
-instance finiteState [∀ o, Finite (Ret o)] (p : Syntax O A Op Ret α u) : Finite p.State := by
+instance [∀ o, Finite (Ret o)] (p : Syntax O A Op Ret α u) : Finite p.State := by
   induction p with
   | ret a => exact inferInstanceAs (Finite PEmpty)
   | step o k ih =>
@@ -159,7 +159,7 @@ instance finiteState [∀ o, Finite (Ret o)] (p : Syntax O A Op Ret α u) : Fini
     let := ih
     exact inferInstanceAs (Finite (_ ⊕ ((j : _) × State (k j))))
 
-instance finiteExit [∀ o, Finite (Ret o)] (p : Syntax O A Op Ret α u) : Finite p.Exit := by
+instance [∀ o, Finite (Ret o)] (p : Syntax O A Op Ret α u) : Finite p.Exit := by
   induction p with
   | ret a => exact inferInstanceAs (Finite PUnit)
   | step o k ih =>

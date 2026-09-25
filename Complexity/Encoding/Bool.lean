@@ -39,12 +39,12 @@ theorem decodeBool_eq_some_iff {xs : List Bool} {b : Bool} :
 end BitList
 
 /-- A Boolean occupies exactly one bit. -/
-instance boolBitListEncoding : UniqueEncoding (List Bool) Bool :=
+instance : UniqueEncoding (List Bool) Bool :=
   UniqueEncoding.ofOption BitList.encodeBool BitList.decodeBool fun _ _ =>
     BitList.decodeBool_eq_some_iff
 
 /-- A Boolean occupies a leaf or a pair of leaves. -/
-instance boolTreeEncoding : UniqueEncoding Tree Bool :=
+instance : UniqueEncoding Tree Bool :=
   UniqueEncoding.ofOption Tree.encodeBool Tree.decodeBool fun _ _ => Tree.decodeBool_eq_some_iff
 
 @[simp] theorem encode_bool_bits (b : Bool) : encode (List Bool) b = [b] := rfl

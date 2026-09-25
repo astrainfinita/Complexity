@@ -11,7 +11,7 @@ meta import Complexity.Data.NatMemory
 
 open Complexity
 
-local instance seven : Inhabited ℕ := ⟨7⟩
+local instance : Inhabited ℕ := ⟨7⟩
 
 -- Lookup and growth must use the specified default, including gaps between stored values.
 #guard (NatMemory.ofArray #[3, 4])[100] = 7
