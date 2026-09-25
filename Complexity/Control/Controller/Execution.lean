@@ -50,16 +50,17 @@ def initInput {F : Type u → Type*} (M : Controller F Observation Action Q) (in
 variable [Observe Config Observation] [Apply Config Action]
 
 variable (Config) in
-/-- Run from the selected input configuration with an explicit choice interpretation. -/
-def runWith {F m : Type u → Type*} [Monad m]
-    (M : Controller F Observation Action Q) (h : Choice.Interpretation F m)
+/-- Run from the selected input configuration in the target monad. -/
+def runWith {F : Type u → Type*} (m : Type u → Type*) [Monad m] [MonadLiftT F m]
+    (M : Controller F Observation Action Q)
     (input : Input) (n : ℕ) [Execution Config Q Output input] : m Config :=
-  M.runFromWith h (M.initInput input) n
+  M.runFromWith m (M.initInput input) n
 
-@[simp] theorem runWith_zero {F m : Type u → Type*} [Monad m]
-    (M : Controller F Observation Action Q) (h : Choice.Interpretation F m)
+@[simp] theorem runWith_zero {F : Type u → Type*} (m : Type u → Type*)
+    [Monad m] [MonadLiftT F m]
+    (M : Controller F Observation Action Q)
     (input : Input) [Execution Config Q Output input] :
-    M.runWith Config h input 0 = pure (M.initInput input) := rfl
+    M.runWith Config m input 0 = pure (M.initInput input) := rfl
 
 variable (Config) in
 /-- Run from the initial configuration selected by an execution convention. -/

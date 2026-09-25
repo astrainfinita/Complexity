@@ -30,37 +30,38 @@ variable {F : Type u → Type*} {Observation : Type*} {Action Config : Type u}
 
 section Execution
 
-variable {m : Type u → Type*} [Monad m]
+variable (m : Type u → Type*) [Monad m] [MonadLiftT F m]
 variable [HasState Config Q] [Observe Config Observation] [Apply Config Action]
 
 /-- Execute one interpreted action together with its external charge. -/
 def stepWithCost (M : Controller F Observation Action Q)
     (cost : Action → Config → ℕ)
-    (choices : Choice.Interpretation F m) (cfg : Config) : m (Config × ℕ) :=
+    (cfg : Config) : m (Config × ℕ) :=
   if M.halt (state cfg) then pure (cfg, 0)
   else (fun action ↦ (apply action cfg, cost action cfg)) <$>
-    choices (M.transition (state cfg) (observe cfg))
+    monadLift (M.transition (state cfg) (observe cfg))
 
 theorem stepWithCost_of_halted (M : Controller F Observation Action Q)
     (cost : Action → Config → ℕ)
-    (choices : Choice.Interpretation F m) (cfg : Config) (h : M.Halted cfg) :
-    M.stepWithCost cost choices cfg = pure (cfg, 0) := by
+    (cfg : Config) (h : M.Halted cfg) :
+    M.stepWithCost m cost cfg = pure (cfg, 0) := by
   simp [stepWithCost, show M.halt (state cfg) = true from h]
 
 /-- Run a controller and sum the charges along each interpreted branch. -/
-def runFromWithCost (M : Controller F Observation Action Q)
+def runFromWithCost (m : Type u → Type*) [Monad m] [MonadLiftT F m]
+    (M : Controller F Observation Action Q)
     (cost : Action → Config → ℕ)
-    (choices : Choice.Interpretation F m) (cfg : Config) : ℕ → m (Config × ℕ)
+    (cfg : Config) : ℕ → m (Config × ℕ)
   | 0 => pure (cfg, 0)
   | n + 1 => do
-    let next ← M.stepWithCost cost choices cfg
-    let rest ← M.runFromWithCost cost choices next.1 n
+    let next ← M.stepWithCost m cost cfg
+    let rest ← M.runFromWithCost m cost next.1 n
     pure (rest.1, next.2 + rest.2)
 
 @[simp] theorem runFromWithCost_zero (M : Controller F Observation Action Q)
     (cost : Action → Config → ℕ)
-    (choices : Choice.Interpretation F m) (cfg : Config) :
-    M.runFromWithCost cost choices cfg 0 = pure (cfg, 0) := rfl
+    (cfg : Config) :
+    M.runFromWithCost m cost cfg 0 = pure (cfg, 0) := rfl
 
 section Lawful
 
@@ -69,32 +70,32 @@ variable [LawfulMonad m]
 /-- Charging an action does not change its successor configuration. -/
 @[simp] theorem fst_stepWithCost (M : Controller F Observation Action Q)
     (cost : Action → Config → ℕ)
-    (choices : Choice.Interpretation F m) (cfg : Config) :
-    Prod.fst <$> M.stepWithCost cost choices cfg = M.stepWith choices cfg := by
+    (cfg : Config) :
+    Prod.fst <$> M.stepWithCost m cost cfg = M.stepWith m cfg := by
   by_cases h : M.halt (state cfg) = true <;>
     simp [stepWithCost, stepWith, h, Functor.map_map]
 
 /-- Forgetting charges recovers the original interpreted execution. -/
 @[simp] theorem fst_runFromWithCost (M : Controller F Observation Action Q)
     (cost : Action → Config → ℕ)
-    (choices : Choice.Interpretation F m) (cfg : Config) (n : ℕ) :
-    Prod.fst <$> M.runFromWithCost cost choices cfg n =
-      M.runFromWith choices cfg n := by
+    (cfg : Config) (n : ℕ) :
+    Prod.fst <$> M.runFromWithCost m cost cfg n =
+      M.runFromWith m cfg n := by
   induction n generalizing cfg with
   | zero => simp [runFromWithCost, runFromWith]
   | succ n ih =>
     simp only [runFromWithCost, runFromWith_succ, map_bind, map_pure]
     simp_rw [← map_eq_pure_bind, ih]
-    rw [← M.fst_stepWithCost cost choices cfg]
+    rw [← M.fst_stepWithCost m cost cfg]
     simp only [bind_map_left]
 
 theorem runFromWithCost_of_halted (M : Controller F Observation Action Q)
     (cost : Action → Config → ℕ)
-    (choices : Choice.Interpretation F m) (cfg : Config) (h : M.Halted cfg)
-    (n : ℕ) : M.runFromWithCost cost choices cfg n = pure (cfg, 0) := by
+    (cfg : Config) (h : M.Halted cfg)
+    (n : ℕ) : M.runFromWithCost m cost cfg n = pure (cfg, 0) := by
   induction n with
   | zero => rfl
-  | succ n ih => simp [runFromWithCost, M.stepWithCost_of_halted cost choices cfg h, ih]
+  | succ n ih => simp [runFromWithCost, M.stepWithCost_of_halted m cost cfg h, ih]
 
 end Lawful
 end Execution
@@ -143,29 +144,29 @@ theorem runActionSumFrom_mono (cfg : Config) {n k : ℕ} (h : n ≤ k) :
   Transition.runCost_mono _ _ _ h
 
 @[simp] theorem snd_stepWithCost (cfg : Config) :
-    ((M.stepWithCost cost (Choice.Interpretation.id Id) cfg).run).snd =
+    ((M.stepWithCost Id cost cfg).run).snd =
       M.stepCost cost cfg := by
   by_cases h : M.halt (state cfg) = true <;>
-    simp [stepWithCost, stepCost, h, Choice.Interpretation.id]
+    simp [stepWithCost, stepCost, h]
 
 /-- The branch-aware runner and the deterministic cost accumulator agree. -/
 @[simp] theorem snd_runFromWithCost (cfg : Config) (n : ℕ) :
-    ((M.runFromWithCost cost (Choice.Interpretation.id Id) cfg n).run).snd =
+    ((M.runFromWithCost Id cost cfg n).run).snd =
       M.runActionSumFrom cost cfg n := by
   induction n generalizing cfg with
   | zero => rfl
   | succ n ih =>
-    change ((M.stepWithCost cost (Choice.Interpretation.id Id) cfg).run).snd +
-      ((M.runFromWithCost cost (Choice.Interpretation.id Id)
-        ((M.stepWithCost cost (Choice.Interpretation.id Id) cfg).run).fst n).run).snd = _
+    change ((M.stepWithCost Id cost cfg).run).snd +
+      ((M.runFromWithCost Id cost
+        ((M.stepWithCost Id cost cfg).run).fst n).run).snd = _
     rw [ih, snd_stepWithCost, runActionSumFrom_succ]
     congr 1
     exact congrArg (fun c ↦ M.runActionSumFrom cost c.run n)
-      (M.fst_stepWithCost cost (Choice.Interpretation.id Id) cfg)
+      (M.fst_stepWithCost Id cost cfg)
 
 theorem runActionSumFrom_of_halted (cfg : Config) (h : M.Halted cfg) (n : ℕ) :
     M.runActionSumFrom cost cfg n = 0 := by
-  rw [← M.snd_runFromWithCost cost, M.runFromWithCost_of_halted cost _ cfg h n]
+  rw [← M.snd_runFromWithCost cost, M.runFromWithCost_of_halted Id cost cfg h n]
   rfl
 
 /-- Padding a run after its halting point does not add action charges. -/

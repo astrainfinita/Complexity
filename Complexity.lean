@@ -19,8 +19,8 @@ public import Complexity.Classes.TreeFunctions.Composition
 public import Complexity.Classes.TreeFunctions.Encoding
 public import Complexity.Classes.TreeP
 public import Complexity.Classes.TreeSimulation
-public import Complexity.Control.Choice
-public import Complexity.Control.Choice.Probability
+public import Complexity.Control.BinaryChoice
+public import Complexity.Control.BinaryChoice.Probability
 public import Complexity.Control.Controller
 public import Complexity.Control.Controller.Binary
 public import Complexity.Control.Controller.Cost

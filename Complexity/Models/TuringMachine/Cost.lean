@@ -136,7 +136,7 @@ def visitedCosts [Fintype κ] : CostModel (Action κ Γ Q) (TrackedCfg κ Γ Q x
     (M.step s).cfg =
       M.step s.cfg := by
   by_cases h : M.halt s.cfg.state = true <;>
-    simp [Controller.step, Controller.stepWith, Choice.Interpretation.id, h]
+    simp [Controller.step, Controller.stepWith, h]
 
 /-- Each step extends the interval to its new head; halted padding stays within it. -/
 theorem tracked_step_visited (M : TM Id κ Γ Q) (s : TrackedCfg κ Γ Q xs) (i : κ) :
@@ -146,7 +146,7 @@ theorem tracked_step_visited (M : TM Id κ Γ Q) (s : TrackedCfg κ Γ Q xs) (i 
   · simp only [Controller.step_of_halted M s h,
       M.step_of_halted s.cfg h]
     exact (sup_eq_left.mpr (s.head_mem i)).symm
-  · simp [Controller.step, Controller.stepWith, Choice.Interpretation.id, h]
+  · simp [Controller.step, Controller.stepWith, h]
 
 /-- Recording visits preserves every ordinary execution prefix. -/
 @[simp] theorem tracked_runFrom_cfg (M : TM Id κ Γ Q) (s : TrackedCfg κ Γ Q xs) (n : ℕ) :

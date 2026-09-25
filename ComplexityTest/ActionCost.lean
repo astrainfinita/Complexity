@@ -5,19 +5,20 @@ Authors: Yuyang Zhao
 -/
 module
 
+import Complexity.Control.BinaryChoice
 import Complexity.Control.Controller.Cost
 import Complexity.Control.Cost
 meta import Complexity.Control.Controller.Cost
 meta import Complexity.Control.Controller
 meta import Complexity.Control.Cost
-meta import Complexity.Control.Choice
+meta import Complexity.Control.BinaryChoice
 meta import Complexity.Control.Transition.Cost
 
 open Complexity
 
 namespace Complexity.ActionCostTest
 
-def branches : Controller Choice.Binary Unit Bool Bool where
+def branches : Controller BinaryChoice Unit Bool Bool where
   q₀ := false
   halt := id
   transition _ _ i := i == 1
@@ -34,14 +35,14 @@ private instance : Controller.Apply Bool Bool where
 def branchCost : Bool → Bool → ℕ := fun action _ => if action then 7 else 2
 
 -- Coincident endpoints cannot recover which action was selected or its charge.
-#guard branches.stepWith Choice.binaryMultiset false = ↑[true, true]
-#guard branches.stepWithCost branchCost Choice.binaryMultiset false =
+#guard branches.stepWith Multiset false = ↑[true, true]
+#guard branches.stepWithCost Multiset branchCost false =
   ↑[(true, 2), (true, 7)]
 
 -- Each branch retains its own charge, even after many halting padding steps.
-#guard branches.runFromWithCost branchCost Choice.binaryMultiset false 20 =
+#guard branches.runFromWithCost Multiset branchCost false 20 =
   ↑[(true, 2), (true, 7)]
-#guard branches.runFromWithCost branchCost Choice.binaryMultiset true 20 = ↑[(true, 0)]
+#guard branches.runFromWithCost Multiset branchCost true 20 = ↑[(true, 0)]
 
 def counter : Controller Id ℕ Unit Bool where
   q₀ := false
@@ -66,7 +67,7 @@ private def inferredState :=
 example : inferredState = true := rfl
 
 -- Charges use the data before each action, giving 1 + 2 + 3.
-#guard (counter.runFromWithCost counterCost (Choice.Interpretation.id Id) 0 20).run =
+#guard (counter.runFromWithCost Id counterCost 0 20).run =
   (3, 6)
 #guard counter.runActionSumFrom counterCost 0 20 = 6
 #guard counter.runActionSumFrom (fun _ _ => 1) 0 20 = 3
@@ -74,15 +75,13 @@ example : inferredState = true := rfl
 
 -- Replacing the cost model preserves execution, including every intermediate endpoint.
 example (data n : ℕ) :
-    ((counter.runFromWithCost counterCost
-      (Choice.Interpretation.id Id) data n).run).fst =
+    ((counter.runFromWithCost Id counterCost data n).run).fst =
     counter.runFrom data n :=
-  congrArg Id.run (counter.fst_runFromWithCost counterCost (Choice.Interpretation.id Id) data n)
+  congrArg Id.run (counter.fst_runFromWithCost Id counterCost data n)
 
 -- The deterministic accumulator agrees with the branch-aware runner on all prefixes.
 example (data n : ℕ) :
-    ((counter.runFromWithCost counterCost
-      (Choice.Interpretation.id Id) data n).run).snd =
+    ((counter.runFromWithCost Id counterCost data n).run).snd =
     counter.runActionSumFrom counterCost data n :=
   counter.snd_runFromWithCost counterCost data n
 

@@ -5,6 +5,8 @@ Authors: Yuyang Zhao
 -/
 module
 
+import Complexity.Control.BinaryChoice
+meta import Complexity.Control.BinaryChoice
 import Complexity.Models.TuringMachine.Deterministic
 meta import Complexity.Models.TuringMachine.Deterministic
 meta import Complexity.Models.TuringMachine.Basic
@@ -101,17 +103,17 @@ def walkLeft : TM Id (Fin 1) Γ Bool where
 #guard spaceUsedOfTrace (walkLeft.runTrace ((walkLeft.initInput (Input := List Γ) (Config := Cfg (Fin 1) Γ Bool [].toArray) [])) 5) = 6
 
 -- Distinct choices with equal successors retain their multiplicity in the Multiset monad.
-def fork : TM Choice.Binary (Fin 0) Γ Bool where
+def fork : TM BinaryChoice (Fin 0) Γ Bool where
   q₀ := false
   halt := id
   transition _ _ :=
     let a : Action (Fin 0) Γ Bool := ⟨.zero, Fin.elim0, some .one, true⟩
     fun _ ↦ a
 
-#guard (fork.runWith (Cfg (Fin 0) Γ (Bool) #[]) Choice.binaryMultiset ([] : List Γ) 1).map (·.output) = ↑[#[Γ.one], #[Γ.one]]
-#guard (fork.runWith (Cfg (Fin 0) Γ (Bool) #[]) Choice.binaryMultiset ([] : List Γ) 5).map (·.output) = ↑[#[Γ.one], #[Γ.one]]
-#guard (fork.runTraceWith Choice.binaryMultiset ((fork.initInput (Input := List Γ) (Config := Cfg (Fin 0) Γ Bool [].toArray) [])) 2).map List.length = ↑[3, 3]
-#guard (fork.runTraceWith Choice.binaryMultiset ((fork.initInput (Input := List Γ) (Config := Cfg (Fin 0) Γ Bool [].toArray) [])) 2).map spaceUsedOfTrace = ↑[0, 0]
+#guard (fork.runWith (Cfg (Fin 0) Γ (Bool) #[]) Multiset ([] : List Γ) 1).map (·.output) = ↑[#[Γ.one], #[Γ.one]]
+#guard (fork.runWith (Cfg (Fin 0) Γ (Bool) #[]) Multiset ([] : List Γ) 5).map (·.output) = ↑[#[Γ.one], #[Γ.one]]
+#guard (fork.runTraceWith Multiset ((fork.initInput (Input := List Γ) (Config := Cfg (Fin 0) Γ Bool [].toArray) [])) 2).map List.length = ↑[3, 3]
+#guard (fork.runTraceWith Multiset ((fork.initInput (Input := List Γ) (Config := Cfg (Fin 0) Γ Bool [].toArray) [])) 2).map spaceUsedOfTrace = ↑[0, 0]
 
 -- Failure of an effect is distinct from a halting state.
 def abort : TM Option (Fin 0) Γ Bool where
@@ -119,9 +121,9 @@ def abort : TM Option (Fin 0) Γ Bool where
   halt := id
   transition _ _ := none
 
-#guard (abort.runWith (Cfg (Fin 0) Γ (Bool) #[]) (Choice.Interpretation.id Option) ([] : List Γ) 1).isNone
-#guard (abort.runWith (Cfg (Fin 0) Γ (Bool) #[]) (Choice.Interpretation.id Option) ([] : List Γ) 0).isSome
-#guard (abort.runFromWith (Choice.Interpretation.id Option) { (abort.initInput (Input := List Γ) (Config := Cfg (Fin 0) Γ Bool [].toArray) []) with state := true } 10).isSome
+#guard (abort.runWith (Cfg (Fin 0) Γ (Bool) #[]) Option ([] : List Γ) 1).isNone
+#guard (abort.runWith (Cfg (Fin 0) Γ (Bool) #[]) Option ([] : List Γ) 0).isSome
+#guard (abort.runFromWith Option { (abort.initInput (Input := List Γ) (Config := Cfg (Fin 0) Γ Bool [].toArray) []) with state := true } 10).isSome
 
 -- Halting is allowed already at time zero, and the transition is never executed.
 def alreadyHalted : TM Id (Fin 0) Γ Bool where
@@ -133,7 +135,7 @@ def alreadyHalted : TM Id (Fin 0) Γ Bool where
 #guard (alreadyHalted.run (Input := List Γ) (Cfg (Fin 0) Γ Bool [].toArray) [] 10).output = #[]
 
 -- Each active step makes a fresh choice; both mixed histories must occur.
-def twoChoices : TM Choice.Binary (Fin 0) Γ (Fin 3) where
+def twoChoices : TM BinaryChoice (Fin 0) Γ (Fin 3) where
   q₀ := 0
   halt q := q == 2
   transition q _ b :=
@@ -141,7 +143,7 @@ def twoChoices : TM Choice.Binary (Fin 0) Γ (Fin 3) where
       output := some (if b = 0 then .zero else .one)
       state := if q = 0 then 1 else 2 }
 
-#guard (twoChoices.runWith (Cfg (Fin 0) Γ (Fin 3) #[]) Choice.binaryMultiset ([] : List Γ) 2).map (·.output) =
+#guard (twoChoices.runWith (Cfg (Fin 0) Γ (Fin 3) #[]) Multiset ([] : List Γ) 2).map (·.output) =
   ↑[#[Γ.zero, Γ.zero], #[Γ.zero, Γ.one], #[Γ.one, Γ.zero], #[Γ.one, Γ.one]]
-#guard (twoChoices.runWith (Cfg (Fin 0) Γ (Fin 3) #[]) Choice.binaryMultiset ([] : List Γ) 8).map (·.output) =
-  (twoChoices.runWith (Cfg (Fin 0) Γ (Fin 3) #[]) Choice.binaryMultiset ([] : List Γ) 2).map (·.output)
+#guard (twoChoices.runWith (Cfg (Fin 0) Γ (Fin 3) #[]) Multiset ([] : List Γ) 8).map (·.output) =
+  (twoChoices.runWith (Cfg (Fin 0) Γ (Fin 3) #[]) Multiset ([] : List Γ) 2).map (·.output)

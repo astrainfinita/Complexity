@@ -15,13 +15,11 @@ public import Mathlib.Data.Finset.Card
 # Multi-tape Turing machines with explicit choices
 
 A controller observes only the state and symbols under the heads and selects local actions
-with choice shape `F`. Execution interprets each choice in a separate monad. `Id` gives
-deterministic machines; `Choice.Binary` permits exactly two labelled alternatives per step.
+with choice shape `F`. `Id` gives deterministic machines.
 
 Configurations store plain states and symbols. `Inhabited Γ` selects the blank symbol.
-Execution from a configuration uses the shared `Controller.step`, `Controller.runFrom`,
-and `Controller.runTrace` APIs, or their `With` variants for an explicit choice interpretation.
-Input, output, and resource accounting remain specific to this storage model.
+Execution uses the shared `Controller` API. Input, output, and resource accounting
+remain specific to this storage model.
 -/
 
 @[expose] public section

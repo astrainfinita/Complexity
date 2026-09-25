@@ -12,13 +12,9 @@ public import Complexity.Control.Controller.Execution
 # Tree register machines with atomic choices
 
 Control observes the roots of a fixed register bank and selects one instruction: `nop`,
-or a register operation whose first index is its destination. As for `TM`, `F` describes
-one layer of atomic choices, and execution uses an explicit interpretation into a semantic
-monad. `Id` specializes to deterministic execution; halted configurations make no choice.
-The input tree starts in register zero, and every other register starts empty.
-Execution from arbitrary configurations uses the shared `Controller` API:
-`stepWith`, `runFromWith`, and `runTraceWith` take an explicit interpretation;
-`step`, `runFrom`, and `runTrace` execute deterministic machines.
+or a register operation whose first index is its destination. `F` describes the choices;
+`Id` gives deterministic machines. The input tree starts in register zero, and every other
+register starts empty. Execution uses the shared `Controller` API.
 -/
 
 @[expose] public section

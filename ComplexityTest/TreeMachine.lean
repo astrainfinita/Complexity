@@ -5,6 +5,8 @@ Authors: Yuyang Zhao
 -/
 module
 
+import Complexity.Control.BinaryChoice
+meta import Complexity.Control.BinaryChoice
 import Complexity.Models.TreeMachine.Deterministic
 meta import Complexity.Models.TreeMachine.Deterministic
 meta import Complexity.Models.TreeMachine.Cost
@@ -61,7 +63,7 @@ def c : Cfg 3 Bool := Cfg.mk grow.q₀ ![b, a, Tree.nil]
 #guard grow.cost c 20 = 7
 #guard grow.timeUsed c 20 = 1
 #guard Controller.runConfigMaxFrom grow TreeMachine.treeCosts.space c 20 = 13
-#guard ((grow.runFromWithCost treeCosts.time (Choice.Interpretation.id Id) c 20).run).2 = 7
+#guard ((grow.runFromWithCost Id treeCosts.time c 20).run).2 = 7
 
 -- Writing an empty leaf costs one even when it replaces a larger tree.
 def shrink : TreeMachine Id 3 Bool where
@@ -103,44 +105,44 @@ def idle (q : Bool) : TreeMachine Id 0 Bool where
 #guard (apply (Action.assign true (.nop : Op 2)) (Cfg.mk false ![a, b])).state
 
 -- Branch multiplicity and failure have the same semantics as in the multi-tape model.
-def fork : TreeMachine Choice.Binary 1 Bool where
+def fork : TreeMachine BinaryChoice 1 Bool where
   q₀ := false
   halt := id
   transition _ _ _ := Action.assign true (.pair 0 0 0)
 
-#guard ((fork.runWith (Cfg 1 Bool) Choice.binaryMultiset Tree.nil 5).map (fun c ↦ c.regs 0)) = ↑[a, a]
-#guard ((fork.runFromWithCost treeCosts.time Choice.binaryMultiset
+#guard ((fork.runWith (Cfg 1 Bool) Multiset Tree.nil 5).map (fun c ↦ c.regs 0)) = ↑[a, a]
+#guard ((fork.runFromWithCost Multiset treeCosts.time
   (fork.initInput (Config := Cfg 1 Bool) Tree.nil) 5).map Prod.snd) = ↑[3, 3]
 
 -- Two `nop` branches remain distinct effects, even though their resulting banks agree.
-def forkNop : TreeMachine Choice.Binary 1 Bool where
+def forkNop : TreeMachine BinaryChoice 1 Bool where
   q₀ := false
   halt := id
   transition _ _ _ := Action.assign true .nop
 
-#guard ((forkNop.runWith (Cfg 1 Bool) Choice.binaryMultiset b 5).map (fun c ↦ c.regs 0)) = ↑[b, b]
-#guard ((forkNop.runFromWithCost treeCosts.time Choice.binaryMultiset
+#guard ((forkNop.runWith (Cfg 1 Bool) Multiset b 5).map (fun c ↦ c.regs 0)) = ↑[b, b]
+#guard ((forkNop.runFromWithCost Multiset treeCosts.time
   (forkNop.initInput (Config := Cfg 1 Bool) b) 5).map Prod.snd) = ↑[1, 1]
 
 -- Shrinking to a nonempty tree still pays for that entire tree.
 #guard treeCosts.time (Action.assign true (.left 0 0)) c = 3
 
 -- Equal endpoints can have different fees: a no-op and writing back the same tree.
-def sameEndpoint : TreeMachine Choice.Binary 3 Bool where
+def sameEndpoint : TreeMachine BinaryChoice 3 Bool where
   q₀ := false
   halt := id
   transition _ _ i := if i = 0 then Action.keep true else Action.assign true (.pair 0 1 2)
 
-#guard ((sameEndpoint.runFromWithCost treeCosts.time Choice.binaryMultiset c 5).map
+#guard ((sameEndpoint.runFromWithCost Multiset treeCosts.time c 5).map
   (fun (d, fee) ↦ (d.state, d.regs 0, fee))) = ↑[(true, b, 1), (true, b, 5)]
 
 -- Two fresh choices reach all four leaves, including paths 01 and 10.
-def twoChoices : TreeMachine Choice.Binary 0 (Fin 7) where
+def twoChoices : TreeMachine BinaryChoice 0 (Fin 7) where
   q₀ := 0
   halt q := decide (3 ≤ q.val)
   transition q _ i := Action.keep ⟨(2 * q.val + 1 + i.val) % 7, Nat.mod_lt _ (by decide)⟩
 
-#guard ((twoChoices.runFromWith Choice.binaryMultiset (Cfg.mk twoChoices.q₀ Fin.elim0) 2).map
+#guard ((twoChoices.runFromWith Multiset (Cfg.mk twoChoices.q₀ Fin.elim0) 2).map
   (fun c ↦ c.state.val)) = ↑[3, 4, 5, 6]
 
 -- A successful `nop` is different from failure in `Option`.
@@ -149,9 +151,9 @@ def optionNop : TreeMachine Option 0 Bool where
   halt := id
   transition _ _ := some (Action.assign true .nop)
 
-#guard (optionNop.runFromWith (Choice.Interpretation.id Option)
+#guard (optionNop.runFromWith Option
   (Cfg.mk optionNop.q₀ Fin.elim0) 1).isSome
-#guard ((optionNop.runFromWith (Choice.Interpretation.id Option)
+#guard ((optionNop.runFromWith Option
   (Cfg.mk optionNop.q₀ Fin.elim0) 1).map
   (fun c ↦ c.state)) = some true
 
@@ -160,11 +162,11 @@ def abort : TreeMachine Option 0 Bool where
   halt := id
   transition _ _ := none
 
-#guard (abort.runFromWith (Choice.Interpretation.id Option)
+#guard (abort.runFromWith Option
   (Cfg.mk abort.q₀ Fin.elim0) 0).isSome
-#guard (abort.runFromWith (Choice.Interpretation.id Option)
+#guard (abort.runFromWith Option
   (Cfg.mk abort.q₀ Fin.elim0) 1).isNone
-#guard (abort.runFromWith (Choice.Interpretation.id Option)
+#guard (abort.runFromWith Option
   (⟨true, Fin.elim0⟩ : Cfg 0 Bool) 10).isSome
 
 end Complexity.TreeMachineTest

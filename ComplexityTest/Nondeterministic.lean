@@ -11,7 +11,7 @@ meta import Complexity.Models.TuringMachine.Nondeterministic
 meta import Complexity.Models.TuringMachine.Basic
 meta import Complexity.Models.TuringMachine.Configuration
 meta import Complexity.Control.Controller
-meta import Complexity.Control.Choice
+meta import Complexity.Control.BinaryChoice
 meta import Complexity.Control.Transition
 meta import Complexity.Data.IntMemory
 
@@ -34,7 +34,7 @@ def guess : NTM (Fin 0) (Option Bool) Bool where
 
 private theorem guess_run_one (xs : List (Option Bool)) :
     guess.runWith (TM.Cfg (Fin 0) (Option Bool) Bool xs.toArray)
-      Choice.binaryMultiset xs 1 =
+      Multiset xs 1 =
       ↑[apply (answer false)
           (guess.initInput (Config := TM.Cfg (Fin 0) (Option Bool) Bool xs.toArray) xs),
         apply (answer true)
@@ -82,9 +82,9 @@ def splitHeads : NTM (Fin 1) (Option Bool) Bool where
     { inputMove := 0, work := fun _ => (none, if i = 0 then -1 else 1)
       output := some (some (i == 1)), state := true }
 
-#guard ((splitHeads.runTraceWith Choice.binaryMultiset
+#guard ((splitHeads.runTraceWith Multiset
   (splitHeads.initInput (Input := List (Option Bool)) (Config := TM.Cfg (Fin 1) (Option Bool) Bool [].toArray) []) 1).map TM.spaceUsedOfTrace) = ↑[2, 2]
-#guard ((splitHeads.runTraceWith Choice.binaryMultiset
+#guard ((splitHeads.runTraceWith Multiset
   (splitHeads.initInput (Input := List (Option Bool)) (Config := TM.Cfg (Fin 1) (Option Bool) Bool [].toArray) []) 4).map TM.spaceUsedOfTrace) = ↑[2, 2]
 
 -- An early accepting branch does not excuse another branch missing the time bound.
@@ -103,7 +103,7 @@ example : ¬mixed.UsesTime [] 1 := by
   have hc : apply
       (⟨0, Fin.elim0, none, false⟩ : TM.Action (Fin 0) (Option Bool) Bool)
       (mixed.initInput (Config := TM.Cfg (Fin 0) (Option Bool) Bool #[]) ([] : List (Option Bool))) ∈
-      mixed.runWith _ Choice.binaryMultiset ([] : List (Option Bool)) 1 := by
+      mixed.runWith _ Multiset ([] : List (Option Bool)) 1 := by
     change _ ∈ (_ ::ₘ _ ::ₘ (0 : Multiset (TM.Cfg (Fin 0) (Option Bool) Bool #[])))
     exact Multiset.mem_cons_self _ _
   exact Bool.false_ne_true (h _ hc)
@@ -139,7 +139,7 @@ example : ¬NTM.BooleanOutput malformed.toBinary [] := by
   rw [NTM.booleanOutput_iff_of_usesTime ht]
   intro h
   have hc : malformed.run (TM.Cfg (Fin 0) (Option Bool) Bool #[]) ([] : List (Option Bool)) 1 ∈
-      malformed.toBinary.runWith _ Choice.binaryMultiset ([] : List (Option Bool)) 1 := by
+      malformed.toBinary.runWith _ Multiset ([] : List (Option Bool)) 1 := by
     simp only [Controller.mem_runWith_toBinary_iff]
   obtain ⟨b, hb⟩ := h _ hc
   change #[] = #[some b] at hb
