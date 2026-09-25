@@ -97,7 +97,7 @@ example (xs : List Bool) :
 -- Execute the complete input adapter, simulator, and output adapter.
 def checkIdentity (xs : List Bool) : Bool :=
   let M := compiler identity
-  let c := M.run (Config := TM.Cfg (Fin 3 ⊕ Bool) _ _ (xs.map some).toArray) (xs.map some) 1024
+  let c := M.run (TM.Cfg (Fin 3 ⊕ Bool) _ _ (xs.map some).toArray) (xs.map some) 1024
   M.halt c.state && c.output == xs.toArray.map some
 
 #guard checkIdentity []

@@ -80,7 +80,7 @@ def double : TreeMachine Id 1 Bool where
   halt := id
   transition _ _ := pure <| Action.assign false (.pair 0 0 0)
 
-#guard Tree.size ((double.run (Config := Cfg 1 Bool) Tree.nil 6).regs 0) = 127
+#guard Tree.size ((double.run (Cfg 1 Bool) Tree.nil 6).regs 0) = 127
 #guard double.runActionSum treeCosts.time Tree.nil 6 = 246
 #guard double.runActionSum (Config := Cfg 1 Bool) (fun _ _ => 1) Tree.nil 6 = 6
 #guard double.runConfigMax (Config := Cfg 1 Bool) treeCosts.space Tree.nil 6 = 127
@@ -108,7 +108,7 @@ def fork : TreeMachine Choice.Binary 1 Bool where
   halt := id
   transition _ _ _ := Action.assign true (.pair 0 0 0)
 
-#guard ((fork.runWith (Config := Cfg 1 Bool) Choice.binaryMultiset Tree.nil 5).map (fun c ↦ c.regs 0)) = ↑[a, a]
+#guard ((fork.runWith (Cfg 1 Bool) Choice.binaryMultiset Tree.nil 5).map (fun c ↦ c.regs 0)) = ↑[a, a]
 #guard ((fork.runFromWithCost treeCosts.time Choice.binaryMultiset
   (fork.initInput (Config := Cfg 1 Bool) Tree.nil) 5).map Prod.snd) = ↑[3, 3]
 
@@ -118,7 +118,7 @@ def forkNop : TreeMachine Choice.Binary 1 Bool where
   halt := id
   transition _ _ _ := Action.assign true .nop
 
-#guard ((forkNop.runWith (Config := Cfg 1 Bool) Choice.binaryMultiset b 5).map (fun c ↦ c.regs 0)) = ↑[b, b]
+#guard ((forkNop.runWith (Cfg 1 Bool) Choice.binaryMultiset b 5).map (fun c ↦ c.regs 0)) = ↑[b, b]
 #guard ((forkNop.runFromWithCost treeCosts.time Choice.binaryMultiset
   (forkNop.initInput (Config := Cfg 1 Bool) b) 5).map Prod.snd) = ↑[1, 1]
 

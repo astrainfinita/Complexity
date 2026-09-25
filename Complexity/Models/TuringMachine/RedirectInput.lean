@@ -267,14 +267,14 @@ theorem runFrom_init (e : (κ ⊕ Unit) ↪ τ)
     (M : TM Id κ (Option Bool) Q) (xs : List Bool)
     {ys : Array (Option Bool)} (s : Cfg τ (Option Bool) Δ ys) (n : ℕ) :
     ∃ l', Boundary
-        (M.run (Config := Cfg κ (Option Bool) Q (xs.map some).toArray)
+        (M.run (Cfg κ (Option Bool) Q (xs.map some).toArray)
           (xs.map some) n).inputPos l' ∧
       (compilerAlong e M).runFrom
         (cfgAlong e xs.toArray s
           (M.initInput (Config := Cfg κ (Option Bool) Q (xs.map some).toArray)
             (xs.map some)) false) n =
         cfgAlong e xs.toArray s
-          (M.run (Config := Cfg κ (Option Bool) Q (xs.map some).toArray)
+          (M.run (Cfg κ (Option Bool) Q (xs.map some).toArray)
             (xs.map some) n) l' :=
   runFrom_cfgAlong e M xs.toArray s
     (M.initInput (Config := Cfg κ (Option Bool) Q (xs.map some).toArray) (xs.map some))

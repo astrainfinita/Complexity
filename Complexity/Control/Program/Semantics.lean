@@ -59,14 +59,14 @@ inductive Exec (e : Semantics O A Op Ret S) :
 theorem Exec.mapResult {e : Semantics O A Op Ret S} {v w : Kind}
     {p : Syntax O A Op Ret α v} {s t : S} {m : ℕ} {a : Kind.Value α v}
     (hp : Exec e p s m a t) (f : Kind.Value α v → Kind.Value β w) :
-    Exec e (mapResult f p) s m (f a) t := by
+    Exec e (p.mapResult β w f) s m (f a) t := by
   induction hp generalizing β w with
   | ret a s => exact .ret (f a) s
   | step o k s h ih => exact .step o _ s (ih f)
   | loop_done a i body k hb hk ihb ihk =>
-    exact .loop_done a i _ _ (ihb (β := β) (w := .branch _ _) id) (ihk f)
+    exact .loop_done a i _ _ (by apply ihb) (ihk f)
   | loop_next a i body k hb hk ihb ihk =>
-    exact .loop_next a i _ _ (ihb (β := β) (w := .branch _ _) id) (ihk f)
+    exact .loop_next a i _ _ (by apply ihb) (ihk f)
   | call b k hb hk ih => exact .call b _ hb (ih f)
 
 /-- Substituting a continuation adds the two exact costs, with no connecting transition. -/
@@ -82,13 +82,13 @@ theorem Exec.bindTo {e : Semantics O A Op Ret S} {v w : Kind}
       first | rfl | omega
   | loop_done a i body k hb hk _ ih =>
     convert Exec.loop_done (e := e) a i
-      (fun j ↦ Syntax.mapResult (α := α) (β := β) id (body j)) (fun x ↦ bindTo (k x) f)
-      (hb.mapResult (β := β) (w := .branch _ _) id)
+      (fun j ↦ (body j).mapResult β (.branch _ _) id) (fun x ↦ bindTo (k x) f)
+      (by apply hb.mapResult)
       (ih hf) using 1 <;> first | rfl | omega
   | loop_next a i body k hb hk _ ih =>
     convert Exec.loop_next (e := e) a i
-      (fun j ↦ Syntax.mapResult (α := α) (β := β) id (body j)) (fun x ↦ bindTo (k x) f)
-      (hb.mapResult (β := β) (w := .branch _ _) id)
+      (fun j ↦ (body j).mapResult β (.branch _ _) id) (fun x ↦ bindTo (k x) f)
+      (by apply hb.mapResult)
       (ih hf) using 1 <;> first | rfl | omega
   | call block k hb hk ih =>
     convert Exec.call block (fun x ↦ bindTo (k x) f) hb (ih hf) using 1 <;>
@@ -128,7 +128,7 @@ theorem loop_done {n r : ℕ} (a : A)
     (h : (body i).Exec e (e.act a s) m (.inr j) t) :
     (loop a body i).Exec e s (m + 1) j t := by
   exact Syntax.Exec.loop_done a i _ _
-    (Syntax.Exec.mapResult (β := Fin r) (w := .branch n r) h id)
+    (by apply h.mapResult)
     (Syntax.Exec.ret (v := .value) j t)
 
 /-- A continuing body routes directly to the next charged loop entry. -/
@@ -139,7 +139,7 @@ theorem loop_next {n r : ℕ} (a : A)
     (hc : (loop a body j).Exec e t l v u) :
     (loop a body i).Exec e s (m + l + 1) v u := by
   exact Syntax.Exec.loop_next a i _ _
-    (Syntax.Exec.mapResult (β := Fin r) (w := .branch n r) h id) hc
+    (by apply h.mapResult) hc
 
 /-- A successful test terminates `repeatUntil` after its charged dispatch. -/
 theorem repeatUntil_done (a : A) (p : Program O A Op Ret Bool) {s t : S} {m : ℕ}

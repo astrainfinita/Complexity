@@ -80,7 +80,7 @@ variable [Observe Config Observation] [Apply Config Action]
 /-- Standard input execution reaches exactly the original deterministic endpoint. -/
 @[simp] theorem mem_runWith_toBinary_iff (input : Input) (d : Config) (n : ℕ)
     [Execution Config Q Output input] :
-    d ∈ M.toBinary.runWith Choice.binaryMultiset input n ↔ d = M.run input n :=
+    d ∈ M.toBinary.runWith Config Choice.binaryMultiset input n ↔ d = M.run Config input n :=
   M.mem_runFromWith_toBinary_iff (M.initInput input) d n
 
 end Complexity.Controller

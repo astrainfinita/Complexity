@@ -45,31 +45,31 @@ def halted (k : ℕ) : TreeMachine Id k Unit where
 -- A larger destination shares the old work bank and gains one fresh scratch slot.
 def wider := dirty.comp (needsClean 4)
 
-#guard (wider.run (Config := Cfg (max 3 4 + 1) (Comp.State 3 4 (Fin 4) Bool)) a 3).regs 0 =
+#guard (wider.run (Cfg (max 3 4 + 1) (Comp.State 3 4 (Fin 4) Bool)) a 3).regs 0 =
     .pair a a
-#guard (wider.run (Config := Cfg (max 3 4 + 1) (Comp.State 3 4 (Fin 4) Bool)) a 3).regs 1 =
+#guard (wider.run (Cfg (max 3 4 + 1) (Comp.State 3 4 (Fin 4) Bool)) a 3).regs 1 =
     .pair a a
-#guard (wider.run (Config := Cfg (max 3 4 + 1) (Comp.State 3 4 (Fin 4) Bool)) a 3).regs 2 =
+#guard (wider.run (Cfg (max 3 4 + 1) (Comp.State 3 4 (Fin 4) Bool)) a 3).regs 2 =
     .pair a a
-#guard (wider.run (Config := Cfg (max 3 4 + 1) (Comp.State 3 4 (Fin 4) Bool)) a 4).regs 1 =
+#guard (wider.run (Cfg (max 3 4 + 1) (Comp.State 3 4 (Fin 4) Bool)) a 4).regs 1 =
     .pair a a
-#guard (wider.run (Config := Cfg (max 3 4 + 1) (Comp.State 3 4 (Fin 4) Bool)) a 5).regs 1 = .nil
-#guard (wider.run (Config := Cfg (max 3 4 + 1) (Comp.State 3 4 (Fin 4) Bool)) a 5).regs 2 =
+#guard (wider.run (Cfg (max 3 4 + 1) (Comp.State 3 4 (Fin 4) Bool)) a 5).regs 1 = .nil
+#guard (wider.run (Cfg (max 3 4 + 1) (Comp.State 3 4 (Fin 4) Bool)) a 5).regs 2 =
     .pair a a
-#guard (wider.run (Config := Cfg (max 3 4 + 1) (Comp.State 3 4 (Fin 4) Bool)) a 6).regs 2 = .nil
-#guard (wider.run (Config := Cfg (max 3 4 + 1) (Comp.State 3 4 (Fin 4) Bool)) a 7).regs 3 = .nil
+#guard (wider.run (Cfg (max 3 4 + 1) (Comp.State 3 4 (Fin 4) Bool)) a 6).regs 2 = .nil
+#guard (wider.run (Cfg (max 3 4 + 1) (Comp.State 3 4 (Fin 4) Bool)) a 7).regs 3 = .nil
 #guard ∀ n : Fin 5, (wider.run
-    (Config := Cfg (max 3 4 + 1) (Comp.State 3 4 (Fin 4) Bool)) a (3 + n.val)).regs 0 = .pair a a
-#guard ¬wider.Halted (wider.run (Config := Cfg (max 3 4 + 1) (Comp.State 3 4 (Fin 4) Bool)) a 7)
-#guard wider.Halted (wider.run (Config := Cfg (max 3 4 + 1) (Comp.State 3 4 (Fin 4) Bool)) a 8)
-#guard (wider.run (Config := Cfg (max 3 4 + 1) (Comp.State 3 4 (Fin 4) Bool)) a 8).regs 0 = a
+    (Cfg (max 3 4 + 1) (Comp.State 3 4 (Fin 4) Bool)) a (3 + n.val)).regs 0 = .pair a a
+#guard ¬wider.Halted (wider.run (Cfg (max 3 4 + 1) (Comp.State 3 4 (Fin 4) Bool)) a 7)
+#guard wider.Halted (wider.run (Cfg (max 3 4 + 1) (Comp.State 3 4 (Fin 4) Bool)) a 8)
+#guard (wider.run (Cfg (max 3 4 + 1) (Comp.State 3 4 (Fin 4) Bool)) a 8).regs 0 = a
 
 -- The reserved slot stays empty through both phases, cleanup, and halted padding.
 #guard ∀ n : Fin 16, (wider.run
-    (Config := Cfg (max 3 4 + 1) (Comp.State 3 4 (Fin 4) Bool)) a n.val).regs 4 = .nil
+    (Cfg (max 3 4 + 1) (Comp.State 3 4 (Fin 4) Bool)) a n.val).regs 4 = .nil
 
 -- Cleanup costs exactly K, including the initial control transfer.
-#guard wider.cost (wider.run (Config := Cfg (max 3 4 + 1) (Comp.State 3 4 (Fin 4) Bool)) a 3) 4 = 4
+#guard wider.cost (wider.run (Cfg (max 3 4 + 1) (Comp.State 3 4 (Fin 4) Bool)) a 3) 4 = 4
 #guard wider.runActionSum treeCosts.time a 20 = 28
 #guard wider.runActionSum
     (Config := Cfg (max 3 4 + 1) (Comp.State 3 4 (Fin 4) Bool)) (fun _ _ => 1) a 20 = 8
@@ -80,35 +80,35 @@ def wider := dirty.comp (needsClean 4)
 def narrower := dirty.comp (needsClean 2)
 
 #guard narrower.Halted (narrower.run
-    (Config := Cfg (max 3 2 + 1) (Comp.State 3 2 (Fin 4) Bool)) a 7)
-#guard (narrower.run (Config := Cfg (max 3 2 + 1) (Comp.State 3 2 (Fin 4) Bool)) a 7).regs 0 = a
-#guard (narrower.run (Config := Cfg (max 3 2 + 1) (Comp.State 3 2 (Fin 4) Bool)) a 7).regs 1 = .nil
-#guard (narrower.run (Config := Cfg (max 3 2 + 1) (Comp.State 3 2 (Fin 4) Bool)) a 7).regs 2 = .nil
+    (Cfg (max 3 2 + 1) (Comp.State 3 2 (Fin 4) Bool)) a 7)
+#guard (narrower.run (Cfg (max 3 2 + 1) (Comp.State 3 2 (Fin 4) Bool)) a 7).regs 0 = a
+#guard (narrower.run (Cfg (max 3 2 + 1) (Comp.State 3 2 (Fin 4) Bool)) a 7).regs 1 = .nil
+#guard (narrower.run (Cfg (max 3 2 + 1) (Comp.State 3 2 (Fin 4) Bool)) a 7).regs 2 = .nil
 #guard ∀ n : Fin 16, (narrower.run
-    (Config := Cfg (max 3 2 + 1) (Comp.State 3 2 (Fin 4) Bool)) a n.val).regs 3 = .nil
+    (Cfg (max 3 2 + 1) (Comp.State 3 2 (Fin 4) Bool)) a n.val).regs 3 = .nil
 #guard narrower.runActionSum treeCosts.time a 20 = 27
 #guard narrower.runConfigMax
     (Config := Cfg (max 3 2 + 1) (Comp.State 3 2 (Fin 4) Bool)) treeCosts.space a 20 = 22
 
 -- Initially halted endpoints still perform the bridge, including the K = 1 case.
 #guard (dirty.comp (halted 2)).Halted ((dirty.comp (halted 2)).run
-    (Config := Cfg (max 3 2 + 1) (Comp.State 3 2 (Fin 4) Unit)) a 6)
+    (Cfg (max 3 2 + 1) (Comp.State 3 2 (Fin 4) Unit)) a 6)
 #guard ((dirty.comp (halted 2)).run
-    (Config := Cfg (max 3 2 + 1) (Comp.State 3 2 (Fin 4) Unit)) a 6).regs 0 = .pair a a
+    (Cfg (max 3 2 + 1) (Comp.State 3 2 (Fin 4) Unit)) a 6).regs 0 = .pair a a
 #guard ((dirty.comp (halted 2)).run
-    (Config := Cfg (max 3 2 + 1) (Comp.State 3 2 (Fin 4) Unit)) a 6).regs 1 = .nil
+    (Cfg (max 3 2 + 1) (Comp.State 3 2 (Fin 4) Unit)) a 6).regs 1 = .nil
 #guard ((dirty.comp (halted 2)).run
-    (Config := Cfg (max 3 2 + 1) (Comp.State 3 2 (Fin 4) Unit)) a 6).regs 2 = .nil
+    (Cfg (max 3 2 + 1) (Comp.State 3 2 (Fin 4) Unit)) a 6).regs 2 = .nil
 #guard (dirty.comp (halted 2)).runActionSum treeCosts.time a 20 = 24
-#guard ((halted 3).comp (needsClean 4)).Halted (((halted 3).comp (needsClean 4)).run (Config := Cfg (max 3 4 + 1) (Comp.State 3 4 Unit Bool)) a 5)
+#guard ((halted 3).comp (needsClean 4)).Halted (((halted 3).comp (needsClean 4)).run (Cfg (max 3 4 + 1) (Comp.State 3 4 Unit Bool)) a 5)
 #guard (((halted 3).comp (needsClean 4)).run
-    (Config := Cfg (max 3 4 + 1) (Comp.State 3 4 Unit Bool)) a 5).regs 0 = .nil
+    (Cfg (max 3 4 + 1) (Comp.State 3 4 Unit Bool)) a 5).regs 0 = .nil
 #guard ¬((halted 1).comp (halted 1)).Halted (((halted 1).comp (halted 1)).run
-    (Config := Cfg (max 1 1 + 1) (Comp.State 1 1 Unit Unit)) a 0)
+    (Cfg (max 1 1 + 1) (Comp.State 1 1 Unit Unit)) a 0)
 #guard ((halted 1).comp (halted 1)).Halted (((halted 1).comp (halted 1)).run
-    (Config := Cfg (max 1 1 + 1) (Comp.State 1 1 Unit Unit)) a 1)
+    (Cfg (max 1 1 + 1) (Comp.State 1 1 Unit Unit)) a 1)
 #guard (((halted 1).comp (halted 1)).run
-    (Config := Cfg (max 1 1 + 1) (Comp.State 1 1 Unit Unit)) a 1).regs 0 = a
+    (Cfg (max 1 1 + 1) (Comp.State 1 1 Unit Unit)) a 1).regs 0 = a
 #guard ((halted 1).comp (halted 1)).runActionSum treeCosts.time a 20 = 1
 
 private theorem dirty_computes : dirty.ComputesInTimeAndSpace a (.pair a a) 21 21 := by

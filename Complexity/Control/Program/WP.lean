@@ -158,11 +158,11 @@ theorem spec_bind_of_spec {p : Program O A Op Ret α} {f : α → Program O A Op
 theorem spec_mapResult (f : α → β) {p : Program O A Op Ret α}
     {e : Semantics O A Op Ret S} {P : S → ℕ → Prop} {Q : β → S → ℕ → Prop} {x : Unit}
     (h : Triple (p.verify e) P (fun a ↦ Q (f a)) x) :
-    Triple (verify (Syntax.mapResult (u := .value) (v := .value) f p) e) P Q x := by
+    Triple (verify (p.mapResult β .value f) e) P Q x := by
   constructor
   intro s b hs
   obtain ⟨n, a, t, hn, he, hq⟩ := h.le_wp s b hs
-  exact ⟨n, f a, t, hn, he.mapResult (β := β) (w := .value) f, hq⟩
+  exact ⟨n, f a, t, hn, (by apply he.mapResult), hq⟩
 
 /-- A primitive performs one local action and consumes one unit of budget. -/
 @[spec]

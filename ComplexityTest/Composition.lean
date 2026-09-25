@@ -88,7 +88,7 @@ private theorem step_at (xs : List Bool) (n : ℕ) (hn : n < xs.length) :
       List.map_cons, List.map_nil]
 
 private theorem run_at (xs : List Bool) (n : ℕ) (hn : n ≤ xs.length) :
-    copier.run (Config := Cfg (Fin 0) Symbol Bool (xs.map some).toArray) (xs.map some) n = scanned xs n hn := by
+    copier.run (Cfg (Fin 0) Symbol Bool (xs.map some).toArray) (xs.map some) n = scanned xs n hn := by
   induction n with
   | zero => exact (at_zero xs).symm
   | succ n ih =>
@@ -98,7 +98,7 @@ private theorem run_at (xs : List Bool) (n : ℕ) (hn : n ≤ xs.length) :
 def copied (xs : List Bool) : Cfg (Fin 0) Symbol Bool (input xs) :=
   { scanned xs xs.length le_rfl with state := true }
 
-theorem run_copier (xs : List Bool) : copier.run (Config := Cfg (Fin 0) Symbol Bool (xs.map some).toArray) (xs.map some) (xs.length + 1) = copied xs := by
+theorem run_copier (xs : List Bool) : copier.run (Cfg (Fin 0) Symbol Bool (xs.map some).toArray) (xs.map some) (xs.length + 1) = copied xs := by
   rw [Controller.run_succ]
   rw [run_at xs xs.length le_rfl]
   have hr : (scanned xs xs.length le_rfl).inputSymbol = none := by rw [at_read]; simp
@@ -114,13 +114,13 @@ theorem run_copier (xs : List Bool) : copier.run (Config := Cfg (Fin 0) Symbol B
 @[simp] theorem copied_output (xs : List Bool) : (copied xs).output = input xs := by
   simp [copied, scanned]
 
-theorem copier_halts (xs : List Bool) : copier.Halted (copier.run (Config := Cfg (Fin 0) Symbol Bool (xs.map some).toArray) (xs.map some) (xs.length + 1)) := by
+theorem copier_halts (xs : List Bool) : copier.Halted (copier.run (Cfg (Fin 0) Symbol Bool (xs.map some).toArray) (xs.map some) (xs.length + 1)) := by
   rw [run_copier]
   rfl
 
-#guard (copier.run (Config := Cfg (Fin 0) Symbol Bool ([].map some).toArray) (([] : List Bool).map some) 1).output == input []
-#guard (copier.run (Config := Cfg (Fin 0) Symbol Bool ([false].map some).toArray) (([false] : List Bool).map some) 2).output == input [false]
-#guard (copier.run (Config := Cfg (Fin 0) Symbol Bool ([false, true].map some).toArray) (([false, true] : List Bool).map some) 3).output == input [false, true]
+#guard (copier.run (Cfg (Fin 0) Symbol Bool ([].map some).toArray) (([] : List Bool).map some) 1).output == input []
+#guard (copier.run (Cfg (Fin 0) Symbol Bool ([false].map some).toArray) (([false] : List Bool).map some) 2).output == input [false]
+#guard (copier.run (Cfg (Fin 0) Symbol Bool ([false, true].map some).toArray) (([false, true] : List Bool).map some) 3).output == input [false, true]
 
 private def bufferEmbedding : (Fin 0 ⊕ Unit) ↪ Fin 1 where
   toFun _ := 0
@@ -155,10 +155,10 @@ private def finished (xs : List Bool) : Cfg (Fin 1) Symbol Unit (input xs) :=
   { saved xs with output := input xs }
 
 private theorem toBuffer_run (xs : List Bool) :
-    toBuffer.run (Config := Cfg (Fin 1) Symbol Bool (xs.map some).toArray) (xs.map some) (xs.length + 1) =
+    toBuffer.run (Cfg (Fin 1) Symbol Bool (xs.map some).toArray) (xs.map some) (xs.length + 1) =
       RedirectOutput.cfgAlong bufferEmbedding (copied xs) ((rawExecution (xs.map some)).init false) := by
   change (RedirectOutput.compilerAlong bufferEmbedding copier).run
-    (Config := Cfg (Fin 1) Symbol Bool (xs.map some).toArray) (xs.map some) (xs.length + 1) = _
+    (Cfg (Fin 1) Symbol Bool (xs.map some).toArray) (xs.map some) (xs.length + 1) = _
   rw [RedirectOutput.run_eq bufferEmbedding, run_copier]
   rfl
 
@@ -166,7 +166,7 @@ private theorem fill_spec (xs : List Bool) (q : ℕ) :
     Triple ((Program.call toBuffer).verify (Program.cfgSemantics (input xs)))
       (fun s b ↦ s = (rawExecution (xs.map some)).init () ∧ xs.length + 1 + q ≤ b)
       (fun _ s b ↦ s = saved xs ∧ q ≤ b) () := by
-  have hh : toBuffer.Halted (toBuffer.run (Config := Cfg (Fin 1) Symbol Bool (xs.map some).toArray) (xs.map some) (xs.length + 1)) := by
+  have hh : toBuffer.Halted (toBuffer.run (Cfg (Fin 1) Symbol Bool (xs.map some).toArray) (xs.map some) (xs.length + 1)) := by
     rw [toBuffer_run]
     rfl
   have hs := Program.cfg_spec_call toBuffer ((toBuffer.initInput (Config := Cfg (Fin 1) Symbol Bool (xs.map some).toArray) (xs.map some)))
@@ -175,7 +175,7 @@ private theorem fill_spec (xs : List Bool) (q : ℕ) :
   apply Triple.entails_wp_of_post hs
   intro a s b h
   refine ⟨h.2.1.trans ?_, h.2.2⟩
-  change (toBuffer.run (Config := Cfg (Fin 1) Symbol Bool (xs.map some).toArray) (xs.map some) (xs.length + 1)).mapState (fun _ ↦ ()) = _
+  change (toBuffer.run (Cfg (Fin 1) Symbol Bool (xs.map some).toArray) (xs.map some) (xs.length + 1)).mapState (fun _ ↦ ()) = _
   rw [toBuffer_run]
   rfl
 
@@ -199,7 +199,7 @@ private theorem read_spec (xs : List Bool) (q : ℕ) :
   obtain ⟨l, hl, hr⟩ := RedirectInput.runFrom_init bufferEmbedding copier xs
     (rewound xs) (xs.length + 1)
   change fromBuffer.runFrom c (xs.length + 1) = _ at hr
-  rw [show copier.run (Config := Cfg (Fin 0) Symbol Bool (xs.map some).toArray) (xs.map some) (xs.length + 1) = copied xs from
+  rw [show copier.run (Cfg (Fin 0) Symbol Bool (xs.map some).toArray) (xs.map some) (xs.length + 1) = copied xs from
     run_copier xs] at hr
   have hh : fromBuffer.Halted (fromBuffer.runFrom c (xs.length + 1)) := by
     rw [hr]
@@ -262,13 +262,13 @@ theorem twice_computesInTimeAndSpace (xs : List Bool) :
   simpa only [Fintype.card_fin, Nat.one_mul, Nat.add_assoc, input, List.toList_toArray] using
     Program.cfg_computesInTimeAndSpace h ⟨rfl, le_rfl⟩
 
-#guard (twice.compile.run (Config := Cfg (Fin 1) Symbol (twice.State ⊕ twice.Exit) ([].map some).toArray) (([] : List Bool).map some) 6).output == input []
-#guard (twice.compile.run (Config := Cfg (Fin 1) Symbol (twice.State ⊕ twice.Exit) ([false].map some).toArray) (([false] : List Bool).map some) 11).output == input [false]
-#guard (twice.compile.run (Config := Cfg (Fin 1) Symbol (twice.State ⊕ twice.Exit) ([false, true].map some).toArray) (([false, true] : List Bool).map some) 16).output == input [false, true]
-#guard (twice.compile.run (Config := Cfg (Fin 1) Symbol (twice.State ⊕ twice.Exit) ([true, false, true].map some).toArray) (([true, false, true] : List Bool).map some) 21).output == input [true, false, true]
-#guard (twice.compile.run (Config := Cfg (Fin 1) Symbol (twice.State ⊕ twice.Exit) ([false, true].map some).toArray) (([false, true] : List Bool).map some) 16).inputPos.val == 3
-#guard (twice.compile.run (Config := Cfg (Fin 1) Symbol (twice.State ⊕ twice.Exit) ([false, true].map some).toArray) (([false, true] : List Bool).map some) 16).workPos 0 == 2
-#guard ((twice.compile.run (Config := Cfg (Fin 1) Symbol (twice.State ⊕ twice.Exit) ([false, true].map some).toArray) (([false, true] : List Bool).map some) 16).workTapes 0)[(0 : ℤ)] == some false
-#guard ((twice.compile.run (Config := Cfg (Fin 1) Symbol (twice.State ⊕ twice.Exit) ([false, true].map some).toArray) (([false, true] : List Bool).map some) 16).workTapes 0)[(2 : ℤ)] == none
+#guard (twice.compile.run (Cfg (Fin 1) Symbol (twice.State ⊕ twice.Exit) ([].map some).toArray) (([] : List Bool).map some) 6).output == input []
+#guard (twice.compile.run (Cfg (Fin 1) Symbol (twice.State ⊕ twice.Exit) ([false].map some).toArray) (([false] : List Bool).map some) 11).output == input [false]
+#guard (twice.compile.run (Cfg (Fin 1) Symbol (twice.State ⊕ twice.Exit) ([false, true].map some).toArray) (([false, true] : List Bool).map some) 16).output == input [false, true]
+#guard (twice.compile.run (Cfg (Fin 1) Symbol (twice.State ⊕ twice.Exit) ([true, false, true].map some).toArray) (([true, false, true] : List Bool).map some) 21).output == input [true, false, true]
+#guard (twice.compile.run (Cfg (Fin 1) Symbol (twice.State ⊕ twice.Exit) ([false, true].map some).toArray) (([false, true] : List Bool).map some) 16).inputPos.val == 3
+#guard (twice.compile.run (Cfg (Fin 1) Symbol (twice.State ⊕ twice.Exit) ([false, true].map some).toArray) (([false, true] : List Bool).map some) 16).workPos 0 == 2
+#guard ((twice.compile.run (Cfg (Fin 1) Symbol (twice.State ⊕ twice.Exit) ([false, true].map some).toArray) (([false, true] : List Bool).map some) 16).workTapes 0)[(0 : ℤ)] == some false
+#guard ((twice.compile.run (Cfg (Fin 1) Symbol (twice.State ⊕ twice.Exit) ([false, true].map some).toArray) (([false, true] : List Bool).map some) 16).workTapes 0)[(2 : ℤ)] == none
 
 end CompositionTest

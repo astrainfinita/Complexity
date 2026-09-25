@@ -34,7 +34,7 @@ private def start : TM.Cfg Unit Bool (Fin 5) #[] :=
   excursion.initInput ([] : List Bool)
 
 private def tracked (n : ℕ) : TM.TrackedCfg Unit Bool (Fin 5) #[] :=
-  excursion.run ([] : List Bool) n
+  excursion.run _ ([] : List Bool) n
 
 -- The starting work cell counts even before any action has run.
 #guard (tracked 0).space = 1

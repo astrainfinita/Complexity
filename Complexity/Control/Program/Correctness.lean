@@ -25,14 +25,14 @@ private theorem run_step (o : Op) (k : Ret o → Syntax O A Op Ret α u) (j : Re
     (h : Control.Run (compile e.eval (k j)) (k j).result e.observe e.act q s n x t) :
     Control.Run (compile e.eval (.step o k)) (Syntax.step o k).result e.observe e.act
       (stepLabel o k j q) s n x t := by
-  have hh := Control.Run.relabel (d := compile e.eval (.step o k))
+  have hh := h.relabel (d := compile e.eval (.step o k))
     (out' := (Syntax.step o k).result) (fun q ↦ Sum.inr ⟨j, q⟩) (fun x ↦ ⟨j, x⟩)
     (by
       intro q v
       simp only [compile]
       cases hnext : (compile e.eval (k j)).next q v with
       | mk a q => cases q <;> simp only [hnext] <;> rfl)
-    (fun _ ↦ rfl) h
+    (fun _ ↦ rfl)
   cases q <;> exact hh
 
 private theorem run_loop_cont {n r : ℕ} (a : A) (i : Fin n)
@@ -42,7 +42,7 @@ private theorem run_loop_cont {n r : ℕ} (a : A) (i : Fin n)
     (h : Control.Run (compile e.eval (k j)) (k j).result e.observe e.act q s m x t) :
     Control.Run (compile e.eval (.loop a i b k)) (Syntax.loop a i b k).result e.observe e.act
       (loopCont a i b k j q) s m x t := by
-  have hh := Control.Run.relabel (d := compile e.eval (.loop a i b k))
+  have hh := h.relabel (d := compile e.eval (.loop a i b k))
     (out' := (Syntax.loop a i b k).result)
     (fun q ↦ Sum.inr (.inr ⟨j, q⟩)) (fun x ↦ ⟨j, x⟩)
     (by
@@ -50,7 +50,7 @@ private theorem run_loop_cont {n r : ℕ} (a : A) (i : Fin n)
       simp only [compile]
       cases hnext : (compile e.eval (k j)).next q v with
       | mk a q => cases q <;> simp only [hnext] <;> rfl)
-    (fun _ ↦ rfl) h
+    (fun _ ↦ rfl)
   cases q <;> exact hh
 
 private theorem run_loop_body {n r : ℕ} (a : A) (i : Fin n)
@@ -80,7 +80,7 @@ private theorem run_call_cont {c d : ℕ} (b : Control O A (Fin c) (Fin d))
     (h : Control.Run (compile e.eval (k j)) (k j).result e.observe e.act q s m x t) :
     Control.Run (compile e.eval (.call b k)) (Syntax.call b k).result e.observe e.act
       (callCont b k j q) s m x t := by
-  have hh := Control.Run.relabel (d := compile e.eval (.call b k))
+  have hh := h.relabel (d := compile e.eval (.call b k))
     (out' := (Syntax.call b k).result)
     (fun q ↦ Sum.inr ⟨j, q⟩) (fun x ↦ ⟨j, x⟩)
     (by
@@ -88,7 +88,7 @@ private theorem run_call_cont {c d : ℕ} (b : Control O A (Fin c) (Fin d))
       simp only [compile]
       cases hnext : (compile e.eval (k j)).next q v with
       | mk a q => cases q <;> simp only [hnext] <;> rfl)
-    (fun _ ↦ rfl) h
+    (fun _ ↦ rfl)
   cases q <;> exact hh
 
 private theorem run_call_block {c d : ℕ} (b : Control O A (Fin c) (Fin d))
@@ -99,14 +99,14 @@ private theorem run_call_block {c d : ℕ} (b : Control O A (Fin c) (Fin d))
       (compile e.eval (k j)).start t l x z) :
     Control.Run (compile e.eval (.call b k)) (Syntax.call b k).result e.observe e.act
       (callLabel b k (fun j ↦ (compile e.eval (k j)).start) q) s (m + l) x z := by
-  have hh := Control.Run.link (c := b) (d := compile e.eval (.call b k))
+  have hh := h.link (d := compile e.eval (.call b k))
     (out' := (Syntax.call b k).result) Sum.inl
     (fun j ↦ callCont b k j (compile e.eval (k j)).start)
     (by
       intro q v
       simp only [compile]
       cases hnext : b.next q v with
-      | mk a q => cases q <;> simp only [hnext] <;> rfl) h
+      | mk a q => cases q <;> simp only [hnext] <;> rfl)
     (by intro j' hj; cases hj; exact run_call_cont e b k j' ht)
   cases q <;> exact hh
 
@@ -129,7 +129,7 @@ theorem Exec.compile {p : Syntax O A Op Ret α u} {s t : S} {n : ℕ} {x : Kind.
     simpa only [Syntax.compile] using
       run_loop_body e a i b k i ihb (run_loop_cont e a i b k _ ihk)
   | loop_next a i b k hb hk ihb ihk =>
-    have hloop := Control.Run.congr_next (d := Syntax.compile e.eval (.loop a i b k)) ihk
+    have hloop := ihk.congr_next (d := Syntax.compile e.eval (.loop a i b k))
       (by
         funext q o
         rcases q with j | (⟨j, q⟩ | ⟨j, q⟩)

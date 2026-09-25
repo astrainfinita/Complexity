@@ -52,7 +52,7 @@ def check {k : ℕ} {Q : Type} [FinEnum Q] (M : TreeMachine Id k Q) (i : Fin k) 
     (o : Fin k) (t : Tree) : Bool :=
   let N := TM.Program.compile (Simulation.Program.program M i o)
   let xs := TreeMachine.code x
-  let c := N.run (Config := TM.Cfg _ _ _ xs.toArray) xs 4802
+  let c := N.run (TM.Cfg _ _ _ xs.toArray) xs 4802
   N.halt c.state && (c.output == (TreeMachine.code t).toArray) &&
     (c.inputPos.val == xs.length + 1) && (c.workPos (Compiler.counter k) == 0)
 

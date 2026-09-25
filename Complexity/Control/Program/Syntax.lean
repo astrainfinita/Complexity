@@ -56,14 +56,15 @@ namespace Syntax
 variable {O A Op α β γ : Type} {Ret : Op → Type} {u v w : Kind}
 
 /-- Change the external type and result shape while preserving the operations. -/
-def mapResult {u v : Kind} (f : Kind.Value α u → Kind.Value β v) (p : Syntax O A Op Ret α u) :
-    Syntax O A Op Ret β v :=
+def mapResult {u : Kind} (p : Syntax O A Op Ret α u) (β : Type) (v : Kind)
+    (f : Kind.Value α u → Kind.Value β v) : Syntax O A Op Ret β v :=
   match p with
   | .ret a => .ret (f a)
-  | .step o k => .step o (fun x ↦ mapResult f (k x))
+  | .step o k => .step o (fun x ↦ (k x).mapResult β v f)
   | .loop a i body k =>
-      .loop a i (fun j ↦ mapResult id (body j)) (fun x ↦ mapResult f (k x))
-  | .call b k => .call b (fun x ↦ mapResult f (k x))
+      .loop a i (fun j ↦ (body j).mapResult β (.branch _ _) id)
+        (fun x ↦ (k x).mapResult β v f)
+  | .call b k => .call b (fun x ↦ (k x).mapResult β v f)
 
 /-- Substitute returns without saving an arbitrary intermediate type in syntax. -/
 def bindTo {u v : Kind} (p : Syntax O A Op Ret α u) (f : Kind.Value α u → Syntax O A Op Ret β v) :
@@ -72,10 +73,10 @@ def bindTo {u v : Kind} (p : Syntax O A Op Ret α u) (f : Kind.Value α u → Sy
   | .ret a => f a
   | .step o k => .step o (fun x ↦ bindTo (k x) f)
   | .loop a i body k =>
-      .loop a i (fun j ↦ mapResult (α := α) (β := β) id (body j)) (fun x ↦ bindTo (k x) f)
+      .loop a i (fun j ↦ (body j).mapResult β (.branch _ _) id) (fun x ↦ bindTo (k x) f)
   | .call b k => .call b (fun x ↦ bindTo (k x) f)
 
-@[simp] theorem mapResult_id (p : Syntax O A Op Ret α u) : mapResult id p = p := by
+@[simp] theorem mapResult_id (p : Syntax O A Op Ret α u) : p.mapResult α u id = p := by
   induction p with
   | ret a => rfl
   | step o k ih => simp only [mapResult, ih]
@@ -83,7 +84,8 @@ def bindTo {u v : Kind} (p : Syntax O A Op Ret α u) (f : Kind.Value α u → Sy
   | call b k ih => simp only [mapResult, ih]
 
 theorem mapResult_comp (p : Syntax O A Op Ret α u) (f : Kind.Value α u → Kind.Value β v)
-    (g : Kind.Value β v → Kind.Value γ w) : mapResult g (mapResult f p) = mapResult (g ∘ f) p := by
+    (g : Kind.Value β v → Kind.Value γ w) :
+    (p.mapResult β v f).mapResult γ w g = p.mapResult γ w (g ∘ f) := by
   induction p generalizing β γ v w with
   | ret a => rfl
   | step o k ih => simp only [mapResult, ih]
@@ -91,7 +93,7 @@ theorem mapResult_comp (p : Syntax O A Op Ret α u) (f : Kind.Value α u → Kin
     simp only [mapResult, hk]
     congr 1
     funext j
-    exact hb j (β := β) (γ := γ) (v := .branch n r) (w := .branch n r) id id
+    apply hb j
   | call b k ih => simp only [mapResult, ih]
 
 @[simp] theorem ret_bindTo (a : Kind.Value α u) (f : Kind.Value α u → Syntax O A Op Ret β v) :
@@ -118,8 +120,7 @@ theorem bindTo_assoc (p : Syntax O A Op Ret α u) (f : Kind.Value α u → Synta
     simp only [bindTo, ih]
     congr 1
     funext j
-    exact mapResult_comp (body j) (β := β) (γ := γ)
-      (v := .branch n r) (w := .branch n r) id id
+    apply mapResult_comp (body j)
   | call b k ih => simp only [bindTo, ih]
 
 /-- Native control states generated from syntax. -/
@@ -191,8 +192,8 @@ def perform (o : Op) : Program O A Op Ret (Ret o) := step o ret
 /-- A finite loop whose dispatch action is charged on each iteration. -/
 def loop {n r : ℕ} (a : A) (body : Fin n → Program O A Op Ret (Fin n ⊕ Fin r))
     (i : Fin n) : Program O A Op Ret (Fin r) :=
-  Syntax.loop a i (fun j ↦ Syntax.mapResult (α := Fin n ⊕ Fin r) (β := Fin r)
-    (u := .value) (v := .branch n r) id (body j)) (fun j ↦ Syntax.ret (u := .value) j)
+  Syntax.loop a i (fun j ↦ (body j).mapResult (Fin r) (.branch n r) id)
+    (fun j ↦ Syntax.ret (u := .value) j)
 
 /-- Call an external controller and continue from its numbered exit. -/
 def call {c d : ℕ} (b : Control O A (Fin c) (Fin d)) (k : Fin d → Program O A Op Ret α) :

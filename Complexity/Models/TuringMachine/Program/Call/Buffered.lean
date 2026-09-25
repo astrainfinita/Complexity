@@ -166,12 +166,12 @@ def program (M : TM Id κ (Option Bool) Q) : Program (κ ⊕ Bool) (Option Bool)
 /-- The call has at most the source running time and preserves the caller's external streams. -/
 @[spec] theorem spec (M : TM Id κ (Option Bool) Q)
     (d : Cfg (κ ⊕ Bool) (Option Bool) Unit zs) (t q : ℕ)
-    (h : M.Halted (M.run (Config := Cfg κ (Option Bool) Q (xs.map some).toArray) (xs.map some) t)) :
+    (h : M.Halted (M.run (Cfg κ (Option Bool) Q (xs.map some).toArray) (xs.map some) t)) :
     Triple ((program M).verify (cfgSemantics zs))
       (fun u b ↦ u = (cfg (Q := Q) xs d (M.initInput (xs.map some)) false).mapState
         (fun _ ↦ ()) ∧ t + q ≤ b)
       (fun _ u b ↦ ∃ l, u =
-        (cfg (Q := Q) xs d (M.run (xs.map some) t) l).mapState
+        (cfg (Q := Q) xs d (M.run _ (xs.map some) t) l).mapState
           (fun _ ↦ ()) ∧ q ≤ b) () := by
   obtain ⟨l, _, hr⟩ := runFrom_cfg (xs := xs) M d (M.initInput (xs.map some)) false
     (by intro _; rfl) t
@@ -192,8 +192,8 @@ def program (M : TM Id κ (Option Bool) Q) : Program (κ ⊕ Bool) (Option Bool)
 results afterwards; the input buffer and both external streams are preserved. -/
 @[spec] theorem spec_ready (M : TM Id κ (Option Bool) Q)
     (d : Cfg (κ ⊕ Bool) (Option Bool) Unit zs) (t q : ℕ)
-    (h : M.Halted (M.run (Config := Cfg κ (Option Bool) Q (xs.map some).toArray) (xs.map some) t))
-    (hy : (M.run (Config := Cfg κ (Option Bool) Q (xs.map some).toArray) (xs.map some) t).output =
+    (h : M.Halted (M.run (Cfg κ (Option Bool) Q (xs.map some).toArray) (xs.map some) t))
+    (hy : (M.run (Cfg κ (Option Bool) Q (xs.map some).toArray) (xs.map some) t).output =
       (ys.map some).toArray)
     (hw : ∀ j : κ, d.workTapes (Sum.inl j) = ∅)
     (hp : ∀ j : κ, d.workPos (Sum.inl j) = 0)

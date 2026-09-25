@@ -78,7 +78,7 @@ def outputEnd := (RedirectOutput.compilerAlong routed machine).runFrom outputSta
 
 example (n : ℕ) :
     (RedirectOutput.compilerAlong routed machine).runFrom outputStart n =
-      RedirectOutput.cfgAlong routed (machine.run (Input := List Symbol) (Config := Cfg (Fin 2) Symbol Bool [some true].toArray) [some true] n) (caller 5) :=
+      RedirectOutput.cfgAlong routed (machine.run (Input := List Symbol) (Cfg (Fin 2) Symbol Bool [some true].toArray) [some true] n) (caller 5) :=
   RedirectOutput.runFrom_cfgAlong routed machine _ _ n
 
 def composedEnd := (RedirectOutput.compilerAlong (routed.trans shifted) machine).runFrom
@@ -108,10 +108,10 @@ def inputEnd := (RedirectInput.compilerAlong routed machine).runFrom inputStart 
 #guard (inputEnd.workTapes 2)[(5 : ℤ)] == some false && inputEnd.workPos 2 == 5
 
 example (n : ℕ) : ∃ flag,
-    RedirectInput.Boundary (machine.run (Input := List Symbol) (Config := Cfg (Fin 2) Symbol Bool ([true].map some).toArray) ([true].map some) n).inputPos flag ∧
+    RedirectInput.Boundary (machine.run (Input := List Symbol) (Cfg (Fin 2) Symbol Bool ([true].map some).toArray) ([true].map some) n).inputPos flag ∧
       (RedirectInput.compilerAlong routed machine).runFrom inputStart n =
         RedirectInput.cfgAlong routed #[true] (caller 5)
-          (machine.run (Input := List Symbol) (Config := Cfg (Fin 2) Symbol Bool ([true].map some).toArray) ([true].map some) n) flag :=
+          (machine.run (Input := List Symbol) (Cfg (Fin 2) Symbol Bool ([true].map some).toArray) ([true].map some) n) flag :=
   RedirectInput.runFrom_cfgAlong routed machine #[true] (caller 5)
     _ false (by intro _; rfl) n
 
@@ -141,7 +141,7 @@ example (n : ℕ) :
         (RedirectOutput.cfgAlong (Function.Embedding.refl _)
           ((taggedMachine.initInput (Input := List Symbol) (Config := Cfg Bool Symbol Bool #[]) [])) ((rawExecution (κ := Bool ⊕ Unit) (Γ := Symbol) []).init false)) n =
       RedirectOutput.cfgAlong (Function.Embedding.refl _)
-        (taggedMachine.run (Input := List Symbol) (Config := Cfg Bool Symbol Bool #[]) [] n) ((rawExecution (κ := Bool ⊕ Unit) (Γ := Symbol) []).init false) :=
+        (taggedMachine.run (Input := List Symbol) (Cfg Bool Symbol Bool #[]) [] n) ((rawExecution (κ := Bool ⊕ Unit) (Γ := Symbol) []).init false) :=
   RedirectOutput.runFrom_cfgAlong (Function.Embedding.refl _) taggedMachine _ _ n
 
 end TapeEmbeddingTest

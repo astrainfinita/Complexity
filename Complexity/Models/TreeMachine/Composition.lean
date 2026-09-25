@@ -293,24 +293,24 @@ theorem comp_computesInTimeAndSpace [NeZero k] [NeZero l]
   obtain ⟨n, _, hn, ha, hc, _⟩ := hM.exists_haltsAt
   obtain ⟨m, _, hm, hb, hd, _⟩ := hN.exists_haltsAt
   let C := comp M N
-  let c := M.run (Config := Cfg k Q) x n
+  let c := M.run (Cfg k Q) x n
   have h₀ : C.initInput (Config := Cfg (max k l + 1) (Comp.State k l Q Q')) x =
       Comp.left (l := l) (Q' := Q') (M.initInput (Config := Cfg k Q) x) :=
     Comp.initInput_eq M N x
   have hleft (d : ℕ) (hd : d ≤ n) :
-      C.run (Config := Cfg (max k l + 1) (Comp.State k l Q Q')) x d =
-        Comp.left (l := l) (Q' := Q') (M.run (Config := Cfg k Q) x d) := by
+      C.run (Cfg (max k l + 1) (Comp.State k l Q Q')) x d =
+        Comp.left (l := l) (Q' := Q') (M.run (Cfg k Q) x d) := by
     rw [Controller.run, h₀]
     exact Comp.runFrom_left M N _ d (fun j hj => hn.2 j (by omega))
-  have h₁ : C.run (Config := Cfg (max k l + 1) (Comp.State k l Q Q')) x n =
+  have h₁ : C.run (Cfg (max k l + 1) (Comp.State k l Q Q')) x n =
       Comp.left (l := l) (Q' := Q') c := hleft n le_rfl
   have h₂ : C.runFrom (Comp.left (l := l) (Q' := Q') c) (max k l) =
       Comp.right (k := k) (Q := Q) (N.initInput (Config := Cfg l Q') a) := by
     rw [Comp.runFrom_clear M N c hn.1]
     exact congrArg (fun a => Comp.right (k := k) (Q := Q) (N.initInput (Config := Cfg l Q') a)) ha
   have hright (d : ℕ) : C.run
-      (Config := Cfg (max k l + 1) (Comp.State k l Q Q')) x (n + max k l + d) =
-      Comp.right (k := k) (Q := Q) (N.run (Config := Cfg l Q') a d) := by
+      (Cfg (max k l + 1) (Comp.State k l Q Q')) x (n + max k l + d) =
+      Comp.right (k := k) (Q := Q) (N.run (Cfg l Q') a d) := by
     rw [Controller.run, Controller.runFrom_add, Controller.runFrom_add, ← Controller.run, h₁, h₂]
     exact Comp.runFrom_right M N _ d
   have hw : C.cost (C.initInput
@@ -320,13 +320,13 @@ theorem comp_computesInTimeAndSpace [NeZero k] [NeZero l]
       Comp.cost_left M N _ n hn.2, Comp.cost_clear M N c hn.1, Comp.cost_right M N]
     exact Nat.add_le_add (Nat.add_le_add_right hc _) hd
   refine ⟨n + max k l + m, ?_, ?_, hw, ?_⟩
-  · change C.Halted (C.run (Config := Cfg (max k l + 1) (Comp.State k l Q Q')) x (n + max k l + m))
+  · change C.Halted (C.run (Cfg (max k l + 1) (Comp.State k l Q Q')) x (n + max k l + m))
     rw [hright]
     exact hm.1
-  · change (C.run (Config := Cfg (max k l + 1) (Comp.State k l Q Q'))
+  · change (C.run (Cfg (max k l + 1) (Comp.State k l Q Q'))
       x (n + max k l + m)).regs 0 = b
     rw [hright]
-    exact (pad_get (by omega) (N.run (Config := Cfg l Q') a m).regs 0).trans hb
+    exact (pad_get (by omega) (N.run (Cfg l Q') a m).regs 0).trans hb
   · apply (C.runConfigMax_le_iff treeCosts.space x _ _).2
     intro d _
     simp only [treeCosts_space]

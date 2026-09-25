@@ -29,7 +29,7 @@ theorem ComputesInTimeAndSpace.mono {κ : Type*} [Fintype κ] {Γ Q : Type*} [In
     {M : TM Id κ Γ Q} {xs ys : List Γ} {t s t' s' : ℕ}
     (h : M.ComputesInTimeAndSpace xs ys t s) (ht : t ≤ t') (hs : s ≤ s') :
     M.ComputesInTimeAndSpace xs ys t' s' := by
-  have he : M.run xs t' = M.run xs t := M.run_eq_of_halted xs h.1 ht
+  have he : M.run _ xs t' = M.run _ xs t := M.run_eq_of_halted xs h.1 ht
   exact ⟨he.symm ▸ h.1, he.symm ▸ h.2.1, (h.usesSpace t').trans hs⟩
 
 variable {α β : Type*} [Encoding (List Bool) α] [Encoding (List Bool) β]

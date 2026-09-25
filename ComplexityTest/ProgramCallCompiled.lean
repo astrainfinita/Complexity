@@ -69,13 +69,13 @@ def composed : TM.Program (Fin 1) (Option Bool) Unit := do
   pure ()
 
 -- Both called controllers came from Program, including the product added by input redirection.
-#guard ((Program.compile (Program.call (Program.compile producer))).run (Input := List (Option Bool)) (Config := Cfg (Fin 0) (Option Bool) ((Program.call producer.compile).State ⊕ (Program.call producer.compile).Exit) #[]) [] 2).output ==
+#guard ((Program.compile (Program.call (Program.compile producer))).run (Input := List (Option Bool)) (Cfg (Fin 0) (Option Bool) ((Program.call producer.compile).State ⊕ (Program.call producer.compile).Exit) #[]) [] 2).output ==
   #[some false, some true]
 -- Producer: 2 steps; rewinding two bits: 10; copier: 5.
-#guard !(Program.compile composed).halt ((Program.compile composed).run (Input := List (Option Bool)) (Config := Cfg (Fin 1) (Option Bool) (composed.State ⊕ composed.Exit) #[]) [] 16).state
-#guard (Program.compile composed).halt ((Program.compile composed).run (Input := List (Option Bool)) (Config := Cfg (Fin 1) (Option Bool) (composed.State ⊕ composed.Exit) #[]) [] 17).state
-#guard ((Program.compile composed).run (Input := List (Option Bool)) (Config := Cfg (Fin 1) (Option Bool) (composed.State ⊕ composed.Exit) #[]) [] 17).output == #[some false, some true]
-#guard (((Program.compile composed).run (Input := List (Option Bool)) (Config := Cfg (Fin 1) (Option Bool) (composed.State ⊕ composed.Exit) #[]) [] 17).workTapes 0)[(0 : ℤ)] == some false
-#guard (((Program.compile composed).run (Input := List (Option Bool)) (Config := Cfg (Fin 1) (Option Bool) (composed.State ⊕ composed.Exit) #[]) [] 17).workTapes 0)[(1 : ℤ)] == some true
+#guard !(Program.compile composed).halt ((Program.compile composed).run (Input := List (Option Bool)) (Cfg (Fin 1) (Option Bool) (composed.State ⊕ composed.Exit) #[]) [] 16).state
+#guard (Program.compile composed).halt ((Program.compile composed).run (Input := List (Option Bool)) (Cfg (Fin 1) (Option Bool) (composed.State ⊕ composed.Exit) #[]) [] 17).state
+#guard ((Program.compile composed).run (Input := List (Option Bool)) (Cfg (Fin 1) (Option Bool) (composed.State ⊕ composed.Exit) #[]) [] 17).output == #[some false, some true]
+#guard (((Program.compile composed).run (Input := List (Option Bool)) (Cfg (Fin 1) (Option Bool) (composed.State ⊕ composed.Exit) #[]) [] 17).workTapes 0)[(0 : ℤ)] == some false
+#guard (((Program.compile composed).run (Input := List (Option Bool)) (Cfg (Fin 1) (Option Bool) (composed.State ⊕ composed.Exit) #[]) [] 17).workTapes 0)[(1 : ℤ)] == some true
 
 end ProgramCallCompiledTest

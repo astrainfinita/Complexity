@@ -33,7 +33,7 @@ variable {κ : Type*} {Γ Q : Type*} [Inhabited Γ] {xs : List Γ}
 
 /-- Every computation branch has halted by this deadline. -/
 def UsesTime (M : NTM κ Γ Q) (xs : List Γ) (t : ℕ) : Prop :=
-  ∀ c ∈ M.runWith (Config := TM.Cfg κ Γ Q xs.toArray) Choice.binaryMultiset xs t, M.Halted c
+  ∀ c ∈ M.runWith (TM.Cfg κ Γ Q xs.toArray) Choice.binaryMultiset xs t, M.Halted c
 
 /-- All computation branches halt, with a common finite deadline for this input. -/
 def Terminates (M : NTM κ Γ Q) (xs : List Γ) : Prop :=
@@ -68,20 +68,20 @@ theorem UsesSpace.tapes_le [Fintype κ] {M : NTM κ Γ Q} {xs : List Γ} {s : �
 /-- Once every branch has halted, additional padding leaves the entire endpoint multiset fixed. -/
 theorem runWith_eq_of_usesTime {M : NTM κ Γ Q} {xs : List Γ} {t t' : ℕ}
     (h : M.UsesTime xs t) (ht : t ≤ t') :
-    M.runWith (Config := TM.Cfg κ Γ Q xs.toArray) Choice.binaryMultiset xs t' =
-      M.runWith (Config := TM.Cfg κ Γ Q xs.toArray) Choice.binaryMultiset xs t :=
+    M.runWith (TM.Cfg κ Γ Q xs.toArray) Choice.binaryMultiset xs t' =
+      M.runWith (TM.Cfg κ Γ Q xs.toArray) Choice.binaryMultiset xs t :=
   Controller.runFromWith_eq_of_forall_halted M Choice.binaryMultiset
     (M.initInput (Config := TM.Cfg κ Γ Q xs.toArray) xs) h ht
 
 /-- Some finite computation halts with the given complete output. -/
 def Produces (M : NTM κ Γ Q) (xs ys : List Γ) : Prop :=
-  ∃ n c, c ∈ M.runWith (Config := TM.Cfg κ Γ Q xs.toArray) Choice.binaryMultiset xs n ∧
+  ∃ n c, c ∈ M.runWith (TM.Cfg κ Γ Q xs.toArray) Choice.binaryMultiset xs n ∧
     M.Halted c ∧ c.output = ys.toArray
 
 /-- A time bound allows eventual output to be checked at one fixed depth. -/
 theorem produces_iff_of_usesTime {M : NTM κ Γ Q} {xs ys : List Γ} {t : ℕ}
     (h : M.UsesTime xs t) : M.Produces xs ys ↔
-      ∃ c ∈ M.runWith (Config := TM.Cfg κ Γ Q xs.toArray) Choice.binaryMultiset xs t,
+      ∃ c ∈ M.runWith (TM.Cfg κ Γ Q xs.toArray) Choice.binaryMultiset xs t,
         c.output = ys.toArray := by
   constructor
   · rintro ⟨n, c, hc, hh, ho⟩
@@ -107,13 +107,13 @@ def Accepts (M : NTM κ (Option Bool) Q) (xs : List (Option Bool)) : Prop :=
 
 theorem accepts_iff_of_usesTime {t : ℕ} (h : M.UsesTime xs t) :
     M.Accepts xs ↔ ∃ c ∈ M.runWith
-      (Config := TM.Cfg κ (Option Bool) Q xs.toArray) Choice.binaryMultiset xs t,
+      (TM.Cfg κ (Option Bool) Q xs.toArray) Choice.binaryMultiset xs t,
         c.output = #[some true] :=
   produces_iff_of_usesTime h
 
 theorem booleanOutput_iff_of_usesTime {t : ℕ} (h : M.UsesTime xs t) :
     M.BooleanOutput xs ↔ ∀ c ∈ M.runWith
-      (Config := TM.Cfg κ (Option Bool) Q xs.toArray) Choice.binaryMultiset xs t,
+      (TM.Cfg κ (Option Bool) Q xs.toArray) Choice.binaryMultiset xs t,
         ∃ b : Bool, c.output = #[some b] := by
   constructor
   · intro hb c hc

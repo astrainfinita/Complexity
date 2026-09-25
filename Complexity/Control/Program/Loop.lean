@@ -136,9 +136,8 @@ variable [FinEnum α] [FinEnum β]
 /-- Encode a body's carried result without enumerating its control states. -/
 def loopOnBody (b : α → Program O A Op Ret (α ⊕ β)) (i : Fin (FinEnum.card α)) :
     Syntax O A Op Ret β (.branch (FinEnum.card α) (FinEnum.card β)) :=
-  Syntax.mapResult (α := α ⊕ β) (β := β)
-    (u := .value) (v := .branch (FinEnum.card α) (FinEnum.card β))
-    (Sum.map FinEnum.equiv FinEnum.equiv) (b (FinEnum.equiv.symm i))
+  (b (FinEnum.equiv.symm i)).mapResult β (.branch (FinEnum.card α) (FinEnum.card β))
+    (Sum.map FinEnum.equiv FinEnum.equiv)
 
 /-- A finite-value loop. Every body entry executes the charged dispatch action. -/
 def loopOn (a : A) (b : α → Program O A Op Ret (α ⊕ β)) (i : α) :
@@ -148,10 +147,10 @@ def loopOn (a : A) (b : α → Program O A Op Ret (α ⊕ β)) (i : α) :
 
 /-- Finite carried values are a relabeling of the numbered loop's inputs and results. -/
 theorem loopOn_eq_mapResult_loop (a : A) (b : α → Program O A Op Ret (α ⊕ β)) (i : α) :
-    loopOn a b i = Syntax.mapResult (u := .value) (v := .value)
-      (FinEnum.equiv : β ≃ Fin (FinEnum.card β)).symm
-      (loop a (fun j ↦ Syntax.mapResult (u := .value) (v := .value)
-        (Sum.map FinEnum.equiv FinEnum.equiv) (b (FinEnum.equiv.symm j))) (FinEnum.equiv i)) := by
+    loopOn a b i =
+      (loop a (fun j ↦ (b (FinEnum.equiv.symm j)).mapResult _ .value
+        (Sum.map FinEnum.equiv FinEnum.equiv)) (FinEnum.equiv i)).mapResult β .value
+        (FinEnum.equiv : β ≃ Fin (FinEnum.card β)).symm := by
   simp only [loopOn, loop, Syntax.mapResult, Syntax.mapResult_comp,
     Function.id_comp]
   rfl
@@ -165,8 +164,7 @@ theorem loopOn_done (a : A) (b : α → Program O A Op Ret (α ⊕ β))
     {i : α} {j : β} {s t : S} {n : ℕ}
     (h : (b i).Exec e (e.act a s) n (.inr j) t) :
     (loopOn a b i).Exec e s (n + 1) j t := by
-  have hb := Syntax.Exec.mapResult (β := β)
-    (w := .branch (FinEnum.card α) (FinEnum.card β)) h
+  have hb := h.mapResult (β := β) (w := .branch (FinEnum.card α) (FinEnum.card β))
     (Sum.map FinEnum.equiv FinEnum.equiv)
   apply Syntax.Exec.loop_done (m := n) (l := 0) (j := FinEnum.equiv j)
     a (FinEnum.equiv i) (loopOnBody b)
@@ -182,8 +180,7 @@ theorem loopOn_next (a : A) (b : α → Program O A Op Ret (α ⊕ β))
     (h : (b i).Exec e (e.act a s) n (.inl j) t)
     (hc : (loopOn a b j).Exec e t m v u) :
     (loopOn a b i).Exec e s (n + m + 1) v u := by
-  have hb := Syntax.Exec.mapResult (β := β)
-    (w := .branch (FinEnum.card α) (FinEnum.card β)) h
+  have hb := h.mapResult (β := β) (w := .branch (FinEnum.card α) (FinEnum.card β))
     (Sum.map FinEnum.equiv FinEnum.equiv)
   apply Syntax.Exec.loop_next (m := n) (l := m) (j := FinEnum.equiv j)
     a (FinEnum.equiv i) (loopOnBody b)
@@ -205,8 +202,8 @@ theorem spec_loopOn (a : A) (b : α → Program O A Op Ret (α ⊕ β)) (i : α)
   rw [loopOn_eq_mapResult_loop]
   apply spec_mapResult
   have h := spec_loop a
-    (fun j ↦ Syntax.mapResult (u := .value) (v := .value)
-      (Sum.map FinEnum.equiv FinEnum.equiv) (b (FinEnum.equiv.symm j)))
+    (fun j ↦ (b (FinEnum.equiv.symm j)).mapResult _ .value
+      (Sum.map FinEnum.equiv FinEnum.equiv))
     (FinEnum.equiv i) e (fun j ↦ I (FinEnum.equiv.symm j))
     (fun j ↦ Q (FinEnum.equiv.symm j)) () (fun j ↦ hp (FinEnum.equiv.symm j))
   simp only [Equiv.symm_apply_apply] at h

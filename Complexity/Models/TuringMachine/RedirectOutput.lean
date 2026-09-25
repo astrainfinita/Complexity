@@ -164,8 +164,8 @@ theorem cfg_init (e : (κ ⊕ Unit) ↪ τ) (xs : List Γ) (q : Q) :
 
 /-- Output redirection preserves a standard input run. -/
 theorem run_eq (e : (κ ⊕ Unit) ↪ τ) (M : TM Id κ Γ Q) (xs : List Γ) (n : ℕ) :
-    (compilerAlong e M).run (Config := Cfg τ Γ Q xs.toArray) xs n =
-      cfgAlong e (M.run xs n)
+    (compilerAlong e M).run (Cfg τ Γ Q xs.toArray) xs n =
+      cfgAlong e (M.run _ xs n)
         ((compilerAlong e M).initInput (Config := Cfg τ Γ Q xs.toArray) xs) := by
   simpa only [Controller.run, Controller.initInput, cfg_init,
     show (compilerAlong e M).q₀ = M.q₀ from rfl] using

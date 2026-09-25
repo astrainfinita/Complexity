@@ -49,49 +49,51 @@ def initInput {F : Type u → Type*} (M : Controller F Observation Action Q) (in
 
 variable [Observe Config Observation] [Apply Config Action]
 
+variable (Config) in
 /-- Run from the selected input configuration with an explicit choice interpretation. -/
 def runWith {F m : Type u → Type*} [Monad m]
     (M : Controller F Observation Action Q) (h : Choice.Interpretation F m)
     (input : Input) (n : ℕ) [Execution Config Q Output input] : m Config :=
-  M.runFromWith h (initInput M input) n
+  M.runFromWith h (M.initInput input) n
 
 @[simp] theorem runWith_zero {F m : Type u → Type*} [Monad m]
     (M : Controller F Observation Action Q) (h : Choice.Interpretation F m)
     (input : Input) [Execution Config Q Output input] :
-    M.runWith (Config := Config) h input 0 = pure (M.initInput input) := rfl
+    M.runWith Config h input 0 = pure (M.initInput input) := rfl
 
+variable (Config) in
 /-- Run from the initial configuration selected by an execution convention. -/
 def run (M : Controller Id Observation Action Q) (input : Input) (n : ℕ)
     [Execution Config Q Output input] : Config :=
-  M.runFrom (initInput M input) n
+  M.runFrom (M.initInput input) n
 
 @[simp] theorem run_zero (M : Controller Id Observation Action Q) (input : Input)
     [Execution Config Q Output input] :
-    M.run (Config := Config) input 0 = M.initInput input := rfl
+    M.run Config input 0 = M.initInput input := rfl
 
 /-- One more step extends a standard input run. -/
 theorem run_succ (M : Controller Id Observation Action Q) (input : Input) (n : ℕ)
     [Execution Config Q Output input] :
-    M.run (Config := Config) input (n + 1) = M.step (M.run input n) :=
+    M.run Config input (n + 1) = M.step (M.run Config input n) :=
   M.runFrom_succ' (M.initInput input) n
 
 /-- Standard input execution stays fixed after reaching a halting state. -/
 theorem run_eq_of_halted (M : Controller Id Observation Action Q) (input : Input)
     [Execution Config Q Output input] {n k : ℕ}
-    (h : M.Halted (M.run (Config := Config) input n)) (hk : n ≤ k) :
-    M.run (Config := Config) input k = M.run input n :=
+    (h : M.Halted (M.run Config input n)) (hk : n ≤ k) :
+    M.run Config input k = M.run Config input n :=
   M.runFrom_eq_of_halted (M.initInput input) h hk
 
 /-- The cumulative action cost of an execution prefix from its selected start. -/
 def runActionSum (M : Controller Id Observation Action Q) (cost : Action → Config → ℕ)
     (input : Input) (n : ℕ) [Execution Config Q Output input] : ℕ :=
-  M.runActionSumFrom cost (initInput M input) n
+  M.runActionSumFrom cost (M.initInput input) n
 
 /-- The peak configuration space of an execution prefix from its selected start. -/
 def runConfigMax (M : Controller Id Observation Action Q)
     (space : Config → ℕ) (input : Input) (n : ℕ)
     [Execution Config Q Output input] : ℕ :=
-  M.runConfigMaxFrom space (initInput M input) n
+  M.runConfigMaxFrom space (M.initInput input) n
 
 @[simp] theorem runActionSum_zero (M : Controller Id Observation Action Q)
     (cost : Action → Config → ℕ) (input : Input)
@@ -102,7 +104,7 @@ def runConfigMax (M : Controller Id Observation Action Q)
 @[simp] theorem runConfigMax_zero (M : Controller Id Observation Action Q)
     (space : Config → ℕ) (input : Input)
     [Execution Config Q Output input] :
-    runConfigMax M space input 0 = space (initInput M input) := by
+    runConfigMax M space input 0 = space (M.initInput input) := by
   simp [runConfigMax]
 
 section Resources
@@ -116,7 +118,7 @@ theorem runActionSum_mono (cost : Action → Config → ℕ) (input : Input)
 
 theorem runActionSum_eq_of_halted (cost : Action → Config → ℕ) (input : Input)
     [Execution Config Q Output input] {n k : ℕ}
-    (h : M.Halted (M.run (Config := Config) input n)) (hk : n ≤ k) :
+    (h : M.Halted (M.run Config input n)) (hk : n ≤ k) :
     M.runActionSum cost input k = M.runActionSum cost input n :=
   M.runActionSumFrom_eq_of_halted cost (M.initInput input) h hk
 
@@ -127,18 +129,18 @@ theorem runConfigMax_mono (space : Config → ℕ) (input : Input)
 
 theorem runConfigMax_eq_of_halted (space : Config → ℕ) (input : Input)
     [Execution Config Q Output input] {n k : ℕ}
-    (h : M.Halted (M.run (Config := Config) input n)) (hk : n ≤ k) :
+    (h : M.Halted (M.run Config input n)) (hk : n ≤ k) :
     M.runConfigMax space input k = M.runConfigMax space input n :=
   M.runConfigMaxFrom_eq_of_halted space (M.initInput input) h hk
 
 theorem space_le_runConfigMax (space : Config → ℕ) (input : Input)
     [Execution Config Q Output input] {i n : ℕ} (h : i ≤ n) :
-    space (M.run input i) ≤ M.runConfigMax space input n :=
+    space (M.run Config input i) ≤ M.runConfigMax space input n :=
   M.space_le_runConfigMaxFrom space (M.initInput input) h
 
 theorem runConfigMax_le_iff (space : Config → ℕ) (input : Input)
     [Execution Config Q Output input] (n bound : ℕ) :
-    M.runConfigMax space input n ≤ bound ↔ ∀ i ≤ n, space (M.run input i) ≤ bound :=
+    M.runConfigMax space input n ≤ bound ↔ ∀ i ≤ n, space (M.run Config input i) ≤ bound :=
   M.runConfigMaxFrom_le_iff space (M.initInput input) n bound
 
 end Resources
@@ -149,7 +151,7 @@ def computes (M : Controller Id Observation Action Q)
     (input : Input) (output : Output) (time space : ℕ)
     [exe : Execution Config Q Output input] : Prop :=
   ∃ n,
-    let final := run M input n
+    let final := M.run Config input n
     M.Halted final ∧ exe.hasOutput final output ∧
       runActionSum M costs.time input n ≤ time ∧
       runConfigMax M costs.space input n ≤ space

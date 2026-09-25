@@ -53,11 +53,11 @@ def demo : Program (Fin 1) Bool Bool := do
 example : (Program.compile (Program.callFrom machine true)).halt
     (Program.compile (Program.callFrom machine true)).q₀ = true :=
   Program.halt_start_callFrom machine true
-example : ((Program.compile (Program.callFrom machine true)).run (Input := List Bool) (Config := Cfg (Fin 1) Bool ((Program.callFrom machine true).State ⊕ (Program.callFrom machine true).Exit) [].toArray) [] 3).output = #[] := by
+example : ((Program.compile (Program.callFrom machine true)).run (Input := List Bool) (Cfg (Fin 1) Bool ((Program.callFrom machine true).State ⊕ (Program.callFrom machine true).Exit) [].toArray) [] 3).output = #[] := by
   rw [Complexity.Controller.run, Complexity.Controller.runFrom_of_halted _ _
     (by exact Program.halt_start_callFrom machine true)]
   rfl
-example : ((Program.compile (Program.call machine)).run (Input := List Bool) (Config := Cfg (Fin 1) Bool ((Program.call machine).State ⊕ (Program.call machine).Exit) [].toArray) [] 1).output = #[false] := by
+example : ((Program.compile (Program.call machine)).run (Input := List Bool) (Cfg (Fin 1) Bool ((Program.call machine).State ⊕ (Program.call machine).Exit) [].toArray) [] 1).output = #[false] := by
   change ((Program.compile (Program.call machine)).step
     ((Program.compile (Program.call machine)).initInput (Input := List Bool) (Config := Cfg (Fin 1) Bool ((Program.call machine).State ⊕ (Program.call machine).Exit) [].toArray) [])).output = _
   rw [TM.step_eq]
@@ -67,8 +67,8 @@ example : ((Program.compile (Program.call machine)).run (Input := List Bool) (Co
     machine, Action.mapState]
   rfl
 
-#guard ((Program.compile demo).run (Input := List Bool) (Config := Cfg (Fin 1) Bool ((demo).State ⊕ (demo).Exit) [].toArray) [] 4).output == #[false, true]
-#guard (((Program.compile demo).run (Input := List Bool) (Config := Cfg (Fin 1) Bool ((demo).State ⊕ (demo).Exit) [].toArray) [] 4).workTapes 0)[(0 : ℤ)]
+#guard ((Program.compile demo).run (Input := List Bool) (Cfg (Fin 1) Bool ((demo).State ⊕ (demo).Exit) [].toArray) [] 4).output == #[false, true]
+#guard (((Program.compile demo).run (Input := List Bool) (Cfg (Fin 1) Bool ((demo).State ⊕ (demo).Exit) [].toArray) [] 4).workTapes 0)[(0 : ℤ)]
 
 theorem demo_spec : Triple (demo.verify (Program.cfgSemantics #[]))
     (fun c b ↦ c = (rawExecution []).init () ∧ b = 4)

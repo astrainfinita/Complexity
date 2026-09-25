@@ -68,7 +68,7 @@ theorem runFrom_callFrom (M : TM Id κ Γ Q) (q : Q) (c : Cfg κ Γ Q xs)
 /-- Running a compiled call from fresh tapes reproduces the selected source execution. -/
 theorem run_callFrom (M : TM Id κ Γ Q) (q : Q) (xs : List Γ) (n : ℕ) :
     (compile (callFrom M q)).run
-      (Config := Cfg κ Γ ((callFrom M q).State ⊕ (callFrom M q).Exit) xs.toArray) xs n =
+      (Cfg κ Γ ((callFrom M q).State ⊕ (callFrom M q).Exit) xs.toArray) xs n =
       (M.runFrom ((rawExecution (κ := κ) xs).init q) n).mapState (callRoute M) := by
   rw [Controller.run, initInput_raw, start_callFrom]
   exact runFrom_callFrom M q ((rawExecution (κ := κ) xs).init q) n

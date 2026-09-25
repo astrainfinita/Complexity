@@ -33,7 +33,7 @@ def guess : NTM (Fin 0) (Option Bool) Bool where
   transition _ _ i := answer (i == 1)
 
 private theorem guess_run_one (xs : List (Option Bool)) :
-    guess.runWith (Config := TM.Cfg (Fin 0) (Option Bool) Bool xs.toArray)
+    guess.runWith (TM.Cfg (Fin 0) (Option Bool) Bool xs.toArray)
       Choice.binaryMultiset xs 1 =
       ↑[apply (answer false)
           (guess.initInput (Config := TM.Cfg (Fin 0) (Option Bool) Bool xs.toArray) xs),
@@ -103,7 +103,7 @@ example : ¬mixed.UsesTime [] 1 := by
   have hc : apply
       (⟨0, Fin.elim0, none, false⟩ : TM.Action (Fin 0) (Option Bool) Bool)
       (mixed.initInput (Config := TM.Cfg (Fin 0) (Option Bool) Bool #[]) ([] : List (Option Bool))) ∈
-      mixed.runWith Choice.binaryMultiset ([] : List (Option Bool)) 1 := by
+      mixed.runWith _ Choice.binaryMultiset ([] : List (Option Bool)) 1 := by
     change _ ∈ (_ ::ₘ _ ::ₘ (0 : Multiset (TM.Cfg (Fin 0) (Option Bool) Bool #[])))
     exact Multiset.mem_cons_self _ _
   exact Bool.false_ne_true (h _ hc)
@@ -138,8 +138,8 @@ example : ¬NTM.BooleanOutput malformed.toBinary [] := by
     (malformed.usesTime_toBinary_iff _ _).2 rfl
   rw [NTM.booleanOutput_iff_of_usesTime ht]
   intro h
-  have hc : malformed.run (Config := TM.Cfg (Fin 0) (Option Bool) Bool #[]) ([] : List (Option Bool)) 1 ∈
-      malformed.toBinary.runWith Choice.binaryMultiset ([] : List (Option Bool)) 1 := by
+  have hc : malformed.run (TM.Cfg (Fin 0) (Option Bool) Bool #[]) ([] : List (Option Bool)) 1 ∈
+      malformed.toBinary.runWith _ Choice.binaryMultiset ([] : List (Option Bool)) 1 := by
     simp only [Controller.mem_runWith_toBinary_iff]
   obtain ⟨b, hb⟩ := h _ hc
   change #[] = #[some b] at hb

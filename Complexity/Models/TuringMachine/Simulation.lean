@@ -136,10 +136,10 @@ theorem computesInTimeAndSpace {xs ys : List Γ} {d : Cfg κ Γ Q xs.toArray}
     (hd : M.Halted d) (ho : d.output = ys.toArray) :
     M.ComputesInTimeAndSpace xs ys t s := by
   obtain ⟨n, hn, he, hc⟩ := h
-  have hh : M.Halted (M.run (Config := Cfg κ Γ Q xs.toArray) xs n) := by
+  have hh : M.Halted (M.run (Cfg κ Γ Q xs.toArray) xs n) := by
     rw [Controller.run, he]
     exact hd
-  have ht : M.run (Config := Cfg κ Γ Q xs.toArray) xs t = d :=
+  have ht : M.run (Cfg κ Γ Q xs.toArray) xs t = d :=
     (M.run_eq_of_halted xs hh hn).trans he
   refine ⟨ht.symm ▸ hd, ht.symm ▸ ho, ?_⟩
   rw [M.spaceUsed_eq_of_halted _ hh hn]

@@ -145,12 +145,12 @@ theorem spaceUsed_eq_sum_visited [Fintype κ] (M : TM Id κ Γ Q)
 
 /-- The computation eventually reaches a halting state. -/
 def Terminates (M : TM Id κ Γ Q) (xs : List Γ) : Prop :=
-  ∃ t, M.Halted (M.run (Config := Cfg κ Γ Q xs.toArray) xs t)
+  ∃ t, M.Halted (M.run (Cfg κ Γ Q xs.toArray) xs t)
 
 /-- The first halting time, excluding the identity steps that pad a halted execution. -/
 def HaltsAt (M : TM Id κ Γ Q) (xs : List Γ) (t : ℕ) : Prop :=
-  M.Halted (M.run (Config := Cfg κ Γ Q xs.toArray) xs t) ∧
-    ∀ u < t, ¬M.Halted (M.run (Config := Cfg κ Γ Q xs.toArray) xs u)
+  M.Halted (M.run (Cfg κ Γ Q xs.toArray) xs t) ∧
+    ∀ u < t, ¬M.Halted (M.run (Cfg κ Γ Q xs.toArray) xs u)
 
 theorem HaltsAt.terminates {M : TM Id κ Γ Q} {xs : List Γ} {t : ℕ}
     (h : M.HaltsAt xs t) : M.Terminates xs := ⟨t, h.1⟩
@@ -169,8 +169,8 @@ def UsesSpace [Fintype κ] (M : TM Id κ Γ Q) (xs : List Γ) (s : ℕ) : Prop :
 /-- By time `t`, the machine has halted with the specified output and has used at most `s` cells. -/
 def ComputesInTimeAndSpace [Fintype κ] (M : TM Id κ Γ Q) (xs ys : List Γ)
     (t s : ℕ) : Prop :=
-  M.Halted (M.run (Config := Cfg κ Γ Q xs.toArray) xs t) ∧
-    (M.run (Config := Cfg κ Γ Q xs.toArray) xs t).output = ys.toArray ∧
+  M.Halted (M.run (Cfg κ Γ Q xs.toArray) xs t) ∧
+    (M.run (Cfg κ Γ Q xs.toArray) xs t).output = ys.toArray ∧
     M.spaceUsed (M.initInput (Config := Cfg κ Γ Q xs.toArray) xs) t ≤ s
 
 theorem ComputesInTimeAndSpace.terminates [Fintype κ] {M : TM Id κ Γ Q}

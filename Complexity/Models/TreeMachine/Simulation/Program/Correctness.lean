@@ -187,7 +187,7 @@ theorem computesInTimeAndSpace (M : TreeMachine Id k Q)
       (timeBound k x.size t) (spaceBound k x.size t) := by
   obtain ⟨n, hn, hh, ha, _, _⟩ := h.exists_haltsAt
   let B := x.size + k + t
-  have hm (j : ℕ) : (M.run (Config := Cfg k Q) x j).mass ≤ B :=
+  have hm (j : ℕ) : (M.run (Cfg k Q) x j).mass ≤ B :=
     h.space_of_time.mass_le j
   have hi := spec_init (k := k) 0 x (t * stepTime k B + (3 * B + 3))
   have hl := spec_loop M (M.initInput x) 0
