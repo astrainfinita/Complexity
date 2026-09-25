@@ -1,0 +1,157 @@
+name: continuous integration
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # Preserve every master/staging run; cancel superseded branch/PR runs.
+  group: ${{ github.workflow }}-${{ (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/staging') && github.run_id || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    env:
+      LEAN_ABORT_ON_PANIC: '1'
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Enable Lean annotations
+        # This fork supports Lean diagnostics and has no release tags.
+        uses: leanprover-community/gh-problem-matcher-wrap@65a654fcdf7b64ff7633bc7a558f7b46d59a27bf # 2026-06-25
+        with:
+          action: add
+          linters: lean, gcc
+
+      - name: Build, test, and check imports
+        id: lean
+        uses: leanprover/lean-action@v1.6.0
+        with:
+          build: true
+          build-args: '--wfail -KCI'
+          test: true
+          test-args: '--iofail'
+          # Run lint separately so it also runs if the build or a later check fails.
+          lint: false
+          mk_all-check: true
+          mk_all-args: '--lib Complexity --module'
+          reinstall-transient-toolchain: true
+
+      - name: Check for unexpected output
+        shell: bash
+        run: |
+          if output="$(lake build -q --iofail Complexity)" && [[ -z "$output" ]]; then
+            exit 0
+          fi
+          printf '%s\n' "$output"
+          exit 1
+
+      - name: Check import graph generation
+        run: |
+          lake exe graph
+          rm import_graph.dot
+
+      # - name: Check unused imports
+      #   run: lake exe shake Complexity --cfg scripts/noshake.json --gh-style
+
+      - name: Lint Complexity
+        if: ${{ !cancelled() && (steps.lean.outputs.build-status == 'SUCCESS' || steps.lean.outputs.build-status == 'FAILURE') }}
+        run: lake lint
+
+      - name: Disable Lean annotations
+        if: always()
+        uses: leanprover-community/gh-problem-matcher-wrap@65a654fcdf7b64ff7633bc7a558f7b46d59a27bf # 2026-06-25
+        with:
+          action: remove
+          linters: lean, gcc
+
+  style:
+    name: Lint style
+    runs-on: ubuntu-latest
+    steps:
+      - uses: leanprover-community/lint-style-action@a7e7428fa44f9635d6eb8e01919d16fd498d387a # 2025-08-18
+        with:
+          mode: check
+          ref: ${{ github.sha }}
+
+      - name: Check source file extensions
+        run: |
+          unexpected="$(git ls-files 'Complexity/*' 'ComplexityTest/*' | grep -Ev '\.(lean|md)$' || true)"
+          if [ -n "$unexpected" ]; then
+            printf 'Source files must have a .lean or .md extension:\n%s\n' "$unexpected"
+            exit 1
+          fi
+
+  docs:
+    name: build docs
+    needs: [build, style]
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/master')
+    runs-on: ubuntu-latest
+    env:
+      LEAN_ABORT_ON_PANIC: '1'
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Lean
+        uses: leanprover/lean-action@v1.6.0
+        with:
+          build: false
+          test: false
+          lint: false
+
+      - name: Build documentation
+        run: bash scripts/build-docs.sh
+
+      - name: Upload documentation
+        uses: actions/upload-pages-artifact@v5.0.0
+        with:
+          path: .lake/docbuild/.lake/build/doc
+
+  deploy:
+    name: deploy docs
+    needs: docs
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: github-pages
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Check whether this commit is still current
+        id: current
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CI_REPOSITORY: ${{ github.repository }}
+          CI_SHA: ${{ github.sha }}
+        run: |
+          branch_sha="$(gh api "repos/$CI_REPOSITORY/git/ref/heads/master" --jq .object.sha)"
+          if [[ "$branch_sha" == "$CI_SHA" ]]; then
+            echo 'publish=true' >> "$GITHUB_OUTPUT"
+          else
+            echo "Skipping documentation deployment for superseded commit $CI_SHA."
+          fi
+
+      - name: Set up Pages
+        if: steps.current.outputs.publish == 'true'
+        uses: actions/configure-pages@v6.0.0
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        if: steps.current.outputs.publish == 'true'
+        uses: actions/deploy-pages@v5.0.1
