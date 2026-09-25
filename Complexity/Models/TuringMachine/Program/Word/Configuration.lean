@@ -87,7 +87,7 @@ theorem spec_rewind_cfg_le (c : Cfg κ (Option Bool) Unit xs) (j : κ) (bs : Lis
     Triple ((rewind j).verify (cfgSemantics xs))
       (fun s b ↦ s = c ∧ 3 * h + 4 + z ≤ b)
       (fun _ s b ↦ s = c.setWorkPos j 0 ∧ z ≤ b) () :=
-  Complexity.Program.spec_exact_budget_le
+  Program.spec_exact_budget_le
     (fun q ↦ spec_rewind_cfg c j bs h q hw hp hlen) le_rfl z
 
 /-- Append a suffix and restore the source head, with no history obligations for the caller. -/

@@ -269,7 +269,7 @@ theorem spec_scan (u : TM.Cfg κ (Option Bool) Unit zs) (s d c : κ) (copy : Boo
       (fun v b => v.cfg = u ∧ v.Within L R ∧ b = 4 * a.size + q)
       (fun _ v b => ScanPost u s d c copy a xs.length ys L R q v b) () := by
   have hn : a.size - 1 + 1 = a.size := by have := Tree.size_pos a; omega
-  have hl := Complexity.Program.spec_repeatUntil_count TM.Program.idle
+  have hl := Program.spec_repeatUntilWith_count TM.Program.idle
     (scanBody s d c copy) (TM.Program.semantics zs)
     (At u s d c copy a xs.length ys L R)
     (At u s d c copy a xs.length ys L R a.size) (a.size - 1) 3 3 q

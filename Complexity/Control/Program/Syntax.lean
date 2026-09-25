@@ -189,14 +189,22 @@ def step (o : Op) (k : Ret o → Program O A Op Ret α) : Program O A Op Ret α 
 /-- Perform one primitive operation and return its result. -/
 def perform (o : Op) : Program O A Op Ret (Ret o) := step o ret
 
-/-- A finite loop whose dispatch action is charged on each iteration. -/
-def loop {n r : ℕ} (a : A) (body : Fin n → Program O A Op Ret (Fin n ⊕ Fin r))
+/-- A finite loop with an explicit dispatch action.
+
+`dispatch` runs before every body entry, including the first, and costs one transition.
+The action type `A` need not have a no-op, so the caller chooses the action; it may change
+the configuration. The dispatch also gives a continuing pure body a positive iteration cost. -/
+def loop {n r : ℕ} (dispatch : A) (body : Fin n → Program O A Op Ret (Fin n ⊕ Fin r))
     (i : Fin n) : Program O A Op Ret (Fin r) :=
-  Syntax.loop a i (fun j ↦ (body j).mapResult (Fin r) (.branch n r) id)
+  Syntax.loop dispatch i (fun j ↦ (body j).mapResult (Fin r) (.branch n r) id)
     (fun j ↦ Syntax.ret (u := .value) j)
 
-/-- Call an external controller and continue from its numbered exit. -/
-def call {c d : ℕ} (b : Control O A (Fin c) (Fin d)) (k : Fin d → Program O A Op Ret α) :
+/-- Call an external control graph and select a continuation by its numbered exit.
+
+The block and its continuation use the caller's current configuration. Connecting an exit
+to its continuation adds no transition. This interface takes a `Control` and an explicit
+continuation; `TM.Program.call` instead takes a machine and returns its halting state. -/
+def callControl {c d : ℕ} (b : Control O A (Fin c) (Fin d)) (k : Fin d → Program O A Op Ret α) :
     Program O A Op Ret α := Syntax.call b k
 
 /-- Replace every ordinary return by the chosen continuation. -/
@@ -219,9 +227,13 @@ instance : LawfulMonad (Program O A Op Ret) :=
   LawfulMonad.mk' _ (fun p ↦ bind_ret p) (fun a f ↦ ret_bind a f)
     (fun p f g ↦ bind_assoc p f g)
 
-/-- Repeat the body until it returns `true`, charging one dispatch action each time. -/
-def repeatUntil (a : A) (p : Program O A Op Ret Bool) : Program O A Op Ret Unit := do
-  let _ ← loop a (fun _ : Fin 1 ↦ do
+/-- Repeat the body until it returns `true`, using an explicit dispatch action.
+
+`dispatch` runs before every body execution, including the first, and costs one transition.
+It may change the configuration: the generic action type `A` has no assumed no-op.
+`TM.Program.repeatUntil` fixes this choice to the machine's `idle` action. -/
+def repeatUntilWith (dispatch : A) (p : Program O A Op Ret Bool) : Program O A Op Ret Unit := do
+  let _ ← loop dispatch (fun _ : Fin 1 ↦ do
     let b ← p
     pure (if b then Sum.inr (0 : Fin 1) else Sum.inl (0 : Fin 1))) 0
   pure ()

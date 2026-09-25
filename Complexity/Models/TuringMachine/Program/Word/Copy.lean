@@ -133,7 +133,7 @@ theorem spec_copy (c : TM.Cfg κ (Option Bool) Unit xs) (i j : κ)
   have hl : Triple ((copy i j).verify (TM.Program.semantics xs))
       (fun s b ↦ I 0 s ∧ b = 3 * v.length + 2 + z)
       (fun _ s b ↦ (s.cfg = copied c i j w v ∧ s.Within L R) ∧ b = z) () := by
-    apply Complexity.Program.spec_repeatUntil_count TM.Program.idle (copyBody i j)
+    apply Program.spec_repeatUntilWith_count TM.Program.idle (copyBody i j)
       (TM.Program.semantics xs) I _ v.length 2 1 z
     · intro r hr s hs
       exact TM.Program.apply_idle s

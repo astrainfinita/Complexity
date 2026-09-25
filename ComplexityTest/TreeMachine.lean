@@ -19,9 +19,9 @@ open Complexity Complexity.TreeMachine
 
 namespace Complexity.TreeMachineTest
 
-def a : Complexity.Tree := Tree.pair Tree.nil Tree.nil
+def a : Tree := Tree.pair Tree.nil Tree.nil
 
-def b : Complexity.Tree := Tree.pair a Tree.nil
+def b : Tree := Tree.pair a Tree.nil
 
 -- An operation reads the old destination when its source aliases it.
 def project : Action 2 Bool := Action.assign true (.right 0 0)

@@ -85,7 +85,7 @@ private theorem spec_finish {κ : Type} [DecidableEq κ] {zs : Array (Option Boo
   obtain ⟨n₁, a₁, c₁, hn₁, he₁, rfl, hb₁⟩ := h₁.le_wp c b ⟨rfl, hb⟩
   obtain ⟨n₂, a₂, c₂, hn₂, he₂, rfl, _⟩ := h₂.le_wp d (b - n₁) ⟨rfl, by omega⟩
   refine ⟨n₁ + n₂, a₂, outputCfg d j ys, by omega,
-    Complexity.Program.Exec.bind he₁ he₂, ?_⟩
+    Program.Exec.bind he₁ he₂, ?_⟩
   change c.output ++ ys.toArray.map some = ys.toArray.map some
   simp [hy]
 

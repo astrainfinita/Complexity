@@ -26,16 +26,16 @@ variable {κ : Type} {Γ α : Type} [Inhabited Γ] {xs : Array Γ}
 
 /-- A compiled step preserves the complete tracked state and updates its control label. -/
 @[simp]
-theorem step_compile (p : Program κ Γ α) (q : p.State)
+theorem step_compile (p : TM.Program κ Γ α) (q : p.State)
     (s : TrackedCfg κ Γ Unit xs) :
     (compile p).step (s.mapState (fun _ ↦ Sum.inl q)) =
-      let next := (Complexity.Program.compile eval p).next q (Controller.observe s)
+      let next := (p.toControl eval).next q (Controller.observe s)
       (apply next.1 s).mapState (fun _ ↦ next.2) := rfl
 
 /-- Compilation preserves the complete configuration, including any earlier visit history. -/
-theorem run_compile {p : Program κ Γ α} {q : p.State ⊕ p.Exit}
+theorem run_compile {p : TM.Program κ Γ α} {q : p.State ⊕ p.Exit}
     {s t : TrackedCfg κ Γ Unit xs} {n : ℕ} {a : α}
-    (h : Complexity.Program.Control.Run (Complexity.Program.compile eval p) p.result
+    (h : Program.Control.Run (p.toControl eval) p.result
       Controller.observe (apply) q s n a t) :
     ∃ e : p.Exit, p.result e = a ∧
       (compile p).runFrom (s.mapState (fun _ ↦ q)) n = t.mapState (fun _ ↦ Sum.inr e) := by
@@ -48,9 +48,9 @@ theorem run_compile {p : Program κ Γ α} {q : p.State ⊕ p.Exit}
     exact hr
 
 /-- The compiled run's peak space is the final recorded space, including earlier history. -/
-theorem runConfigMaxFrom_compile [Fintype κ] {p : Program κ Γ α} {q : p.State ⊕ p.Exit}
+theorem runConfigMaxFrom_compile [Fintype κ] {p : TM.Program κ Γ α} {q : p.State ⊕ p.Exit}
     {s t : TrackedCfg κ Γ Unit xs} {n : ℕ} {a : α}
-    (h : Complexity.Program.Control.Run (Complexity.Program.compile eval p) p.result
+    (h : Program.Control.Run (p.toControl eval) p.result
       Controller.observe (apply) q s n a t) :
     (compile p).runConfigMaxFrom visitedCosts.space (s.mapState (fun _ ↦ q)) n =
       t.space := by
@@ -58,19 +58,19 @@ theorem runConfigMaxFrom_compile [Fintype κ] {p : Program κ Γ α} {q : p.Stat
   rw [runConfigMaxFrom_tracked, hr, TrackedCfg.space_mapState]
 
 /-- A source execution gives a machine computation with the same time and bounded space. -/
-theorem computesInTimeAndSpace_of_exec [Fintype κ] (p : Program κ Γ α) {ys : Array Γ}
+theorem computesInTimeAndSpace_of_exec [Fintype κ] (p : TM.Program κ Γ α) {ys : Array Γ}
     {n t s : ℕ} {a : α} {v : TrackedCfg κ Γ Unit xs}
-    (h : Complexity.Program.Syntax.Exec
+    (h : Program.Syntax.Exec
       (⟨eval, Controller.observe, apply⟩ :
-        Complexity.Program.Semantics _ _ _ _ _)
+        Program.Semantics _ _ _ _ _)
       p ((rawExecution xs.toList).init ()).track n a v)
     (hn : n ≤ t) (ho : v.cfg.output = ys) (hs : v.space ≤ s) :
     (compile p).ComputesInTimeAndSpace xs.toList ys.toList t s := by
-  obtain ⟨e, _, hr⟩ := run_compile (h.compile _)
+  obtain ⟨e, _, hr⟩ := run_compile h.toControl
   apply TM.ReachesInTimeAndSpace.computesInTimeAndSpace
     (M := compile p) (d := v.cfg.mapState (fun _ ↦ Sum.inr e)) ?_ (by rfl) ho
   refine ⟨n, hn, ?_, ?_⟩
   · exact ((compile p).tracked_runFrom_cfg _ n).symm.trans (congrArg TrackedCfg.cfg hr)
-  · exact (runConfigMaxFrom_compile (h.compile _)).le.trans hs
+  · exact (runConfigMaxFrom_compile h.toControl).le.trans hs
 
 end Complexity.TM.Program

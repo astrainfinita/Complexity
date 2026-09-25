@@ -42,7 +42,7 @@ private theorem body_continue_of_bank (M : TreeMachine Id k Q) (o : Fin k)
     (hw : c.workTapes = tapes b (fun i ↦ BitList.encodeTree (r.regs i)) σ)
     (hp : c.workPos = fun _ ↦ 0)
     (hb : Triple
-      ((Complexity.Program.forFin (build b ((M.transition r.state (observe r)).run))).verify
+      ((Program.forFin (build b ((M.transition r.state (observe r)).run))).verify
         (TM.Program.cfgSemantics xs))
       (fun s t ↦ s = c ∧ k * R + q ≤ t)
       (fun _ s t ↦
@@ -56,7 +56,7 @@ private theorem body_continue_of_bank (M : TreeMachine Id k Q) (o : Fin k)
     rw [TreeMachine.step_eq, hf]
     rfl
   have hb' (v : Fin k → Bool) (hv : v = observe r) : Triple
-      ((Complexity.Program.forFin (build b ((M.transition r.state v).run))).verify
+      ((Program.forFin (build b ((M.transition r.state v).run))).verify
         (TM.Program.cfgSemantics xs))
       (fun s t ↦ s = c ∧ k * R + q ≤ t)
       (fun _ s t ↦
@@ -73,7 +73,7 @@ theorem spec_bank (c : TM.Cfg (Fin (2 * k + 1)) (Option Bool) Unit xs) (b : Bool
     (a : Action k Q) (ρ : Fin k → Tree) (σ : Fin k → List Bool) (B q : ℕ)
     (hρ : ∀ i, (ρ i).size ≤ B) (hν : ∀ i, (a.op.eval ρ i).size ≤ B)
     (hσ : ∀ i, (σ i).length ≤ B) :
-    Triple ((Complexity.Program.forFin (build b a)).verify (TM.Program.cfgSemantics xs))
+    Triple ((Program.forFin (build b a)).verify (TM.Program.cfgSemantics xs))
       (fun s t ↦ s = bankCfg c b ρ σ ∧ k * (50 * (B + 1)) + q ≤ t)
       (fun _ s t ↦ s = bankCfg c (!b) (a.op.eval ρ)
         (fun i ↦ BitList.encodeTree (ρ i)) ∧ q ≤ t) () := by

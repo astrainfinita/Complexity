@@ -138,7 +138,7 @@ def fromBuffer : TM Id (Fin 1) Symbol (Bool × Bool) :=
   RedirectInput.compilerAlong bufferEmbedding copier
 
 -- Both calls are compiled into one finite controller, sharing the physical buffer.
-def twice : Program (Fin 1) Symbol Unit := do
+def twice : TM.Program (Fin 1) Symbol Unit := do
   let _ ← Program.call toBuffer
   Program.Word.rewind 0
   let _ ← Program.call fromBuffer

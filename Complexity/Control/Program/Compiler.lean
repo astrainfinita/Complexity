@@ -68,8 +68,16 @@ def callLabel {c d : ℕ} (b : Control O A (Fin c) (Fin d))
   | .inl q => .inl (.inl q)
   | .inr j => callCont b k j (f j)
 
-/-- Compile a finite syntax tree, sharing loop bodies through back edges. -/
-def compile (eval : (o : Op) → O → A × Ret o) :
+/-- Convert finite syntax to a control graph, sharing loop bodies through back edges.
+
+`eval` maps an operation and observation to an action and a result. It is explicit because
+the syntax does not choose its interpreter. The graph has separate internal and exit labels,
+with returned values recovered by `p.result`; it neither stores nor numbers the label types.
+
+Both general syntax and `Program`, its value-returning specialization, use `p.toControl eval`.
+`TM.Program.compile` fixes the TM interpreter and turns the graph into a machine with
+initial state, halting test, and transitions. -/
+def toControl (eval : (o : Op) → O → A × Ret o) :
     {u : Kind} → (p : Syntax O A Op Ret α u) → Control O A p.State p.Exit
   | _, .ret _ =>
       { start := .inr ⟨⟩
@@ -79,51 +87,45 @@ def compile (eval : (o : Op) → O → A × Ret o) :
         next := fun q v ↦ match q with
           | .inl _ =>
               let (a, x) := eval o v
-              (a, stepLabel o k x (compile eval (k x)).start)
+              (a, stepLabel o k x (toControl eval (k x)).start)
           | .inr ⟨x, q⟩ =>
-              let (a, q') := (compile eval (k x)).next q v
+              let (a, q') := (toControl eval (k x)).next q v
               (a, stepLabel o k x q') }
   | _, .loop a i b k =>
-      let c := fun j ↦ (compile eval (k j)).start
+      let c := fun j ↦ (toControl eval (k j)).start
       { start := .inl (.inl i)
         next := fun q v ↦ match q with
-          | .inl j => (a, loopLabel a i b k c j (compile eval (b j)).start)
+          | .inl j => (a, loopLabel a i b k c j (toControl eval (b j)).start)
           | .inr (.inl ⟨j, q⟩) =>
-              let (a', q') := (compile eval (b j)).next q v
+              let (a', q') := (toControl eval (b j)).next q v
               (a', loopLabel a i b k c j q')
           | .inr (.inr ⟨j, q⟩) =>
-              let (a', q') := (compile eval (k j)).next q v
+              let (a', q') := (toControl eval (k j)).next q v
               (a', loopCont a i b k j q') }
   | _, .call b k =>
-      let c := fun j ↦ (compile eval (k j)).start
+      let c := fun j ↦ (toControl eval (k j)).start
       { start := callLabel b k c b.start
         next := fun q v ↦ match q with
           | .inl q =>
               let (a, q') := b.next q v
               (a, callLabel b k c q')
           | .inr ⟨j, q⟩ =>
-              let (a, q') := (compile eval (k j)).next q v
+              let (a, q') := (toControl eval (k j)).next q v
               (a, callCont b k j q') }
 
 /-- A returned value enters directly at its unique terminal label. -/
 @[simp] theorem start_ret (eval : (o : Op) → O → A × Ret o) (a : Kind.Value α u) :
-    (compile eval (Syntax.ret a : Syntax O A Op Ret α u)).start = .inr PUnit.unit := by
-  simp only [compile]
+    (toControl eval (Syntax.ret a : Syntax O A Op Ret α u)).start = .inr PUnit.unit := by
+  simp only [toControl]
 
 /-- An imported controller takes its own transition before routing its destination. -/
 @[simp] theorem next_call_inl (eval : (o : Op) → O → A × Ret o)
     {c d : ℕ} (b : Control O A (Fin c) (Fin d)) (k : Fin d → Syntax O A Op Ret α u)
     (q : Fin c) (o : O) :
-    (compile eval (Syntax.call b k)).next (.inl q) o =
-      ((b.next q o).1, callLabel b k (fun j ↦ (compile eval (k j)).start) (b.next q o).2) := by
-  simp only [compile]
+    (toControl eval (Syntax.call b k)).next (.inl q) o =
+      ((b.next q o).1, callLabel b k (fun j ↦ (toControl eval (k j)).start) (b.next q o).2) := by
+  simp only [toControl]
 
 end Syntax
-
-variable {O A Op α : Type} {Ret : Op → Type}
-
-/-- Compile a program without storing or numbering its generated control types. -/
-def compile (eval : (o : Op) → O → A × Ret o) (p : Program O A Op Ret α) :
-    Control O A p.State p.Exit := Syntax.compile eval p
 
 end Complexity.Program

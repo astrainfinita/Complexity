@@ -27,7 +27,7 @@ open Std.WP
 variable {κ : Type} [DecidableEq κ] {xs : Array (Option Bool)}
 
 /-- Return a word's head to address zero, preserving all stored cells. -/
-def rewind (j : κ) : Program κ (Option Bool) Unit := do
+def rewind (j : κ) : TM.Program κ (Option Bool) Unit := do
   move j .neg
   seek j .neg (· = none)
   move j .pos

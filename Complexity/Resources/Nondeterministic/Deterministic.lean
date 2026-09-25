@@ -28,13 +28,13 @@ variable {f : α → Bool} {p : α → Prop} {t s : ℕ → ℕ}
 /-- A deterministic Boolean computation decides the same predicate after
 duplicating its transitions, without changing either resource bound. -/
 theorem Computes.decidesInTimeAndSpace {κ : Type*} [Fintype κ] {Q : Type*}
-    {M : TM Id κ (Option Bool) Q} (h : Computes M f t s) (hp : Complexity.Decides f p) :
+    {M : TM Id κ (Option Bool) Q} (h : Computes M f t s) (hp : Decides f p) :
     NTM.DecidesInTimeAndSpace M.toBinary p t s := by
   rw [computes_iff] at h
   have hh : ∀ (xs : List Bool) (a : α), a ∈ decode α xs →
       M.ComputesInTimeAndSpace (xs.map some) [some (f a)]
         (t xs.length) (s xs.length) := by
-    simpa using (Complexity.Computes.iff_of_uniqueOutput.mp h)
+    simpa using (Computes.iff_of_uniqueOutput.mp h)
   refine ⟨⟨?_, ?_⟩, ?_⟩
   · intro xs a ha
     have hc := hh xs a ha
@@ -52,18 +52,18 @@ theorem Computes.decidesInTimeAndSpace {κ : Type*} [Fintype κ] {Q : Type*}
     exact (M.usesSpace_toBinary_iff _ _).2 (hh xs a ha).usesSpace
 
 theorem ComputableInTimeAndSpace.decidableInTimeAndSpace
-    (h : ComputableInTimeAndSpace f t s) (hp : Complexity.Decides f p) :
+    (h : ComputableInTimeAndSpace f t s) (hp : Decides f p) :
     NTM.DecidableInTimeAndSpace p t s := by
   obtain ⟨κ, hκ, Q, hQ, M, h⟩ := h
   exact ⟨κ, hκ, Q, hQ, M.toBinary, h.decidesInTimeAndSpace hp⟩
 
 theorem ComputableInTime.decidableInTime (h : ComputableInTime f t)
-    (hp : Complexity.Decides f p) : NTM.DecidableInTime p t := by
+    (hp : Decides f p) : NTM.DecidableInTime p t := by
   obtain ⟨s, h⟩ := h
   exact (h.decidableInTimeAndSpace hp).decidableInTime
 
 theorem ComputableInSpace.decidableInSpace (h : ComputableInSpace f s)
-    (hp : Complexity.Decides f p) : NTM.DecidableInSpace p s := by
+    (hp : Decides f p) : NTM.DecidableInSpace p s := by
   obtain ⟨t, h⟩ := h
   exact (h.decidableInTimeAndSpace hp).decidableInSpace
 

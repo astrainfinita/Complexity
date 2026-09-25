@@ -53,9 +53,13 @@ instance {κ : Type} {Γ : Type} (o : Op κ Γ) : Finite o.Result := by
 
 end Program
 
-/-- A monadic finite controller over local multi-tape actions. -/
-abbrev Program (κ : Type) (Γ : Type) :=
-  Complexity.Program (Γ × (κ → Γ)) (Action κ Γ Unit) (Program.Op κ Γ)
+/-- Source programs over local multi-tape operations.
+
+This specializes `Program` to the TM observations, actions, and operation results. The
+protected name is written `TM.Program`, keeping the generic `Program` interface available
+when the TM namespace is opened. `compile` supplies the fixed TM operation interpreter. -/
+protected abbrev Program (κ : Type) (Γ : Type) :=
+  Program (Γ × (κ → Γ)) (Action κ Γ Unit) (Program.Op κ Γ)
     Program.Op.Result
 
 namespace Program
@@ -87,27 +91,27 @@ def eval : (o : Op κ Γ) → (Γ × (κ → Γ)) → Action κ Γ Unit × o.Res
   | .observeBits _ f, v => (idle, Vector.ofFn (f v))
 
 /-- Execute a simultaneous local action in one transition. -/
-def act (a : Action κ Γ Unit) : Program κ Γ Unit :=
-  Complexity.Program.perform (Op.act a)
+def act (a : Action κ Γ Unit) : TM.Program κ Γ Unit :=
+  Program.perform (Op.act a)
 
 /-- Read the current input symbol in one transition. -/
-def readInput [FinEnum Γ] : Program κ Γ Γ :=
-  Complexity.Program.perform (Op.readInput (κ := κ) (Γ := Γ) inferInstance)
+def readInput [FinEnum Γ] : TM.Program κ Γ Γ :=
+  Program.perform (Op.readInput (κ := κ) (Γ := Γ) inferInstance)
 
 /-- Read the symbol under one work head in one transition. -/
-def read [FinEnum Γ] (i : κ) : Program κ Γ Γ :=
-  Complexity.Program.perform (Op.read (Γ := Γ) inferInstance i)
+def read [FinEnum Γ] (i : κ) : TM.Program κ Γ Γ :=
+  Program.perform (Op.read (Γ := Γ) inferInstance i)
 
 /-- Observe a finite collection of Boolean tests in one transition. -/
 def observeBits {n : ℕ} (f : (Γ × (κ → Γ)) → Fin n → Bool) :
-    Program κ Γ (Vector Bool n) := Complexity.Program.perform (Op.observeBits n f)
+    TM.Program κ Γ (Vector Bool n) := Program.perform (Op.observeBits n f)
 
 /-- Write the current work cell without moving its head. -/
-def write [DecidableEq κ] (i : κ) (a : Γ) : Program κ Γ Unit :=
+def write [DecidableEq κ] (i : κ) (a : Γ) : TM.Program κ Γ Unit :=
   act { idle (κ := κ) with work := fun j ↦ (if j = i then some a else none, 0) }
 
 /-- Move one work head by at most one cell. -/
-def move [DecidableEq κ] (i : κ) (d : SignType) : Program κ Γ Unit :=
+def move [DecidableEq κ] (i : κ) (d : SignType) : TM.Program κ Γ Unit :=
   act (moveAction i d)
 
 section Movement
@@ -139,23 +143,32 @@ theorem moveAction_setWorkPos (c : Cfg κ Γ Unit xs) (j : κ)
 end Movement
 
 /-- Move the read-only input head, using the machine's boundary convention. -/
-def moveInput (d : SignType) : Program κ Γ Unit :=
+def moveInput (d : SignType) : TM.Program κ Γ Unit :=
   act { idle with inputMove := d }
 
 /-- Append one symbol to the output in one transition. -/
-def emit (a : Γ) : Program κ Γ Unit := act { idle with output := some a }
+def emit (a : Γ) : TM.Program κ Γ Unit := act { idle with output := some a }
 
-/-- Repeat a body until it returns `true`, charging one dispatch step per iteration. -/
-def repeatUntil (p : Program κ Γ Bool) : Program κ Γ Unit :=
-  Complexity.Program.repeatUntil idle p
+/-- Repeat a body until it returns `true`, with an idle transition before each iteration.
 
-/-- A machine whose finite control is the program graph. All exits halt. -/
-def compile (p : Program κ Γ α) : TM Id κ Γ (p.State ⊕ p.Exit) where
-  q₀ := (Complexity.Program.compile eval p).start
+This is `Program.repeatUntilWith idle`: the TM interface fixes the generic dispatch action
+so that it preserves tapes and head positions. The idle dispatch still costs one machine
+transition, including before the first body execution. -/
+def repeatUntil (p : TM.Program κ Γ Bool) : TM.Program κ Γ Unit :=
+  Program.repeatUntilWith idle p
+
+/-- Compile a program into a deterministic machine using the TM operation interpreter.
+
+`p.toControl eval` supplies the control graph. This backend fixes `eval`, uses the
+graph's start as the initial state, and makes every exit halt. Internal graph transitions
+become machine transitions with exactly the same step count. Thus this interface produces
+a `TM`, while the generic `Program.Syntax.toControl` leaves the machine representation open. -/
+def compile (p : TM.Program κ Γ α) : TM Id κ Γ (p.State ⊕ p.Exit) where
+  q₀ := (p.toControl eval).start
   halt := Sum.elim (fun _ ↦ false) (fun _ ↦ true)
   transition q v := pure <| match q with
     | .inl q =>
-        let (b, q') := (Complexity.Program.compile eval p).next q v
+        let (b, q') := (p.toControl eval).next q v
         b.mapState (fun _ ↦ q')
     | .inr e => idle.mapState (fun _ ↦ .inr e)
 

@@ -67,7 +67,7 @@ def body (M : TreeMachine Id k Q) (o : Fin k) (s : Q × Bool) :
   else
     let v ← roots s.2
     let a := (M.transition s.1 v).run
-    Complexity.Program.forFin (build s.2 a)
+    Program.forFin (build s.2 a)
     pure (.inl (a.state, !s.2))
 
 /-- Mark the counter and initialize every non-input source register to `nil`. -/
@@ -86,7 +86,7 @@ def init (i : Fin k) : TM.Program (Fin (2 * k + 1)) (Option Bool) Unit := do
 def program [FinEnum Q] (M : TreeMachine Id k Q) (i o : Fin k) :
     TM.Program (Fin (2 * k + 1)) (Option Bool) Unit := do
   init i
-  Complexity.Program.loopOn TM.Program.idle (body M o) (M.q₀, false)
+  Program.loopOn TM.Program.idle (body M o) (M.q₀, false)
 
 end Complexity.TreeMachine.Simulation.Program
 

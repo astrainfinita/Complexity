@@ -14,7 +14,7 @@ public import Complexity.Models.TuringMachine.Program.Basic
 namespace Complexity.TM.Program
 
 /-- Advance a selected head by a fixed number of cells. -/
-def advance {κ : Type} [DecidableEq κ] {Γ : Type} (j : κ) : ℕ → Program κ Γ Unit
+def advance {κ : Type} [DecidableEq κ] {Γ : Type} (j : κ) : ℕ → TM.Program κ Γ Unit
   | 0 => pure ()
   | n + 1 => do
     move j .pos

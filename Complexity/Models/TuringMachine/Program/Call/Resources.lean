@@ -30,15 +30,15 @@ theorem step_callFrom (M : TM Id κ Γ Q) (q : Q) (c : Cfg κ Γ Q xs) :
       (c.mapState (callRoute M)) =
       (M.step c).mapState (callRoute M) := by
   have hn (r : Q) (a : Γ) (v : κ → Γ) :
-      (Complexity.Program.compile eval (callFrom M q)).next (.inl (FinEnum.equiv r))
+      ((callFrom M q).toControl eval).next (.inl (FinEnum.equiv r))
         (a, v) = let w := (M.transition r (a, v)).run
           (w.mapState (fun _ ↦ ()), callRoute M w.state) := by
-    simp only [callFrom, Complexity.Program.call, Complexity.Program.pure,
-      Complexity.Program.ret, Complexity.Program.compile, Complexity.Program.Syntax.compile,
+    simp only [callFrom, Program.callControl, Program.pure,
+      Program.ret, Program.Syntax.toControl,
       callBlock, Equiv.symm_apply_apply]
     cases hh : M.halt ((M.transition r (a, v)).run).state <;>
       simp only [blockRoute, callRoute, hh, Bool.false_eq_true, ↓reduceIte,
-        Complexity.Program.Syntax.callLabel, Complexity.Program.Syntax.callCont] <;> rfl
+        Program.Syntax.callLabel, Program.Syntax.callCont] <;> rfl
   simp only [TM.step_eq]
   erw [halt_callRoute]
   split_ifs with h
@@ -48,7 +48,7 @@ theorem step_callFrom (M : TM Id κ Γ Q) (q : Q) (c : Cfg κ Γ Q xs) :
         (c.inputSymbol, c.workSymbols)).run =
         ((M.transition c.state (c.inputSymbol, c.workSymbols)).run).mapState (callRoute M) := by
       simp only [callRoute, hf, Bool.false_eq_true, ↓reduceIte]
-      change (let r := ((Complexity.Program.compile eval (callFrom M q)).next
+      change (let r := (((callFrom M q).toControl eval).next
           (.inl (FinEnum.equiv c.state)) (c.inputSymbol, c.workSymbols))
         r.1.mapState (fun _ ↦ r.2)) = _
       rw [hn]
@@ -94,18 +94,18 @@ theorem spec_callFrom_within (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs)
   constructor
   rintro s b ⟨hc, hs, hb⟩
   obtain ⟨m, hm, hr⟩ := exec_callFrom M c n hh
-  obtain ⟨t, ht, he⟩ := Complexity.Program.Exec.lift TrackedCfg.cfg
+  obtain ⟨t, ht, he⟩ := Program.Exec.lift TrackedCfg.cfg
     (e := cfgSemantics xs) (e' := semantics xs)
     (fun _ ↦ rfl) (fun _ _ ↦ rfl) hr s hc
-  obtain ⟨e, _, he'⟩ := run_compile (Complexity.Program.Exec.compile he)
+  obtain ⟨e, _, he'⟩ := run_compile he.toControl
   have h₀ : s.cfg.mapState (fun _ ↦
-      (Complexity.Program.compile eval (callFrom M c.state)).start) =
+      ((callFrom M c.state).toControl eval).start) =
       c.mapState (callRoute M) := by
     change s.cfg.mapState (fun _ ↦ (compile (callFrom M c.state)).q₀) = _
     rw [start_callFrom, hc]
     rfl
   have hF := (compile (callFrom M c.state)).tracked_runFrom_within
-    (s.mapState (fun _ ↦ (Complexity.Program.compile eval (callFrom M c.state)).start))
+    (s.mapState (fun _ ↦ ((callFrom M c.state).toControl eval).start))
     m hs (fun i ↦ by
       erw [TrackedCfg.mapState_cfg, h₀, visited_callFrom]
       exact (M.visited_mono c hm i).trans (hw i))

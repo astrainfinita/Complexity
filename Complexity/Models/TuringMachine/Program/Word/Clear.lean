@@ -29,7 +29,7 @@ def eraseAction (i : κ) : Action κ (Option Bool) Unit :=
     work := fun j ↦ (if j = i then some none else none, if j = i then -1 else 0) }
 
 /-- Erase the last remaining bit, or stop on the left blank. -/
-def clearBody (i : κ) : Program κ (Option Bool) Bool := do
+def clearBody (i : κ) : TM.Program κ (Option Bool) Bool := do
   let a ← read i
   if a.isSome then
     act (eraseAction i)
@@ -37,7 +37,7 @@ def clearBody (i : κ) : Program κ (Option Bool) Bool := do
   else pure true
 
 /-- Scan to the end, erase the word backwards, and restore its head to address zero. -/
-def clear (i : κ) : Program κ (Option Bool) Unit := do
+def clear (i : κ) : TM.Program κ (Option Bool) Unit := do
   seek i .pos (· = none)
   move i .neg
   repeatUntil (clearBody i)
@@ -93,7 +93,7 @@ private theorem clear_loop_spec (c : Cfg κ (Option Bool) Unit xs) (i : κ)
     Triple ((repeatUntil (clearBody i)).verify (cfgSemantics xs))
       (fun s b ↦ s = clearAt c i w 0 ∧ b = 3 * w.length + 2 + z)
       (fun _ s b ↦ s = clearAt c i w w.length ∧ b = z) () := by
-  apply Complexity.Program.spec_repeatUntil_count idle (clearBody i)
+  apply Program.spec_repeatUntilWith_count idle (clearBody i)
     (cfgSemantics xs) (fun r s ↦ s = clearAt c i w r)
     (fun s ↦ s = clearAt c i w w.length) w.length 2 1 z
   · intro r hr s hs

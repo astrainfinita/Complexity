@@ -67,7 +67,7 @@ theorem spec_init (i : Fin k) (x : Tree) (q : ℕ) :
       (fun _ s t ↦ s = loadedCfg i x ∧ q ≤ t) () := by
   let d := apply (boot i)
     ((TM.rawExecution (κ := Fin (2 * k + 1)) (TreeMachine.code x)).init ())
-  have h := Complexity.Program.spec_exact_budget_le
+  have h := Program.spec_exact_budget_le
     (fun z ↦ spec_load_cfg d (data false i) (BitList.encodeTree x) z
       (by simp [TreeMachine.code]) rfl
       (by simp [d, boot, data_ne_counter]) rfl)

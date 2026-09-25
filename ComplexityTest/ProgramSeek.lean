@@ -26,7 +26,7 @@ namespace ProgramSeekTest
 def search : TM.Program (Fin 1) Bool Unit := Program.seek 0 .pos (· = true)
 
 def cfg : Cfg (Fin 1) Bool (search.State ⊕ search.Exit) #[] :=
-  { (search.compile.initInput (Input := List Bool) (Config := Complexity.TM.Cfg _ _ _ [].toArray) []) with
+  { (search.compile.initInput (Input := List Bool) (Config := Cfg _ _ _ [].toArray) []) with
     workTapes := fun _ ↦ IntMemory.ofArray #[false, false, true] }
 
 #guard !search.compile.halt (search.compile.runFrom cfg 7).state

@@ -56,7 +56,7 @@ def sourceTapes (b : Bool) : IntMemory (Option Bool) :=
   else (∅ : IntMemory (Option Bool)).set 0 (some true) |>.set 1 (some true) |>.set 2 (some false)
 
 def start {n : ℕ} {α : Type} (L : Bool ↪ Fin n)
-    (p : Program (Fin n) (Option Bool) α) :
+    (p : TM.Program (Fin n) (Option Bool) α) :
     Cfg (Fin n) (Option Bool) (p.State ⊕ p.Exit) input :=
   { (p.compile.initInput (Config := Cfg (Fin n) _ _ input.toList.toArray) input.toList) with
     inputPos := 2
@@ -74,9 +74,9 @@ def sameData {n : ℕ} {Q Q' : Type}
       sameTape (c.workTapes i) (d.workTapes i)).all id
 
 -- Returning an infinite-type value must neither require a default nor add a transition.
-def pureSource : Program Bool (Option Bool) ℕ := pure 37
+def pureSource : TM.Program Bool (Option Bool) ℕ := pure 37
 
-def finish {κ : Type} (p : Program κ (Option Bool) ℕ) : Program κ (Option Bool) Unit := do
+def finish {κ : Type} (p : TM.Program κ (Option Bool) ℕ) : TM.Program κ (Option Bool) Unit := do
   let n ← p
   Program.emit (some (decide (n = 37)))
 
@@ -126,7 +126,7 @@ def bufferedEnd := buffered.compile.runFrom bufferedStart 1
 #guard ([0, 3, 6] : List (Fin 7)).all fun i ↦
   bufferedEnd.workPos i == 7 && sameTape (bufferedEnd.workTapes i) dirty
 
-def source : Program Bool (Option Bool) ℕ := do
+def source : TM.Program Bool (Option Bool) ℕ := do
   let _ ← Program.call called
   Program.repeatUntil do
     let a ← Program.read false
@@ -177,7 +177,7 @@ def nestedEnd := nested.compile.runFrom (start (sparse.trans shifted) nested) 14
 
 open Std.WP
 
-def localCopy : Program Bool (Option Bool) (Option Bool) := do
+def localCopy : TM.Program Bool (Option Bool) (Option Bool) := do
   let a ← Program.read true
   Program.write false a
   pure a

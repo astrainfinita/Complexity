@@ -19,7 +19,7 @@ variable {O A Op S : Type} {Ret : Op → Type}
 
 /-- A counted traversal may carry a different remaining-budget invariant at every index.
 Each body entry consumes one dispatch credit before continuing or stopping. -/
-theorem spec_repeatUntil_count_of_invariant (a : A) (p : Program O A Op Ret Bool)
+theorem spec_repeatUntilWith_count_of_invariant (a : A) (p : Program O A Op Ret Bool)
     (e : Semantics O A Op Ret S) (I : ℕ → S → ℕ → Prop) (Q : S → ℕ → Prop) (n : ℕ)
     (ha : ∀ i ≤ n, ∀ c b, I i c b → e.act a c = c)
     (hp : ∀ i ≤ n, ∀ c b, I i c b → 0 < b)
@@ -27,10 +27,10 @@ theorem spec_repeatUntil_count_of_invariant (a : A) (p : Program O A Op Ret Bool
       (fun r c b ↦ r = false ∧ I (i + 1) c b) ())
     (ht : Triple (p.verify e) (fun c b ↦ I n c (b + 1))
       (fun r c b ↦ r = true ∧ Q c b) ()) :
-    Triple ((repeatUntil a p).verify e) (I 0) (fun _ ↦ Q) () := by
+    Triple ((repeatUntilWith a p).verify e) (I 0) (fun _ ↦ Q) () := by
   let J : S → ℕ → Prop := fun c b ↦ ∃ i ≤ n, I i c b
-  have h : Triple ((repeatUntil a p).verify e) J (fun _ ↦ Q) () := by
-    apply spec_repeatUntil_nop_of_invariant a p e J _ ()
+  have h : Triple ((repeatUntilWith a p).verify e) J (fun _ ↦ Q) () := by
+    apply spec_repeatUntilWith_nop_of_invariant a p e J _ ()
     · rintro c b ⟨i, hi, hc⟩
       exact ha i hi c b hc
     · rintro c b ⟨i, hi, hc⟩
@@ -52,7 +52,7 @@ theorem spec_repeatUntil_count_of_invariant (a : A) (p : Program O A Op Ret Bool
 
 /-- A traversal advances through `I 0` to `I n`, then executes its final stopping body.
 Each body entry pays one dispatch transition in addition to its specified action cost. -/
-theorem spec_repeatUntil_count (a : A) (p : Program O A Op Ret Bool)
+theorem spec_repeatUntilWith_count (a : A) (p : Program O A Op Ret Bool)
     (e : Semantics O A Op Ret S)
     (I : ℕ → S → Prop) (Q : S → Prop) (n u v q : ℕ)
     (ha : ∀ i ≤ n, ∀ c, I i c → e.act a c = c)
@@ -60,10 +60,10 @@ theorem spec_repeatUntil_count (a : A) (p : Program O A Op Ret Bool)
       (fun r c b ↦ r = false ∧ I (i + 1) c ∧ b = q) ())
     (ht : ∀ q, Triple (p.verify e) (fun c b ↦ I n c ∧ b = v + q)
       (fun r c b ↦ r = true ∧ Q c ∧ b = q) ()) :
-    Triple ((repeatUntil a p).verify e)
+    Triple ((repeatUntilWith a p).verify e)
       (fun c b ↦ I 0 c ∧ b = (u + 1) * n + (v + 1) + q)
       (fun _ c b ↦ Q c ∧ b = q) () := by
-  apply spec_repeatUntil_count_of_invariant a p e
+  apply spec_repeatUntilWith_count_of_invariant a p e
     (fun i c b ↦ I i c ∧ b = (u + 1) * (n - i) + (v + 1) + q) _ n
   · intro i hi c b hc
     exact ha i hi c hc.1

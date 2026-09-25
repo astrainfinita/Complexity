@@ -106,6 +106,6 @@ theorem spec_putWords_le {xs : Array (Option Bool)}
     Triple ((putWords j bs).verify (cfgSemantics xs))
       (fun s b ↦ s = written c j as ∧ bs.length + q ≤ b)
       (fun _ s b ↦ s = written c j (as ++ bs) ∧ q ≤ b) () :=
-  Complexity.Program.spec_exact_budget_le (fun q ↦ spec_putWords c j as bs q) le_rfl q
+  Program.spec_exact_budget_le (fun q ↦ spec_putWords c j as bs q) le_rfl q
 
 end Complexity.TM.Program.Word

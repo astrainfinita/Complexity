@@ -115,7 +115,7 @@ example : Finite (Simulation.Program.program (once .nop) 0 0).State := inferInst
 -- Here the controller starts running at false, but the represented source is already halted.
 example (x : Tree) :
     Std.WP.Triple
-      ((Complexity.Program.loopOn TM.Program.idle
+      ((Program.loopOn TM.Program.idle
         (Simulation.Program.body (once .nop) 1) (true, false)).verify
         (TM.Program.cfgSemantics (TreeMachine.code x).toArray))
       (fun c t ↦ c = Simulation.Program.loadedCfg 1 x ∧ 3 * (x.size + 2) + 3 ≤ t)

@@ -187,10 +187,10 @@ theorem spec_step_pure (o : Op) (e : Semantics O A Op Ret S)
 
 /-- Compose a block execution with its source continuation. The generic rule is not registered:
 its continuation WP is intended for a caller-supplied contract. -/
-theorem spec_call {c d : ℕ} (b : Control O A (Fin c) (Fin d))
+theorem spec_callControl {c d : ℕ} (b : Control O A (Fin c) (Fin d))
     (k : Fin d → Program O A Op Ret α) (e : Semantics O A Op Ret S)
     (Q : α → S → ℕ → Prop) (x : Unit) :
-    Triple ((call b k).verify e)
+    Triple ((callControl b k).verify e)
       (fun s z ↦ ∃ m j t, m ≤ z ∧ Control.Run b id e.observe e.act b.start s m j t ∧
         wp ((k j).verify e) Q x t (z - m)) Q x := by
   constructor
@@ -201,10 +201,10 @@ theorem spec_call {c d : ℕ} (b : Control O A (Fin c) (Fin d))
 
 /-- A block with a return continuation exposes its exact result, state, and unused credits. -/
 @[spec]
-theorem spec_call_pure {c d : ℕ} (b : Control O A (Fin c) (Fin d))
+theorem spec_callControl_pure {c d : ℕ} (b : Control O A (Fin c) (Fin d))
     (e : Semantics O A Op Ret S) (s t : S) (m z : ℕ) (j : Fin d)
     (hr : Control.Run b id e.observe e.act b.start s m j t) (hz : m ≤ z) (x : Unit) :
-    Triple ((call b (Pure.pure (f := Program O A Op Ret))).verify e)
+    Triple ((callControl b (Pure.pure (f := Program O A Op Ret))).verify e)
       (fun u q ↦ u = s ∧ q = z)
       (fun i u q ↦ i = j ∧ u = t ∧ q = z - m) x := by
   constructor

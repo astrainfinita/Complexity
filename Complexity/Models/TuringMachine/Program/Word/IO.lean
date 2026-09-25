@@ -29,7 +29,7 @@ def emitToken (i : κ) (a : (Option Bool)) : Action κ (Option Bool) Unit :=
     output := some a }
 
 /-- Emit one data symbol, or finish at the end of the word. -/
-def emitBody (i : κ) : Program κ (Option Bool) Bool := do
+def emitBody (i : κ) : TM.Program κ (Option Bool) Bool := do
   let a ← Program.read i
   if a.isSome then
     Program.act (emitToken i a)
@@ -37,7 +37,7 @@ def emitBody (i : κ) : Program κ (Option Bool) Bool := do
   else pure true
 
 /-- Append a work tape's binary word to the output. -/
-def emit (i : κ) : Program κ (Option Bool) Unit := Program.repeatUntil (emitBody i)
+def emit (i : κ) : TM.Program κ (Option Bool) Unit := Program.repeatUntil (emitBody i)
 
 /-- Complete configuration after emitting a word. -/
 @[simps -fullyApplied]
@@ -91,7 +91,7 @@ theorem spec_emit_cfg (c : Cfg κ (Option Bool) Unit xs) (i : κ)
   have h : Triple ((emit i).verify (Program.cfgSemantics xs))
       (fun s b ↦ s = emitted c i (w.take 0) ∧ b = 3 * w.length + 2 + z)
       (fun _ s b ↦ s = emitted c i w ∧ b = z) () := by
-    apply Complexity.Program.spec_repeatUntil_count Program.idle (emitBody i)
+    apply Program.spec_repeatUntilWith_count Program.idle (emitBody i)
       (Program.cfgSemantics xs) (fun r s ↦ s = emitted c i (w.take r))
       (fun s ↦ s = emitted c i w) w.length 2 1 z
     · intro r hr s hs
@@ -118,7 +118,7 @@ def loadToken (i : κ) (a : Option Bool) : Action κ (Option Bool) Unit :=
     work := fun j ↦ (if j = i then some a else none, if j = i then 1 else 0) }
 
 /-- Copy a bit or finish at the right input boundary. -/
-def loadBody (i : κ) : Program κ (Option Bool) Bool := do
+def loadBody (i : κ) : TM.Program κ (Option Bool) Bool := do
   let a ← Program.readInput
   if a.isSome then
     Program.act (loadToken i a)
@@ -126,7 +126,7 @@ def loadBody (i : κ) : Program κ (Option Bool) Bool := do
   else pure true
 
 /-- Copy the input word and return its work head to zero. -/
-def load (i : κ) : Program κ (Option Bool) Unit := do
+def load (i : κ) : TM.Program κ (Option Bool) Unit := do
   Program.repeatUntil (loadBody i)
   rewind i
 
@@ -196,7 +196,7 @@ private theorem load_loop_spec (c : Cfg κ (Option Bool) Unit xs) (i : κ)
   have h : Triple ((Program.repeatUntil (loadBody i)).verify (Program.cfgSemantics xs))
       (fun s b ↦ s = loadAt c i w 0 ∧ b = 3 * w.length + 2 + z)
       (fun _ s b ↦ s = loadAt c i w w.length ∧ b = z) () := by
-    apply Complexity.Program.spec_repeatUntil_count Program.idle (loadBody i)
+    apply Program.spec_repeatUntilWith_count Program.idle (loadBody i)
       (Program.cfgSemantics xs) (fun r s ↦ s = loadAt c i w r)
       (fun s ↦ s = loadAt c i w w.length) w.length 2 1 z
     · intro r hr s hs

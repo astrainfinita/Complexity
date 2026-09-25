@@ -20,12 +20,12 @@ meta import Complexity.Models.TuringMachine.Basic
 meta import Complexity.Models.TuringMachine.Configuration
 meta import Complexity.Models.TuringMachine.Tapes
 
-open Complexity (TM)
+open Complexity (TM Program)
 open Complexity.TM
 
 namespace ProgramSyntaxTest
 
-abbrev Code := Complexity.Program Unit Unit Unit (fun _ : Unit ↦ Unit)
+abbrev Code := Program Unit Unit Unit (fun _ : Unit ↦ Unit)
 
 -- Program can be stored and returned as ordinary data in Type.
 structure Box : Type where
@@ -35,13 +35,13 @@ example : Type := Array (Code Unit)
 example : Code (Code Unit) := pure (pure ())
 
 -- Compile with the public backend and check the first halting time, not padded execution.
-def check {k : ℕ} (p : Program (Fin k) (Fin 2) Unit) (xs ys : Array (Fin 2)) (n : ℕ) : Bool :=
+def check {k : ℕ} (p : TM.Program (Fin k) (Fin 2) Unit) (xs ys : Array (Fin 2)) (n : ℕ) : Bool :=
   let M := p.compile
   let c := M.run (Cfg (Fin k) _ _ xs.toList.toArray) xs.toList n
   M.halt c.state && c.output == ys && (n == 0 || !M.halt (M.run (Cfg (Fin k) _ _ xs.toList.toArray) xs.toList (n - 1)).state)
 
 -- One continuation is pure; the other has two internal actions and a different state type.
-def branch : Program (Fin 0) (Fin 2) Unit := do
+def branch : TM.Program (Fin 0) (Fin 2) Unit := do
   let i ← Program.readInput
   if i == 0 then pure () else do
     Program.emit 1
@@ -52,7 +52,7 @@ def branch : Program (Fin 0) (Fin 2) Unit := do
 #guard check branch #[1] #[1, 0, 1] 4
 
 -- Snapshot the bank, recover a function of its components, and inspect that result.
-def bank (a : Fin 2) : Program (Fin 3) (Fin 2) Unit := do
+def bank (a : Fin 2) : TM.Program (Fin 3) (Fin 2) Unit := do
   Program.write 0 1
   Program.write 2 a
   let v ← Program.observeBits fun v (i : Fin 3) ↦ v.2 i == 1
@@ -63,12 +63,12 @@ def bank (a : Fin 2) : Program (Fin 3) (Fin 2) Unit := do
 #guard check (bank 1) #[] #[1] 4
 
 -- Different finite types index dispatchers and final exits. The returned exit value is used.
-def body (i : Fin 3) : Program (Fin 0) (Fin 2) (Fin 3 ⊕ Fin 2) := do
+def body (i : Fin 3) : TM.Program (Fin 0) (Fin 2) (Fin 3 ⊕ Fin 2) := do
   Program.emit (Fin.ofNat 2 i.val)
   pure (if i == 2 then .inr 1 else .inl (i + 1))
 
-def loop : Program (Fin 0) (Fin 2) Unit := do
-  let i ← Complexity.Program.loopOn Program.idle body 0
+def loop : TM.Program (Fin 0) (Fin 2) Unit := do
+  let i ← Program.loopOn Program.idle body 0
   Program.emit i
 
 -- Three dispatches, three body emissions, and one emission after the loop.

@@ -27,14 +27,14 @@ theorem spec_bank_of_register (c : TM.Cfg (Fin (2 * k + 1)) (Option Bool) Unit x
       Triple ((build b a i).verify (TM.Program.cfgSemantics xs))
         (fun s t ↦ s = cycleCfg c b ρ ν σ i.val ∧ R + z ≤ t)
         (fun _ s t ↦ s = cycleCfg c b ρ ν σ (i.val + 1) ∧ z ≤ t) ()) :
-    Triple ((Complexity.Program.forFin (build b a)).verify (TM.Program.cfgSemantics xs))
+    Triple ((Program.forFin (build b a)).verify (TM.Program.cfgSemantics xs))
       (fun s t ↦ s = bankCfg c b ρ σ ∧ k * R + q ≤ t)
       (fun _ s t ↦ s = bankCfg c (!b) ν (fun i ↦ BitList.encodeTree (ρ i)) ∧ q ≤ t) () := by
   have hf : Triple
-      ((Complexity.Program.forFin (build b a)).verify (TM.Program.cfgSemantics xs))
+      ((Program.forFin (build b a)).verify (TM.Program.cfgSemantics xs))
       (fun s t ↦ s = cycleCfg c b ρ ν σ 0 ∧ (k - 0) * R + q ≤ t)
       (fun _ s t ↦ s = cycleCfg c b ρ ν σ k ∧ (k - k) * R + q ≤ t) () := by
-    apply Complexity.Program.spec_forFin (I := fun n s t ↦
+    apply Program.spec_forFin (I := fun n s t ↦
       s = cycleCfg c b ρ ν σ n ∧ (k - n) * R + q ≤ t)
     intro i
     constructor

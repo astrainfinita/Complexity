@@ -148,7 +148,7 @@ theorem spec_build (c : TM.Cfg (Fin (2 * k + 1)) (Option Bool) Unit xs) (b : Boo
     Triple ((build b a i).verify (TM.Program.cfgSemantics xs))
       (fun s z ↦ s = c ∧ 50 * (B + 1) + q ≤ z)
       (fun _ s z ↦ s = built c b a i ρ ∧ q ≤ z) () := by
-  apply Complexity.Program.spec_exact_budget_le (fun q ↦ spec_build_exact c b a i ρ σ q hw hp)
+  apply Program.spec_exact_budget_le (fun q ↦ spec_build_exact c b a i ρ σ q hw hp)
   have := makeTime_le a i ρ B hρ
   have := hσ i
   simp only [buildTime]

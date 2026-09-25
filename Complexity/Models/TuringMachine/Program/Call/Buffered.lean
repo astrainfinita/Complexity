@@ -159,7 +159,7 @@ theorem cfg_init_eq (M : TM Id κ (Option Bool) Q)
 variable [FinEnum Q]
 
 /-- Invoke an existing machine through the two prepared work buffers. -/
-def program (M : TM Id κ (Option Bool) Q) : Program (κ ⊕ Bool) (Option Bool) Unit := do
+def program (M : TM Id κ (Option Bool) Q) : TM.Program (κ ⊕ Bool) (Option Bool) Unit := do
   let _ ← call (compiler M)
   pure ()
 
@@ -185,7 +185,7 @@ def program (M : TM Id κ (Option Bool) Q) : Program (κ ⊕ Bool) (Option Bool)
   intro u b hu
   obtain ⟨n, a, v, hn, he, ha, hv, hb⟩ := hc.le_wp u b hu
   refine ⟨n + 0, (), v, by omega, ?_, l, ?_, hb⟩
-  · exact Complexity.Program.Exec.bind he (Complexity.Program.Exec.pure _ _ _)
+  · exact Program.Exec.bind he (Program.Exec.pure _ _ _)
   · simpa only [Controller.run, hr] using hv
 
 /-- A field-oriented interface for prepared buffers. Source work tapes may contain arbitrary

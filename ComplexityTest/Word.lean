@@ -39,7 +39,7 @@ def input : Array (Option Bool) := #[some true, none, some false]
 def source : List Bool := [false, true, false]
 
 -- Both tape indices are Boolean. Input and output are already partially consumed/produced.
-def initial (p : Program Bool (Option Bool) Unit) (word : List Bool)
+def initial (p : TM.Program Bool (Option Bool) Unit) (word : List Bool)
     (pos otherPos : ℤ) : Cfg Bool (Option Bool) (p.State ⊕ p.Exit) input :=
   { (p.compile.initInput (Config := Cfg Bool _ _ input.toList.toArray) input.toList) with
     inputPos := 2
@@ -51,7 +51,7 @@ def initial (p : Program Bool (Option Bool) Unit) (word : List Bool)
 def tapeMatches (m : IntMemory (Option Bool)) (word : List Bool) : Bool :=
   (List.range 32).all fun i ↦ m[(i : ℤ) - 4] == (Program.Word.tape word)[(i : ℤ) - 4]
 
-def check (p : Program Bool (Option Bool) Unit) (before after : List Bool)
+def check (p : TM.Program Bool (Option Bool) Unit) (before after : List Bool)
     (pos finalPos otherPos finalOtherPos : ℤ) : Bool :=
   let c := initial p before pos otherPos
   let d := p.compile.runFrom c 512
@@ -76,8 +76,8 @@ def check (p : Program Bool (Option Bool) Unit) (before after : List Bool)
 #guard check (Program.Word.append false true) [true] [true, false, true, false] 1 4 0 0
 
 -- Repeated reuse alternates clearing, appending, and rewinding before a shorter final write.
-def reuse : Program Bool (Option Bool) Unit := do
-  Complexity.Program.forFin fun _ : Fin 3 ↦ do
+def reuse : TM.Program Bool (Option Bool) Unit := do
+  Program.forFin fun _ : Fin 3 ↦ do
     Program.Word.clear false
     Program.Word.append false true
     Program.Word.rewind false
@@ -90,7 +90,7 @@ def reuse : Program Bool (Option Bool) Unit := do
 -- Raw input bits are copied without a delimiter, including false bits and the empty input.
 def checkLoad (word : List Bool) : Bool :=
   let xs := word.toArray.map some
-  let p : Program Bool (Option Bool) Unit := Program.Word.load false
+  let p : TM.Program Bool (Option Bool) Unit := Program.Word.load false
   let c : Cfg Bool (Option Bool) (p.State ⊕ p.Exit) xs :=
     { (p.compile.initInput (Config := Cfg Bool _ _ xs.toList.toArray) xs.toList) with
       workTapes := fun j ↦ Program.Word.tape (if j then source else [])

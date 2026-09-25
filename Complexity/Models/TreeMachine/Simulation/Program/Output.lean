@@ -32,7 +32,7 @@ theorem spec_body_halt (M : TreeMachine Id k Q) (o : Fin k)
     Triple ((body M o (r.state, b)).verify (TM.Program.cfgSemantics xs))
       (fun s t ↦ s = c ∧ (3 * a.size + 2) + q ≤ t)
       (fun v s t ↦ v = .inr () ∧ s.output = (TreeMachine.code a).toArray ∧ q ≤ t) () := by
-  have he := Complexity.Program.spec_exact_budget_le
+  have he := Program.spec_exact_budget_le
     (fun z ↦ spec_emit_cfg c (Compiler.data b o) (BitList.encodeTree a) z ht hp)
     (m := 3 * a.size + 2) (by simp) q
   unfold body

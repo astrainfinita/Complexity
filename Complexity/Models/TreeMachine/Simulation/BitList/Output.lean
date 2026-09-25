@@ -184,7 +184,7 @@ theorem spec_output (c : Cfg κ (Option Bool) Unit xs) (j : κ)
     simp only [payload, List.length_append, List.length_cons, List.length_nil] at h
     unfold cost
     omega
-  exact Complexity.Program.spec_exact_budget_le
+  exact Program.spec_exact_budget_le
     (fun q ↦ spec_output_exact c j bs q hr) hc q
 
 end Complexity.TreeMachine.Simulation.BitList

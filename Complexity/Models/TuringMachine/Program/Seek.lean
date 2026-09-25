@@ -26,7 +26,7 @@ variable {κ : Type} [DecidableEq κ] {Γ S : Type} [FinEnum Γ]
 
 /-- Read one cell, stopping at the selected delimiter or moving in the selected direction. -/
 def seekBody (j : κ) (d : SignType) (stop : Γ → Prop) [DecidablePred stop] :
-    Program κ Γ Bool := do
+    TM.Program κ Γ Bool := do
   let a ← read j
   if stop a then
     pure true
@@ -36,9 +36,9 @@ def seekBody (j : κ) (d : SignType) (stop : Γ → Prop) [DecidablePred stop] :
 
 /-- Seek the first symbol satisfying `stop`, leaving the head on that symbol. -/
 def seek (j : κ) (d : SignType) (stop : Γ → Prop) [DecidablePred stop] :
-    Program κ Γ Unit := repeatUntil (seekBody j d stop)
+    TM.Program κ Γ Unit := repeatUntil (seekBody j d stop)
 
-variable (e : Complexity.Program.Semantics (Γ × (κ → Γ)) (Action κ Γ Unit)
+variable (e : Program.Semantics (Γ × (κ → Γ)) (Action κ Γ Unit)
   (Op κ Γ) Op.Result S) (he : e.eval = eval)
 
 include he
@@ -50,10 +50,10 @@ theorem exec_seekBody_stop (j : κ) (d : SignType) (stop : Γ → Prop)
     (seekBody j d stop).Exec e s 1 true s := by
   have hr : (read j).Exec e s 1 ((e.observe s).2 j) s := by
     simpa only [read, he, eval, hi] using
-      Complexity.Program.Exec.perform e (Op.read (Γ := Γ) inferInstance j) s
+      Program.Exec.perform e (Op.read (Γ := Γ) inferInstance j) s
   unfold seekBody
-  apply Complexity.Program.Exec.bind (m := 1) (n := 0) hr
-  simpa only [ite_eq_left hs, Pure.pure] using Complexity.Program.Exec.pure e true s
+  apply Program.Exec.bind (m := 1) (n := 0) hr
+  simpa only [ite_eq_left hs, Pure.pure] using Program.Exec.pure e true s
 
 /-- A continuing iteration takes one read and one move, independently of ghost fields. -/
 theorem exec_seekBody_move (j : κ) (d : SignType) (stop : Γ → Prop)
@@ -62,15 +62,15 @@ theorem exec_seekBody_move (j : κ) (d : SignType) (stop : Γ → Prop)
     (seekBody j d stop).Exec e s 2 false (e.act (moveAction j d) s) := by
   have hr : (read j).Exec e s 1 ((e.observe s).2 j) s := by
     simpa only [read, he, eval, hi] using
-      Complexity.Program.Exec.perform e (Op.read (Γ := Γ) inferInstance j) s
+      Program.Exec.perform e (Op.read (Γ := Γ) inferInstance j) s
   have hm : (move j d).Exec e s 1 () (e.act (moveAction j d) s) := by
     simpa only [move_eq_act, act, he, eval] using
-      Complexity.Program.Exec.perform e (Op.act (moveAction j d)) s
+      Program.Exec.perform e (Op.act (moveAction j d)) s
   unfold seekBody
-  apply Complexity.Program.Exec.bind (m := 1) (n := 1) hr
+  apply Program.Exec.bind (m := 1) (n := 1) hr
   simp only [ite_eq_right hs]
-  exact hm.bind (f := fun _ ↦ Complexity.Program.pure false)
-    (Complexity.Program.Exec.pure e false _)
+  exact hm.bind (f := fun _ ↦ Program.pure false)
+    (Program.Exec.pure e false _)
 
 /-- A counted seek only needs the delimiter test and preservation by its head movement.
 The interpretation may include any ghost state, provided idle preserves the invariant. -/
@@ -83,7 +83,7 @@ theorem spec_seek (j : κ) (d : SignType) (stop : Γ → Prop) [DecidablePred st
     Triple ((seek j d stop).verify e)
       (fun s b ↦ I 0 s ∧ b = 3 * n + 2 + q)
       (fun _ s b ↦ I n s ∧ b = q) () := by
-  apply Complexity.Program.spec_repeatUntil_count idle (seekBody j d stop)
+  apply Program.spec_repeatUntilWith_count idle (seekBody j d stop)
     e I (I n) n 2 1 q hi
   · intro r hr v
     constructor

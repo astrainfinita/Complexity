@@ -141,17 +141,17 @@ theorem loop_next {n r : ℕ} (a : A)
   exact Syntax.Exec.loop_next a i _ _
     (by apply h.mapResult) hc
 
-/-- A successful test terminates `repeatUntil` after its charged dispatch. -/
-theorem repeatUntil_done (a : A) (p : Program O A Op Ret Bool) {s t : S} {m : ℕ}
+/-- A successful test terminates `repeatUntilWith` after its charged dispatch. -/
+theorem repeatUntilWith_done (a : A) (p : Program O A Op Ret Bool) {s t : S} {m : ℕ}
     (h : p.Exec e (e.act a s) m true t) :
-    (repeatUntil a p).Exec e s (m + 1) () t := by
+    (repeatUntilWith a p).Exec e s (m + 1) () t := by
   have hb := h.bind (f := fun b ↦ Program.pure
     (if b then Sum.inr (0 : Fin 1) else Sum.inl (0 : Fin 1))) (Exec.pure e
     (if true then Sum.inr (0 : Fin 1) else Sum.inl (0 : Fin 1)) t)
   have hl := loop_done a
     (fun _ : Fin 1 ↦ p.bind fun b ↦ Program.pure
       (if b then Sum.inr (0 : Fin 1) else Sum.inl (0 : Fin 1))) (i := 0) hb
-  simpa only [repeatUntil, Bind.bind, Pure.pure, Nat.add_zero] using
+  simpa only [repeatUntilWith, Bind.bind, Pure.pure, Nat.add_zero] using
     hl.bind (f := fun _ ↦ Program.pure ())
     (Exec.pure e () t)
 

@@ -25,7 +25,7 @@ meta import Complexity.Models.TuringMachine.Program.Call
 
 set_option experimental.vcgen true
 
-open Complexity (TM)
+open Complexity (TM IntMemory Controller Program)
 open Complexity.TM Std.WP
 
 namespace ProgramCallTest
@@ -38,11 +38,11 @@ def machine : TM Id (Fin 1) Bool Bool where
 
 private theorem machine_run_one :
     machine.runFrom (machine.initInput (Config := Cfg (Fin 1) Bool Bool #[]) ([] : List Bool)) 1 =
-      { state := true, inputPos := 1, workTapes := fun _ ↦ (∅ : Complexity.IntMemory Bool).set 0 true,
+      { state := true, inputPos := 1, workTapes := fun _ ↦ (∅ : IntMemory Bool).set 0 true,
         workPos := fun _ ↦ 1, output := #[false] } := rfl
 
 -- A returned machine state and its stored result are usable by the continuation.
-def demo : Program (Fin 1) Bool Bool := do
+def demo : TM.Program (Fin 1) Bool Bool := do
   let q ← Program.call machine
   Program.move 0 (-1)
   let a ← Program.read 0
@@ -54,7 +54,7 @@ example : (Program.compile (Program.callFrom machine true)).halt
     (Program.compile (Program.callFrom machine true)).q₀ = true :=
   Program.halt_start_callFrom machine true
 example : ((Program.compile (Program.callFrom machine true)).run (Input := List Bool) (Cfg (Fin 1) Bool ((Program.callFrom machine true).State ⊕ (Program.callFrom machine true).Exit) [].toArray) [] 3).output = #[] := by
-  rw [Complexity.Controller.run, Complexity.Controller.runFrom_of_halted _ _
+  rw [Controller.run, Controller.runFrom_of_halted _ _
     (by exact Program.halt_start_callFrom machine true)]
   rfl
 example : ((Program.compile (Program.call machine)).run (Input := List Bool) (Cfg (Fin 1) Bool ((Program.call machine).State ⊕ (Program.call machine).Exit) [].toArray) [] 1).output = #[false] := by
@@ -62,8 +62,8 @@ example : ((Program.compile (Program.call machine)).run (Input := List Bool) (Cf
     ((Program.compile (Program.call machine)).initInput (Input := List Bool) (Config := Cfg (Fin 1) Bool ((Program.call machine).State ⊕ (Program.call machine).Exit) [].toArray) [])).output = _
   rw [TM.step_eq]
   simp [Program.call, Program.compile, Program.callFrom, Program.callBlock, Program.blockRoute,
-    Complexity.Program.call, Complexity.Program.compile, Complexity.Program.Syntax.compile,
-    Complexity.Program.Syntax.callLabel, Complexity.Program.Syntax.callCont,
+    Program.callControl, Program.Syntax.toControl,
+    Program.Syntax.callLabel, Program.Syntax.callCont,
     machine, Action.mapState]
   rfl
 

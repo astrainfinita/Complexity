@@ -37,12 +37,21 @@ def callBlock (M : TM Id κ Γ Q) (q : Q) :
     let a := (M.transition (FinEnum.equiv.symm q) v).run
     (a.mapState (fun _ ↦ ()), blockRoute M a.state)
 
-/-- Call a machine from a selected finite control state, using the current tape configuration. -/
-@[inline] def callFrom (M : TM Id κ Γ Q) (q : Q) : Program κ Γ Q :=
-  Program.call (callBlock M q) (fun e ↦ Program.pure (FinEnum.equiv.symm e))
+/-- Call a machine from a selected finite control state and return its halting state.
 
-/-- Call a machine from its initial control state, preserving the caller's tapes and heads. -/
-@[inline] def call (M : TM Id κ Γ Q) : Program κ Γ Q := callFrom M M.q₀
+The call uses the caller's current tapes and heads, without initialization or restoration.
+`FinEnum` supplies the numbering needed by `Program.callControl`; the continuation converts
+the numbered exit back to a state of the machine. Each source transition costs one step,
+and an already halted entry returns without taking a step. -/
+@[inline] def callFrom (M : TM Id κ Γ Q) (q : Q) : TM.Program κ Γ Q :=
+  Program.callControl (callBlock M q) (fun e ↦ Program.pure (FinEnum.equiv.symm e))
+
+/-- Call a machine from its initial control state and return its halting state.
+
+This fixes the entry of `callFrom` to `M.q₀`; storage still comes from the caller's current
+configuration. Unlike `Program.callControl`, it accepts a machine and supplies the exit
+continuation itself. The call adds no transitions beyond the source machine's execution. -/
+@[inline] def call (M : TM Id κ Γ Q) : TM.Program κ Γ Q := callFrom M M.q₀
 
 /-- Embed a source label in the compiled call, including its pure return continuation. -/
 def callRoute (M : TM Id κ Γ Q) (q : Q) :
@@ -53,13 +62,13 @@ def callRoute (M : TM Id κ Γ Q) (q : Q) :
 /-- A compiled call starts at the imported source label. -/
 @[simp] theorem start_callFrom (M : TM Id κ Γ Q) (q : Q) :
     (compile (callFrom M q)).q₀ = callRoute M q := by
-  change (Complexity.Program.compile eval (callFrom M q)).start = _
-  simp only [callFrom, Complexity.Program.call, Complexity.Program.pure,
-    Complexity.Program.ret, Complexity.Program.compile, Complexity.Program.Syntax.compile,
+  change ((callFrom M q).toControl eval).start = _
+  simp only [callFrom, Program.callControl, Program.pure,
+    Program.ret, Program.Syntax.toControl,
     callBlock]
   cases h : M.halt q <;>
     simp only [blockRoute, callRoute, h, Bool.false_eq_true, ↓reduceIte,
-      Complexity.Program.Syntax.callLabel, Complexity.Program.Syntax.callCont] <;> rfl
+      Program.Syntax.callLabel, Program.Syntax.callCont] <;> rfl
 
 /-- Importing a label preserves its halting status. -/
 @[simp] theorem halt_callRoute (M : TM Id κ Γ Q) (q r : Q) :
@@ -76,7 +85,7 @@ variable [Inhabited Γ] {xs : Array Γ}
 
 private theorem run_callBlock (M : TM Id κ Γ Q) (q : Q)
     (c : Cfg κ Γ Q xs) (n : ℕ) (hh : M.Halted (M.runFrom c n)) :
-    ∃ m ≤ n, Complexity.Program.Control.Run (callBlock M q) id
+    ∃ m ≤ n, Program.Control.Run (callBlock M q) id
       (cfgSemantics xs).observe (cfgSemantics xs).act (blockRoute M c.state)
       (c.mapState (fun _ ↦ ())) m (FinEnum.equiv (M.runFrom c n).state)
       ((M.runFrom c n).mapState (fun _ ↦ ())) := by
@@ -85,7 +94,7 @@ private theorem run_callBlock (M : TM Id κ Γ Q) (q : Q)
     have hc : M.halt c.state = true := hh
     refine ⟨0, le_rfl, ?_⟩
     simp only [blockRoute, hc, ↓reduceIte, Controller.runFrom_zero]
-    exact Complexity.Program.Control.Run.done _ _
+    exact Program.Control.Run.done _ _
   | succ n ih =>
     by_cases hc : M.Halted c
     · have hr := M.runFrom_of_halted c hc (n + 1)
@@ -93,7 +102,7 @@ private theorem run_callBlock (M : TM Id κ Γ Q) (q : Q)
       rw [hr]
       have he : M.halt c.state = true := hc
       simp only [blockRoute, he, ↓reduceIte]
-      exact Complexity.Program.Control.Run.done _ _
+      exact Program.Control.Run.done _ _
     · have hf : M.halt c.state = false := Bool.eq_false_iff.mpr hc
       have hs := M.step_eq c
       simp only [hf, Bool.false_eq_true, ite_false] at hs
@@ -101,7 +110,7 @@ private theorem run_callBlock (M : TM Id κ Γ Q) (q : Q)
       obtain ⟨m, hm, hr⟩ := ih (M.step c) (hn ▸ hh)
       refine ⟨m + 1, by omega, ?_⟩
       simp only [hn, blockRoute, hf, Bool.false_eq_true, ↓reduceIte]
-      apply Complexity.Program.Control.Run.step
+      apply Program.Control.Run.step
       simpa only [callBlock, Equiv.symm_apply_apply, cfgSemantics, Cfg.observe_def,
         Cfg.inputSymbol_mapState, Cfg.workSymbols_mapState, Action.apply_mapState,
         hs, apply_state] using hr
@@ -114,13 +123,13 @@ theorem exec_callFrom (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs)
       ((M.runFrom c n).mapState (fun _ ↦ ())) := by
   obtain ⟨m, hm, hr⟩ := run_callBlock M c.state c n hh
   refine ⟨m, hm, ?_⟩
-  have h := Complexity.Program.Syntax.Exec.call (e := cfgSemantics xs)
+  have h := Program.Syntax.Exec.call (e := cfgSemantics xs)
     (callBlock M c.state) (fun e ↦
-      Complexity.Program.Syntax.ret (α := Q) (u := .value)
+      Program.Syntax.ret (α := Q) (u := .value)
         ((FinEnum.equiv : Q ≃ Fin (FinEnum.card Q)).symm e))
-    hr (Complexity.Program.Syntax.Exec.ret (v := .value) _ _)
-  simpa only [callFrom, Complexity.Program.call, Complexity.Program.pure,
-    Complexity.Program.ret, Nat.add_zero, Equiv.symm_apply_apply] using h
+    hr (Program.Syntax.Exec.ret (v := .value) _ _)
+  simpa only [callFrom, Program.callControl, Program.pure,
+    Program.ret, Nat.add_zero, Equiv.symm_apply_apply] using h
 
 /-- A call preserves the complete final configuration and credits reserved for its continuation. -/
 @[spec]

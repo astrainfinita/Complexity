@@ -78,7 +78,7 @@ private theorem spec_loop_of_body {xs : Array (Option Bool)} (M : TreeMachine Id
         (TM.Program.cfgSemantics xs))
         (fun s t ↦ s = c ∧ 3 * B + 2 ≤ t)
         (fun v s _ ↦ v = .inr () ∧ s.output = (TreeMachine.code a).toArray) ()) :
-    Triple ((Complexity.Program.loopOn TM.Program.idle (body M o) (r.state, b₀)).verify
+    Triple ((Program.loopOn TM.Program.idle (body M o) (r.state, b₀)).verify
       (TM.Program.cfgSemantics xs))
       (fun s t ↦ s = c₀ ∧ n * stepTime k B + (3 * B + 3) ≤ t)
       (fun _ s _ ↦ s.output = (TreeMachine.code a).toArray) () := by
@@ -87,7 +87,7 @@ private theorem spec_loop_of_body {xs : Array (Option Bool)} (M : TreeMachine Id
     fun v c t ↦ ∃ j ≤ n, v.1 = (M.runFrom r j).state ∧ Rep (M.runFrom r j) v.2 c B ∧
       (n - j) * stepTime k B + (3 * B + 3) ≤ t
   have hl : Triple
-      ((Complexity.Program.loopOn TM.Program.idle (body M o) (r.state, b₀)).verify
+      ((Program.loopOn TM.Program.idle (body M o) (r.state, b₀)).verify
         (TM.Program.cfgSemantics xs))
       (I (r.state, b₀)) (fun _ s _ ↦ s.output = (TreeMachine.code a).toArray) () := by
     apply TM.Program.cfg_spec_loopOn
@@ -132,7 +132,7 @@ theorem spec_loop {xs : Array (Option Bool)} (M : TreeMachine Id k Q)
     (hn : ∀ j < n, ¬M.Halted (M.runFrom r j))
     (ha : (M.runFrom r n).regs o = a)
     (hm : ∀ j ≤ n, (M.runFrom r j).mass ≤ B) :
-    Triple ((Complexity.Program.loopOn TM.Program.idle (body M o) (r.state, b₀)).verify
+    Triple ((Program.loopOn TM.Program.idle (body M o) (r.state, b₀)).verify
       (TM.Program.cfgSemantics xs))
       (fun s t ↦ s = c₀ ∧ n * stepTime k B + (3 * B + 3) ≤ t)
       (fun _ s _ ↦ s.output = (TreeMachine.code a).toArray) () := by

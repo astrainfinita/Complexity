@@ -89,14 +89,14 @@ theorem spec_loop_nop {n r : ℕ} (a : A) (f : Fin n → Program O A Op Ret (Fin
 
 /-- A total repeat-until rule, including the action executed before each body entry. -/
 @[spec]
-theorem spec_repeatUntil (a : A) (p : Program O A Op Ret Bool) (e : Semantics O A Op Ret S)
+theorem spec_repeatUntilWith (a : A) (p : Program O A Op Ret Bool) (e : Semantics O A Op Ret S)
     (I : Invariant S (ℕ → Prop)) (Q : Unit → S → ℕ → Prop) (x : Unit)
     (hpos : ∀ s b, I s b → 0 < b)
     (hstep : Triple (p.verify e)
       (fun s b => ∃ t, I t (b + 1) ∧ s = e.act a t)
       (fun r s b => if r then Q () s b else I s b) x) :
-    Triple ((repeatUntil a p).verify e) (fun s b => I s b) Q x := by
-  unfold repeatUntil
+    Triple ((repeatUntilWith a p).verify e) (fun s b => I s b) Q x := by
+  unfold repeatUntilWith
   apply spec_bind_of_spec (R := fun _ : Fin 1 ↦ Q ())
   · apply spec_loop a _ 0 e (fun _ ↦ I) (fun _ ↦ Q ()) x (fun _ ↦ hpos)
     intro _
@@ -110,26 +110,26 @@ theorem spec_repeatUntil (a : A) (p : Program O A Op Ret Bool) (e : Semantics O 
     exact spec_pure () e Q x
 
 /-- A repeat dispatcher need only preserve states satisfying its invariant. -/
-theorem spec_repeatUntil_nop_of_invariant
+theorem spec_repeatUntilWith_nop_of_invariant
     (a : A) (p : Program O A Op Ret Bool) (e : Semantics O A Op Ret S)
     (I : Invariant S (ℕ → Prop)) (Q : Unit → S → ℕ → Prop) (x : Unit)
     (ha : ∀ s b, I s b → e.act a s = s)
     (hpos : ∀ s b, I s b → 0 < b)
     (hstep : Triple (p.verify e) (fun s b => I s (b + 1))
       (fun r s b => if r then Q () s b else I s b) x) :
-    Triple ((repeatUntil a p).verify e) (fun s b => I s b) Q x := by
-  apply spec_repeatUntil a p e I Q x hpos
+    Triple ((repeatUntilWith a p).verify e) (fun s b => I s b) Q x := by
+  apply spec_repeatUntilWith a p e I Q x hpos
   exact spec_nop_pre a ha hstep
 
 /-- A no-op dispatcher changes only the remaining time budget. -/
-theorem spec_repeatUntil_nop (a : A) (p : Program O A Op Ret Bool) (e : Semantics O A Op Ret S)
+theorem spec_repeatUntilWith_nop (a : A) (p : Program O A Op Ret Bool) (e : Semantics O A Op Ret S)
     (I : Invariant S (ℕ → Prop)) (Q : Unit → S → ℕ → Prop) (x : Unit)
     (ha : ∀ s, e.act a s = s)
     (hpos : ∀ s b, I s b → 0 < b)
     (hstep : Triple (p.verify e) (fun s b => I s (b + 1))
       (fun r s b => if r then Q () s b else I s b) x) :
-    Triple ((repeatUntil a p).verify e) (fun s b => I s b) Q x :=
-  spec_repeatUntil_nop_of_invariant a p e I Q x (fun s _ _ ↦ ha s) hpos hstep
+    Triple ((repeatUntilWith a p).verify e) (fun s b => I s b) Q x :=
+  spec_repeatUntilWith_nop_of_invariant a p e I Q x (fun s _ _ ↦ ha s) hpos hstep
 
 variable [FinEnum α] [FinEnum β]
 
@@ -139,10 +139,14 @@ def loopOnBody (b : α → Program O A Op Ret (α ⊕ β)) (i : Fin (FinEnum.car
   (b (FinEnum.equiv.symm i)).mapResult β (.branch (FinEnum.card α) (FinEnum.card β))
     (Sum.map FinEnum.equiv FinEnum.equiv)
 
-/-- A finite-value loop. Every body entry executes the charged dispatch action. -/
-def loopOn (a : A) (b : α → Program O A Op Ret (α ⊕ β)) (i : α) :
+/-- A finite-value loop with an explicit dispatch action and a carried value.
+
+As in `loop`, `dispatch` runs before every body entry and costs one transition. The caller
+chooses it because `A` has no assumed no-op. Only carried values need `FinEnum`; the
+compiled control labels remain structural. -/
+def loopOn (dispatch : A) (b : α → Program O A Op Ret (α ⊕ β)) (i : α) :
     Program O A Op Ret β :=
-  Syntax.loop a (FinEnum.equiv i) (loopOnBody b)
+  Syntax.loop dispatch (FinEnum.equiv i) (loopOnBody b)
     (fun j ↦ Syntax.ret (u := .value) ((FinEnum.equiv : β ≃ Fin (FinEnum.card β)).symm j))
 
 /-- Finite carried values are a relabeling of the numbered loop's inputs and results. -/

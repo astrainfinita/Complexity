@@ -113,7 +113,7 @@ private theorem spec_loop (c : TM.Cfg κ (Option Bool) Unit (input xs))
     Triple ((repeatUntil (body j)).verify (cfgSemantics (input xs)))
       (fun s b ↦ s = loadAt c j 0 ∧ 7 * xs.length + 2 + q ≤ b)
       (fun _ s b ↦ s = loadAt c j xs.length ∧ q ≤ b) () := by
-  apply Complexity.Program.spec_repeatUntil_count_of_invariant idle (body j)
+  apply Program.spec_repeatUntilWith_count_of_invariant idle (body j)
     (cfgSemantics (input xs))
     (fun r s b ↦ s = loadAt c j r ∧ 7 * (xs.length - r) + 2 + q ≤ b) _ xs.length
   · intro r hr s b hs
@@ -123,13 +123,13 @@ private theorem spec_loop (c : TM.Cfg κ (Option Bool) Unit (input xs))
   · intro r hr
     constructor
     rintro s b ⟨rfl, hb⟩
-    have hnext := Complexity.Program.spec_exact_budget_le (spec_body_next c j r hr)
+    have hnext := Program.spec_exact_budget_le (spec_body_next c j r hr)
       (m := 6) (by have := length_chunk_le xs[r]; omega)
       (7 * (xs.length - (r + 1)) + 2 + q)
     simpa only [and_assoc] using hnext.le_wp _ b ⟨rfl, by omega⟩
   · constructor
     rintro s b ⟨rfl, hb⟩
-    have hstop := Complexity.Program.spec_exact_budget_le (spec_body_done c j) le_rfl q
+    have hstop := Program.spec_exact_budget_le (spec_body_done c j) le_rfl q
     simpa only [and_assoc] using hstop.le_wp _ b ⟨rfl, by omega⟩
 
 /-- Complete adapter configuration, leaving the buffer head at its right end. -/
