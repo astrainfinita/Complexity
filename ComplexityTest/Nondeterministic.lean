@@ -9,6 +9,7 @@ import Complexity.Classes.NP
 import Complexity.Models.TuringMachine.Nondeterministic.Deterministic
 meta import Complexity.Models.TuringMachine.Nondeterministic
 meta import Complexity.Models.TuringMachine.Basic
+meta import Complexity.Models.TuringMachine.Cost
 meta import Complexity.Models.TuringMachine.Configuration
 meta import Complexity.Control.Controller
 meta import Complexity.Control.BinaryChoice
@@ -64,8 +65,8 @@ theorem guess_spec : guess.DecidesInTimeAndSpace (fun _ : List Bool => True)
   refine ⟨⟨?_, fun xs _ _ => guess_time _⟩, ?_⟩
   · intro xs _ _
     exact ⟨(guess_time _).terminates, guess_boolean _, iff_true_intro (guess_accepts _)⟩
-  · intro xs _ _ n cs _
-    simp [TM.spaceUsedOfTrace]
+  · intro xs _ _ n c _
+    simp [TM.TrackedCfg.space]
 
 example : (fun _ : List Bool => True) ∈ NTISP (fun _ => 1) (fun _ => 0) :=
   NTISP.of_decidableInTimeAndSpace guess_spec.decidableInTimeAndSpace
@@ -74,7 +75,7 @@ example : (fun _ : List Bool => True) ∈ NP := by
   apply NP.of_time_le guess_spec.decidesInTime.decidableInTime 1 0
   simp
 
--- The two branches visit {0,-1} and {0,1}: each uses two cells, not their union's three.
+-- The two branches visit [-1,0] and [0,1]: each uses two cells.
 def splitHeads : NTM (Fin 1) (Option Bool) Bool where
   q₀ := false
   halt := id
@@ -82,10 +83,26 @@ def splitHeads : NTM (Fin 1) (Option Bool) Bool where
     { inputMove := 0, work := fun _ => (none, if i = 0 then -1 else 1)
       output := some (some (i == 1)), state := true }
 
-#guard ((splitHeads.runTraceWith Multiset
-  (splitHeads.initInput (Input := List (Option Bool)) (Config := TM.Cfg (Fin 1) (Option Bool) Bool [].toArray) []) 1).map TM.spaceUsedOfTrace) = ↑[2, 2]
-#guard ((splitHeads.runTraceWith Multiset
-  (splitHeads.initInput (Input := List (Option Bool)) (Config := TM.Cfg (Fin 1) (Option Bool) Bool [].toArray) []) 4).map TM.spaceUsedOfTrace) = ↑[2, 2]
+#guard (splitHeads.runWith (TM.TrackedCfg (Fin 1) (Option Bool) Bool #[])
+  Multiset ([] : List (Option Bool)) 1).map TM.TrackedCfg.space = ↑[2, 2]
+#guard (splitHeads.runWith (TM.TrackedCfg (Fin 1) (Option Bool) Bool #[])
+  Multiset ([] : List (Option Bool)) 4).map TM.TrackedCfg.space = ↑[2, 2]
+
+-- Branches return to the same blank configuration while retaining different visit intervals.
+def rejoinHeads : NTM Unit Bool (Fin 4) where
+  q₀ := 0
+  halt q := q == 3
+  transition q _ i :=
+    { inputMove := 0
+      work := fun _ => (none,
+        if q = 0 then (if i = 0 then -1 else 1) else if q = 1 then 1 else -1)
+      output := none
+      state := if q = 0 then (if i = 0 then 1 else 2) else 3 }
+
+#guard (rejoinHeads.runWith (TM.Cfg Unit Bool (Fin 4) #[]) Multiset ([] : List Bool) 2).map
+  (fun c => (c.state, c.workPos ())) = ↑([(3, 0), (3, 0), (3, 0), (3, 0)] : List (Fin 4 × ℤ))
+#guard (rejoinHeads.runWith (TM.TrackedCfg Unit Bool (Fin 4) #[]) Multiset ([] : List Bool) 2).map
+  (fun c => ((c.visited ()).fst, (c.visited ()).snd)) = ↑([(-1, 0), (-1, 0), (0, 1), (0, 1)] : List (ℤ × ℤ))
 
 -- An early accepting branch does not excuse another branch missing the time bound.
 def mixed : NTM (Fin 0) (Option Bool) Bool where
@@ -115,8 +132,8 @@ def forever : TM Id (Fin 0) (Option Bool) Unit where
   transition _ _ := pure <| ⟨0, Fin.elim0, none, ()⟩
 
 example (xs : List (Option Bool)) : NTM.UsesSpace forever.toBinary xs 0 := by
-  intro n cs _
-  simp [TM.spaceUsedOfTrace]
+  intro n c _
+  simp [TM.TrackedCfg.space]
 
 private theorem forever_diverges (xs : List (Option Bool)) : ¬NTM.Terminates forever.toBinary xs := by
   rw [TM.terminates_toBinary_iff]

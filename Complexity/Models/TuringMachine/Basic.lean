@@ -8,8 +8,6 @@ module
 public import Complexity.Models.TuringMachine.Configuration
 public import Complexity.Control.Controller
 public import Complexity.Control.Controller.Execution
-public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-public import Mathlib.Data.Finset.Card
 
 /-!
 # Multi-tape Turing machines with explicit choices
@@ -61,16 +59,14 @@ theorem step_eq (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs) :
       else apply
         ((M.transition c.state (c.inputSymbol, c.workSymbols)).run) c := rfl
 
-variable {κ : Type*} {Γ Q : Type*} [Inhabited Γ] {xs : Array Γ}
-
-/-- Positions visited on a work tape along an externally recorded trace. -/
-def visitedOfTrace (cs : List (Cfg κ Γ Q xs)) (i : κ) : Finset ℤ :=
-  (cs.map fun c ↦ c.workPos i).toFinset
-
-/-- Work space used by one trace, with input and output excluded.
-A concrete branching model determines which traces its resource bounds quantify over. -/
-def spaceUsedOfTrace [Fintype κ] (cs : List (Cfg κ Γ Q xs)) : ℕ :=
-  ∑ i : κ, (visitedOfTrace cs i).card
+/-- A transition moves each work head by at most one cell. -/
+theorem step_workPos_bounds (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs) (i : κ) :
+    c.workPos i - 1 ≤ (M.step c).workPos i ∧
+      (M.step c).workPos i ≤ c.workPos i + 1 := by
+  rw [step_eq]
+  split
+  · omega
+  · exact Action.workPos_apply_bounds _ _ i
 
 end TM
 

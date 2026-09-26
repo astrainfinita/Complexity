@@ -11,8 +11,8 @@ public import Complexity.Control.Controller.Execution
 /-!
 # Deterministic controllers as binary choices
 
-Duplicating each deterministic action gives a binary controller with the same reachable
-configurations and traces. Its multiset interpretation retains the multiplicity of coincident paths.
+Duplicating each deterministic action preserves reachable configurations.
+The multiset interpretation retains the multiplicity of coincident paths.
 -/
 
 @[expose] public section
@@ -63,20 +63,6 @@ variable [Observe Config Observation] [Apply Config Action]
       (fun b => M.toBinary.runFromWith Multiset b n) ↔
       d = M.runFrom (M.step c) n
     simp only [Multiset.mem_bind, mem_stepWith_toBinary_iff, ih, exists_eq_left]
-
-/-- Every trace of an embedded deterministic controller is its original trace. -/
-@[simp] theorem mem_runTraceWith_toBinary_iff (c : Config) (cs : List Config) (n : ℕ) :
-    cs ∈ M.toBinary.runTraceWith Multiset c n ↔
-      cs = M.runTrace c n := by
-  induction n generalizing c cs with
-  | zero => exact Multiset.mem_singleton
-  | succ n ih =>
-    change cs ∈ (M.toBinary.stepWith Multiset c).bind
-      (fun d => (M.toBinary.runTraceWith Multiset d n).bind
-        (fun ds => {c :: ds})) ↔
-      cs = c :: M.runTrace (M.step c) n
-    simp only [Multiset.mem_bind, Multiset.mem_singleton, mem_stepWith_toBinary_iff, ih,
-      exists_eq_left]
 
 /-- Standard input execution reaches exactly the original deterministic endpoint. -/
 @[simp] theorem mem_runWith_toBinary_iff (input : Input) (d : Config) (n : ℕ)

@@ -72,11 +72,6 @@ example (n : ℕ) (hn : 1 ≤ n) :
   simp only [Multiset.mem_coe, List.mem_cons, List.not_mem_nil, or_false] at hd
   rcases hd with rfl | rfl | rfl <;> decide
 
-example {cs : List ℕ} {n : ℕ}
-    (h : cs ∈ threeChoices.runTraceWith Multiset 0 n) :
-    cs.length = n + 1 :=
-  threeChoices.length_of_mem_runTraceWith 0 h
-
 -- The same controller can use a local interpretation for the same target monad.
 private def binaryChoices : Controller BinaryChoice Unit ℕ ℕ where
   q₀ := 0

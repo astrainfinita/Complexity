@@ -12,9 +12,9 @@ public import Complexity.Control.Transition.Cost
 # Composition of deterministic simulations
 
 An execution block records an actual bounded run of the target machine. Sequential blocks
-compose by adding their time bounds and taking the union of their visited work cells.
-Consequently, adding their space bounds is always sound, even when the blocks visit disjoint
-parts of the same tape.
+compose by adding their time bounds and joining their recorded visit intervals.
+Their visit intervals share the head positions at the boundary, so adding their space
+bounds is sound.
 
 The simulation interface below assembles implementations of individual source steps. Its
 hypotheses include those implementations; it does not construct a compiler or impose a
@@ -29,75 +29,67 @@ variable {κ : Type*} {Γ Q : Type*} [Inhabited Γ] {xs ys : Array Γ}
   {M : TM Id κ Γ Q}
 
 /-- Each step contributes at most one newly visited cell per work tape. -/
-theorem runConfigMaxFrom_track_le_time [Fintype κ] (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs) (t : ℕ) :
-    M.runConfigMaxFrom TrackedCfg.space c.track t ≤ Fintype.card κ * (t + 1) := by
+theorem tracked_space_step_le [Fintype κ] (M : TM Id κ Γ Q) (s : TrackedCfg κ Γ Q xs) :
+    (M.step s).space ≤ s.space + Fintype.card κ := by
   calc
-    _ ≤ ∑ _ : κ, (t + 1) := by
-      rw [runConfigMaxFrom_track_eq_sum_visited]
+    _ ≤ ∑ i, (((s.visited i).snd + 1 - (s.visited i).fst).toNat + 1) := by
       apply Finset.sum_le_sum
       intro i _
-      exact (Finset.card_image_le).trans (by simp)
-    _ = Fintype.card κ * (t + 1) := by simp
-
-/-- Sequential runs visit the union of the cells visited by their two blocks. -/
-theorem visited_add (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs)
-    (s t : ℕ) (i : κ) :
-    M.visited c (s + t) i = M.visited c s i ∪ M.visited (M.runFrom c s) t i := by
-  ext j
-  constructor
-  · intro hj
-    obtain ⟨u, hu, rfl⟩ := Finset.mem_image.mp hj
-    have hu' : u ≤ s + t := by
-      have := Finset.mem_range.mp hu
+      have hp := M.step_workPos_bounds s.cfg i
+      have hv := s.head_mem i
+      simp only [tracked_step_visited, NonemptyInterval.fst_sup, NonemptyInterval.snd_sup,
+        NonemptyInterval.pure_fst, NonemptyInterval.pure_snd]
       omega
-    by_cases hs : u ≤ s
-    · exact Finset.mem_union.mpr (.inl (Finset.mem_image.mpr
-        ⟨u, Finset.mem_range.mpr (by omega), rfl⟩))
-    · apply Finset.mem_union.mpr
-      right
-      refine Finset.mem_image.mpr ⟨u - s, Finset.mem_range.mpr (by omega), ?_⟩
-      rw [Controller.runFrom_runFrom, Nat.add_sub_of_le (by omega : s ≤ u)]
-  · intro hj
-    rcases Finset.mem_union.mp hj with hj | hj
-    · exact M.visited_mono c (Nat.le_add_right s t) i hj
-    · obtain ⟨u, hu, rfl⟩ := Finset.mem_image.mp hj
-      refine Finset.mem_image.mpr ⟨s + u, Finset.mem_range.mpr ?_, ?_⟩
-      · have := Finset.mem_range.mp hu
-        omega
-      · rw [Controller.runFrom_runFrom]
+    _ = _ := by simp [Finset.sum_add_distrib, TrackedCfg.space]
 
-/-- Space of sequential blocks is bounded by the sum, not merely the maximum, of their bounds. -/
+/-- Fresh visit records count one initial cell per work tape. -/
+theorem runConfigMaxFrom_track_le_time [Fintype κ] (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs) (t : ℕ) :
+    M.runConfigMaxFrom TrackedCfg.space c.track t ≤ Fintype.card κ * (t + 1) := by
+  rw [runConfigMaxFrom_tracked]
+  calc
+    _ ≤ c.track.space + Transition.runCost M.step (fun _ _ ↦ Fintype.card κ) t c.track :=
+      Transition.potential_runN_le _ _ _ M.tracked_space_step_le t c.track
+    _ = _ := by simp [Nat.mul_succ, Nat.mul_comm, Nat.add_comm]
+
+private theorem interval_size_sup_le {u v : NonemptyInterval ℤ} {p : ℤ}
+    (hu : p ∈ u) (hv : p ∈ v) :
+    ((u ⊔ v).snd + 1 - (u ⊔ v).fst).toNat ≤
+      (u.snd + 1 - u.fst).toNat + (v.snd + 1 - v.fst).toNat := by
+  rcases hu with ⟨hu₁, hu₂⟩
+  rcases hv with ⟨hv₁, hv₂⟩
+  simp only [NonemptyInterval.fst_sup, NonemptyInterval.snd_sup]
+  omega
+
+/-- Space of sequential blocks is bounded by the sum of their fresh space bounds. -/
 theorem runConfigMaxFrom_track_add_le [Fintype κ] (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs) (s t : ℕ) :
     M.runConfigMaxFrom TrackedCfg.space c.track (s + t) ≤
       M.runConfigMaxFrom TrackedCfg.space c.track s +
         M.runConfigMaxFrom TrackedCfg.space (M.runFrom c s).track t := by
-  simp only [runConfigMaxFrom_track_eq_sum_visited, visited_add, ← Finset.sum_add_distrib]
-  exact Finset.sum_le_sum fun _ _ ↦ Finset.card_union_le _ _
+  simp only [runConfigMaxFrom_tracked, TrackedCfg.space, tracked_runFrom_visited_add,
+    Cfg.track_cfg, ← Finset.sum_add_distrib]
+  apply Finset.sum_le_sum
+  intro i _
+  exact interval_size_sup_le
+    ((M.mem_tracked_runFrom_visited c s i _).mpr ⟨s, le_rfl, rfl⟩)
+    ((M.mem_tracked_runFrom_visited (M.runFrom c s) t i _).mpr ⟨0, Nat.zero_le t, rfl⟩)
 
-/-- A single set of absolute tape positions bounds the space of a complete execution. -/
-theorem runConfigMaxFrom_track_le_of_visited_subset [Fintype κ] (M : TM Id κ Γ Q)
-    (c : Cfg κ Γ Q xs) (t : ℕ) (F : κ → Finset ℤ)
-    (h : ∀ i, M.visited c t i ⊆ F i) :
-    M.runConfigMaxFrom TrackedCfg.space c.track t ≤ ∑ i, (F i).card := by
-  rw [runConfigMaxFrom_track_eq_sum_visited]
-  exact Finset.sum_le_sum fun i _ ↦ Finset.card_le_card (h i)
+/-- A common interval bound survives concatenating freshly measured blocks. -/
+theorem tracked_runFrom_within_add_iff (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs)
+    (s t : ℕ) (l h : κ → ℤ) :
+    (M.runFrom c.track (s + t)).Within l h ↔
+      (M.runFrom c.track s).Within l h ∧ (M.runFrom (M.runFrom c s).track t).Within l h := by
+  simp only [TrackedCfg.Within, tracked_runFrom_visited_add,
+    Cfg.track_cfg, NonemptyInterval.fst_sup, NonemptyInterval.snd_sup,
+    le_min_iff, max_le_iff, forall_and]
+  tauto
 
-/-- A common absolute footprint is preserved by concatenation. -/
-theorem visited_add_subset_iff (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs)
-    (s t : ℕ) (i : κ) (F : Finset ℤ) :
-    M.visited c (s + t) i ⊆ F ↔
-      M.visited c s i ⊆ F ∧ M.visited (M.runFrom c s) t i ⊆ F := by
-  rw [visited_add, Finset.union_subset_iff]
-
-/-- Blocks sharing a fixed footprint need not pay its cardinality repeatedly. -/
-theorem runConfigMaxFrom_track_add_le_of_visited_subset [Fintype κ] (M : TM Id κ Γ Q)
-    (c : Cfg κ Γ Q xs) (s t : ℕ) (F : κ → Finset ℤ)
-    (h : ∀ i, M.visited c s i ⊆ F i)
-    (h' : ∀ i, M.visited (M.runFrom c s) t i ⊆ F i) :
-    M.runConfigMaxFrom TrackedCfg.space c.track (s + t) ≤ ∑ i, (F i).card := by
-  apply M.runConfigMaxFrom_track_le_of_visited_subset
-  intro i
-  exact (M.visited_add_subset_iff c s t i (F i)).mpr ⟨h i, h' i⟩
+/-- One common interval bound controls space without recounting shared cells. -/
+theorem runConfigMaxFrom_le_of_within [Fintype κ] (M : TM Id κ Γ Q)
+    (s : TrackedCfg κ Γ Q xs) (n : ℕ) (l h : κ → ℤ)
+    (hn : (M.runFrom s n).Within l h) :
+    M.runConfigMaxFrom TrackedCfg.space s n ≤ ∑ i, (h i + 1 - l i).toNat := by
+  rw [runConfigMaxFrom_tracked]
+  exact TrackedCfg.space_le_of_within _ l h hn
 
 /-- A block starts fresh visit records at `c` and reaches underlying configuration `d`. -/
 def ReachesInTimeAndSpace [Fintype κ] (M : TM Id κ Γ Q) (c d : Cfg κ Γ Q xs)
@@ -176,14 +168,7 @@ theorem Simulates.runN_const [Fintype κ] {t s : ℕ}
     (c : Cfg κ Γ Q xs) (hc : R a c) :
     ∃ d, R ((Transition.runN (m := Id) (pure ∘ f) n a).run) d ∧
       M.ReachesInTimeAndSpace c d (n * t) (Fintype.card κ + n * s) := by
-  induction n generalizing a c with
-  | zero => exact ⟨c, hc, by simpa using ReachesInTimeAndSpace.refl M c⟩
-  | succ n ih =>
-    obtain ⟨d, hd, hb⟩ := h a c hc
-    obtain ⟨e, he, hb'⟩ := ih (f a) d hd
-    refine ⟨e, he, ?_⟩
-    simpa only [Nat.succ_mul, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm]
-      using hb.trans hb'
+  simpa only [Transition.runCost_const] using h.runN n a c hc
 
 /-- Initialization, implementations of source steps, and final output production give a
 complete target computation. Every hypothesis concerns actual runs of `M`. -/

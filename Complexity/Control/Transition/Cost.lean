@@ -12,8 +12,7 @@ public import Mathlib.Data.Nat.Basic
 # External costs of executions
 
 A cost is a function of two successive configurations, independently of the machine model.
-`costOfTrace` measures one trace, including a branch of a monadic computation.
-`runCost` accumulates costs along deterministic execution without constructing its trace.
+`runCost` accumulates costs along deterministic execution.
 -/
 
 @[expose] public section
@@ -21,19 +20,6 @@ A cost is a function of two successive configurations, independently of the mach
 namespace Complexity.Transition
 
 variable {α : Type*}
-
-/-- Sum the costs of adjacent configurations in one externally recorded trace. -/
-def costOfTrace (w : α → α → ℕ) : List α → ℕ
-  | a :: b :: as => w a b + costOfTrace w (b :: as)
-  | _ => 0
-
-@[simp] theorem costOfTrace_nil (w : α → α → ℕ) : costOfTrace w [] = 0 := rfl
-
-@[simp] theorem costOfTrace_singleton (w : α → α → ℕ) (a : α) :
-    costOfTrace w [a] = 0 := rfl
-
-theorem costOfTrace_cons_cons (w : α → α → ℕ) (a b : α) (as : List α) :
-    costOfTrace w (a :: b :: as) = w a b + costOfTrace w (b :: as) := rfl
 
 /-- Accumulate an external step cost along a deterministic execution. -/
 def runCost (f : α → α) (w : α → α → ℕ) : ℕ → α → ℕ
@@ -45,6 +31,12 @@ def runCost (f : α → α) (w : α → α → ℕ) : ℕ → α → ℕ
 
 theorem runCost_succ (f : α → α) (w : α → α → ℕ) (n : ℕ) (a : α) :
     runCost f w (n + 1) a = w a (f a) + runCost f w n (f a) := rfl
+
+@[simp] theorem runCost_const (f : α → α) (cost n : ℕ) (a : α) :
+    runCost f (fun _ _ ↦ cost) n a = n * cost := by
+  induction n generalizing a with
+  | zero => simp
+  | succ n ih => simp [runCost_succ, ih, Nat.succ_mul, Nat.add_comm]
 
 theorem runCost_add (f : α → α) (w : α → α → ℕ) (s t : ℕ) (a : α) :
     runCost f w (s + t) a =
@@ -97,21 +89,5 @@ theorem potential_runN_le_of_le (f : α → α) (w : α → α → ℕ) (p : α 
     p ((runN (m := Id) (pure ∘ f) s a).run) ≤ p a + runCost f w t a :=
   Nat.le_trans (potential_runN_le f w p h s a)
     (Nat.add_le_add_left (runCost_mono f w a ht) _)
-
-private theorem costOfTrace_cons_runTrace (f : α → α) (w : α → α → ℕ)
-    (n : ℕ) (a b : α) :
-    costOfTrace w (a :: (runTrace (m := Id) (pure ∘ f) n b).run) = w a b + runCost f w n b := by
-  induction n generalizing a b with
-  | zero => rfl
-  | succ n ih =>
-    change w a b + costOfTrace w (b :: (runTrace (m := Id) (pure ∘ f) n (f b)).run) = _
-    rw [ih]
-    rfl
-
-theorem costOfTrace_runTrace (f : α → α) (w : α → α → ℕ) (n : ℕ) (a : α) :
-    costOfTrace w ((runTrace (m := Id) (pure ∘ f) n a).run) = runCost f w n a := by
-  cases n with
-  | zero => rfl
-  | succ n => exact costOfTrace_cons_runTrace f w n a (f a)
 
 end Complexity.Transition

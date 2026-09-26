@@ -7,7 +7,6 @@ module
 
 public import Mathlib.Data.Multiset.Functor
 public import Complexity.Control.Transition
-public import Mathlib.Data.List.Basic
 
 /-!
 # Controllers over local observations and atomic actions
@@ -17,10 +16,9 @@ interpret a run. An action includes its destination control state. The concrete
 model supplies configurations, their local observations, and action application.
 No input/output representation or resource accounting is imposed here.
 
-`stepWith`, `runFromWith`, and `runTraceWith` interpret choices in the target monad `m`
-through `MonadLiftT F m`.
-Their deterministic counterparts `step`, `runFrom`, and `runTrace` use `Id`. Both
-interfaces and their execution laws are shared by all concrete storage models.
+`stepWith` and `runFromWith` interpret choices in the target monad `m` through
+`MonadLiftT F m`. Their deterministic counterparts `step` and `runFrom` use `Id`.
+These interfaces and their execution laws are shared by all concrete storage models.
 
 Types are parameters, not fields. Concrete complexity classes impose finiteness
 of control and observations and select their permitted atomic choice shape.
@@ -96,11 +94,6 @@ def runFromWith (M : Controller F Observation Action Q)
     (c : Config) (n : ℕ) : m Config :=
   Transition.runN (M.stepWith m) n c
 
-/-- Record the initial configuration and each successor in the target monad. -/
-def runTraceWith (M : Controller F Observation Action Q)
-    (c : Config) (n : ℕ) : m (List Config) :=
-  Transition.runTrace (M.stepWith m) n c
-
 @[simp] theorem runFromWith_zero (M : Controller F Observation Action Q)
     (c : Config) : M.runFromWith m c 0 = pure c := rfl
 
@@ -128,11 +121,6 @@ theorem runFromWith_succ' (M : Controller F Observation Action Q)
     (c : Config) (hc : M.halt (state c) = true) (n : ℕ) :
     M.runFromWith m c n = pure c :=
   Transition.runN_of_fixed _ (M.stepWith_of_halted m c hc) n
-
-theorem getLastD_runTraceWith (M : Controller F Observation Action Q)
-    (c : Config) (n : ℕ) :
-    (fun cs ↦ cs.getLastD c) <$> M.runTraceWith m c n = M.runFromWith m c n :=
-  Transition.getLastD_runTrace _ _ _ _
 
 end Lawful
 end Interpreted
@@ -181,34 +169,6 @@ theorem forall_halted_runFromWith_mono (c : Config) {n n' : ℕ}
   rw [M.runFromWith_eq_of_forall_halted c h hn]
   exact h
 
-/-- The final configuration of a trace is a reachable endpoint. -/
-theorem getLastD_mem_runFromWith_of_mem_runTraceWith (c : Config) {cs : List Config} {n : ℕ}
-    (h : cs ∈ M.runTraceWith Multiset c n) :
-    cs.getLastD c ∈ M.runFromWith Multiset c n := by
-  rw [← M.getLastD_runTraceWith Multiset c n]
-  exact Multiset.mem_map.mpr ⟨cs, h, rfl⟩
-
-/-- A trace records its initial configuration and one configuration for each step. -/
-theorem length_of_mem_runTraceWith (c : Config) {cs : List Config} {n : ℕ}
-    (h : cs ∈ M.runTraceWith Multiset c n) : cs.length = n + 1 := by
-  induction n generalizing c cs with
-  | zero =>
-    have hc : cs = [c] := by simpa [runTraceWith, Transition.runTrace] using h
-    simp [hc]
-  | succ n ih =>
-    change cs ∈ (M.stepWith Multiset c).bind
-      (fun d => (M.runTraceWith Multiset d n).bind (fun ds => {c :: ds})) at h
-    simp only [Multiset.mem_bind, Multiset.mem_singleton] at h
-    obtain ⟨d, _, ds, hd, rfl⟩ := h
-    simp only [List.length_cons, ih d hd]
-
-/-- Every execution trace contains at least its initial configuration. -/
-theorem ne_nil_of_mem_runTraceWith (c : Config) {cs : List Config} {n : ℕ}
-    (h : cs ∈ M.runTraceWith Multiset c n) : cs ≠ [] := by
-  have hn := M.length_of_mem_runTraceWith c h
-  intro hc
-  simp [hc] at hn
-
 end Multiset
 
 section Deterministic
@@ -255,15 +215,6 @@ theorem runFrom_eq_of_halted (c : Config) {t u : ℕ}
 theorem runFrom_runFrom (c : Config) (n l : ℕ) :
     M.runFrom (M.runFrom c n) l = M.runFrom c (n + l) :=
   (M.runFrom_add c n l).symm
-
-/-- Record the initial configuration and every deterministic successor. -/
-def runTrace (c : Config) (n : ℕ) : List Config :=
-  (M.runTraceWith Id c n).run
-
-/-- The last configuration in a deterministic trace is its bounded-run endpoint. -/
-theorem getLastD_runTrace (c : Config) (n : ℕ) :
-    (M.runTrace c n).getLastD c = M.runFrom c n :=
-  congrArg Id.run (M.getLastD_runTraceWith Id c n)
 
 end Deterministic
 

@@ -76,16 +76,20 @@ theorem run_callFrom (M : TM Id κ Γ Q) (q : Q) (xs : List Γ) (n : ℕ) :
 /-- The call introduces no additional work-head visits. -/
 theorem visited_callFrom (M : TM Id κ Γ Q) (q : Q) (c : Cfg κ Γ Q xs)
     (n : ℕ) (i : κ) :
-    (compile (callFrom M q)).visited (c.mapState (callRoute M)) n i =
-      M.visited c n i := by
-  simp only [TM.visited, runFrom_callFrom, Cfg.mapState_workPos]
+    ((compile (callFrom M q)).runFrom
+      (Config := TrackedCfg κ Γ ((callFrom M q).State ⊕ (callFrom M q).Exit) xs)
+      (c.mapState (callRoute M)).track n).visited i =
+      (M.runFrom c.track n).visited i := by
+  apply TM.tracked_runFrom_visited_congr
+  intro m _
+  exact congrArg (fun d ↦ d.workPos i) (runFrom_callFrom M q c m)
 
 /-- A call preserves a common interval bound containing its actual source execution.
 The caller's existing visitation history and remaining time credits are retained. -/
 @[spec]
 theorem spec_callFrom_within (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs)
     (n r : ℕ) (L R : κ → ℤ) (hh : M.Halted (M.runFrom c n))
-    (hw : ∀ i, M.visited c n i ⊆ Finset.Icc (L i) (R i)) :
+    (hw : (M.runFrom c.track n).Within L R) :
     Triple ((callFrom M c.state).verify (semantics xs))
       (fun s b ↦ s.cfg = c.mapState (fun _ ↦ ()) ∧ s.Within L R ∧ n + r ≤ b)
       (fun a s b ↦ a = (M.runFrom c n).state ∧
@@ -108,7 +112,7 @@ theorem spec_callFrom_within (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs)
     (s.mapState (fun _ ↦ ((callFrom M c.state).toControl eval).start))
     m hs (fun i ↦ by
       erw [TrackedCfg.mapState_cfg, h₀, visited_callFrom]
-      exact (M.visited_mono c hm i).trans (hw i))
+      exact M.tracked_runFrom_within_mono c.track hm hw i)
   erw [he', TrackedCfg.within_mapState] at hF
   exact ⟨m, (M.runFrom c n).state, t, by omega, he,
     rfl, ht, hF, by omega⟩
@@ -118,7 +122,7 @@ theorem spec_callFrom_within (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs)
 theorem spec_call_within (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs)
     (n r : ℕ) (L R : κ → ℤ) (hc : c.state = M.q₀)
     (hh : M.Halted (M.runFrom c n))
-    (hw : ∀ i, M.visited c n i ⊆ Finset.Icc (L i) (R i)) :
+    (hw : (M.runFrom c.track n).Within L R) :
     Triple ((call M).verify (semantics xs))
       (fun s b ↦ s.cfg = c.mapState (fun _ ↦ ()) ∧ s.Within L R ∧ n + r ≤ b)
       (fun a s b ↦ a = (M.runFrom c n).state ∧

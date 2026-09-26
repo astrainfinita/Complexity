@@ -6,15 +6,15 @@ Authors: Yuyang Zhao
 module
 
 public import Complexity.Control.BinaryChoice
-public import Complexity.Models.TuringMachine.Basic
+public import Complexity.Models.TuringMachine.Cost
 
 /-!
 # Binary nondeterministic Turing machines
 
-`NTM` specializes the existing tape model to two labelled alternatives. Finite runs and
-traces use the default `Multiset` interpretation, retaining distinct computation paths.
-Time bounds cover every branch. Space is measured separately on every finite trace,
-including nonhalting traces, rather than on the union of different branches' visits.
+`NTM` specializes the existing tape model to two labelled alternatives. Finite runs use
+the default `Multiset` interpretation, retaining the multiplicity of computation paths.
+Time bounds cover every branch. Each branch carries its own `TrackedCfg` visit intervals;
+space bounds cover every finite prefix, including nonhalting branches.
 
 `Terminates` requires a finite deadline for all branches on this input. No uniform bound
 across input lengths is part of that property. Decision outputs are exactly one Boolean,
@@ -43,9 +43,7 @@ def Terminates (M : NTM κ Γ Q) (xs : List Γ) : Prop :=
 /-- Every finite computation prefix stays within the work-space bound.
 This property alone does not require termination. -/
 def UsesSpace [Fintype κ] (M : NTM κ Γ Q) (xs : List Γ) (s : ℕ) : Prop :=
-  ∀ n cs, cs ∈ M.runTraceWith Multiset
-      (M.initInput (Config := TM.Cfg κ Γ Q xs.toArray) xs) n →
-    TM.spaceUsedOfTrace cs ≤ s
+  ∀ n c, c ∈ M.runWith (TM.TrackedCfg κ Γ Q xs.toArray) Multiset xs n → c.space ≤ s
 
 theorem UsesTime.mono {M : NTM κ Γ Q} {xs : List Γ} {t t' : ℕ}
     (h : M.UsesTime xs t) (ht : t ≤ t') : M.UsesTime xs t' :=
@@ -57,14 +55,14 @@ theorem UsesTime.terminates {M : NTM κ Γ Q} {xs : List Γ} {t : ℕ}
 
 theorem UsesSpace.mono [Fintype κ] {M : NTM κ Γ Q} {xs : List Γ} {s s' : ℕ}
     (h : M.UsesSpace xs s) (hs : s ≤ s') : M.UsesSpace xs s' :=
-  fun n cs hc => (h n cs hc).trans hs
+  fun n c hc => (h n c hc).trans hs
 
 /-- Initial head positions count toward space, even at time zero. -/
 theorem UsesSpace.tapes_le [Fintype κ] {M : NTM κ Γ Q} {xs : List Γ} {s : ℕ}
     (h : M.UsesSpace xs s) : Fintype.card κ ≤ s := by
-  have hh := h 0 [M.initInput (Config := TM.Cfg κ Γ Q xs.toArray) xs]
+  have hh := h 0 (M.initInput (Config := TM.TrackedCfg κ Γ Q xs.toArray) xs)
     (Multiset.mem_singleton_self _)
-  simpa [TM.spaceUsedOfTrace, TM.visitedOfTrace] using hh
+  simpa only [TM.initInput_tracked, TM.Cfg.space_track] using hh
 
 /-- Once every branch has halted, additional padding leaves the entire endpoint multiset fixed. -/
 theorem runWith_eq_of_usesTime {M : NTM κ Γ Q} {xs : List Γ} {t t' : ℕ}

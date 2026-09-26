@@ -87,7 +87,6 @@ def haltAfterWrite : TM Id (Fin 2) Γ Bool where
 #guard haltAfterWrite.runConfigMax (Config := TrackedCfg (Fin 2) Γ Bool #[]) TrackedCfg.space ([] : List Γ) 0 = 2
 #guard haltAfterWrite.runConfigMax (Config := TrackedCfg (Fin 2) Γ Bool #[]) TrackedCfg.space ([] : List Γ) 1 = 4
 #guard haltAfterWrite.runConfigMax (Config := TrackedCfg (Fin 2) Γ Bool #[]) TrackedCfg.space ([] : List Γ) 10 = 4
-#guard spaceUsedOfTrace (haltAfterWrite.runTrace ((haltAfterWrite.initInput (Input := List Γ) (Config := Cfg (Fin 2) Γ Bool [].toArray) [])) 10) = 4
 
 -- Space counts visited blank cells, even when a machine never writes or halts.
 def walkLeft : TM Id (Fin 1) Γ Bool where
@@ -101,7 +100,6 @@ def walkLeft : TM Id (Fin 1) Γ Bool where
 
 #guard walkLeft.runConfigMax (Config := TrackedCfg (Fin 1) Γ Bool #[]) TrackedCfg.space ([] : List Γ) 5 = 6
 #guard ((walkLeft.run (Input := List Γ) (Cfg (Fin 1) Γ Bool [].toArray) [] 5).workTapes 0)[(-3 : ℤ)] = .blank
-#guard spaceUsedOfTrace (walkLeft.runTrace ((walkLeft.initInput (Input := List Γ) (Config := Cfg (Fin 1) Γ Bool [].toArray) [])) 5) = 6
 
 -- Distinct choices with equal successors retain their multiplicity in the Multiset monad.
 def fork : TM BinaryChoice (Fin 0) Γ Bool where
@@ -113,8 +111,8 @@ def fork : TM BinaryChoice (Fin 0) Γ Bool where
 
 #guard (fork.runWith (Cfg (Fin 0) Γ (Bool) #[]) Multiset ([] : List Γ) 1).map (·.output) = ↑[#[Γ.one], #[Γ.one]]
 #guard (fork.runWith (Cfg (Fin 0) Γ (Bool) #[]) Multiset ([] : List Γ) 5).map (·.output) = ↑[#[Γ.one], #[Γ.one]]
-#guard (fork.runTraceWith Multiset ((fork.initInput (Input := List Γ) (Config := Cfg (Fin 0) Γ Bool [].toArray) [])) 2).map List.length = ↑[3, 3]
-#guard (fork.runTraceWith Multiset ((fork.initInput (Input := List Γ) (Config := Cfg (Fin 0) Γ Bool [].toArray) [])) 2).map spaceUsedOfTrace = ↑[0, 0]
+
+#guard (fork.runWith (TrackedCfg (Fin 0) Γ Bool #[]) Multiset ([] : List Γ) 2).map TrackedCfg.space = ↑[0, 0]
 
 -- Failure of an effect is distinct from a halting state.
 def abort : TM Option (Fin 0) Γ Bool where

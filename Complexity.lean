@@ -42,7 +42,6 @@ public import Complexity.Control.Program.WP
 public import Complexity.Control.Transition
 public import Complexity.Control.Transition.Cost
 public import Complexity.Control.Transition.Simulation
-public import Complexity.Control.Transition.Trace
 public import Complexity.Data.Embedding
 public import Complexity.Data.FinEnum
 public import Complexity.Data.IntMemory

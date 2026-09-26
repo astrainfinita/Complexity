@@ -10,7 +10,6 @@ public import Complexity.Control.Transition.Simulation
 public import Complexity.Models.TuringMachine.Tapes
 public import Mathlib.Data.Fintype.Sum
 public import Complexity.Data.IntMemory.List
-public import Mathlib.Data.Int.Interval
 
 /-! # Redirecting output to a work tape
 
@@ -115,33 +114,38 @@ theorem runFrom_cfgAlong (e : (κ ⊕ Unit) ↪ τ)
       cfgAlong e (M.runFrom c n) d :=
   Transition.runN_map (fun c ↦ cfgAlong e c d) (fun c ↦ step_cfgAlong e M c d) c n
 
-/-- The original work tapes visit exactly the same positions after embedding. -/
+/-- The original work tapes record the same intervals after embedding. -/
 theorem visited_embed (e : (κ ⊕ Unit) ↪ τ)
     (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs) (d : Cfg τ Γ Δ xs) (n : ℕ) (j : κ) :
-    (compilerAlong e M).visited (cfgAlong e c d) n (e (.inl j)) =
-      M.visited c n j := by
-  simp only [TM.visited, runFrom_cfgAlong]
-  simp
+    ((compilerAlong e M).runFrom (cfgAlong e c d).track n).visited (e (.inl j)) =
+      (M.runFrom c.track n).visited j := by
+  apply TM.tracked_runFrom_visited_congr
+  intro m _
+  simp [runFrom_cfgAlong]
 
 /-- The output buffer stays between its starting and ending output lengths. -/
-theorem visited_self_subset (e : (κ ⊕ Unit) ↪ τ)
+theorem visited_self_le (e : (κ ⊕ Unit) ↪ τ)
     (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs) (d : Cfg τ Γ Δ xs) (n : ℕ) :
-    (compilerAlong e M).visited (cfgAlong e c d) n (e (.inr ())) ⊆
-      Finset.Icc (c.output.size : ℤ) (M.runFrom c n).output.size := by
-  intro p hp
-  obtain ⟨u, hu, rfl⟩ := Finset.mem_image.mp hp
-  rw [runFrom_cfgAlong]
-  simp only [cfgAlong_workPos, Function.Embedding.replace_apply, Sum.elim_inr, Finset.mem_Icc]
-  exact ⟨by exact_mod_cast M.output_size_le_runFrom c u,
-    by exact_mod_cast M.output_size_runFrom_mono c (Finset.mem_range_succ_iff.mp hu)⟩
+    ((compilerAlong e M).runFrom (cfgAlong e c d).track n).visited (e (.inr ())) ≤
+      ⟨(c.output.size, (M.runFrom c n).output.size),
+        Int.ofNat_le.mpr (M.output_size_le_runFrom c n)⟩ := by
+  apply (TM.tracked_runFrom_visited_le_iff _ _ _ _ _).mpr
+  intro m hm
+  simp only [runFrom_cfgAlong, cfgAlong_workPos, Function.Embedding.replace_apply,
+    Sum.elim_inr, NonemptyInterval.mem_mk]
+  exact ⟨by exact_mod_cast M.output_size_le_runFrom c m,
+    by exact_mod_cast M.output_size_runFrom_mono c hm⟩
 
-/-- Heads outside the embedding never move. -/
+/-- Heads outside the embedding retain singleton visit intervals. -/
 theorem visited_extra (e : (κ ⊕ Unit) ↪ τ)
     (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs) (d : Cfg τ Γ Δ xs) (n : ℕ)
     (j : τ) (hj : j ∉ Set.range e) :
-    (compilerAlong e M).visited (cfgAlong e c d) n j = {d.workPos j} := by
-  simp only [TM.visited, runFrom_cfgAlong]
-  simp [hj, Finset.image_const]
+    ((compilerAlong e M).runFrom (cfgAlong e c d).track n).visited j =
+      NonemptyInterval.pure (d.workPos j) := by
+  apply SetLike.ext
+  intro p
+  simp [TM.mem_tracked_runFrom_visited, runFrom_cfgAlong, hj,
+    show ∃ m : ℕ, m ≤ n from ⟨0, Nat.zero_le n⟩]
 
 @[simp↓]
 theorem cfg_init (e : (κ ⊕ Unit) ↪ τ) (xs : List Γ) (q : Q) :
