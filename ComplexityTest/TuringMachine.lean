@@ -10,6 +10,7 @@ meta import Complexity.Control.BinaryChoice
 import Complexity.Models.TuringMachine.Deterministic
 meta import Complexity.Models.TuringMachine.Deterministic
 meta import Complexity.Models.TuringMachine.Basic
+meta import Complexity.Models.TuringMachine.Cost
 meta import Complexity.Models.TuringMachine.Configuration
 meta import Complexity.Data.IntMemory
 
@@ -35,7 +36,7 @@ def copyInput : TM Id (Fin 0) Γ Bool where
 #guard (copyInput.run (Input := List Γ) (Cfg (Fin 0) Γ Bool [.one, .zero, .one].toArray) [.one, .zero, .one] 20).output = #[.one, .zero, .one]
 #guard (copyInput.run (Input := List Γ) (Cfg (Fin 0) Γ Bool [].toArray) [] 1).state = true
 #guard (copyInput.run (Input := List Γ) (Cfg (Fin 0) Γ Bool [].toArray) [] 1).output = #[]
-#guard copyInput.spaceUsed ((copyInput.initInput (Input := List Γ) (Config := Cfg (Fin 0) Γ Bool [.one, .zero].toArray) [.one, .zero])) 10 = 0
+#guard copyInput.runConfigMax (Config := TrackedCfg (Fin 0) Γ Bool [.one, .zero].toArray) TrackedCfg.space ([.one, .zero] : List Γ) 10 = 0
 
 -- Outward input moves clamp, including on an empty input.
 #guard (moveInputPos (0 : Fin 5) .neg).val = 0
@@ -83,9 +84,9 @@ def haltAfterWrite : TM Id (Fin 2) Γ Bool where
 
 #guard (haltAfterWrite.run (Input := List Γ) (Cfg (Fin 2) Γ Bool [].toArray) [] 10).output = #[.one]
 #guard ((haltAfterWrite.run (Input := List Γ) (Cfg (Fin 2) Γ Bool [].toArray) [] 10).workTapes 0)[(0 : ℤ)] = .one
-#guard haltAfterWrite.spaceUsed ((haltAfterWrite.initInput (Input := List Γ) (Config := Cfg (Fin 2) Γ Bool [].toArray) [])) 0 = 2
-#guard haltAfterWrite.spaceUsed ((haltAfterWrite.initInput (Input := List Γ) (Config := Cfg (Fin 2) Γ Bool [].toArray) [])) 1 = 4
-#guard haltAfterWrite.spaceUsed ((haltAfterWrite.initInput (Input := List Γ) (Config := Cfg (Fin 2) Γ Bool [].toArray) [])) 10 = 4
+#guard haltAfterWrite.runConfigMax (Config := TrackedCfg (Fin 2) Γ Bool #[]) TrackedCfg.space ([] : List Γ) 0 = 2
+#guard haltAfterWrite.runConfigMax (Config := TrackedCfg (Fin 2) Γ Bool #[]) TrackedCfg.space ([] : List Γ) 1 = 4
+#guard haltAfterWrite.runConfigMax (Config := TrackedCfg (Fin 2) Γ Bool #[]) TrackedCfg.space ([] : List Γ) 10 = 4
 #guard spaceUsedOfTrace (haltAfterWrite.runTrace ((haltAfterWrite.initInput (Input := List Γ) (Config := Cfg (Fin 2) Γ Bool [].toArray) [])) 10) = 4
 
 -- Space counts visited blank cells, even when a machine never writes or halts.
@@ -98,7 +99,7 @@ def walkLeft : TM Id (Fin 1) Γ Bool where
       output := none
       state := false }
 
-#guard walkLeft.spaceUsed ((walkLeft.initInput (Input := List Γ) (Config := Cfg (Fin 1) Γ Bool [].toArray) [])) 5 = 6
+#guard walkLeft.runConfigMax (Config := TrackedCfg (Fin 1) Γ Bool #[]) TrackedCfg.space ([] : List Γ) 5 = 6
 #guard ((walkLeft.run (Input := List Γ) (Cfg (Fin 1) Γ Bool [].toArray) [] 5).workTapes 0)[(-3 : ℤ)] = .blank
 #guard spaceUsedOfTrace (walkLeft.runTrace ((walkLeft.initInput (Input := List Γ) (Config := Cfg (Fin 1) Γ Bool [].toArray) [])) 5) = 6
 

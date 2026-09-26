@@ -237,6 +237,6 @@ pays for the call; the source space bound is not a bound on the caller's combine
         u.workPos (Sum.inr true) = (ys.length : ℤ) ∧
         u.workTapes (Sum.inr false) = Word.tape xs ∧
         u.inputPos = d.inputPos ∧ u.output = d.output ∧ q ≤ b) () := by
-  exact spec_ready M d t q h.1 h.2.1 hw hp hi hip ho hop
+  exact spec_ready M d t q h.run_spec.1 h.run_spec.2 hw hp hi hip ho hop
 
 end Complexity.TM.Program.BufferedCall

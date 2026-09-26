@@ -136,14 +136,10 @@ theorem cfg_computesInTimeAndSpace [Fintype κ] {p : TM.Program κ Γ α} {ys : 
   obtain ⟨v, hv, hr⟩ := Program.Exec.lift TrackedCfg.cfg
     (e' := semantics xs)
     (fun _ ↦ rfl) (fun _ _ ↦ rfl) he (((rawExecution xs.toList).init ()).track) rfl
-  obtain ⟨e, _, he⟩ := run_compile hr.toControl
-  apply TM.ReachesInTimeAndSpace.computesInTimeAndSpace
-    (M := compile p) (d := v.cfg.mapState (fun _ ↦ Sum.inr e)) ?_ (by rfl)
-    (by change v.cfg.output = ys; rw [hv]; exact ho)
-  refine ⟨n, hn, ?_, ?_⟩
-  · exact ((compile p).tracked_runFrom_cfg _ n).symm.trans (congrArg TrackedCfg.cfg he)
-  · exact ((compile p).spaceUsed_le_time _ n).trans
-      (Nat.mul_le_mul_left (Fintype.card κ) (by omega))
+  apply computesInTimeAndSpace_of_exec p hr hn (by rw [hv]; exact ho)
+  rw [← runConfigMaxFrom_compile hr.toControl]
+  exact ((compile p).runConfigMaxFrom_track_le_time _ n).trans
+    (Nat.mul_le_mul_left (Fintype.card κ) (by omega))
 
 end Configuration
 

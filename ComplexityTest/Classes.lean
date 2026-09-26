@@ -22,10 +22,12 @@ private theorem bit_spec : TM.Computes bit (id : Bool → Bool) (fun _ => 1) (fu
   apply TM.computes_iff.mpr
   apply Computes.iff_of_uniqueEncoding.mpr
   intro b
+  apply (Controller.computes_unit_iff TM.visitedCosts_time).mpr
   refine ⟨rfl, ?_, ?_⟩
   · change #[((encode (List Bool) b).map some).toArray[0]?.getD none] = _
     simp
-  · simp [TM.spaceUsed_eq_sum_visited]
+  · simp only [TM.visitedCosts_space]
+    simp [TM.TrackedCfg.space]
 
 private theorem bit_fp : (id : Bool → Bool) ∈ FP :=
   FP.of_time_le bit_spec.computableInTimeAndSpace.computableInTime

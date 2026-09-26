@@ -6,7 +6,7 @@ Authors: Yuyang Zhao
 module
 
 import Complexity.Models.TreeMachine.Deterministic
-import Complexity.Models.TuringMachine.Execution
+import Complexity.Models.TuringMachine.Simulation
 
 open Complexity
 
@@ -30,7 +30,27 @@ example {κ Γ Q : Type*} [Inhabited Γ] [Fintype κ]
     Controller.computes (Config := TM.TrackedCfg κ Γ Q xs.toArray)
       M TM.visitedCosts xs ys t s ↔
       M.ComputesInTimeAndSpace xs ys t s :=
-  TM.computes_visited_iff M xs ys t s
+  Iff.rfl
+
+-- The unified computation retains the old fixed-time meaning, including halted padding.
+example {κ Γ Q : Type*} [Inhabited Γ] [Fintype κ]
+    (M : TM Id κ Γ Q) (xs ys : List Γ) (t s : ℕ) :
+    M.ComputesInTimeAndSpace xs ys t s ↔
+      M.Halted (M.run (TM.Cfg κ Γ Q xs.toArray) xs t) ∧
+      (M.run (TM.Cfg κ Γ Q xs.toArray) xs t).output = ys.toArray ∧
+      M.runConfigMax (Config := TM.TrackedCfg κ Γ Q xs.toArray)
+        TM.TrackedCfg.space xs t ≤ s := by
+  refine (Controller.computes_unit_iff TM.visitedCosts_time).trans ?_
+  simp only [TM.visitedCosts_space, TM.TrackedCfg.hasOutput_def,
+    TM.tracked_halted_iff, TM.tracked_run_cfg]
+
+-- Block bounds still measure fresh visits and retain ordinary configuration endpoints.
+example {κ Γ Q : Type*} [Inhabited Γ] [Fintype κ] {xs : Array Γ}
+    (M : TM Id κ Γ Q) (c d : TM.Cfg κ Γ Q xs) (t s : ℕ) :
+    M.ReachesInTimeAndSpace c d t s ↔
+      ∃ n ≤ t, M.runFrom c n = d ∧
+        M.runConfigMaxFrom TM.TrackedCfg.space c.track n ≤ s := by
+  simp only [TM.ReachesInTimeAndSpace, TM.tracked_runFrom_cfg, TM.Cfg.track_cfg]
 
 -- Zero action fees require an execution length separate from the time budget.
 private def oneAction : Controller Id Unit Unit Bool where
@@ -56,6 +76,16 @@ private instance : Controller.Execution (Bool × ℕ) Bool
 example : Controller.computes (Config := Bool × ℕ)
     oneAction ⟨fun _ _ => 0, Prod.snd⟩ () 1 0 1 := by
   refine ⟨1, rfl, rfl, ?_, ?_⟩ <;> decide
+
+-- Unit costs permit halted padding, but cannot hide the first active step in a zero budget.
+example (time : Unit → Bool × ℕ → ℕ) (htime : ∀ a c, time a c = 1) :
+    oneAction.computes ⟨time, Prod.snd⟩ () 1 5 1 :=
+  (Controller.computes_unit_iff htime).mpr ⟨rfl, rfl, by dsimp only; decide⟩
+
+example : ¬oneAction.computes (Config := Bool × ℕ) ⟨(fun _ _ ↦ 1), Prod.snd⟩ () 1 0 1 := by
+  intro h
+  have hh := ((Controller.computes_unit_iff (fun _ _ ↦ rfl)).mp h).1
+  contradiction
 
 -- The standard output type is inferred from the execution instance.
 example : Controller.Execution.hasOutput (Config := Bool × ℕ)

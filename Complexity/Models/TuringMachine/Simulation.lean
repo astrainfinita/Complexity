@@ -29,11 +29,11 @@ variable {κ : Type*} {Γ Q : Type*} [Inhabited Γ] {xs ys : Array Γ}
   {M : TM Id κ Γ Q}
 
 /-- Each step contributes at most one newly visited cell per work tape. -/
-theorem spaceUsed_le_time [Fintype κ] (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs) (t : ℕ) :
-    M.spaceUsed c t ≤ Fintype.card κ * (t + 1) := by
+theorem runConfigMaxFrom_track_le_time [Fintype κ] (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs) (t : ℕ) :
+    M.runConfigMaxFrom TrackedCfg.space c.track t ≤ Fintype.card κ * (t + 1) := by
   calc
-    M.spaceUsed c t ≤ ∑ _ : κ, (t + 1) := by
-      rw [spaceUsed_eq_sum_visited]
+    _ ≤ ∑ _ : κ, (t + 1) := by
+      rw [runConfigMaxFrom_track_eq_sum_visited]
       apply Finset.sum_le_sum
       intro i _
       exact (Finset.card_image_le).trans (by simp)
@@ -67,17 +67,19 @@ theorem visited_add (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs)
       · rw [Controller.runFrom_runFrom]
 
 /-- Space of sequential blocks is bounded by the sum, not merely the maximum, of their bounds. -/
-theorem spaceUsed_add_le [Fintype κ] (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs) (s t : ℕ) :
-    M.spaceUsed c (s + t) ≤ M.spaceUsed c s + M.spaceUsed (M.runFrom c s) t := by
-  simp only [spaceUsed_eq_sum_visited, visited_add, ← Finset.sum_add_distrib]
+theorem runConfigMaxFrom_track_add_le [Fintype κ] (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs) (s t : ℕ) :
+    M.runConfigMaxFrom TrackedCfg.space c.track (s + t) ≤
+      M.runConfigMaxFrom TrackedCfg.space c.track s +
+        M.runConfigMaxFrom TrackedCfg.space (M.runFrom c s).track t := by
+  simp only [runConfigMaxFrom_track_eq_sum_visited, visited_add, ← Finset.sum_add_distrib]
   exact Finset.sum_le_sum fun _ _ ↦ Finset.card_union_le _ _
 
 /-- A single set of absolute tape positions bounds the space of a complete execution. -/
-theorem spaceUsed_le_of_visited_subset [Fintype κ] (M : TM Id κ Γ Q)
+theorem runConfigMaxFrom_track_le_of_visited_subset [Fintype κ] (M : TM Id κ Γ Q)
     (c : Cfg κ Γ Q xs) (t : ℕ) (F : κ → Finset ℤ)
     (h : ∀ i, M.visited c t i ⊆ F i) :
-    M.spaceUsed c t ≤ ∑ i, (F i).card := by
-  rw [spaceUsed_eq_sum_visited]
+    M.runConfigMaxFrom TrackedCfg.space c.track t ≤ ∑ i, (F i).card := by
+  rw [runConfigMaxFrom_track_eq_sum_visited]
   exact Finset.sum_le_sum fun i _ ↦ Finset.card_le_card (h i)
 
 /-- A common absolute footprint is preserved by concatenation. -/
@@ -88,19 +90,20 @@ theorem visited_add_subset_iff (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs)
   rw [visited_add, Finset.union_subset_iff]
 
 /-- Blocks sharing a fixed footprint need not pay its cardinality repeatedly. -/
-theorem spaceUsed_add_le_of_visited_subset [Fintype κ] (M : TM Id κ Γ Q)
+theorem runConfigMaxFrom_track_add_le_of_visited_subset [Fintype κ] (M : TM Id κ Γ Q)
     (c : Cfg κ Γ Q xs) (s t : ℕ) (F : κ → Finset ℤ)
     (h : ∀ i, M.visited c s i ⊆ F i)
     (h' : ∀ i, M.visited (M.runFrom c s) t i ⊆ F i) :
-    M.spaceUsed c (s + t) ≤ ∑ i, (F i).card := by
-  apply M.spaceUsed_le_of_visited_subset
+    M.runConfigMaxFrom TrackedCfg.space c.track (s + t) ≤ ∑ i, (F i).card := by
+  apply M.runConfigMaxFrom_track_le_of_visited_subset
   intro i
   exact (M.visited_add_subset_iff c s t i (F i)).mpr ⟨h i, h' i⟩
 
-/-- An execution block reaches `d` within `t` steps while visiting at most `s` work cells. -/
+/-- A block starts fresh visit records at `c` and reaches underlying configuration `d`. -/
 def ReachesInTimeAndSpace [Fintype κ] (M : TM Id κ Γ Q) (c d : Cfg κ Γ Q xs)
     (t s : ℕ) : Prop :=
-  ∃ n ≤ t, M.runFrom c n = d ∧ M.spaceUsed c n ≤ s
+  ∃ n ≤ t, (M.runFrom c.track n).cfg = d ∧
+    M.runConfigMaxFrom TrackedCfg.space c.track n ≤ s
 
 namespace ReachesInTimeAndSpace
 
@@ -124,9 +127,10 @@ theorem trans (h : M.ReachesInTimeAndSpace c d t s)
     M.ReachesInTimeAndSpace c e (t + u) (s + v) := by
   obtain ⟨n, hn, he, hc⟩ := h
   obtain ⟨n', hn', he', hc'⟩ := h'
+  simp only [tracked_runFrom_cfg, Cfg.track_cfg] at he he'
   refine ⟨n + n', Nat.add_le_add hn hn', ?_, ?_⟩
-  · rw [← Controller.runFrom_runFrom, he, he']
-  · have h := M.spaceUsed_add_le c n n'
+  · rw [tracked_runFrom_cfg, Cfg.track_cfg, ← Controller.runFrom_runFrom, he, he']
+  · have h := M.runConfigMaxFrom_track_add_le c n n'
     rw [he] at h
     exact h.trans (Nat.add_le_add hc hc')
 
@@ -136,14 +140,9 @@ theorem computesInTimeAndSpace {xs ys : List Γ} {d : Cfg κ Γ Q xs.toArray}
     (hd : M.Halted d) (ho : d.output = ys.toArray) :
     M.ComputesInTimeAndSpace xs ys t s := by
   obtain ⟨n, hn, he, hc⟩ := h
-  have hh : M.Halted (M.run (Cfg κ Γ Q xs.toArray) xs n) := by
-    rw [Controller.run, he]
-    exact hd
-  have ht : M.run (Cfg κ Γ Q xs.toArray) xs t = d :=
-    (M.run_eq_of_halted xs hh hn).trans he
-  refine ⟨ht.symm ▸ hd, ht.symm ▸ ho, ?_⟩
-  rw [M.spaceUsed_eq_of_halted _ hh hn]
-  exact hc
+  refine ⟨n, ?_, ?_, (M.runActionSumFrom_unit_le _ n).trans hn, hc⟩
+  · exact (M.tracked_halted_iff _).mpr (he.symm ▸ hd)
+  · exact (congrArg Cfg.output he).trans ho
 
 end ReachesInTimeAndSpace
 

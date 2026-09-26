@@ -51,12 +51,13 @@ theorem visitedOfTrace_runTrace (c : Cfg κ Γ Q xs) (n : ℕ) (i : κ) :
 
 /-- Recording a deterministic trace does not change its measured work space. -/
 theorem spaceUsedOfTrace_runTrace [Fintype κ] (c : Cfg κ Γ Q xs) (n : ℕ) :
-    spaceUsedOfTrace (M.runTrace c n) = M.spaceUsed c n := by
-  simp only [spaceUsedOfTrace, spaceUsed_eq_sum_visited, visitedOfTrace_runTrace]
+    spaceUsedOfTrace (M.runTrace c n) = M.runConfigMaxFrom TrackedCfg.space c.track n := by
+  simp only [spaceUsedOfTrace, runConfigMaxFrom_track_eq_sum_visited, visitedOfTrace_runTrace]
 
 @[simp] theorem usesSpace_toBinary_iff [Fintype κ] (xs : List Γ) (s : ℕ) :
     NTM.UsesSpace M.toBinary xs s ↔ M.UsesSpace xs s := by
   simp only [NTM.UsesSpace, Controller.initInput_toBinary,
-    Controller.mem_runTraceWith_toBinary_iff, forall_eq, spaceUsedOfTrace_runTrace, UsesSpace]
+    Controller.mem_runTraceWith_toBinary_iff, forall_eq, spaceUsedOfTrace_runTrace]
+  rfl
 
 end Complexity.TM

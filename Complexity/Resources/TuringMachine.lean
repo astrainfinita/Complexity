@@ -7,7 +7,7 @@ module
 
 public import Complexity.Resources.Basic
 public import Complexity.Encoding.BitList
-public import Complexity.Models.TuringMachine.Execution
+public import Complexity.Models.TuringMachine.Deterministic
 
 /-!
 # Time and space complexity on multi-tape Turing machines
@@ -28,9 +28,8 @@ namespace Complexity.TM
 theorem ComputesInTimeAndSpace.mono {κ : Type*} [Fintype κ] {Γ Q : Type*} [Inhabited Γ]
     {M : TM Id κ Γ Q} {xs ys : List Γ} {t s t' s' : ℕ}
     (h : M.ComputesInTimeAndSpace xs ys t s) (ht : t ≤ t') (hs : s ≤ s') :
-    M.ComputesInTimeAndSpace xs ys t' s' := by
-  have he : M.run _ xs t' = M.run _ xs t := M.run_eq_of_halted xs h.1 ht
-  exact ⟨he.symm ▸ h.1, he.symm ▸ h.2.1, (h.usesSpace t').trans hs⟩
+    M.ComputesInTimeAndSpace xs ys t' s' :=
+  Controller.computes_mono h ht hs
 
 variable {α β : Type*} [Encoding (List Bool) α] [Encoding (List Bool) β]
 
@@ -50,8 +49,7 @@ theorem computes_iff {κ : Type*} [Fintype κ] {Q : Type*} {M : TM Id κ (Option
     Computes M f t s ↔
       Complexity.Computes
         (fun xs ys => M.ComputesInTimeAndSpace (xs.map some) (ys.map some))
-        List.length f t s := by
-  simp only [Computes, Complexity.Computes, computes_bits_visited_iff]
+        List.length f t s := Iff.rfl
 
 /-- A single finite-control machine computes the function within both pointwise
 bounds. The number of work tapes and the machine do not depend on the input. -/

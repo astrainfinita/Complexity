@@ -5,8 +5,8 @@ Authors: Yuyang Zhao
 -/
 module
 
-import Complexity.Models.TuringMachine.Execution
-meta import Complexity.Models.TuringMachine.Execution
+import Complexity.Models.TuringMachine.Deterministic
+meta import Complexity.Models.TuringMachine.Deterministic
 meta import Complexity.Models.TuringMachine.Cost
 meta import Complexity.Models.TuringMachine.Basic
 meta import Complexity.Models.TuringMachine.Configuration
@@ -50,7 +50,7 @@ private def tracked (n : ℕ) : TM.TrackedCfg Unit Bool (Fin 5) #[] :=
 #guard (tracked 20).cfg.workPos () = 0
 #guard (tracked 20).space = 3
 #guard excursion.runConfigMax (Config := TM.TrackedCfg Unit Bool (Fin 5) #[])
-  TM.visitedCosts.space ([] : List Bool) 20 = 3
+  TM.TrackedCfg.space ([] : List Bool) 20 = 3
 #guard excursion.runActionSum (Config := TM.TrackedCfg Unit Bool (Fin 5) #[])
   TM.visitedCosts.time ([] : List Bool) 20 = 4
 
@@ -58,8 +58,9 @@ private def tracked (n : ℕ) : TM.TrackedCfg Unit Bool (Fin 5) #[] :=
 example (n : ℕ) : (tracked n).cfg = excursion.runFrom start n :=
   excursion.tracked_runFrom_cfg start.track n
 
-example (n : ℕ) : excursion.runConfigMaxFrom TM.visitedCosts.space
-    start.track n = excursion.spaceUsed start n := rfl
+example (n : ℕ) : excursion.runConfigMaxFrom TM.TrackedCfg.space
+    start.track n = (tracked n).space :=
+  excursion.runConfigMaxFrom_tracked start.track n
 
 -- Recording can also begin in the middle of a computation, away from head zero.
 private def freshResume : TM.TrackedCfg Unit Bool (Fin 5) #[] :=
@@ -86,6 +87,6 @@ private def resumed : TM.TrackedCfg Unit Bool (Fin 5) #[] :=
 #guard resumed.space = 8
 
 -- Peak space also preserves the prior history through halted padding.
-#guard excursion.runConfigMaxFrom TM.visitedCosts.space resumeStart 20 = 8
+#guard excursion.runConfigMaxFrom TM.TrackedCfg.space resumeStart 20 = 8
 
 end Complexity.TuringMachineCostTest

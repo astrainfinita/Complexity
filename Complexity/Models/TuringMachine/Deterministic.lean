@@ -62,24 +62,10 @@ theorem visited_succ (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs) (n : ℕ) (i : κ)
     M.visited c (n + 1) i = insert ((M.runFrom c (n + 1)).workPos i) (M.visited c n i) := by
   simp only [visited, Finset.range_add_one, Finset.image_insert]
 
-/-- Total distinct work cells visited, counted separately on each tape. -/
-def spaceUsed [Fintype κ] (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs) (t : ℕ) : ℕ :=
-  M.runConfigMaxFrom visitedCosts.space c.track t
-
 theorem visited_mono (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs)
     {s t : ℕ} (h : s ≤ t) (i : κ) : M.visited c s i ⊆ M.visited c t i := by
   apply Finset.image_subset_image
   exact Finset.range_mono (by omega)
-
-theorem spaceUsed_mono [Fintype κ] (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs)
-    {s t : ℕ} (h : s ≤ t) : M.spaceUsed c s ≤ M.spaceUsed c t :=
-  M.runConfigMaxFrom_mono visitedCosts.space c.track h
-
-@[simp]
-theorem spaceUsed_zero [Fintype κ] (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs) :
-    M.spaceUsed c 0 = Fintype.card κ := by
-  simp only [spaceUsed, Controller.runConfigMaxFrom_zero]
-  exact Cfg.space_track c
 
 /-- Padding a halted run does not visit additional work cells. -/
 theorem visited_eq_of_halted (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs)
@@ -92,13 +78,6 @@ theorem visited_eq_of_halted (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs)
   · exact Finset.mem_image.mpr ⟨v, Finset.mem_range.mpr (by omega), rfl⟩
   · refine Finset.mem_image.mpr ⟨t, Finset.mem_range.mpr (by omega), ?_⟩
     rw [M.runFrom_eq_of_halted c h (by omega : t ≤ v)]
-
-theorem spaceUsed_eq_of_halted [Fintype κ] (M : TM Id κ Γ Q)
-    (c : Cfg κ Γ Q xs) {t u : ℕ} (h : M.Halted (M.runFrom c t)) (hu : t ≤ u) :
-    M.spaceUsed c u = M.spaceUsed c t := by
-  apply M.runConfigMaxFrom_eq_of_halted visitedCosts.space
-    c.track ?_ hu
-  simpa only [tracked_halted_iff, tracked_runFrom_cfg, Cfg.track_cfg] using h
 
 /-- The tracked interval contains exactly the cells visited by the ordinary run. -/
 @[simp] theorem tracked_runFrom_visited (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs)
@@ -137,10 +116,10 @@ theorem tracked_runFrom_within (M : TM Id κ Γ Q) (s : TrackedCfg κ Γ Q xs)
   exact ⟨le_min (hs i).1 hb.1, max_le (hs i).2 hb.2⟩
 
 /-- Interval lengths recover the distinct-cell count of the ordinary run. -/
-theorem spaceUsed_eq_sum_visited [Fintype κ] (M : TM Id κ Γ Q)
+theorem runConfigMaxFrom_track_eq_sum_visited [Fintype κ] (M : TM Id κ Γ Q)
     (c : Cfg κ Γ Q xs) (n : ℕ) :
-    M.spaceUsed c n = ∑ i, (M.visited c n i).card := by
-  rw [spaceUsed, runConfigMaxFrom_tracked]
+    M.runConfigMaxFrom TrackedCfg.space c.track n = ∑ i, (M.visited c n i).card := by
+  rw [runConfigMaxFrom_tracked]
   simp only [TrackedCfg.space, ← Int.card_Icc, tracked_runFrom_visited]
 
 /-- The computation eventually reaches a halting state. -/
@@ -164,37 +143,30 @@ theorem HaltsAt.unique {M : TM Id κ Γ Q} {xs : List Γ} {s t : ℕ}
 
 /-- Every finite execution prefix uses at most `s` work cells, whether or not the run halts. -/
 def UsesSpace [Fintype κ] (M : TM Id κ Γ Q) (xs : List Γ) (s : ℕ) : Prop :=
-  ∀ t, M.spaceUsed (M.initInput (Config := Cfg κ Γ Q xs.toArray) xs) t ≤ s
+  ∀ t, M.runConfigMax (Config := TrackedCfg κ Γ Q xs.toArray) TrackedCfg.space xs t ≤ s
 
-/-- By time `t`, the machine has halted with the specified output and has used at most `s` cells. -/
+/-- Compute with unit action time and visited-cell space on one tracked execution. -/
 def ComputesInTimeAndSpace [Fintype κ] (M : TM Id κ Γ Q) (xs ys : List Γ)
     (t s : ℕ) : Prop :=
-  M.Halted (M.run (Cfg κ Γ Q xs.toArray) xs t) ∧
-    (M.run (Cfg κ Γ Q xs.toArray) xs t).output = ys.toArray ∧
-    M.spaceUsed (M.initInput (Config := Cfg κ Γ Q xs.toArray) xs) t ≤ s
+  M.computes (Config := TrackedCfg κ Γ Q xs.toArray) visitedCosts xs ys t s
+
+/-- Read the ordinary run's result without carrying its visitation history. -/
+theorem ComputesInTimeAndSpace.run_spec [Fintype κ] {M : TM Id κ Γ Q}
+    {xs ys : List Γ} {t s : ℕ} (h : M.ComputesInTimeAndSpace xs ys t s) :
+    M.Halted (M.run (Cfg κ Γ Q xs.toArray) xs t) ∧
+      (M.run (Cfg κ Γ Q xs.toArray) xs t).output = ys.toArray := by
+  have ⟨hh, ho, _⟩ := (Controller.computes_unit_iff visitedCosts_time).mp h
+  simpa only [TrackedCfg.hasOutput_def, tracked_halted_iff, tracked_run_cfg] using And.intro hh ho
 
 theorem ComputesInTimeAndSpace.terminates [Fintype κ] {M : TM Id κ Γ Q}
     {xs ys : List Γ} {t s : ℕ}
     (h : M.ComputesInTimeAndSpace xs ys t s) : M.Terminates xs :=
-  ⟨t, h.1⟩
-
-/-- A bounded computation controls space at every earlier execution prefix. -/
-theorem ComputesInTimeAndSpace.spaceUsed_le [Fintype κ] {M : TM Id κ Γ Q}
-    {xs ys : List Γ} {t s : ℕ}
-    (h : M.ComputesInTimeAndSpace xs ys t s) {u : ℕ} (hu : u ≤ t) :
-    M.spaceUsed (M.initInput (Config := Cfg κ Γ Q xs.toArray) xs) u ≤ s :=
-  (M.spaceUsed_mono _ hu).trans h.2.2
+  ⟨t, h.run_spec.1⟩
 
 /-- A terminating bounded computation controls space along the entire infinite padded run. -/
 theorem ComputesInTimeAndSpace.usesSpace [Fintype κ] {M : TM Id κ Γ Q}
     {xs ys : List Γ} {t s : ℕ}
-    (h : M.ComputesInTimeAndSpace xs ys t s) : M.UsesSpace xs s := by
-  intro u
-  by_cases hu : u ≤ t
-  · exact h.spaceUsed_le hu
-  · rw [M.spaceUsed_eq_of_halted
-      (M.initInput (Config := Cfg κ Γ Q xs.toArray) xs) h.1
-      (by omega : t ≤ u)]
-    exact h.2.2
+    (h : M.ComputesInTimeAndSpace xs ys t s) : M.UsesSpace xs s :=
+  fun u ↦ Controller.computes_runConfigMax_le h u
 
 end Complexity.TM

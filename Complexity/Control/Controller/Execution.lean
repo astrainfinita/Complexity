@@ -192,4 +192,26 @@ theorem computes_runConfigMax_le {M : Controller Id Observation Action Q}
   · rw [M.runConfigMax_eq_of_halted costs.space input hn (by omega : n ≤ u)]
     exact hs
 
+/-- Unit action costs describe the halted run at the advertised time bound. -/
+theorem computes_unit_iff {M : Controller Id Observation Action Q}
+    {costs : CostModel Action Config} {input : Input} {output : Output} {t s : ℕ}
+    [exe : Execution Config Q Output input]
+    (htime : ∀ a c, costs.time a c = 1) :
+    M.computes costs input output t s ↔
+      M.Halted (M.run Config input t) ∧
+      exe.hasOutput (M.run Config input t) output ∧
+      M.runConfigMax costs.space input t ≤ s := by
+  rcases costs with ⟨time, space⟩
+  obtain rfl := funext fun a ↦ funext (htime a)
+  constructor
+  · intro h
+    have hs := computes_runConfigMax_le h t
+    obtain ⟨n, hn, ho, ht, _⟩ := h
+    have he := M.runFrom_runActionSumFrom_unit (M.initInput (Config := Config) input) n
+    have hr : M.run Config input t = M.run Config input n :=
+      (M.runFrom_eq_of_halted _ (he.symm ▸ hn) ht).trans he
+    exact ⟨hr.symm ▸ hn, hr.symm ▸ ho, hs⟩
+  · rintro ⟨hn, ho, hs⟩
+    exact ⟨t, hn, ho, M.runActionSumFrom_unit_le _ t, hs⟩
+
 end Complexity.Controller

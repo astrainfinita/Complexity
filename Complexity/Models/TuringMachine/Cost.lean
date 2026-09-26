@@ -126,7 +126,7 @@ end TrackedCfg
     M.Halted s ↔ M.Halted s.cfg := Iff.rfl
 
 /-- Unit transition time and the total historical work-cell footprint. -/
-@[simps]
+@[simps time, simps -fullyApplied space]
 def visitedCosts [Fintype κ] : CostModel (Action κ Γ Q) (TrackedCfg κ Γ Q xs) where
   time := (fun _ _ => 1)
   space := TrackedCfg.space
@@ -180,12 +180,59 @@ theorem tracked_runFrom_visited_mono (M : TM Id κ Γ Q) (s : TrackedCfg κ Γ Q
 /-- Growing intervals make peak space equal the final space, also when resuming a run. -/
 @[simp] theorem runConfigMaxFrom_tracked [Fintype κ] (M : TM Id κ Γ Q)
     (s : TrackedCfg κ Γ Q xs) (n : ℕ) :
-    M.runConfigMaxFrom visitedCosts.space s n =
+    M.runConfigMaxFrom TrackedCfg.space s n =
       (M.runFrom s n).space := by
   apply Nat.le_antisymm ?_
-    (M.space_le_runConfigMaxFrom visitedCosts.space s (Nat.le_refl n))
-  apply (M.runConfigMaxFrom_le_iff visitedCosts.space s n _).2
+    (M.space_le_runConfigMaxFrom TrackedCfg.space s (Nat.le_refl n))
+  apply (M.runConfigMaxFrom_le_iff TrackedCfg.space s n _).2
   intro m hm
   exact TrackedCfg.space_mono fun i ↦ M.tracked_runFrom_visited_mono s hm i
+
+namespace TrackedCfg
+
+/-- Execute on lists while recording visited work cells for resource accounting. -/
+@[simps hasOutput]
+instance {κ Γ Q : Type*} [Inhabited Γ] (xs : List Γ) :
+    Controller.Execution (TrackedCfg κ Γ Q xs.toArray)
+      Q (Output := List Γ) (input := xs) where
+  init q := ((rawExecution xs).init q).track
+  state_init _ := rfl
+  hasOutput cfg ys := cfg.cfg.output = ys.toArray
+
+/-- Represent external bits by nonblank symbols on the input and output tapes. -/
+@[simps hasOutput]
+instance bitsExecution {κ Q : Type*} (xs : List Bool) :
+    Controller.Execution
+      (TrackedCfg κ (Option Bool) Q ((xs.map some).toArray))
+      Q (Output := List Bool) (input := xs) where
+  init q := ((rawExecution (xs.map some)).init q).track
+  state_init _ := rfl
+  hasOutput cfg ys := cfg.cfg.output = (ys.map some).toArray
+
+end TrackedCfg
+
+/-- The standard list input initializes an ordinary configuration with visit records. -/
+@[simp] theorem initInput_tracked {κ Γ Q : Type*} [Inhabited Γ]
+    {F : Type _ → Type*} (M : TM F κ Γ Q) (xs : List Γ) :
+    M.initInput (Config := TrackedCfg κ Γ Q xs.toArray) xs =
+      (M.initInput (Config := Cfg κ Γ Q xs.toArray) xs).track := rfl
+
+/-- Bit inputs occupy nonblank cells before execution starts. -/
+@[simp] theorem initInput_bits {κ Q : Type*} {F : Type _ → Type*}
+    (M : TM F κ (Option Bool) Q) (xs : List Bool) :
+    M.initInput
+      (Config := TrackedCfg κ (Option Bool) Q ((xs.map some).toArray)) xs =
+      (M.initInput (Config := Cfg κ (Option Bool) Q (xs.map some).toArray)
+        (xs.map some)).track := rfl
+
+@[simp] theorem tracked_run_cfg (M : TM Id κ Γ Q) (xs : List Γ) (n : ℕ) :
+    (M.run (TrackedCfg κ Γ Q xs.toArray) xs n).cfg = M.run (Cfg κ Γ Q xs.toArray) xs n :=
+  M.tracked_runFrom_cfg _ n
+
+@[simp↓] theorem runConfigMax_tracked [Fintype κ] (M : TM Id κ Γ Q)
+    (xs : List Γ) (n : ℕ) :
+    M.runConfigMax (Config := TrackedCfg κ Γ Q xs.toArray) TrackedCfg.space xs n =
+      (M.run (TrackedCfg κ Γ Q xs.toArray) xs n).space :=
+  M.runConfigMaxFrom_tracked _ n
 
 end Complexity.TM

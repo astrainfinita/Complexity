@@ -52,7 +52,7 @@ theorem runConfigMaxFrom_compile [Fintype κ] {p : TM.Program κ Γ α} {q : p.S
     {s t : TrackedCfg κ Γ Unit xs} {n : ℕ} {a : α}
     (h : Program.Control.Run (p.toControl eval) p.result
       Controller.observe (apply) q s n a t) :
-    (compile p).runConfigMaxFrom visitedCosts.space (s.mapState (fun _ ↦ q)) n =
+    (compile p).runConfigMaxFrom TrackedCfg.space (s.mapState (fun _ ↦ q)) n =
       t.space := by
   obtain ⟨_, _, hr⟩ := run_compile h
   rw [runConfigMaxFrom_tracked, hr, TrackedCfg.space_mapState]
@@ -67,10 +67,9 @@ theorem computesInTimeAndSpace_of_exec [Fintype κ] (p : TM.Program κ Γ α) {y
     (hn : n ≤ t) (ho : v.cfg.output = ys) (hs : v.space ≤ s) :
     (compile p).ComputesInTimeAndSpace xs.toList ys.toList t s := by
   obtain ⟨e, _, hr⟩ := run_compile h.toControl
-  apply TM.ReachesInTimeAndSpace.computesInTimeAndSpace
-    (M := compile p) (d := v.cfg.mapState (fun _ ↦ Sum.inr e)) ?_ (by rfl) ho
-  refine ⟨n, hn, ?_, ?_⟩
-  · exact ((compile p).tracked_runFrom_cfg _ n).symm.trans (congrArg TrackedCfg.cfg hr)
-  · exact (runConfigMaxFrom_compile h.toControl).le.trans hs
+  refine ⟨n, ?_, ?_, ((compile p).runActionSumFrom_unit_le _ n).trans hn,
+    (runConfigMaxFrom_compile h.toControl).le.trans hs⟩
+  · exact (congrArg (fun s ↦ (compile p).Halted s) hr).mpr rfl
+  · exact (congrArg (fun s ↦ s.cfg.output) hr).trans ho
 
 end Complexity.TM.Program

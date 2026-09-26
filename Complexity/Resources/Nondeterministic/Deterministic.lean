@@ -38,16 +38,17 @@ theorem Computes.decidesInTimeAndSpace {κ : Type*} [Fintype κ] {Q : Type*}
   refine ⟨⟨?_, ?_⟩, ?_⟩
   · intro xs a ha
     have hc := hh xs a ha
-    have ht := (M.usesTime_toBinary_iff _ _).2 hc.1
+    obtain ⟨hhalt, hout⟩ := hc.run_spec
+    have ht := (M.usesTime_toBinary_iff _ _).2 hhalt
     refine ⟨ht.terminates, ?_, ?_⟩
     · rw [NTM.booleanOutput_iff_of_usesTime ht]
       intro c hc'
       obtain rfl := (M.mem_runWith_toBinary_iff _ _ _).1 hc'
-      exact ⟨f a, hc.2.1⟩
+      exact ⟨f a, hout⟩
     · rw [NTM.accepts_iff_of_usesTime ht]
-      simpa [hc.2.1] using hp a
+      simpa [hout] using hp a
   · intro xs a ha
-    exact (M.usesTime_toBinary_iff _ _).2 (hh xs a ha).1
+    exact (M.usesTime_toBinary_iff _ _).2 (hh xs a ha).run_spec.1
   · intro xs a ha
     exact (M.usesSpace_toBinary_iff _ _).2 (hh xs a ha).usesSpace
 
