@@ -179,6 +179,11 @@ variable (M : Controller Id Observation Action Q)
 def step (c : Config) : Config :=
   (M.stepWith Id c).run
 
+/-- A deterministic step either stays halted or applies the selected action. -/
+theorem step_eq (c : Config) :
+    M.step c = if M.halt (state c) then c
+      else apply ((M.transition (state c) (observe c)).run) c := rfl
+
 @[simp] theorem step_of_halted (c : Config) (h : M.Halted c) : M.step c = c :=
   congrArg Id.run (M.stepWith_of_halted Id c h)
 

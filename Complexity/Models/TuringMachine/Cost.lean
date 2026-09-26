@@ -71,6 +71,11 @@ def mapState {Q' : Type*} (f : Q → Q') (s : TrackedCfg κ Γ Q xs) :
 @[simp] theorem mapState_track {Q' : Type*} (f : Q → Q') (c : Cfg κ Γ Q xs) :
     c.track.mapState f = (c.mapState f).track := rfl
 
+/-- Relabeling preserves the complete action result, including earlier visits. -/
+@[simp] theorem apply_mapState {Q' : Type*} (f : Q → Q') (a : Action κ Γ Q)
+    (s : TrackedCfg κ Γ Q xs) :
+    apply (a.mapState f) (s.mapState f) = (apply a s).mapState f := rfl
+
 /-- Total visited-cell space, computed from interval lengths without enumerating cells. -/
 def space [Fintype κ] (s : TrackedCfg κ Γ Q xs) : ℕ :=
   ∑ i, ((s.visited i).snd + 1 - (s.visited i).fst).toNat
@@ -203,12 +208,6 @@ theorem tracked_runFrom_visited_congr {κ' Γ' Q' : Type*} [Inhabited Γ'] {ys :
   intro v
   simp only [tracked_runFrom_visited_le_iff]
   exact forall_congr' fun m ↦ forall_congr' fun hm ↦ by rw [h m hm]
-
-/-- A common bound for earlier history and fresh visits bounds the entire tracked run. -/
-theorem tracked_runFrom_visited_le (M : TM Id κ Γ Q) (s : TrackedCfg κ Γ Q xs)
-    (n : ℕ) {V : κ → NonemptyInterval ℤ} (hs : s.visited ≤ V)
-    (hv : (M.runFrom s.cfg.track n).visited ≤ V) : (M.runFrom s n).visited ≤ V :=
-  (M.tracked_runFrom_visited_sup s n).le.trans (sup_le hs hv)
 
 /-- Growing intervals make peak space equal the final space, also when resuming a run. -/
 @[simp] theorem runConfigMaxFrom_tracked [Fintype κ] (M : TM Id κ Γ Q)
