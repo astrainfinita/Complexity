@@ -5,7 +5,7 @@ Authors: Yuyang Zhao
 -/
 module
 
-import Complexity.Models.TuringMachine.Deterministic
+import Complexity.Models.TuringMachine.Simulation
 meta import Complexity.Models.TuringMachine.Deterministic
 meta import Complexity.Models.TuringMachine.Cost
 meta import Complexity.Models.TuringMachine.Basic
@@ -61,6 +61,14 @@ example (n : ℕ) : (tracked n).cfg = excursion.runFrom start n :=
 example (n : ℕ) : excursion.runConfigMaxFrom TM.TrackedCfg.space
     start.track n = (tracked n).space :=
   excursion.runConfigMaxFrom_tracked start.track n
+
+-- Pointwise head bounds give a space bound through the shared interval.
+example {κ Γ Q : Type*} [Inhabited Γ] [Fintype κ] {xs : Array Γ}
+    (M : TM Id κ Γ Q) (c : TM.Cfg κ Γ Q xs) (n : ℕ) (V : κ → NonemptyInterval ℤ)
+    (hb : ∀ i m, m ≤ n → (M.runFrom c m).workPos i ∈ V i) :
+    M.runConfigMaxFrom TM.TrackedCfg.space c.track n ≤ ∑ i, ((V i).snd + 1 - (V i).fst).toNat :=
+  M.runConfigMaxFrom_le_of_visited_le c.track n V
+    (fun i ↦ (M.tracked_runFrom_visited_le_iff c n i (V i)).mpr (hb i))
 
 -- Recording can also begin in the middle of a computation, away from head zero.
 private def freshResume : TM.TrackedCfg Unit Bool (Fin 5) #[] :=

@@ -107,7 +107,7 @@ public import Complexity.Models.TuringMachine.Program.Move
 public import Complexity.Models.TuringMachine.Program.Seek
 public import Complexity.Models.TuringMachine.Program.Specification.Basic
 public import Complexity.Models.TuringMachine.Program.Specification.Configuration
-public import Complexity.Models.TuringMachine.Program.Specification.Trace
+public import Complexity.Models.TuringMachine.Program.Specification.Tracked
 public import Complexity.Models.TuringMachine.Program.Tapes
 public import Complexity.Models.TuringMachine.Program.Word
 public import Complexity.Models.TuringMachine.Program.Word.Append

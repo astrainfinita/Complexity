@@ -6,7 +6,7 @@ Authors: Yuyang Zhao
 module
 
 public import Complexity.Models.TreeMachine.Program.Scan
-public import Complexity.Models.TuringMachine.Program.Specification.Trace
+public import Complexity.Models.TuringMachine.Program.Specification.Tracked
 
 /-! # A configuration-only contract for the prefix scanner -/
 
@@ -41,22 +41,23 @@ theorem spec_scan_cfg (u : Cfg κ (Option Bool) Unit zs) (s d c : κ) (copy : Bo
     Triple ((scan s d c copy).verify (cfgSemantics zs))
       (fun v b ↦ v = u ∧ b = 4 * a.size + q)
       (fun _ v b ↦ v = scanCfg u s d c copy a xs.length ys a.size ∧ b = q) () := by
-  let L : κ → ℤ := fun i ↦ min (u.workPos i) (-(a.size : ℤ))
-  let R : κ → ℤ := fun i ↦ max (u.workPos i) (xs.length + ys.length + a.size + 1)
-  have hF : ScanFootprint u s d c copy a xs.length ys L R := by
+  let V : κ → NonemptyInterval ℤ := fun i ↦
+    ⟨(min (u.workPos i) (-(a.size : ℤ)),
+      max (u.workPos i) (xs.length + ys.length + a.size + 1)), by omega⟩
+  have hF : ScanFootprint u s d c copy a xs.length ys V := by
     intro n hn i
     have hb := balance_bounds ((BitList.encodeTree a).take n)
     simp only [List.length_take, BitList.length_encodeTree] at hb
-    simp only [scanCfg_workPos, scanWord, L, R, Set.mem_Icc]
+    simp only [scanCfg_workPos, scanWord, V, NonemptyInterval.mem_mk]
     split_ifs <;> (try simp only [List.length_append, List.length_take, length_code]) <;>
       constructor <;> omega
-  apply cfg_of_trace (spec_scan u s d c copy a xs ys ws L R q hs hc hd hx hy hz hp hi hj hF)
+  apply cfg_of_tracked (spec_scan u s d c copy a xs ys ws V q hs hc hd hx hy hz hp hi hj hF)
   · rintro v b ⟨hv, hb⟩
     subst v
     refine ⟨rfl, ?_, hb⟩
     intro i
-    simpa only [Cfg.track_visited, NonemptyInterval.pure, Set.mem_Icc,
-      scanCfg_zero u s d c copy a xs.length ys hy hp hi hj] using hF 0 (by omega) i
+    change u.workPos i ∈ V i
+    simpa only [scanCfg_zero u s d c copy a xs.length ys hy hp hi hj] using hF 0 (by omega) i
   · intro r v b h
     exact ⟨h.1, h.2.2⟩
 

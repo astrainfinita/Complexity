@@ -88,6 +88,24 @@ def splitHeads : NTM (Fin 1) (Option Bool) Bool where
 #guard (splitHeads.runWith (TM.TrackedCfg (Fin 1) (Option Bool) Bool #[])
   Multiset ([] : List (Option Bool)) 4).map TM.TrackedCfg.space = ↑[2, 2]
 
+-- A local invariant proves the space bound at every depth, including halted padding.
+example : splitHeads.UsesSpace [] 2 := by
+  apply splitHeads.usesSpace_of_invariant
+    (P := fun c ↦ c = splitHeads.initInput ([] : List (Option Bool)) ∨ splitHeads.Halted c ∧ c.space ≤ 2)
+  · exact Or.inl rfl
+  · intro c hc d hd
+    rcases hc with rfl | ⟨hh, hs⟩
+    · change d ∈ (_ ::ₘ _ ::ₘ (0 : Multiset _)) at hd
+      simp only [Multiset.mem_cons, Multiset.notMem_zero, or_false] at hd
+      rcases hd with rfl | rfl <;> exact Or.inr ⟨rfl, by decide⟩
+    · rw [splitHeads.stepWith_of_halted Multiset c hh] at hd
+      obtain rfl := Multiset.mem_singleton.mp hd
+      exact Or.inr ⟨hh, hs⟩
+  · intro c hc
+    rcases hc with rfl | ⟨_, hs⟩
+    · decide
+    · exact hs
+
 -- Branches return to the same blank configuration while retaining different visit intervals.
 def rejoinHeads : NTM Unit Bool (Fin 4) where
   q₀ := 0

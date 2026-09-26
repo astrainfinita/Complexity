@@ -6,7 +6,7 @@ Authors: Yuyang Zhao
 module
 
 public import Complexity.Models.TuringMachine.Program.Call
-public import Complexity.Models.TuringMachine.Program.Specification.Trace
+public import Complexity.Models.TuringMachine.Program.Specification.Tracked
 public import Complexity.Control.Transition.Simulation
 
 /-! # Calling a machine inside a shared work-space bound
@@ -87,14 +87,14 @@ theorem visited_callFrom (M : TM Id κ Γ Q) (q : Q) (c : Cfg κ Γ Q xs)
 /-- A call preserves a common interval bound containing its actual source execution.
 The caller's existing visitation history and remaining time credits are retained. -/
 @[spec]
-theorem spec_callFrom_within (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs)
-    (n r : ℕ) (L R : κ → ℤ) (hh : M.Halted (M.runFrom c n))
-    (hw : (M.runFrom c.track n).Within L R) :
+theorem spec_callFrom_visited_le (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs)
+    (n r : ℕ) (V : κ → NonemptyInterval ℤ) (hh : M.Halted (M.runFrom c n))
+    (hw : (M.runFrom c.track n).visited ≤ V) :
     Triple ((callFrom M c.state).verify (semantics xs))
-      (fun s b ↦ s.cfg = c.mapState (fun _ ↦ ()) ∧ s.Within L R ∧ n + r ≤ b)
+      (fun s b ↦ s.cfg = c.mapState (fun _ ↦ ()) ∧ s.visited ≤ V ∧ n + r ≤ b)
       (fun a s b ↦ a = (M.runFrom c n).state ∧
         s.cfg = (M.runFrom c n).mapState (fun _ ↦ ()) ∧
-        s.Within L R ∧ r ≤ b) () := by
+        s.visited ≤ V ∧ r ≤ b) () := by
   constructor
   rintro s b ⟨hc, hs, hb⟩
   obtain ⟨m, hm, hr⟩ := exec_callFrom M c n hh
@@ -108,26 +108,26 @@ theorem spec_callFrom_within (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs)
     change s.cfg.mapState (fun _ ↦ (compile (callFrom M c.state)).q₀) = _
     rw [start_callFrom, hc]
     rfl
-  have hF := (compile (callFrom M c.state)).tracked_runFrom_within
+  have hF := (compile (callFrom M c.state)).tracked_runFrom_visited_le
     (s.mapState (fun _ ↦ ((callFrom M c.state).toControl eval).start))
     m hs (fun i ↦ by
       erw [TrackedCfg.mapState_cfg, h₀, visited_callFrom]
-      exact M.tracked_runFrom_within_mono c.track hm hw i)
-  erw [he', TrackedCfg.within_mapState] at hF
+      exact (M.tracked_runFrom_visited_mono c.track hm).trans hw i)
+  erw [he', TrackedCfg.mapState_visited] at hF
   exact ⟨m, (M.runFrom c n).state, t, by omega, he,
     rfl, ht, hF, by omega⟩
 
 /-- The initial-state call uses the same interval rule without resetting caller storage. -/
 @[spec]
-theorem spec_call_within (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs)
-    (n r : ℕ) (L R : κ → ℤ) (hc : c.state = M.q₀)
+theorem spec_call_visited_le (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs)
+    (n r : ℕ) (V : κ → NonemptyInterval ℤ) (hc : c.state = M.q₀)
     (hh : M.Halted (M.runFrom c n))
-    (hw : (M.runFrom c.track n).Within L R) :
+    (hw : (M.runFrom c.track n).visited ≤ V) :
     Triple ((call M).verify (semantics xs))
-      (fun s b ↦ s.cfg = c.mapState (fun _ ↦ ()) ∧ s.Within L R ∧ n + r ≤ b)
+      (fun s b ↦ s.cfg = c.mapState (fun _ ↦ ()) ∧ s.visited ≤ V ∧ n + r ≤ b)
       (fun a s b ↦ a = (M.runFrom c n).state ∧
         s.cfg = (M.runFrom c n).mapState (fun _ ↦ ()) ∧
-        s.Within L R ∧ r ≤ b) () := by
-  simpa only [call, hc] using spec_callFrom_within M c n r L R hh hw
+        s.visited ≤ V ∧ r ≤ b) () := by
+  simpa only [call, hc] using spec_callFrom_visited_le M c n r V hh hw
 
 end Complexity.TM.Program

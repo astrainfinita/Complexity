@@ -95,18 +95,18 @@ private def trackedDemo : TrackedCfg (Fin 1) Bool (demo.State ⊕ demo.Exit) #[]
 #guard trackedDemo.cfg.workPos 0 = 0
 #guard trackedDemo.cfg.output = #[false, true]
 
-theorem demo_within_spec : Triple (demo.verify (Program.semantics #[]))
+theorem demo_visited_le_spec : Triple (demo.verify (Program.semantics #[]))
     (fun s b ↦ s = start ∧ b = 4)
     (fun a s _ ↦ a = true ∧ s.cfg.output = #[false, true] ∧ s.cfg.workPos 0 = 0 ∧
-      s.Within (fun _ ↦ -3) (fun _ ↦ 4)) () := by
-  have hc := Program.spec_call_within machine ((machine.initInput (Input := List Bool) (Config := Cfg (Fin 1) Bool Bool [].toArray) [])) 1 3
-    (fun _ ↦ -3) (fun _ ↦ 4) rfl (by rfl) (by decide)
+      s.visited ≤ (fun _ ↦ ⟨(-3, 4), by decide⟩)) () := by
+  have hc := Program.spec_call_visited_le machine ((machine.initInput (Input := List Bool) (Config := Cfg (Fin 1) Bool Bool [].toArray) [])) 1 3
+    (fun _ ↦ ⟨(-3, 4), by decide⟩) rfl (by rfl) (by decide)
   unfold demo
   vcgen [hc]
   all_goals simp_all only [machine_run_one]
   all_goals simp_all [machine, Cfg.mapState,
     Program.idle, Cfg.workSymbols, start,
-    TrackedCfg.Within, Fin.eq_zero]
+    Pi.le_def, NonemptyInterval.le_def, Fin.eq_zero]
   all_goals omega
 
 end ProgramCallTest

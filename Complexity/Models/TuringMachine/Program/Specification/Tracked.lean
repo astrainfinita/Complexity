@@ -25,7 +25,7 @@ open Std.WP
 
 variable {κ : Type} {Γ α : Type} [Inhabited Γ]
 
-/-- Interpret local actions on tape data and ghost interval endpoints. -/
+/-- Interpret local actions on tape data and visited intervals. -/
 @[simps eval observe act]
 def semantics (xs : Array Γ) :
     Program.Semantics (Γ × (κ → Γ)) (Action κ Γ Unit) (Op κ Γ) Op.Result
@@ -44,19 +44,19 @@ theorem apply_idle {xs : Array Γ} (s : TrackedCfg κ Γ Unit xs) :
   exact sup_eq_left.mpr (s.head_mem i)
 
 /-- A head move preserves a footprint whenever its new position remains inside it. -/
-theorem moveAction_within [DecidableEq κ] {xs : Array Γ} (j : κ) (d : SignType)
-    (s : TrackedCfg κ Γ Unit xs) (L R : κ → ℤ)
-    (hF : s.Within L R)
-    (hj : (apply (moveAction (Γ := Γ) j d) s.cfg).workPos j ∈ Set.Icc (L j) (R j)) :
-    (apply (moveAction (Γ := Γ) j d) s).Within L R := by
-  apply (s.within_apply_iff _ L R).mpr
+theorem moveAction_visited_le [DecidableEq κ] {xs : Array Γ} (j : κ) (d : SignType)
+    (s : TrackedCfg κ Γ Unit xs) (V : κ → NonemptyInterval ℤ)
+    (hF : s.visited ≤ V)
+    (hj : (apply (moveAction (Γ := Γ) j d) s.cfg).workPos j ∈ V j) :
+    (apply (moveAction (Γ := Γ) j d) s).visited ≤ V := by
+  apply (s.apply_visited_le_iff _ V).mpr
   refine ⟨hF, ?_⟩
   intro i
   by_cases hi : i = j
   · subst i; exact hj
-  · simpa [hi] using hF.head i
+  · simpa [hi] using s.head_mem_of_visited_le hF i
 
-/-- A total loop rule on traces; the dispatcher consumes one time credit. -/
+/-- A total loop rule on tracked configurations; the dispatcher consumes one time credit. -/
 @[spec]
 theorem spec_repeatUntil {xs : Array Γ} (p : TM.Program κ Γ Bool)
     (I : Program.Invariant (TrackedCfg κ Γ Unit xs) (ℕ → Prop))
@@ -76,7 +76,7 @@ theorem spec_act (a : Action κ Γ Unit) (xs : Array Γ) (s : TrackedCfg κ Γ U
       (fun r t c => r = () ∧ t = apply a s ∧ c = b - 1) x :=
   Program.spec_perform (Op.act a) (semantics xs) s b h x
 
-/-- Reading the input preserves the trace and consumes one transition. -/
+/-- Reading the input preserves the tracked configuration and consumes one transition. -/
 @[spec]
 theorem spec_readInput [FinEnum Γ] (xs : Array Γ) (s : TrackedCfg κ Γ Unit xs)
     (b : ℕ) (h : 0 < b) (x : Unit) :
@@ -86,7 +86,7 @@ theorem spec_readInput [FinEnum Γ] (xs : Array Γ) (s : TrackedCfg κ Γ Unit x
     Program.spec_perform (Op.readInput (κ := κ) (Γ := Γ) inferInstance)
       (semantics xs) s b h x
 
-/-- Reading a work symbol preserves the trace and consumes one transition. -/
+/-- Reading a work symbol preserves the tracked configuration and consumes one transition. -/
 @[spec]
 theorem spec_read [FinEnum Γ] (i : κ) (xs : Array Γ) (s : TrackedCfg κ Γ Unit xs)
     (b : ℕ) (h : 0 < b) (x : Unit) :
@@ -114,7 +114,7 @@ section Configuration
 variable {xs : Array Γ}
 
 /-- Forget the history in an already verified total specification. -/
-theorem cfg_of_trace {p : TM.Program κ Γ α}
+theorem cfg_of_tracked {p : TM.Program κ Γ α}
     {P : TrackedCfg κ Γ Unit xs → ℕ → Prop} {Q : α → TrackedCfg κ Γ Unit xs → ℕ → Prop}
     {P' : Cfg κ Γ Unit xs → ℕ → Prop} {Q' : α → Cfg κ Γ Unit xs → ℕ → Prop}
     (h : Triple (p.verify (semantics xs)) P Q ())

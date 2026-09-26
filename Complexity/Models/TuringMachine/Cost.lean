@@ -78,47 +78,28 @@ def space [Fintype κ] (s : TrackedCfg κ Γ Q xs) : ℕ :=
 @[simp] theorem space_mapState [Fintype κ] {Q' : Type*} (f : Q → Q')
     (s : TrackedCfg κ Γ Q xs) : (s.mapState f).space = s.space := rfl
 
-/-- Enlarging every recorded interval cannot reduce space. -/
-theorem space_mono [Fintype κ] {s t : TrackedCfg κ Γ Q xs}
-    (h : ∀ i, s.visited i ≤ t.visited i) : s.space ≤ t.space := by
-  apply Finset.sum_le_sum
-  intro i _
-  have hl := (h i).1
-  have hr := (h i).2
-  omega
-
-/-- Every recorded interval stays inside the specified bounds. -/
-def Within (s : TrackedCfg κ Γ Q xs) (l h : κ → ℤ) : Prop :=
-  ∀ i, l i ≤ (s.visited i).fst ∧ (s.visited i).snd ≤ h i
-
-instance [Fintype κ] (s : TrackedCfg κ Γ Q xs) (l h : κ → ℤ) :
-    Decidable (s.Within l h) := by
-  unfold Within
-  infer_instance
-
-theorem Within.head {s : TrackedCfg κ Γ Q xs} {l h : κ → ℤ}
-    (hs : s.Within l h) (i : κ) :
-    l i ≤ s.cfg.workPos i ∧ s.cfg.workPos i ≤ h i :=
+theorem head_mem_of_visited_le (s : TrackedCfg κ Γ Q xs) {V : κ → NonemptyInterval ℤ}
+    (hs : s.visited ≤ V) (i : κ) : s.cfg.workPos i ∈ V i :=
   ⟨(hs i).1.trans (s.head_mem i).1, (s.head_mem i).2.trans (hs i).2⟩
 
-@[simp] theorem within_mapState {Q' : Type*} (f : Q → Q') (s : TrackedCfg κ Γ Q xs)
-    (l h : κ → ℤ) : (s.mapState f).Within l h ↔ s.Within l h := Iff.rfl
-
 /-- An action preserves a common bound exactly when its new heads remain inside it. -/
-theorem within_apply_iff (a : Action κ Γ Q) (s : TrackedCfg κ Γ Q xs) (l h : κ → ℤ) :
-    (apply a s).Within l h ↔ s.Within l h ∧
-      ∀ i, l i ≤ (apply a s.cfg).workPos i ∧
-        (apply a s.cfg).workPos i ≤ h i := by
-  simp only [Within, apply_visited, NonemptyInterval.fst_sup, NonemptyInterval.snd_sup,
-    NonemptyInterval.pure, le_min_iff, max_le_iff, forall_and]
-  tauto
+theorem apply_visited_le_iff (a : Action κ Γ Q) (s : TrackedCfg κ Γ Q xs)
+    (V : κ → NonemptyInterval ℤ) :
+    (apply a s).visited ≤ V ↔ s.visited ≤ V ∧ ∀ i, (apply a s.cfg).workPos i ∈ V i := by
+  simp only [Pi.le_def, apply_visited, sup_le_iff, forall_and]
+  rfl
 
-theorem space_le_of_within [Fintype κ] (s : TrackedCfg κ Γ Q xs) (l h : κ → ℤ)
-    (hs : s.Within l h) : s.space ≤ ∑ i, (h i + 1 - l i).toNat := by
+theorem space_le_of_visited_le [Fintype κ] (s : TrackedCfg κ Γ Q xs) (V : κ → NonemptyInterval ℤ)
+    (hs : s.visited ≤ V) : s.space ≤ ∑ i, ((V i).snd + 1 - (V i).fst).toNat := by
   apply Finset.sum_le_sum
   intro i _
-  have := hs i
+  rcases hs i with ⟨hl, hr⟩
   omega
+
+/-- Enlarging every recorded interval cannot reduce space. -/
+theorem space_mono [Fintype κ] {s t : TrackedCfg κ Γ Q xs}
+    (h : s.visited ≤ t.visited) : s.space ≤ t.space :=
+  s.space_le_of_visited_le t.visited h
 
 end TrackedCfg
 
@@ -143,15 +124,43 @@ def visitedCosts [Fintype κ] : CostModel (Action κ Γ Q) (TrackedCfg κ Γ Q x
   by_cases h : M.halt s.cfg.state = true <;>
     simp [Controller.step, Controller.stepWith, h]
 
-/-- Each step extends the interval to its new head; halted padding stays within it. -/
-theorem tracked_step_visited (M : TM Id κ Γ Q) (s : TrackedCfg κ Γ Q xs) (i : κ) :
-    (M.step s).visited i =
-      s.visited i ⊔ NonemptyInterval.pure ((M.step s.cfg).workPos i) := by
+/-- Each step extends the intervals to its new heads; halted padding stays within them. -/
+theorem tracked_step_visited (M : TM Id κ Γ Q) (s : TrackedCfg κ Γ Q xs) :
+    (M.step s).visited = s.visited ⊔ fun i ↦ NonemptyInterval.pure ((M.step s.cfg).workPos i) := by
+  funext i
   by_cases h : M.halt s.cfg.state = true
-  · simp only [Controller.step_of_halted M s h,
-      M.step_of_halted s.cfg h]
+  · simp only [Controller.step_of_halted M s h, M.step_of_halted s.cfg h]
     exact (sup_eq_left.mpr (s.head_mem i)).symm
   · simp [Controller.step, Controller.stepWith, h]
+
+/-- Recording visits preserves every ordinary execution prefix. -/
+@[simp] theorem tracked_runFrom_cfg (M : TM Id κ Γ Q) (s : TrackedCfg κ Γ Q xs) (n : ℕ) :
+    (M.runFrom s n).cfg = M.runFrom s.cfg n :=
+  (Transition.runN_map TrackedCfg.cfg (fun s ↦ (M.tracked_step_cfg s).symm) s n).symm
+
+/-- Recorded intervals only grow along an execution, including any prior history. -/
+theorem tracked_runFrom_visited_mono (M : TM Id κ Γ Q) (s : TrackedCfg κ Γ Q xs) :
+    Monotone fun n ↦ (M.runFrom s n).visited := by
+  apply monotone_nat_of_le_succ
+  intro n
+  rw [Controller.runFrom_succ', tracked_step_visited]
+  exact le_sup_left
+
+/-- Prior history joins with the intervals recorded by the same run from singleton history.
+This compares executions without resetting the history of the running configuration. -/
+theorem tracked_runFrom_visited_sup (M : TM Id κ Γ Q) (s : TrackedCfg κ Γ Q xs) (n : ℕ) :
+    (M.runFrom s n).visited = s.visited ⊔ (M.runFrom s.cfg.track n).visited := by
+  induction n with
+  | zero => exact (sup_eq_left.mpr s.head_mem).symm
+  | succ n ih =>
+    simp only [Controller.runFrom_succ', tracked_step_visited,
+      tracked_runFrom_cfg, Cfg.track_cfg, ih, sup_assoc]
+
+/-- Sequential runs join prior visits with the next block's fresh intervals. -/
+theorem tracked_runFrom_visited_add (M : TM Id κ Γ Q) (s : TrackedCfg κ Γ Q xs) (m n : ℕ) :
+    (M.runFrom s (m + n)).visited = (M.runFrom s m).visited ⊔
+      (M.runFrom (M.runFrom s.cfg m).track n).visited := by
+  rw [Controller.runFrom_add, tracked_runFrom_visited_sup, tracked_runFrom_cfg]
 
 /-- A step visits only its new head position in addition to its prior interval. -/
 theorem mem_tracked_step_visited (M : TM Id κ Γ Q) (s : TrackedCfg κ Γ Q xs)
@@ -160,45 +169,9 @@ theorem mem_tracked_step_visited (M : TM Id κ Γ Q) (s : TrackedCfg κ Γ Q xs)
   have hp := M.step_workPos_bounds s.cfg i
   have hv := s.head_mem i
   rw [tracked_step_visited]
-  simp only [NonemptyInterval.mem_def, NonemptyInterval.fst_sup, NonemptyInterval.snd_sup,
-    NonemptyInterval.pure_fst, NonemptyInterval.pure_snd]
+  simp only [Pi.sup_apply, NonemptyInterval.mem_def, NonemptyInterval.fst_sup,
+    NonemptyInterval.snd_sup, NonemptyInterval.pure_fst, NonemptyInterval.pure_snd]
   omega
-
-/-- Recording visits preserves every ordinary execution prefix. -/
-@[simp] theorem tracked_runFrom_cfg (M : TM Id κ Γ Q) (s : TrackedCfg κ Γ Q xs) (n : ℕ) :
-    (M.runFrom s n).cfg =
-      M.runFrom s.cfg n :=
-  (Transition.runN_map TrackedCfg.cfg (fun s ↦ (M.tracked_step_cfg s).symm) s n).symm
-
-/-- Prior history joins with the interval recorded by the same run from a singleton history.
-This compares executions without resetting the history of the running configuration. -/
-theorem tracked_runFrom_visited_sup (M : TM Id κ Γ Q) (s : TrackedCfg κ Γ Q xs)
-    (n : ℕ) (i : κ) :
-    (M.runFrom s n).visited i =
-      s.visited i ⊔ (M.runFrom s.cfg.track n).visited i := by
-  induction n with
-  | zero => exact (sup_eq_left.mpr (s.head_mem i)).symm
-  | succ n ih =>
-    simp only [Controller.runFrom_succ', tracked_step_visited,
-      tracked_runFrom_cfg, Cfg.track_cfg, ih, sup_assoc]
-
-/-- Recorded intervals only grow along an execution, including any prior history. -/
-theorem tracked_runFrom_visited_mono (M : TM Id κ Γ Q) (s : TrackedCfg κ Γ Q xs)
-    {m n : ℕ} (h : m ≤ n) (i : κ) :
-    (M.runFrom s m).visited i ≤
-      (M.runFrom s n).visited i := by
-  apply (monotone_nat_of_le_succ (f := fun n ↦
-    (M.runFrom s n).visited i) ?_) h
-  intro n
-  rw [Controller.runFrom_succ', tracked_step_visited]
-  exact le_sup_left
-
-/-- Sequential runs join prior visits with the next block's fresh interval. -/
-theorem tracked_runFrom_visited_add (M : TM Id κ Γ Q) (s : TrackedCfg κ Γ Q xs)
-    (m n : ℕ) (i : κ) :
-    (M.runFrom s (m + n)).visited i = (M.runFrom s m).visited i ⊔
-      (M.runFrom (M.runFrom s.cfg m).track n).visited i := by
-  rw [Controller.runFrom_add, tracked_runFrom_visited_sup, tracked_runFrom_cfg]
 
 /-- A freshly tracked interval contains exactly the positions reached within the run. -/
 theorem mem_tracked_runFrom_visited (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs)
@@ -226,27 +199,16 @@ theorem tracked_runFrom_visited_congr {κ' Γ' Q' : Type*} [Inhabited Γ'] {ys :
     (d : Cfg κ' Γ' Q' ys) (n : ℕ) (i : κ) (j : κ')
     (h : ∀ m ≤ n, (M.runFrom c m).workPos i = (N.runFrom d m).workPos j) :
     (M.runFrom c.track n).visited i = (N.runFrom d.track n).visited j := by
-  apply SetLike.ext
-  intro p
-  simp only [mem_tracked_runFrom_visited]
-  exact exists_congr fun m ↦ and_congr_right fun hm ↦ by rw [h m hm]
+  apply eq_of_forall_ge_iff
+  intro v
+  simp only [tracked_runFrom_visited_le_iff]
+  exact forall_congr' fun m ↦ forall_congr' fun hm ↦ by rw [h m hm]
 
 /-- A common bound for earlier history and fresh visits bounds the entire tracked run. -/
-theorem tracked_runFrom_within (M : TM Id κ Γ Q) (s : TrackedCfg κ Γ Q xs)
-    (n : ℕ) {l h : κ → ℤ} (hs : s.Within l h)
-    (hv : (M.runFrom s.cfg.track n).Within l h) :
-    (M.runFrom s n).Within l h := by
-  intro i
-  rw [tracked_runFrom_visited_sup]
-  exact ⟨le_min (hs i).1 (hv i).1, max_le (hs i).2 (hv i).2⟩
-
-/-- A bound at the endpoint covers each earlier tracked prefix. -/
-theorem tracked_runFrom_within_mono (M : TM Id κ Γ Q) (s : TrackedCfg κ Γ Q xs)
-    {m n : ℕ} {l h : κ → ℤ} (hm : m ≤ n) (hn : (M.runFrom s n).Within l h) :
-    (M.runFrom s m).Within l h := by
-  intro i
-  have hv := M.tracked_runFrom_visited_mono s hm i
-  exact ⟨(hn i).1.trans hv.1, hv.2.trans (hn i).2⟩
+theorem tracked_runFrom_visited_le (M : TM Id κ Γ Q) (s : TrackedCfg κ Γ Q xs)
+    (n : ℕ) {V : κ → NonemptyInterval ℤ} (hs : s.visited ≤ V)
+    (hv : (M.runFrom s.cfg.track n).visited ≤ V) : (M.runFrom s n).visited ≤ V :=
+  (M.tracked_runFrom_visited_sup s n).le.trans (sup_le hs hv)
 
 /-- Growing intervals make peak space equal the final space, also when resuming a run. -/
 @[simp] theorem runConfigMaxFrom_tracked [Fintype κ] (M : TM Id κ Γ Q)
@@ -257,7 +219,7 @@ theorem tracked_runFrom_within_mono (M : TM Id κ Γ Q) (s : TrackedCfg κ Γ Q 
     (M.space_le_runConfigMaxFrom TrackedCfg.space s (Nat.le_refl n))
   apply (M.runConfigMaxFrom_le_iff TrackedCfg.space s n _).2
   intro m hm
-  exact TrackedCfg.space_mono fun i ↦ M.tracked_runFrom_visited_mono s hm i
+  exact TrackedCfg.space_mono (M.tracked_runFrom_visited_mono s hm)
 
 namespace TrackedCfg
 

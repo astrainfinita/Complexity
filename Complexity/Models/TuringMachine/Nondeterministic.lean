@@ -45,6 +45,15 @@ This property alone does not require termination. -/
 def UsesSpace [Fintype κ] (M : NTM κ Γ Q) (xs : List Γ) (s : ℕ) : Prop :=
   ∀ n c, c ∈ M.runWith (TM.TrackedCfg κ Γ Q xs.toArray) Multiset xs n → c.space ≤ s
 
+/-- A step invariant bounds space on every finite computation prefix. -/
+theorem usesSpace_of_invariant [Fintype κ] (M : NTM κ Γ Q) {xs : List Γ} {s : ℕ}
+    {P : TM.TrackedCfg κ Γ Q xs.toArray → Prop}
+    (hinit : P (M.initInput xs))
+    (hstep : ∀ c, P c → ∀ d ∈ M.stepWith Multiset c, P d)
+    (hspace : ∀ c, P c → c.space ≤ s) : M.UsesSpace xs s := by
+  intro n c hc
+  exact hspace c (Transition.forall_mem_runN (M.stepWith Multiset) hstep hinit n c hc)
+
 theorem UsesTime.mono {M : NTM κ Γ Q} {xs : List Γ} {t t' : ℕ}
     (h : M.UsesTime xs t) (ht : t ≤ t') : M.UsesTime xs t' :=
   Controller.forall_halted_runFromWith_mono M

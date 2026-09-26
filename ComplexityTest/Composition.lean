@@ -23,7 +23,7 @@ meta import Complexity.Data.NatMemory
 
 import Mathlib.Basic.Finite.Prod
 import Complexity.Models.TuringMachine.Program.Call
-import Complexity.Models.TuringMachine.Program.Specification.Trace
+import Complexity.Models.TuringMachine.Program.Specification.Tracked
 import Complexity.Models.TuringMachine.Program.Word.Configuration
 import Complexity.Models.TuringMachine.RedirectInput
 import Complexity.Models.TuringMachine.RedirectOutput

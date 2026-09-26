@@ -37,8 +37,8 @@ theorem tracked_space_step_le [Fintype κ] (M : TM Id κ Γ Q) (s : TrackedCfg �
       intro i _
       have hp := M.step_workPos_bounds s.cfg i
       have hv := s.head_mem i
-      simp only [tracked_step_visited, NonemptyInterval.fst_sup, NonemptyInterval.snd_sup,
-        NonemptyInterval.pure_fst, NonemptyInterval.pure_snd]
+      simp only [tracked_step_visited, Pi.sup_apply, NonemptyInterval.fst_sup,
+        NonemptyInterval.snd_sup, NonemptyInterval.pure_fst, NonemptyInterval.pure_snd]
       omega
     _ = _ := by simp [Finset.sum_add_distrib, TrackedCfg.space]
 
@@ -66,30 +66,20 @@ theorem runConfigMaxFrom_track_add_le [Fintype κ] (M : TM Id κ Γ Q) (c : Cfg 
       M.runConfigMaxFrom TrackedCfg.space c.track s +
         M.runConfigMaxFrom TrackedCfg.space (M.runFrom c s).track t := by
   simp only [runConfigMaxFrom_tracked, TrackedCfg.space, tracked_runFrom_visited_add,
-    Cfg.track_cfg, ← Finset.sum_add_distrib]
+    Cfg.track_cfg, Pi.sup_apply, ← Finset.sum_add_distrib]
   apply Finset.sum_le_sum
   intro i _
   exact interval_size_sup_le
-    ((M.mem_tracked_runFrom_visited c s i _).mpr ⟨s, le_rfl, rfl⟩)
-    ((M.mem_tracked_runFrom_visited (M.runFrom c s) t i _).mpr ⟨0, Nat.zero_le t, rfl⟩)
-
-/-- A common interval bound survives concatenating freshly measured blocks. -/
-theorem tracked_runFrom_within_add_iff (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs)
-    (s t : ℕ) (l h : κ → ℤ) :
-    (M.runFrom c.track (s + t)).Within l h ↔
-      (M.runFrom c.track s).Within l h ∧ (M.runFrom (M.runFrom c s).track t).Within l h := by
-  simp only [TrackedCfg.Within, tracked_runFrom_visited_add,
-    Cfg.track_cfg, NonemptyInterval.fst_sup, NonemptyInterval.snd_sup,
-    le_min_iff, max_le_iff, forall_and]
-  tauto
+    (by simpa [NonemptyInterval.mem_def] using (M.runFrom c.track s).head_mem i)
+    (M.tracked_runFrom_visited_mono (M.runFrom c s).track (Nat.zero_le t) i)
 
 /-- One common interval bound controls space without recounting shared cells. -/
-theorem runConfigMaxFrom_le_of_within [Fintype κ] (M : TM Id κ Γ Q)
-    (s : TrackedCfg κ Γ Q xs) (n : ℕ) (l h : κ → ℤ)
-    (hn : (M.runFrom s n).Within l h) :
-    M.runConfigMaxFrom TrackedCfg.space s n ≤ ∑ i, (h i + 1 - l i).toNat := by
+theorem runConfigMaxFrom_le_of_visited_le [Fintype κ] (M : TM Id κ Γ Q)
+    (s : TrackedCfg κ Γ Q xs) (n : ℕ) (V : κ → NonemptyInterval ℤ)
+    (hn : (M.runFrom s n).visited ≤ V) :
+    M.runConfigMaxFrom TrackedCfg.space s n ≤ ∑ i, ((V i).snd + 1 - (V i).fst).toNat := by
   rw [runConfigMaxFrom_tracked]
-  exact TrackedCfg.space_le_of_within _ l h hn
+  exact TrackedCfg.space_le_of_visited_le _ V hn
 
 /-- A block starts fresh visit records at `c` and reaches underlying configuration `d`. -/
 def ReachesInTimeAndSpace [Fintype κ] (M : TM Id κ Γ Q) (c d : Cfg κ Γ Q xs)

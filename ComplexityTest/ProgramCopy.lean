@@ -5,7 +5,7 @@ Authors: Yuyang Zhao
 -/
 module
 
-import Complexity.Models.TuringMachine.Program.Specification.Trace
+import Complexity.Models.TuringMachine.Program.Specification.Tracked
 import Mathlib.Data.Fintype.Option
 
 set_option experimental.vcgen true
@@ -33,7 +33,7 @@ def copyInput : TM.Program (Fin 0) Symbol Unit := Program.repeatUntil body
 
 example : Finite (copyInput.State ⊕ copyInput.Exit) := inferInstance
 
-private theorem trace_ext {xs : Array Symbol} (s t : TrackedCfg (Fin 0) Symbol Unit xs)
+private theorem tracked_ext {xs : Array Symbol} (s t : TrackedCfg (Fin 0) Symbol Unit xs)
     (hi : s.cfg.inputPos = t.cfg.inputPos) (ho : s.cfg.output = t.cfg.output) : s = t := by
   apply TrackedCfg.ext
   · apply Cfg.ext
@@ -65,7 +65,7 @@ private theorem at_step (xs : List Bool) (i : ℕ) (h : i < xs.length) :
     apply { Program.idle (κ := Fin 0) (Γ := Symbol) with inputMove := 1 }
       (apply { Program.idle (κ := Fin 0) (Γ := Symbol) with output := some (.some xs[i]) }
         (state xs i h.le)) = state xs (i + 1) h := by
-  apply trace_ext
+  apply tracked_ext
   · simp only [TrackedCfg.apply_cfg, apply_inputPos]
     apply Fin.ext
     simp [Program.idle, state, moveInputPos, input]
@@ -162,6 +162,6 @@ theorem copyInput_computesInTimeAndSpace (xs : List Bool) :
       (input xs).toList (input xs).toList (4 * xs.length + 2) 0 := by
   apply Program.computesInTimeAndSpace (copy_spec xs)
   refine ⟨0, Nat.zero_le _, ?_, by simp⟩
-  apply trace_ext <;> rfl
+  apply tracked_ext <;> rfl
 
 end ProgramCopyTest

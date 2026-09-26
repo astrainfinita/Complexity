@@ -6,6 +6,7 @@ Authors: Yuyang Zhao
 module
 
 public import Mathlib.Control.Monad.Basic
+public import Mathlib.Data.Multiset.Functor
 public import Mathlib.Logic.Function.Iterate
 
 /-!
@@ -59,6 +60,17 @@ theorem runN_of_fixed (f : α → m α) {a : α} (h : f a = pure a) (n : ℕ) :
   | succ n ih => simp [runN, h, ih]
 
 end Lawful
+
+/-- A property preserved by every successor holds on every finite path. -/
+theorem forall_mem_runN (f : α → Multiset α) {P : α → Prop}
+    (hstep : ∀ a, P a → ∀ b ∈ f a, P b) {a : α} (ha : P a) (n : ℕ) :
+    ∀ b ∈ runN f n a, P b := by
+  induction n generalizing a with
+  | zero => simpa using ha
+  | succ n ih =>
+    intro b hb
+    obtain ⟨c, hc, hb⟩ := Multiset.mem_bind.mp hb
+    exact ih (hstep a ha c hc) b hb
 
 theorem runN_id (f : α → α) (n : ℕ) (a : α) : (runN (m := Id) (pure ∘ f) n a).run = f^[n] a := by
   induction n generalizing a with

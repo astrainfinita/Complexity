@@ -5,7 +5,7 @@ Authors: Yuyang Zhao
 -/
 module
 
-import Complexity.Models.TuringMachine.Program.Specification.Trace
+import Complexity.Models.TuringMachine.Program.Specification.Tracked
 
 set_option experimental.vcgen true
 

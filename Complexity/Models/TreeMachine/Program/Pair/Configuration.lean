@@ -6,7 +6,7 @@ Authors: Yuyang Zhao
 module
 
 public import Complexity.Models.TreeMachine.Program.Pair
-public import Complexity.Models.TuringMachine.Program.Specification.Trace
+public import Complexity.Models.TuringMachine.Program.Specification.Tracked
 
 /-! # Configuration specifications for composing tree programs -/
 
@@ -28,22 +28,21 @@ theorem spec_pair_cfg (c : TM.Cfg κ (Option Bool) Unit xs) (i j l : κ)
     Triple ((pair i j l).verify (TM.Program.cfgSemantics xs))
       (fun s b ↦ s = c ∧ b = 9 * (u.length + v.length) + 20 + z)
       (fun _ s b ↦ s = paired c i u v ∧ b = z) () := by
-  let L : κ → ℤ := fun q ↦ min (c.workPos q) (-1)
-  let R : κ → ℤ := fun q ↦ max (c.workPos q) (u.length + v.length + 1)
-  have hf : PairFootprint c i j l u v L R := by
-    constructor
-    · intro q
-      simp only [L, R, Set.mem_Icc]
+  let V : κ → NonemptyInterval ℤ := fun q ↦
+    ⟨(min (c.workPos q) (-1), max (c.workPos q) (u.length + v.length + 1)), by omega⟩
+  have hf : PairFootprint i j l u v V := by
+    intro r hl hr
+    have hm (q : κ) : (r : ℤ) ∈ V q := by
+      simp only [V, NonemptyInterval.mem_mk]
       omega
-    · intro r hl hr
-      have hm (q : κ) : (r : ℤ) ∈ Set.Icc (L q) (R q) := by
-        simp only [L, R, Set.mem_Icc]
-        omega
-      exact ⟨hm i, hm j, hm l⟩
-  apply TM.Program.cfg_of_trace (spec_pair c i j l u v L R z hij hil hw hu hv hi hj hl hf)
+    exact ⟨hm i, hm j, hm l⟩
+  apply TM.Program.cfg_of_tracked (spec_pair c i j l u v V z hij hil hw hu hv hi hj hl hf)
   · rintro s b ⟨hs, hb⟩
     subst s
-    exact ⟨rfl, hf.1, hb⟩
+    refine ⟨rfl, fun q ↦ ?_, hb⟩
+    change c.workPos q ∈ V q
+    simp only [V, NonemptyInterval.mem_mk]
+    omega
   · intro a s b h
     exact ⟨h.1, h.2.2⟩
 

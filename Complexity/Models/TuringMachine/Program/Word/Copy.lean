@@ -6,7 +6,7 @@ Authors: Yuyang Zhao
 module
 
 public import Complexity.Control.Program.Traverse
-public import Complexity.Models.TuringMachine.Program.Specification.Trace
+public import Complexity.Models.TuringMachine.Program.Specification.Tracked
 public import Complexity.Models.TuringMachine.Program.Word.Basic
 
 /-! # A finite program for appending a binary suffix from another work tape -/
@@ -46,11 +46,10 @@ def copied (c : TM.Cfg κ (Option Bool) Unit xs) (i j : κ) (w v : List Bool) :
     workTapes := Function.update c.workTapes i (tape (w ++ v))
     workPos := fun l ↦ if l = i ∨ l = j then c.workPos l + v.length else c.workPos l }
 
-/-- The chosen footprint contains the complete paths of the two advancing heads. -/
+/-- The two final head positions lie in the chosen intervals; prior visits cover the starts. -/
 def CopyFootprint (c : TM.Cfg κ (Option Bool) Unit xs) (i j : κ) (v : List Bool)
-    (L R : κ → ℤ) : Prop :=
-  ∀ l r, r ≤ v.length →
-    (if l = i ∨ l = j then c.workPos l + (r : ℤ) else c.workPos l) ∈ Set.Icc (L l) (R l)
+    (V : κ → NonemptyInterval ℤ) : Prop :=
+  c.workPos i + (v.length : ℤ) ∈ V i ∧ c.workPos j + (v.length : ℤ) ∈ V j
 
 private theorem copied_nil (c : TM.Cfg κ (Option Bool) Unit xs) (i j : κ) (w : List Bool)
     (h : c.workTapes i = tape w) : copied c i j w [] = c := by
@@ -112,8 +111,9 @@ private theorem copied_next (c : TM.Cfg κ (Option Bool) Unit xs) (i j : κ)
 
 /-- Complete configuration and footprint at the end of a copy. -/
 def CopyPost (c : TM.Cfg κ (Option Bool) Unit xs) (i j : κ) (w v : List Bool)
-    (L R : κ → ℤ) (z : ℕ) (s : TM.TrackedCfg κ (Option Bool) Unit xs) (b : ℕ) : Prop :=
-  s.cfg = copied c i j w v ∧ s.Within L R ∧ b = z
+    (V : κ → NonemptyInterval ℤ) (z : ℕ)
+    (s : TM.TrackedCfg κ (Option Bool) Unit xs) (b : ℕ) : Prop :=
+  s.cfg = copied c i j w v ∧ s.visited ≤ V ∧ b = z
 
 /-- Copy an arbitrary suffix to a different tape's end, retaining all unused credits.
 
@@ -121,18 +121,18 @@ The full configuration equality preserves input, output, and every unrelated tap
 The footprint bound accounts for visited cells, including read and dispatch transitions. -/
 @[spec]
 theorem spec_copy (c : TM.Cfg κ (Option Bool) Unit xs) (i j : κ)
-    (w u v : List Bool) (L R : κ → ℤ) (z : ℕ) (hij : i ≠ j)
+    (w u v : List Bool) (V : κ → NonemptyInterval ℤ) (z : ℕ) (hij : i ≠ j)
     (ht : c.workTapes j = tape (u ++ v))
     (hp : c.workPos j = u.length) (hw : c.workTapes i = tape w)
-    (hi : c.workPos i = w.length) (hF : CopyFootprint c i j v L R) :
+    (hi : c.workPos i = w.length) (hF : CopyFootprint c i j v V) :
     Triple ((copy i j).verify (TM.Program.semantics xs))
-      (fun s b ↦ s.cfg = c ∧ s.Within L R ∧ b = 3 * v.length + 2 + z)
-      (fun _ s b ↦ CopyPost c i j w v L R z s b) () := by
+      (fun s b ↦ s.cfg = c ∧ s.visited ≤ V ∧ b = 3 * v.length + 2 + z)
+      (fun _ s b ↦ CopyPost c i j w v V z s b) () := by
   let I := fun r (s : TM.TrackedCfg κ (Option Bool) Unit xs) ↦
-    s.cfg = copied c i j w (v.take r) ∧ s.Within L R
+    s.cfg = copied c i j w (v.take r) ∧ s.visited ≤ V
   have hl : Triple ((copy i j).verify (TM.Program.semantics xs))
       (fun s b ↦ I 0 s ∧ b = 3 * v.length + 2 + z)
-      (fun _ s b ↦ (s.cfg = copied c i j w v ∧ s.Within L R) ∧ b = z) () := by
+      (fun _ s b ↦ (s.cfg = copied c i j w v ∧ s.visited ≤ V) ∧ b = z) () := by
     apply Program.spec_repeatUntilWith_count TM.Program.idle (copyBody i j)
       (TM.Program.semantics xs) I _ v.length 2 1 z
     · intro r hr s hs
@@ -147,12 +147,17 @@ theorem spec_copy (c : TM.Cfg κ (Option Bool) Unit xs) (i j : κ)
           change apply (copyToken i j (some v[r])) s.cfg = _
           rw [hs.1, copied_next c i j w v hi r hr]
         refine ⟨hc, ?_⟩
-        apply (s.within_apply_iff _ L R).mpr
+        apply (s.apply_visited_le_iff _ V).mpr
         refine ⟨hs.2, ?_⟩
         intro l
+        have hhead := s.head_mem_of_visited_le hs.2 l
         rw [← TrackedCfg.apply_cfg, hc]
-        simpa only [copied_workPos, List.length_take, Nat.min_eq_left hr, Set.mem_Icc]
-          using hF l (r + 1) hr
+        simp only [hs.1, copied_workPos, List.length_take, Nat.min_eq_left hr.le,
+          Nat.min_eq_left hr, NonemptyInterval.mem_def] at hhead ⊢
+        rcases hF with ⟨⟨_, hFi⟩, ⟨_, hFj⟩⟩
+        split_ifs at hhead ⊢ with he
+        · rcases he with rfl | rfl <;> omega
+        · exact hhead
       unfold copyBody
       vcgen
       all_goals simp_all [I, copied_next]
@@ -167,9 +172,9 @@ theorem spec_copy (c : TM.Cfg κ (Option Bool) Unit xs) (i j : κ)
 
 /-- The preserved footprint gives a space bound independently of the elapsed time. -/
 theorem CopyPost.space_le [Fintype κ] {c : TM.Cfg κ (Option Bool) Unit xs} {i j : κ}
-    {w v : List Bool} {L R : κ → ℤ} {z b : ℕ}
-    {s : TM.TrackedCfg κ (Option Bool) Unit xs} (h : CopyPost c i j w v L R z s b) :
-    s.space ≤ ∑ l, (R l + 1 - L l).toNat :=
-  s.space_le_of_within L R h.2.1
+    {w v : List Bool} {V : κ → NonemptyInterval ℤ} {z b : ℕ}
+    {s : TM.TrackedCfg κ (Option Bool) Unit xs} (h : CopyPost c i j w v V z s b) :
+    s.space ≤ ∑ l, ((V l).snd + 1 - (V l).fst).toNat :=
+  s.space_le_of_visited_le V h.2.1
 
 end Complexity.TM.Program.Word

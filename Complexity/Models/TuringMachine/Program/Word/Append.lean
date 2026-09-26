@@ -65,8 +65,9 @@ theorem setWorkPos_appended (c : TM.Cfg κ (Option Bool) Unit xs) (i j : κ)
 
 /-- The complete output of appending, with history and unused credits retained. -/
 def AppendPost (c : TM.Cfg κ (Option Bool) Unit xs) (i j : κ) (w v : List Bool)
-    (L R : κ → ℤ) (z : ℕ) (s : TM.TrackedCfg κ (Option Bool) Unit xs) (b : ℕ) : Prop :=
-  s.cfg = appended c i j w v ∧ s.Within L R ∧ b = z
+    (V : κ → NonemptyInterval ℤ) (z : ℕ)
+    (s : TM.TrackedCfg κ (Option Bool) Unit xs) (b : ℕ) : Prop :=
+  s.cfg = appended c i j w v ∧ s.visited ≤ V ∧ b = z
 
 /-- The copy and rewind bounds add exactly, retaining credits for later programs.
 
@@ -75,22 +76,21 @@ Destination contents, source restoration, and all unrelated fields are specified
 by the complete final configuration. -/
 @[spec]
 theorem spec_append (c : TM.Cfg κ (Option Bool) Unit xs) (i j : κ)
-    (w u v : List Bool) (L R : κ → ℤ) (z : ℕ) (hij : i ≠ j)
+    (w u v : List Bool) (V : κ → NonemptyInterval ℤ) (z : ℕ) (hij : i ≠ j)
     (ht : c.workTapes j = tape (u ++ v))
     (hp : c.workPos j = u.length) (hw : c.workTapes i = tape w)
-    (hi : c.workPos i = w.length) (hF : CopyFootprint c i j v L R)
-    (hj : ∀ m ≤ u.length + v.length, (m : ℤ) ∈ Set.Icc (L j) (R j))
-    (hleft : (-1 : ℤ) ∈ Set.Icc (L j) (R j)) :
+    (hi : c.workPos i = w.length) (hF : CopyFootprint c i j v V)
+    (hleft : (-1 : ℤ) ∈ V j) :
     Triple ((append i j).verify (TM.Program.semantics xs))
-      (fun s b ↦ s.cfg = c ∧ s.Within L R ∧
+      (fun s b ↦ s.cfg = c ∧ s.visited ≤ V ∧
         b = (3 * v.length + 2) + (3 * (u.length + v.length) + 4) + z)
-      (fun _ s b ↦ AppendPost c i j w v L R z s b) () := by
-  have hc := spec_copy c i j w u v L R (3 * (u.length + v.length) + 4 + z)
+      (fun _ s b ↦ AppendPost c i j w v V z s b) () := by
+  have hc := spec_copy c i j w u v V (3 * (u.length + v.length) + 4 + z)
     hij ht hp hw hi hF
   have hr := spec_rewind_credit (copied c i j w v) j (u ++ v)
-    (u.length + v.length) z L R
+    (u.length + v.length) z V
     (by simpa [hij.symm] using ht)
-    (by simp [hp]) (by simp) hj hleft
+    (by simp [hp]) (by simp) hleft
   unfold append
   vcgen [hc, hr]
   case vc1 =>
@@ -105,9 +105,9 @@ theorem spec_append (c : TM.Cfg κ (Option Bool) Unit xs) (i j : κ)
 
 /-- Appending obeys the shared visited-cell bound, independently of execution time. -/
 theorem AppendPost.space_le [Fintype κ] {c : TM.Cfg κ (Option Bool) Unit xs} {i j : κ}
-    {w v : List Bool} {L R : κ → ℤ} {z b : ℕ}
-    {s : TM.TrackedCfg κ (Option Bool) Unit xs} (h : AppendPost c i j w v L R z s b) :
-    s.space ≤ ∑ l, (R l + 1 - L l).toNat :=
-  s.space_le_of_within L R h.2.1
+    {w v : List Bool} {V : κ → NonemptyInterval ℤ} {z b : ℕ}
+    {s : TM.TrackedCfg κ (Option Bool) Unit xs} (h : AppendPost c i j w v V z s b) :
+    s.space ≤ ∑ l, ((V l).snd + 1 - (V l).fst).toNat :=
+  s.space_le_of_visited_le V h.2.1
 
 end Complexity.TM.Program.Word

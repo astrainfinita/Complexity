@@ -7,7 +7,7 @@ module
 
 public import Complexity.Control.Program.Traverse
 public import Complexity.Models.TreeMachine.Encoding
-public import Complexity.Models.TuringMachine.Program.Specification.Trace
+public import Complexity.Models.TuringMachine.Program.Specification.Tracked
 public import Complexity.Data.IntMemory.List
 
 /-!
@@ -182,17 +182,17 @@ theorem scanCfg_zero (u : TM.Cfg κ (Option Bool) Unit zs) (s d c : κ) (copy : 
   · rfl
 
 private def At (u : TM.Cfg κ (Option Bool) Unit zs) (s d c : κ) (copy : Bool)
-    (a : Tree) (p : ℕ) (ys : List (Option Bool)) (L R : κ → ℤ) (n : ℕ)
+    (a : Tree) (p : ℕ) (ys : List (Option Bool)) (V : κ → NonemptyInterval ℤ) (n : ℕ)
     (v : TM.TrackedCfg κ (Option Bool) Unit zs) : Prop :=
-  v.cfg = scanCfg u s d c copy a p ys n ∧ v.Within L R
+  v.cfg = scanCfg u s d c copy a p ys n ∧ v.visited ≤ V
 
 private theorem at_token (u : TM.Cfg κ (Option Bool) Unit zs) (s d c : κ)
-    (copy : Bool) (a : Tree) (p : ℕ) (ys : List (Option Bool)) (L R : κ → ℤ)
+    (copy : Bool) (a : Tree) (p : ℕ) (ys : List (Option Bool)) (V : κ → NonemptyInterval ℤ)
     (hs : s ≠ d) (hc : c ≠ s) (hd : c ≠ d)
-    (hF : ∀ n, n ≤ a.size → ∀ i, (scanCfg u s d c copy a p ys n).workPos i ∈ Set.Icc (L i) (R i))
+    (hF : ∀ n, n ≤ a.size → ∀ i, (scanCfg u s d c copy a p ys n).workPos i ∈ V i)
     {n : ℕ} {v : TM.TrackedCfg κ (Option Bool) Unit zs} (hn : n < a.size)
-    (hv : At u s d c copy a p ys L R n v) :
-    At u s d c copy a p ys L R (n + 1)
+    (hv : At u s d c copy a p ys V n v) :
+    At u s d c copy a p ys V (n + 1)
       (apply
         (scanToken s d c copy ((BitList.encodeTree a)[n]'(by simpa using hn))) v) := by
   have he : apply
@@ -200,24 +200,22 @@ private theorem at_token (u : TM.Cfg κ (Option Bool) Unit zs) (s d c : κ)
       scanCfg u s d c copy a p ys (n + 1) := by
     rw [hv.1, scanToken_apply u s d c copy a p ys hs hc hd hn]
   refine ⟨he, ?_⟩
-  apply (v.within_apply_iff _ L R).mpr
+  apply (v.apply_visited_le_iff _ V).mpr
   refine ⟨hv.2, ?_⟩
-  intro i
-  rw [he]
-  exact hF _ (by omega) i
+  simpa only [he] using hF (n + 1) (by omega)
 
 set_option experimental.vcgen true in
 private theorem body_progress (u : TM.Cfg κ (Option Bool) Unit zs) (s d c : κ)
-    (copy : Bool) (a : Tree) (xs ys ws : List (Option Bool)) (L R : κ → ℤ)
+    (copy : Bool) (a : Tree) (xs ys ws : List (Option Bool)) (V : κ → NonemptyInterval ℤ)
     (hs : s ≠ d) (hc : c ≠ s) (hd : c ≠ d)
     (hx : u.workTapes s = IntMemory.ofList (xs ++ code a ++ ws))
     (hz : u.workTapes c = IntMemory.ofList [some true])
     (hF : ∀ n, n ≤ a.size → ∀ i,
-      (scanCfg u s d c copy a xs.length ys n).workPos i ∈ Set.Icc (L i) (R i))
+      (scanCfg u s d c copy a xs.length ys n).workPos i ∈ V i)
     {n : ℕ} (hn : n < a.size) (q : ℕ) :
     Triple ((scanBody s d c copy).verify (TM.Program.semantics zs))
-      (fun v b => At u s d c copy a xs.length ys L R n v ∧ b = q + 3)
-      (fun r v b => At u s d c copy a xs.length ys L R (n + 1) v ∧
+      (fun v b => At u s d c copy a xs.length ys V n v ∧ b = q + 3)
+      (fun r v b => At u s d c copy a xs.length ys V (n + 1) v ∧
         (r = true ↔ n + 1 = a.size) ∧ b = q) () := by
   unfold scanBody
   vcgen
@@ -233,7 +231,7 @@ private theorem body_progress (u : TM.Cfg κ (Option Bool) Unit zs) (s d c : κ)
       rw [hv.1,scanCfg_read u s d c copy a xs ys ws hs hx hn]
       cases ((BitList.encodeTree a)[n]'(by simpa using hn)) <;> rfl
     simp only [he] at h₃ ⊢
-    have hv' := at_token u s d c copy a xs.length ys L R hs hc hd hF hn hv
+    have hv' := at_token u s d c copy a xs.length ys V hs hc hd hF hn hv
     rcases h₃ with ⟨rfl,rfl,rfl⟩
     refine ⟨hv',?_,by omega⟩
     simp only [decide_eq_true_eq,hv'.1]
@@ -242,14 +240,14 @@ private theorem body_progress (u : TM.Cfg κ (Option Bool) Unit zs) (s d c : κ)
 
 /-- A common footprint contains the heads at every prefix boundary. -/
 def ScanFootprint (u : TM.Cfg κ (Option Bool) Unit zs) (s d c : κ) (copy : Bool)
-    (a : Tree) (p : ℕ) (ys : List (Option Bool)) (L R : κ → ℤ) : Prop :=
-  ∀ n, n ≤ a.size → ∀ i, (scanCfg u s d c copy a p ys n).workPos i ∈ Set.Icc (L i) (R i)
+    (a : Tree) (p : ℕ) (ys : List (Option Bool)) (V : κ → NonemptyInterval ℤ) : Prop :=
+  ∀ n, n ≤ a.size → ∀ i, (scanCfg u s d c copy a p ys n).workPos i ∈ V i
 
 /-- The entire final configuration, footprint, and unused credits. -/
 def ScanPost (u : TM.Cfg κ (Option Bool) Unit zs) (s d c : κ) (copy : Bool)
-    (a : Tree) (p : ℕ) (ys : List (Option Bool)) (L R : κ → ℤ) (q : ℕ)
+    (a : Tree) (p : ℕ) (ys : List (Option Bool)) (V : κ → NonemptyInterval ℤ) (q : ℕ)
     (v : TM.TrackedCfg κ (Option Bool) Unit zs) (b : ℕ) : Prop :=
-  v.cfg = scanCfg u s d c copy a p ys a.size ∧ v.Within L R ∧ b = q
+  v.cfg = scanCfg u s d c copy a p ys a.size ∧ v.visited ≤ V ∧ b = q
 
 /-- Scan one tree with four actual transitions per code bit, preserving an arbitrary suffix.
 
@@ -258,27 +256,27 @@ chooses a common footprint, which bounds the destination, source, and unary-coun
 Unused time credits are preserved for subsequent program blocks. -/
 @[spec]
 theorem spec_scan (u : TM.Cfg κ (Option Bool) Unit zs) (s d c : κ) (copy : Bool)
-    (a : Tree) (xs ys ws : List (Option Bool)) (L R : κ → ℤ) (q : ℕ)
+    (a : Tree) (xs ys ws : List (Option Bool)) (V : κ → NonemptyInterval ℤ) (q : ℕ)
     (hs : s ≠ d) (hc : c ≠ s) (hd : c ≠ d)
     (hx : u.workTapes s = IntMemory.ofList (xs ++ code a ++ ws))
     (hy : u.workTapes d = IntMemory.ofList ys)
     (hz : u.workTapes c = IntMemory.ofList [some true])
     (hp : u.workPos s = xs.length) (hi : u.workPos d = ys.length) (hj : u.workPos c = 1)
-    (hF : ScanFootprint u s d c copy a xs.length ys L R) :
+    (hF : ScanFootprint u s d c copy a xs.length ys V) :
     Triple ((scan s d c copy).verify (TM.Program.semantics zs))
-      (fun v b => v.cfg = u ∧ v.Within L R ∧ b = 4 * a.size + q)
-      (fun _ v b => ScanPost u s d c copy a xs.length ys L R q v b) () := by
+      (fun v b => v.cfg = u ∧ v.visited ≤ V ∧ b = 4 * a.size + q)
+      (fun _ v b => ScanPost u s d c copy a xs.length ys V q v b) () := by
   have hn : a.size - 1 + 1 = a.size := by have := Tree.size_pos a; omega
   have hl := Program.spec_repeatUntilWith_count TM.Program.idle
     (scanBody s d c copy) (TM.Program.semantics zs)
-    (At u s d c copy a xs.length ys L R)
-    (At u s d c copy a xs.length ys L R a.size) (a.size - 1) 3 3 q
+    (At u s d c copy a xs.length ys V)
+    (At u s d c copy a xs.length ys V a.size) (a.size - 1) 3 3 q
     (fun _ _ v _ ↦ TM.Program.apply_idle v)
     (fun r hr z ↦ by
       constructor
       rintro v b hv
       apply (Triple.entails_wp_of_post
-        (body_progress u s d c copy a xs ys ws L R hs hc hd hx hz hF
+        (body_progress u s d c copy a xs ys ws V hs hc hd hx hz hF
           (show r < a.size by omega) z) ?_) v b ⟨hv.1, by omega⟩
       rintro b v t ⟨hv, hb, ht⟩
       exact ⟨Bool.eq_false_iff.mpr (fun h ↦ by have := hb.mp h; omega), hv, ht⟩)
@@ -286,7 +284,7 @@ theorem spec_scan (u : TM.Cfg κ (Option Bool) Unit zs) (s d c : κ) (copy : Boo
       constructor
       rintro v b hv
       apply (Triple.entails_wp_of_post
-        (body_progress u s d c copy a xs ys ws L R hs hc hd hx hz hF
+        (body_progress u s d c copy a xs ys ws V hs hc hd hx hz hF
           (show a.size - 1 < a.size by omega) z) ?_) v b ⟨hv.1, by omega⟩
       rintro b v t ⟨hv, hb, ht⟩
       exact ⟨hb.mpr hn, hn ▸ hv, ht⟩)
@@ -300,9 +298,11 @@ theorem spec_scan (u : TM.Cfg κ (Option Bool) Unit zs) (s d c : κ) (copy : Boo
 
 /-- A scanner's final footprint bounds all work cells it has visited. -/
 theorem ScanPost.space_le [Fintype κ] {u : TM.Cfg κ (Option Bool) Unit zs} {s d c : κ}
-    {copy : Bool} {a : Tree} {p : ℕ} {ys : List (Option Bool)} {L R : κ → ℤ} {q b : ℕ}
+    {copy : Bool} {a : Tree} {p : ℕ} {ys : List (Option Bool)}
+    {V : κ → NonemptyInterval ℤ} {q b : ℕ}
     {v : TM.TrackedCfg κ (Option Bool) Unit zs}
-    (h : ScanPost u s d c copy a p ys L R q v b) : v.space ≤ ∑ i, (R i + 1 - L i).toNat :=
-  v.space_le_of_within L R h.2.1
+    (h : ScanPost u s d c copy a p ys V q v b) :
+    v.space ≤ ∑ i, ((V i).snd + 1 - (V i).fst).toNat :=
+  v.space_le_of_visited_le V h.2.1
 
 end Complexity.TreeMachine.Program

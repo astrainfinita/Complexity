@@ -6,7 +6,7 @@ Authors: Yuyang Zhao
 module
 
 public import Complexity.Models.TuringMachine.Program.Word.Basic
-public import Complexity.Models.TuringMachine.Program.Specification.Trace
+public import Complexity.Models.TuringMachine.Program.Specification.Tracked
 public import Complexity.Control.Program.Bound
 
 /-! # Writing symbols and fixed binary words -/
@@ -38,17 +38,17 @@ theorem workPos_putAction {xs : Array (Option Bool)}
   by_cases h : q = i <;> simp [putAction, h]
 
 /-- A write stays within the caller's footprint when its advancing head remains inside it. -/
-theorem putAction_within {xs : Array (Option Bool)}
-    (s : TrackedCfg κ (Option Bool) Unit xs) (i : κ) (a : Option Bool) (L R : κ → ℤ)
-    (hs : s.Within L R) (hi : s.cfg.workPos i + 1 ∈ Set.Icc (L i) (R i)) :
-    (apply (putAction i a) s).Within L R := by
-  apply (s.within_apply_iff _ L R).mpr
+theorem putAction_visited_le {xs : Array (Option Bool)}
+    (s : TrackedCfg κ (Option Bool) Unit xs) (i : κ) (a : Option Bool) (V : κ → NonemptyInterval ℤ)
+    (hs : s.visited ≤ V) (hi : s.cfg.workPos i + 1 ∈ V i) :
+    (apply (putAction i a) s).visited ≤ V := by
+  apply (s.apply_visited_le_iff _ V).mpr
   refine ⟨hs, ?_⟩
   intro q
   rw [workPos_putAction]
   by_cases h : q = i
   · subst q; simpa using hi
-  · simpa only [ite_eq_right h] using hs.head q
+  · simpa only [ite_eq_right h] using s.head_mem_of_visited_le hs q
 
 /-- Write a statically known word, advancing after each bit. -/
 def putWords (j : κ) : List Bool → TM.Program κ (Option Bool) Unit

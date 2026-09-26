@@ -5,7 +5,7 @@ Authors: Yuyang Zhao
 -/
 module
 
-public import Complexity.Models.TuringMachine.Program.Specification.Trace
+public import Complexity.Models.TuringMachine.Program.Specification.Tracked
 public import Complexity.Models.TuringMachine.Program.Word.Append
 public import Complexity.Control.Program.Bound
 
@@ -21,29 +21,20 @@ open Std.WP
 
 variable {κ : Type} [DecidableEq κ] {xs : Array (Option Bool)}
 
-private def lower (c : Cfg κ (Option Bool) Unit xs) (i : κ) : ℤ := min (c.workPos i) (-1)
-
-private def upper (c : Cfg κ (Option Bool) Unit xs) (h : ℕ) (i : κ) : ℤ :=
-  max (c.workPos i) 0 + h
+private def bounds (c : Cfg κ (Option Bool) Unit xs) (h : ℕ) (i : κ) : NonemptyInterval ℤ :=
+  ⟨(min (c.workPos i) (-1), max (c.workPos i) 0 + h), by omega⟩
 
 omit [DecidableEq κ] in
 private theorem bounds_head (c : Cfg κ (Option Bool) Unit xs) (h : ℕ) (i : κ) :
-    c.workPos i ∈ Set.Icc (lower c i) (upper c h i) := by
-  simp only [lower, upper, Set.mem_Icc]
+    c.workPos i ∈ bounds c h i := by
+  simp only [bounds, NonemptyInterval.mem_mk]
   omega
 
 omit [DecidableEq κ] in
-private theorem bounds_nat (c : Cfg κ (Option Bool) Unit xs) (h : ℕ) (i : κ)
-    (m : ℕ) (hm : m ≤ h) : (m : ℤ) ∈ Set.Icc (lower c i) (upper c h i) := by
-  simp only [lower, upper, Set.mem_Icc]
-  omega
-
 private theorem bounds_copy (c : Cfg κ (Option Bool) Unit xs) (i j : κ)
     (v : List Bool) (h : ℕ) (hv : v.length ≤ h) :
-    CopyFootprint c i j v (lower c) (upper c h) := by
-  intro l r hr
-  simp only [lower, upper, Set.mem_Icc]
-  split <;> constructor <;> omega
+    CopyFootprint c i j v (bounds c h) := by
+  constructor <;> simp only [bounds, NonemptyInterval.mem_mk] <;> constructor <;> omega
 
 /-- Copy a suffix, keeping the complete configuration and remaining credits in the contract. -/
 @[spec]
@@ -55,7 +46,7 @@ theorem spec_copy_cfg (c : Cfg κ (Option Bool) Unit xs) (i j : κ)
     Triple ((copy i j).verify (cfgSemantics xs))
       (fun s b ↦ s = c ∧ b = 3 * v.length + 2 + z)
       (fun _ s b ↦ s = copied c i j w v ∧ b = z) () := by
-  apply cfg_of_trace (spec_copy c i j w u v (lower c) (upper c v.length) z hij ht hp hw hi
+  apply cfg_of_tracked (spec_copy c i j w u v (bounds c v.length) z hij ht hp hw hi
     (bounds_copy c i j v v.length le_rfl))
   · rintro s b ⟨hs, hb⟩
     subst s
@@ -71,8 +62,8 @@ theorem spec_rewind_cfg (c : Cfg κ (Option Bool) Unit xs) (j : κ) (bs : List B
     Triple ((rewind j).verify (cfgSemantics xs))
       (fun s b ↦ s = c ∧ b = 3 * h + 4 + z)
       (fun _ s b ↦ s = { c with workPos := Function.update c.workPos j 0 } ∧ b = z) () := by
-  apply cfg_of_trace (spec_rewind_credit c j bs h z (lower c) (upper c h) hw hp hlen
-    (bounds_nat c h j) (by simp [lower, upper, Set.mem_Icc]; omega))
+  apply cfg_of_tracked (spec_rewind_credit c j bs h z (bounds c h) hw hp hlen
+    (by simp [bounds, NonemptyInterval.mem_mk]; omega))
   · rintro s b ⟨hs, hb⟩
     subst s
     exact ⟨rfl, bounds_head c h, hb⟩
@@ -101,10 +92,9 @@ theorem spec_append_cfg (c : Cfg κ (Option Bool) Unit xs) (i j : κ)
       (fun s b ↦ s = c ∧
         b = (3 * v.length + 2) + (3 * (u.length + v.length) + 4) + z)
       (fun _ s b ↦ s = appended c i j w v ∧ b = z) () := by
-  apply cfg_of_trace (spec_append c i j w u v (lower c) (upper c (u.length + v.length)) z
+  apply cfg_of_tracked (spec_append c i j w u v (bounds c (u.length + v.length)) z
     hij ht hp hw hi (bounds_copy c i j v _ (by omega))
-    (bounds_nat c (u.length + v.length) j)
-    (by simp [lower, upper, Set.mem_Icc]; omega))
+    (by simp [bounds, NonemptyInterval.mem_mk]; omega))
   · rintro s b ⟨hs, hb⟩
     subst s
     exact ⟨rfl, bounds_head c (u.length + v.length), hb⟩
