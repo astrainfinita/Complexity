@@ -12,7 +12,9 @@ meta import Complexity.Models.TreeMachine.Deterministic
 meta import Complexity.Models.TreeMachine.Cost
 meta import Complexity.Models.TreeMachine.Basic
 meta import Complexity.Models.TreeMachine.Configuration
-meta import Complexity.Control.Transition.Cost
+meta import Complexity.Control.Controller.RunHistory
+meta import Complexity.Control.Controller.History
+meta import Complexity.Control.Controller.History.Cost
 meta import Complexity.Data.Tree
 import Mathlib.Data.Fin.VecNotation
 meta import Mathlib.Data.Fin.VecNotation
@@ -62,8 +64,8 @@ def c : Cfg 3 Bool := Cfg.mk grow.q₀ ![b, a, Tree.nil]
 #guard grow.cost c 1 = 7
 #guard grow.cost c 20 = 7
 #guard grow.timeUsed c 20 = 1
-#guard Controller.runConfigMaxFrom grow TreeMachine.treeCosts.space c 20 = 13
-#guard ((grow.runFromWithCost Id treeCosts.time c 20).run).2 = 7
+#guard Controller.runConfigMaxFrom grow Cfg.mass c 20 = 13
+#guard treeCosts.time (grow.runHistoryFrom c 20) = 7
 
 -- Writing an empty leaf costs one even when it replaces a larger tree.
 def shrink : TreeMachine Id 3 Bool where
@@ -74,7 +76,7 @@ def shrink : TreeMachine Id 3 Bool where
 #guard (shrink.step c).mass = 5
 #guard (shrink.step c).regs 1 = a
 #guard shrink.cost c 20 = 1
-#guard Controller.runConfigMaxFrom shrink TreeMachine.treeCosts.space c 20 = 9
+#guard Controller.runConfigMaxFrom shrink Cfg.mass c 20 = 9
 
 -- Fully expanded destination size is charged even if the runtime can share subtrees.
 def double : TreeMachine Id 1 Bool where
@@ -83,9 +85,9 @@ def double : TreeMachine Id 1 Bool where
   transition _ _ := pure <| Action.assign false (.pair 0 0 0)
 
 #guard Tree.size ((double.run (Cfg 1 Bool) Tree.nil 6).regs 0) = 127
-#guard double.runActionSum treeCosts.time Tree.nil 6 = 246
+#guard double.runActionSum Action.timeCost Tree.nil 6 = 246
 #guard double.runActionSum (Config := Cfg 1 Bool) (fun _ _ => 1) Tree.nil 6 = 6
-#guard double.runConfigMax (Config := Cfg 1 Bool) treeCosts.space Tree.nil 6 = 127
+#guard double.runConfigMax (Config := Cfg 1 Bool) Cfg.mass Tree.nil 6 = 127
 
 -- An active identity transition still costs one; an initially halted machine costs zero.
 def idle (q : Bool) : TreeMachine Id 0 Bool where
@@ -96,7 +98,7 @@ def idle (q : Bool) : TreeMachine Id 0 Bool where
 #guard (idle false).cost (Cfg.mk (idle false).q₀ Fin.elim0) 5 = 5
 #guard (idle true).cost (Cfg.mk (idle true).q₀ Fin.elim0) 5 = 0
 #guard (idle true).timeUsed (Cfg.mk (idle true).q₀ Fin.elim0) 5 = 0
-#guard Controller.runConfigMaxFrom (idle true) TreeMachine.treeCosts.space
+#guard Controller.runConfigMaxFrom (idle true) Cfg.mass
   (Cfg.mk (idle true).q₀ Fin.elim0) 5 = 0
 
 -- `nop` preserves a register bank while changing the selected control state.
@@ -111,8 +113,7 @@ def fork : TreeMachine BinaryChoice 1 Bool where
   transition _ _ _ := Action.assign true (.pair 0 0 0)
 
 #guard ((fork.runWith (Cfg 1 Bool) Multiset Tree.nil 5).map (fun c ↦ c.regs 0)) = ↑[a, a]
-#guard ((fork.runFromWithCost Multiset treeCosts.time
-  (fork.initInput (Config := Cfg 1 Bool) Tree.nil) 5).map Prod.snd) = ↑[3, 3]
+#guard ((fork.runHistoryWith (Cfg 1 Bool) Multiset Tree.nil 5).map treeCosts.time) = ↑[3, 3]
 
 -- Two `nop` branches remain distinct effects, even though their resulting banks agree.
 def forkNop : TreeMachine BinaryChoice 1 Bool where
@@ -121,11 +122,10 @@ def forkNop : TreeMachine BinaryChoice 1 Bool where
   transition _ _ _ := Action.assign true .nop
 
 #guard ((forkNop.runWith (Cfg 1 Bool) Multiset b 5).map (fun c ↦ c.regs 0)) = ↑[b, b]
-#guard ((forkNop.runFromWithCost Multiset treeCosts.time
-  (forkNop.initInput (Config := Cfg 1 Bool) b) 5).map Prod.snd) = ↑[1, 1]
+#guard ((forkNop.runHistoryWith (Cfg 1 Bool) Multiset b 5).map treeCosts.time) = ↑[1, 1]
 
 -- Shrinking to a nonempty tree still pays for that entire tree.
-#guard treeCosts.time (Action.assign true (.left 0 0)) c = 3
+#guard Action.timeCost (Action.assign true (.left 0 0)) c = 3
 
 -- Equal endpoints can have different fees: a no-op and writing back the same tree.
 def sameEndpoint : TreeMachine BinaryChoice 3 Bool where
@@ -133,8 +133,8 @@ def sameEndpoint : TreeMachine BinaryChoice 3 Bool where
   halt := id
   transition _ _ i := if i = 0 then Action.keep true else Action.assign true (.pair 0 1 2)
 
-#guard ((sameEndpoint.runFromWithCost Multiset treeCosts.time c 5).map
-  (fun (d, fee) ↦ (d.state, d.regs 0, fee))) = ↑[(true, b, 1), (true, b, 5)]
+#guard ((sameEndpoint.runHistoryFromWith Multiset c 5).map
+  (fun h ↦ (h.last.state, h.last.regs 0, treeCosts.time h))) = ↑[(true, b, 1), (true, b, 5)]
 
 -- Two fresh choices reach all four leaves, including paths 01 and 10.
 def twoChoices : TreeMachine BinaryChoice 0 (Fin 7) where
@@ -153,20 +153,24 @@ def optionNop : TreeMachine Option 0 Bool where
 
 #guard (optionNop.runFromWith Option
   (Cfg.mk optionNop.q₀ Fin.elim0) 1).isSome
-#guard ((optionNop.runFromWith Option
+#guard ((optionNop.runHistoryFromWith Option
   (Cfg.mk optionNop.q₀ Fin.elim0) 1).map
-  (fun c ↦ c.state)) = some true
+  (fun h ↦ (h.last.state, h.length))) = some (true, 1)
 
 def abort : TreeMachine Option 0 Bool where
   q₀ := false
   halt := id
   transition _ _ := none
 
+#guard ((abort.runHistoryFromWith Option
+  (Cfg.mk abort.q₀ Fin.elim0) 0).map (fun h ↦ (h.last.state, h.length))) = some (false, 0)
 #guard (abort.runFromWith Option
-  (Cfg.mk abort.q₀ Fin.elim0) 0).isSome
-#guard (abort.runFromWith Option
+  (Cfg.mk abort.q₀ Fin.elim0) 1).isNone
+#guard (abort.runHistoryFromWith Option
   (Cfg.mk abort.q₀ Fin.elim0) 1).isNone
 #guard (abort.runFromWith Option
   (⟨true, Fin.elim0⟩ : Cfg 0 Bool) 10).isSome
+#guard ((abort.runHistoryFromWith Option
+  (⟨true, Fin.elim0⟩ : Cfg 0 Bool) 10).map (fun h ↦ h.length)) = some 0
 
 end Complexity.TreeMachineTest

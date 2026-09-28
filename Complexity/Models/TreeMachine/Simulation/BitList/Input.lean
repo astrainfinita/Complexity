@@ -117,7 +117,7 @@ private theorem spec_loop (c : TM.Cfg κ (Option Bool) Unit (input xs))
     (cfgSemantics (input xs))
     (fun r s b ↦ s = loadAt c j r ∧ 7 * (xs.length - r) + 2 + q ≤ b) _ xs.length
   · intro r hr s b hs
-    exact idle_apply s
+    simpa only [cfgSemantics_act, idle_apply] using hs
   · rintro r hr s b ⟨hs, hb⟩
     omega
   · intro r hr

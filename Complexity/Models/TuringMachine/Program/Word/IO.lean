@@ -95,7 +95,7 @@ theorem spec_emit_cfg (c : Cfg κ (Option Bool) Unit xs) (i : κ)
       (Program.cfgSemantics xs) (fun r s ↦ s = emitted c i (w.take r))
       (fun s ↦ s = emitted c i w) w.length 2 1 z
     · intro r hr s hs
-      exact Program.idle_apply s
+      simpa only [Program.cfgSemantics_act, Program.idle_apply] using hs
     · intro r hr q
       have he : (emitted c i (w.take r)).workSymbols i = some w[r] := by
         rw [emitted_read c i w hw hp r hr.le, List.getElem?_eq_getElem hr]
@@ -200,7 +200,7 @@ private theorem load_loop_spec (c : Cfg κ (Option Bool) Unit xs) (i : κ)
       (Program.cfgSemantics xs) (fun r s ↦ s = loadAt c i w r)
       (fun s ↦ s = loadAt c i w w.length) w.length 2 1 z
     · intro r hr s hs
-      exact Program.idle_apply s
+      simpa only [Program.cfgSemantics_act, Program.idle_apply] using hs
     · intro r hr q
       have he : (loadAt c i w r).inputSymbol = some w[r] := by
         rw [loadAt_input c i w hx r hr.le, List.getElem?_eq_getElem hr]

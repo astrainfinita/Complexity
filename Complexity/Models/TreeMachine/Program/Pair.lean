@@ -19,6 +19,7 @@ namespace Complexity.TreeMachine.Program
 open TM TM.Program.Word
 
 open Std.WP
+open Controller (History)
 
 variable {κ : Type} [DecidableEq κ] {xs : Array (Option Bool)}
 
@@ -41,8 +42,9 @@ def PairFootprint (i j l : κ) (u v : List Bool) (V : κ → NonemptyInterval �
 /-- Full configuration and resource postcondition for pair construction. -/
 def PairPost (c : TM.Cfg κ (Option Bool) Unit xs) (i : κ) (u v : List Bool)
     (V : κ → NonemptyInterval ℤ) (z : ℕ)
-    (s : TM.TrackedCfg κ (Option Bool) Unit xs) (b : ℕ) : Prop :=
-  s.cfg = paired c i u v ∧ s.visited ≤ V ∧ b = z
+    (s : History (TM.Cfg κ (Option Bool) Unit xs) (TM.Action κ (Option Bool) Unit))
+    (b : ℕ) : Prop :=
+  s.last = paired c i u v ∧ s.visited ≤ V ∧ b = z
 
 /-- Pair construction by composing the one-step writer, two append routines, and a rewind.
 The two source indices may coincide; only the destination must be distinct from each. -/
@@ -53,7 +55,7 @@ theorem spec_pair (c : TM.Cfg κ (Option Bool) Unit xs) (i j l : κ)
     (hv : c.workTapes l = tape v) (hi : c.workPos i = 0)
     (hj : c.workPos j = 0) (hl : c.workPos l = 0) (hF : PairFootprint i j l u v V) :
     Triple ((pair i j l).verify (TM.Program.semantics xs))
-      (fun s b ↦ s.cfg = c ∧ s.visited ≤ V ∧ b = 9 * (u.length + v.length) + 20 + z)
+      (fun s b ↦ s.last = c ∧ s.visited ≤ V ∧ b = 9 * (u.length + v.length) + 20 + z)
       (fun _ s b ↦ PairPost c i u v V z s b) () := by
   let d := apply (putAction i (some true)) c
   let e := appended d i j [true] u
@@ -118,8 +120,7 @@ theorem spec_pair (c : TM.Cfg κ (Option Bool) Unit xs) (i j l : κ)
     rcases ht with ⟨rfl, rfl, rfl⟩
     obtain ⟨hc, hseen, hb⟩ := hs
     refine ⟨?_, ?_, ?_⟩
-    · change apply (putAction i (some true)) s.cfg = d
-      rw [hc]
+    · rw [History.apply_last, hc]
     · apply putAction_visited_le s i (some true) V hseen
       rw [hc, hi]
       exact (hF 1 (by omega) (by omega)).1
@@ -143,7 +144,8 @@ theorem spec_pair (c : TM.Cfg κ (Option Bool) Unit xs) (i j l : κ)
 /-- Pair construction stays within the finite common footprint. -/
 theorem PairPost.space_le [Fintype κ] {c : TM.Cfg κ (Option Bool) Unit xs} {i : κ}
     {u v : List Bool} {V : κ → NonemptyInterval ℤ} {z b : ℕ}
-    {s : TM.TrackedCfg κ (Option Bool) Unit xs} (h : PairPost c i u v V z s b) :
+    {s : History (TM.Cfg κ (Option Bool) Unit xs) (TM.Action κ (Option Bool) Unit)}
+    (h : PairPost c i u v V z s b) :
     s.space ≤ ∑ q, ((V q).snd + 1 - (V q).fst).toNat :=
   s.space_le_of_visited_le V h.2.1
 

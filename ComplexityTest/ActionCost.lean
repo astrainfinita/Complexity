@@ -12,7 +12,9 @@ meta import Complexity.Control.Controller.Cost
 meta import Complexity.Control.Controller
 meta import Complexity.Control.Cost
 meta import Complexity.Control.BinaryChoice
-meta import Complexity.Control.Transition.Cost
+meta import Complexity.Control.Controller.RunHistory
+meta import Complexity.Control.Controller.History
+meta import Complexity.Control.Controller.History.Cost
 
 open Complexity
 
@@ -36,13 +38,14 @@ def branchCost : Bool → Bool → ℕ := fun action _ => if action then 7 else 
 
 -- Coincident endpoints cannot recover which action was selected or its charge.
 #guard branches.stepWith Multiset false = ↑[true, true]
-#guard branches.stepWithCost Multiset branchCost false =
-  ↑[(true, 2), (true, 7)]
+#guard (branches.runHistoryFromWith Multiset false 1).map
+  (fun h ↦ (h.last, h.actionSum branchCost)) = ↑[(true, 2), (true, 7)]
 
--- Each branch retains its own charge, even after many halting padding steps.
-#guard branches.runFromWithCost Multiset branchCost false 20 =
-  ↑[(true, 2), (true, 7)]
-#guard branches.runFromWithCost Multiset branchCost true 20 = ↑[(true, 0)]
+-- Each branch retains its actual action count and charge after early halting.
+#guard (branches.runHistoryFromWith Multiset false 20).map
+  (fun h ↦ (h.last, h.length, h.actionSum branchCost)) = ↑[(true, 1, 2), (true, 1, 7)]
+#guard (branches.runHistoryFromWith Multiset true 20).map
+  (fun h ↦ (h.last, h.length, h.actionSum branchCost)) = ↑[(true, 0, 0)]
 
 def counter : Controller Id ℕ Unit Bool where
   q₀ := false
@@ -67,38 +70,60 @@ private def inferredState :=
 example : inferredState = true := rfl
 
 -- Charges use the data before each action, giving 1 + 2 + 3.
-#guard (counter.runFromWithCost Id counterCost 0 20).run =
+#guard ((counter.runHistoryFrom 0 20).last, (counter.runHistoryFrom 0 20).actionSum counterCost) =
   (3, 6)
+#guard (counter.runHistoryFrom 0 20).length = 3
+#guard (counter.runHistoryFrom 0 0).length = 0
+#guard (counter.runHistoryFrom 0 20).configs = [0, 1, 2, 3]
 #guard counter.runActionSumFrom counterCost 0 20 = 6
 #guard counter.runActionSumFrom (fun _ _ => 1) 0 20 = 3
 #guard counter.runActionSumFrom counterCost 3 20 = 0
 
--- Replacing the cost model preserves execution, including every intermediate endpoint.
-example (data n : ℕ) :
-    ((counter.runFromWithCost Id counterCost data n).run).fst =
-    counter.runFrom data n :=
-  congrArg Id.run (counter.fst_runFromWithCost Id counterCost data n)
+-- Reading a measurement does not change the recorded execution.
+example (data n : ℕ) : (counter.runHistoryFrom data n).last = counter.runFrom data n :=
+  counter.last_runHistoryFrom data n
 
--- The deterministic accumulator agrees with the branch-aware runner on all prefixes.
 example (data n : ℕ) :
-    ((counter.runFromWithCost Id counterCost data n).run).snd =
-    counter.runActionSumFrom counterCost data n :=
-  counter.snd_runFromWithCost counterCost data n
+    (counter.runHistoryFrom data n).actionSum counterCost =
+      counter.runActionSumFrom counterCost data n := rfl
+
+-- Conditions can be attached to a history without changing its data type.
+example (data n : ℕ) (h : Controller.History ℕ Unit)
+    (hr : counter.RunConditions data n h) : h.first = data := hr.first_eq
+
+example (data n : ℕ) (h : Controller.History ℕ Unit)
+    (hr : counter.RunConditions data n h) : h.length ≤ n := hr.length_le
+
+example (data n : ℕ) (h : Controller.History ℕ Unit)
+    (hr : counter.RunConditions data n h) (hn : h.length < n) :
+    counter.Halted h.last := hr.stopped.resolve_left (by omega)
+
+example (data n : ℕ) (hn : (counter.runHistoryFrom data n).length < n) :
+    counter.Halted (counter.runHistoryFrom data n).last :=
+  (counter.runHistoryFrom_spec data n).stopped.resolve_left (by omega)
+
+example (n : ℕ) (h : Controller.History Bool Bool)
+    (hh : h ∈ branches.runHistoryFromWith Multiset false n) :
+    h.first = false ∧ h.length ≤ n := by
+  have hr := branches.runHistoryFromWith_mem_spec false n hh
+  exact ⟨hr.first_eq, hr.length_le⟩
 
 def counterModel : CostModel Unit ℕ where
-  time := counterCost
-  space data := if data = 1 then 20 else data + 2
+  time h := h.actionSum counterCost
+  space h := h.configSup (fun data ↦ if data = 1 then 20 else data + 2)
 
 -- Zero steps still charge the initial data, and the endpoint is included.
-#guard counter.runConfigMaxFrom counterModel.space 0 0 = 2
-#guard counter.runConfigMaxFrom counterModel.space 0 1 = 20
+#guard counterModel.space (counter.runHistoryFrom 0 0) = 2
+#guard counterModel.space (counter.runHistoryFrom 0 1) = 20
 
 -- The peak survives after the data becomes smaller and after the controller halts.
-#guard counter.runConfigMaxFrom counterModel.space 0 3 = 20
-#guard counter.runConfigMaxFrom counterModel.space 0 20 = 20
-#guard counter.runConfigMaxFrom counterModel.space 3 20 = 5
+#guard counterModel.space (counter.runHistoryFrom 0 3) = 20
+#guard counterModel.space (counter.runHistoryFrom 0 20) = 20
+#guard counterModel.space (counter.runHistoryFrom 3 20) = 5
 
--- Time and space are independent local measurements of the same execution.
-#guard counter.runActionSumFrom counterModel.time 0 20 = 6
+-- One history supplies the endpoint, total charge, and an earlier space peak.
+#guard
+  let h := counter.runHistoryFrom 0 20
+  (h.last, counterModel.time h, counterModel.space h) = (3, 6, 20)
 
 end Complexity.ActionCostTest

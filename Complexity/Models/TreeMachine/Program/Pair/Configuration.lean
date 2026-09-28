@@ -6,7 +6,7 @@ Authors: Yuyang Zhao
 module
 
 public import Complexity.Models.TreeMachine.Program.Pair
-public import Complexity.Models.TuringMachine.Program.Specification.Tracked
+public import Complexity.Models.TuringMachine.Program.Specification.History
 
 /-! # Configuration specifications for composing tree programs -/
 
@@ -36,10 +36,11 @@ theorem spec_pair_cfg (c : TM.Cfg κ (Option Bool) Unit xs) (i j l : κ)
       simp only [V, NonemptyInterval.mem_mk]
       omega
     exact ⟨hm i, hm j, hm l⟩
-  apply TM.Program.cfg_of_tracked (spec_pair c i j l u v V z hij hil hw hu hv hi hj hl hf)
+  apply TM.Program.cfg_of_history (spec_pair c i j l u v V z hij hil hw hu hv hi hj hl hf)
   · rintro s b ⟨hs, hb⟩
     subst s
     refine ⟨rfl, fun q ↦ ?_, hb⟩
+    rw [Controller.History.visited_nil]
     change c.workPos q ∈ V q
     simp only [V, NonemptyInterval.mem_mk]
     omega

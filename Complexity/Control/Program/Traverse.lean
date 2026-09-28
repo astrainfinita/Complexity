@@ -18,10 +18,11 @@ open Std.WP
 variable {O A Op S : Type} {Ret : Op → Type}
 
 /-- A counted traversal may carry a different remaining-budget invariant at every index.
-Each body entry consumes one dispatch credit before continuing or stopping. -/
+The dispatcher preserves the invariant at the same budget; each body entry then consumes
+one dispatch credit before continuing or stopping. -/
 theorem spec_repeatUntilWith_count_of_invariant (a : A) (p : Program O A Op Ret Bool)
     (e : Semantics O A Op Ret S) (I : ℕ → S → ℕ → Prop) (Q : S → ℕ → Prop) (n : ℕ)
-    (ha : ∀ i ≤ n, ∀ c b, I i c b → e.act a c = c)
+    (ha : ∀ i ≤ n, ∀ c b, I i c b → I i (e.act a c) b)
     (hp : ∀ i ≤ n, ∀ c b, I i c b → 0 < b)
     (hs : ∀ i < n, Triple (p.verify e) (fun c b ↦ I i c (b + 1))
       (fun r c b ↦ r = false ∧ I (i + 1) c b) ())
@@ -30,9 +31,9 @@ theorem spec_repeatUntilWith_count_of_invariant (a : A) (p : Program O A Op Ret 
     Triple ((repeatUntilWith a p).verify e) (I 0) (fun _ ↦ Q) () := by
   let J : S → ℕ → Prop := fun c b ↦ ∃ i ≤ n, I i c b
   have h : Triple ((repeatUntilWith a p).verify e) J (fun _ ↦ Q) () := by
-    apply spec_repeatUntilWith_nop_of_invariant a p e J _ ()
+    apply spec_repeatUntilWith_of_invariant a p e J _ ()
     · rintro c b ⟨i, hi, hc⟩
-      exact ha i hi c b hc
+      exact ⟨i, hi, ha i hi c b hc⟩
     · rintro c b ⟨i, hi, hc⟩
       exact hp i hi c b hc
     · constructor
@@ -55,7 +56,7 @@ Each body entry pays one dispatch transition in addition to its specified action
 theorem spec_repeatUntilWith_count (a : A) (p : Program O A Op Ret Bool)
     (e : Semantics O A Op Ret S)
     (I : ℕ → S → Prop) (Q : S → Prop) (n u v q : ℕ)
-    (ha : ∀ i ≤ n, ∀ c, I i c → e.act a c = c)
+    (ha : ∀ i ≤ n, ∀ c, I i c → I i (e.act a c))
     (hs : ∀ i < n, ∀ q, Triple (p.verify e) (fun c b ↦ I i c ∧ b = u + q)
       (fun r c b ↦ r = false ∧ I (i + 1) c ∧ b = q) ())
     (ht : ∀ q, Triple (p.verify e) (fun c b ↦ I n c ∧ b = v + q)
@@ -66,7 +67,7 @@ theorem spec_repeatUntilWith_count (a : A) (p : Program O A Op Ret Bool)
   apply spec_repeatUntilWith_count_of_invariant a p e
     (fun i c b ↦ I i c ∧ b = (u + 1) * (n - i) + (v + 1) + q) _ n
   · intro i hi c b hc
-    exact ha i hi c hc.1
+    exact ⟨ha i hi c hc.1, hc.2⟩
   · rintro i hi c b ⟨hc, hb⟩
     omega
   · intro i hi

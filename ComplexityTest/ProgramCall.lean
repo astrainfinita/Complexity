@@ -6,7 +6,10 @@ Authors: Yuyang Zhao
 module
 
 import Complexity.Models.TuringMachine.Program.Call.Resources
+import all Init.Data.List.Scan.Basic
 
+meta import Complexity.Control.Controller.History
+meta import Complexity.Models.TuringMachine.History
 meta import Complexity.Control.Program
 meta import Complexity.Control.Program.Syntax
 meta import Complexity.Control.Program.Compiler
@@ -27,6 +30,7 @@ set_option experimental.vcgen true
 
 open Complexity (TM IntMemory Controller Program)
 open Complexity.TM Std.WP
+open Complexity.Controller (History)
 
 namespace ProgramCallTest
 
@@ -82,22 +86,32 @@ theorem demo_spec : Triple (demo.verify (Program.cfgSemantics #[]))
   all_goals omega
 
 -- Earlier visits remain part of the caller's history; the current head is still at zero.
-def start : TrackedCfg (Fin 1) Bool Unit #[] where
-  cfg := (rawExecution []).init ()
-  visited := fun _ ↦ ⟨(-3, 4), by decide⟩
-  head_mem := by intro i; change (-3 : ℤ) ≤ 0 ∧ 0 ≤ 4; decide
+private def moveHistory (d : SignType)
+    (s : History (Cfg (Fin 1) Bool Unit #[]) (Action (Fin 1) Bool Unit)) :=
+  s.snoc { Program.idle (κ := Fin 1) with work := fun _ ↦ (none, d) }
 
-private def trackedDemo : TrackedCfg (Fin 1) Bool (demo.State ⊕ demo.Exit) #[] :=
+def start : History (Cfg (Fin 1) Bool Unit #[]) (Action (Fin 1) Bool Unit) :=
+  (moveHistory (-1))^[4] ((moveHistory 1)^[7]
+    ((moveHistory (-1))^[3] (History.nil ((rawExecution []).init ()))))
+
+private theorem start_last : start.last = (rawExecution []).init () := rfl
+
+private theorem start_visited : start.visited = fun _ ↦ ⟨(-3, 4), by decide⟩ := by
+  simp [start, moveHistory, Function.iterate_succ_apply, Program.idle]
+  rfl
+
+private def historyDemo : History (Cfg (Fin 1) Bool (demo.State ⊕ demo.Exit) #[])
+    (Action (Fin 1) Bool (demo.State ⊕ demo.Exit)) :=
   demo.compile.runFrom (start.mapState (fun _ ↦ demo.compile.q₀)) 10
 
-#guard trackedDemo.visited 0 = start.visited 0
-#guard trackedDemo.space = 8
-#guard trackedDemo.cfg.workPos 0 = 0
-#guard trackedDemo.cfg.output = #[false, true]
+#guard historyDemo.visited 0 = start.visited 0
+#guard historyDemo.space = 8
+#guard historyDemo.last.workPos 0 = 0
+#guard historyDemo.last.output = #[false, true]
 
 theorem demo_visited_le_spec : Triple (demo.verify (Program.semantics #[]))
-    (fun s b ↦ s.cfg = start.cfg ∧ s.visited ≤ start.visited ∧ b = 4)
-    (fun a s _ ↦ a = true ∧ s.cfg.output = #[false, true] ∧ s.cfg.workPos 0 = 0 ∧
+    (fun s b ↦ s.last = start.last ∧ s.visited ≤ start.visited ∧ b = 4)
+    (fun a s _ ↦ a = true ∧ s.last.output = #[false, true] ∧ s.last.workPos 0 = 0 ∧
       s.visited ≤ (fun _ ↦ ⟨(-3, 4), by decide⟩)) () := by
   have hc := Program.spec_call_visited_le machine ((machine.initInput (Input := List Bool) (Config := Cfg (Fin 1) Bool Bool [].toArray) [])) 1 3
     (fun _ ↦ ⟨(-3, 4), by decide⟩) rfl (by rfl) (by decide)
@@ -105,7 +119,7 @@ theorem demo_visited_le_spec : Triple (demo.verify (Program.semantics #[]))
   vcgen [hc]
   all_goals simp_all only [machine_run_one]
   all_goals simp_all [machine, Cfg.mapState,
-    Program.idle, Cfg.workSymbols, start,
+    Program.idle, Cfg.workSymbols, start_last, start_visited,
     Pi.le_def, NonemptyInterval.le_def, Fin.eq_zero]
   all_goals omega
 

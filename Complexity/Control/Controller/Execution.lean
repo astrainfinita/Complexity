@@ -12,7 +12,7 @@ public import Complexity.Control.Cost
 # Execution with standard input and output
 
 An execution instance fixes initialization and output interpretation for one input.
-Control state is supplied by `HasState`; observations, actions, and local costs
+Control state is supplied by `HasState`; observations, actions, and resource measurements
 are supplied separately when running the controller.
 -/
 
@@ -72,6 +72,48 @@ def run (M : Controller Id Observation Action Q) (input : Input) (n : ℕ)
     [Execution Config Q Output input] :
     M.run Config input 0 = M.initInput input := rfl
 
+variable (Config) in
+/-- Record the bounded execution from the selected standard input. -/
+def runHistoryWith {F : Type u → Type*} (m : Type u → Type*)
+    [Monad m] [MonadLiftT F m] (M : Controller F Observation Action Q)
+    (input : Input) (n : ℕ) [Execution Config Q Output input] :
+    m (History Config Action) :=
+  M.runHistoryFromWith m (M.initInput input) n
+
+variable (Config) in
+/-- Record a deterministic execution from the selected standard input. -/
+def runHistory (M : Controller Id Observation Action Q) (input : Input) (n : ℕ)
+    [Execution Config Q Output input] : History Config Action :=
+  M.runHistoryFrom (M.initInput input) n
+
+@[simp] theorem runHistoryWith_zero {F : Type u → Type*} (m : Type u → Type*)
+    [Monad m] [LawfulApplicative m] [MonadLiftT F m] (M : Controller F Observation Action Q)
+    (input : Input) [Execution Config Q Output input] :
+    M.runHistoryWith Config m input 0 = pure (History.nil (M.initInput input)) :=
+  M.runHistoryFromWith_zero m (M.initInput input)
+
+@[simp] theorem runHistory_zero (M : Controller Id Observation Action Q)
+    (input : Input) [Execution Config Q Output input] :
+    M.runHistory Config input 0 = History.nil (M.initInput input) := rfl
+
+variable (Config) in
+/-- Standard-input execution satisfies the common bounded-run conditions. -/
+theorem runHistory_spec (M : Controller Id Observation Action Q) (input : Input) (n : ℕ)
+    [Execution Config Q Output input] :
+    M.RunConditions (M.initInput input) n (M.runHistory Config input n) :=
+  M.runHistoryFrom_spec (M.initInput input) n
+
+@[simp] theorem last_runHistoryWith {F : Type u → Type*} (m : Type u → Type*)
+    [Monad m] [LawfulMonad m] [MonadLiftT F m] (M : Controller F Observation Action Q)
+    (input : Input) (n : ℕ) [Execution Config Q Output input] :
+    (fun h ↦ h.last) <$> M.runHistoryWith Config m input n = M.runWith Config m input n :=
+  M.last_runHistoryFromWith m (M.initInput input) n
+
+@[simp] theorem last_runHistory (M : Controller Id Observation Action Q)
+    (input : Input) (n : ℕ) [Execution Config Q Output input] :
+    (M.runHistory Config input n).last = M.run Config input n :=
+  M.last_runHistoryFrom (M.initInput input) n
+
 /-- One more step extends a standard input run. -/
 theorem run_succ (M : Controller Id Observation Action Q) (input : Input) (n : ℕ)
     [Execution Config Q Output input] :
@@ -84,6 +126,13 @@ theorem run_eq_of_halted (M : Controller Id Observation Action Q) (input : Input
     (h : M.Halted (M.run Config input n)) (hk : n ≤ k) :
     M.run Config input k = M.run Config input n :=
   M.runFrom_eq_of_halted (M.initInput input) h hk
+
+/-- Standard-input histories stay fixed after reaching a halting state. -/
+theorem runHistory_eq_of_halted (M : Controller Id Observation Action Q) (input : Input)
+    [Execution Config Q Output input] {n k : ℕ}
+    (h : M.Halted (M.run Config input n)) (hk : n ≤ k) :
+    M.runHistory Config input k = M.runHistory Config input n :=
+  M.runHistoryFrom_eq_of_halted (M.initInput input) h hk
 
 /-- The cumulative action cost of an execution prefix from its selected start. -/
 def runActionSum (M : Controller Id Observation Action Q) (cost : Action → Config → ℕ)
@@ -146,16 +195,25 @@ theorem runConfigMax_le_iff (space : Config → ℕ) (input : Input)
 
 end Resources
 
-/-- One terminating execution satisfies both local resource budgets. -/
+/-- One terminating history satisfies both resource budgets. -/
 def computes (M : Controller Id Observation Action Q)
     (costs : CostModel Action Config)
     (input : Input) (output : Output) (time space : ℕ)
     [exe : Execution Config Q Output input] : Prop :=
   ∃ n,
-    let final := M.run Config input n
-    M.Halted final ∧ exe.hasOutput final output ∧
-      runActionSum M costs.time input n ≤ time ∧
-      runConfigMax M costs.space input n ≤ space
+    let history := M.runHistory Config input n
+    M.Halted history.last ∧ exe.hasOutput history.last output ∧
+      costs.time history ≤ time ∧ costs.space history ≤ space
+
+/-- The endpoint of a computation agrees with the ordinary standard-input run. -/
+theorem computes_iff {M : Controller Id Observation Action Q}
+    {costs : CostModel Action Config} {input : Input} {output : Output} {time space : ℕ}
+    [exe : Execution Config Q Output input] :
+    M.computes costs input output time space ↔
+      ∃ n, M.Halted (M.run Config input n) ∧ exe.hasOutput (M.run Config input n) output ∧
+        costs.time (M.runHistory Config input n) ≤ time ∧
+        costs.space (M.runHistory Config input n) ≤ space := by
+  simp only [computes, last_runHistory]
 
 /-- Enlarging budgets preserves the same execution. -/
 theorem computes_mono {M : Controller Id Observation Action Q}
@@ -168,50 +226,70 @@ theorem computes_mono {M : Controller Id Observation Action Q}
   obtain ⟨n, hn, ho, htime, hspace⟩ := h
   exact ⟨n, hn, ho, htime.trans ht, hspace.trans hs⟩
 
-/-- A computation's action budget bounds every prefix, including halted padding. -/
+/-- An additive action budget bounds every prefix, including halted padding. -/
 theorem computes_runActionSum_le {M : Controller Id Observation Action Q}
     {costs : CostModel Action Config} {input : Input} {output : Output} {time space : ℕ}
-    [Execution Config Q Output input]
+    [Execution Config Q Output input] {cost : Action → Config → ℕ}
+    (htime : costs.time = fun h ↦ h.actionSum cost)
     (h : computes M costs input output time space) (u : ℕ) :
-    M.runActionSum costs.time input u ≤ time := by
-  obtain ⟨n, hn, _, ht, _⟩ := h
+    M.runActionSum cost input u ≤ time := by
+  obtain ⟨n, hn, _, ht, _⟩ := computes_iff.mp h
+  rw [htime] at ht
   by_cases hu : u ≤ n
-  · exact (M.runActionSum_mono costs.time input hu).trans ht
-  · rw [M.runActionSum_eq_of_halted costs.time input hn (by omega : n ≤ u)]
+  · exact (M.runActionSum_mono cost input hu).trans ht
+  · rw [M.runActionSum_eq_of_halted cost input hn (by omega : n ≤ u)]
     exact ht
 
-/-- A computation's space budget bounds every prefix, including halted padding. -/
-theorem computes_runConfigMax_le {M : Controller Id Observation Action Q}
+/-- A prefix-monotone history measurement bounds space throughout a computation. -/
+theorem computes_space_le {M : Controller Id Observation Action Q}
     {costs : CostModel Action Config} {input : Input} {output : Output} {time space : ℕ}
     [Execution Config Q Output input]
-    (h : computes M costs input output time space) (u : ℕ) :
-    M.runConfigMax costs.space input u ≤ space := by
-  obtain ⟨n, hn, _, _, hs⟩ := h
+    (h : computes M costs input output time space)
+    (hmono : Monotone fun n ↦ costs.space (M.runHistory Config input n))
+    (u : ℕ) : costs.space (M.runHistory Config input u) ≤ space := by
+  obtain ⟨n, hn, _, _, hs⟩ := computes_iff.mp h
   by_cases hu : u ≤ n
-  · exact (M.runConfigMax_mono costs.space input hu).trans hs
-  · rw [M.runConfigMax_eq_of_halted costs.space input hn (by omega : n ≤ u)]
+  · exact (hmono hu).trans hs
+  · rw [M.runHistory_eq_of_halted input hn (by omega : n ≤ u)]
     exact hs
 
-/-- Unit action costs describe the halted run at the advertised time bound. -/
+/-- A maximum configuration budget bounds every prefix, including halted padding. -/
+theorem computes_runConfigMax_le {M : Controller Id Observation Action Q}
+    {costs : CostModel Action Config} {input : Input} {output : Output} {time space : ℕ}
+    [Execution Config Q Output input] {size : Config → ℕ}
+    (hspace : costs.space = fun h ↦ h.configSup size)
+    (h : computes M costs input output time space) (u : ℕ) :
+    M.runConfigMax size input u ≤ space := by
+  have hm : Monotone fun n ↦ costs.space (M.runHistory Config input n) := by
+    rw [hspace]
+    exact fun _ _ hn ↦ M.runConfigMax_mono size input hn
+  simpa only [hspace, runConfigMax, runConfigMaxFrom, runHistory] using computes_space_le h hm u
+
+/-- Counting recorded actions describes the halted run at the advertised time bound. -/
 theorem computes_unit_iff {M : Controller Id Observation Action Q}
     {costs : CostModel Action Config} {input : Input} {output : Output} {t s : ℕ}
     [exe : Execution Config Q Output input]
-    (htime : ∀ a c, costs.time a c = 1) :
+    (htime : costs.time = History.length) :
     M.computes costs input output t s ↔
       M.Halted (M.run Config input t) ∧
       exe.hasOutput (M.run Config input t) output ∧
-      M.runConfigMax costs.space input t ≤ s := by
-  rcases costs with ⟨time, space⟩
-  obtain rfl := funext fun a ↦ funext (htime a)
+      costs.space (M.runHistory Config input t) ≤ s := by
+  rw [computes_iff]
   constructor
-  · intro h
-    have hs := computes_runConfigMax_le h t
-    obtain ⟨n, hn, ho, ht, _⟩ := h
-    have he := M.runFrom_runActionSumFrom_unit (M.initInput (Config := Config) input) n
-    have hr : M.run Config input t = M.run Config input n :=
-      (M.runFrom_eq_of_halted _ (he.symm ▸ hn) ht).trans he
-    exact ⟨hr.symm ▸ hn, hr.symm ▸ ho, hs⟩
+  · rintro ⟨n, hn, ho, ht, hs⟩
+    rw [htime] at ht
+    have he : M.run Config input (M.runHistory Config input n).length =
+        M.run Config input n := by
+      simpa only [run, runHistory] using
+        M.runFrom_length_runHistoryFrom (M.initInput (Config := Config) input) n
+    have hh := he.symm ▸ hn
+    have hp := M.runHistory_eq_of_halted input hh (M.runHistory_spec Config input n).length_le
+    have hq := M.runHistory_eq_of_halted input hh ht
+    have hr := hq.trans hp.symm
+    have he' := congrArg History.last hr
+    simp only [last_runHistory] at he'
+    exact ⟨he'.symm ▸ hn, he'.symm ▸ ho, hr.symm ▸ hs⟩
   · rintro ⟨hn, ho, hs⟩
-    exact ⟨t, hn, ho, M.runActionSumFrom_unit_le _ t, hs⟩
+    exact ⟨t, hn, ho, htime.symm ▸ (M.runHistory_spec Config input t).length_le, hs⟩
 
 end Complexity.Controller

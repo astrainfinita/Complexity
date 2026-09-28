@@ -93,13 +93,15 @@ private theorem observe_pad {r : ℕ} (h : k ≤ r) (c : Cfg k Q) (q : Q') :
     apply Cfg.ext <;> simp [step_eq, comp, right, h', observe_pad, pad_eval]
 
 @[simp] theorem stepCost_left (c : Cfg k Q) (h : ¬M.Halted c) :
-    (comp M N).stepCost treeCosts.time (left c) = M.stepCost treeCosts.time c := by
+    (comp M N).stepCost Action.timeCost (left c) = M.stepCost Action.timeCost c := by
   have h' : M.halt c.state = false := Bool.eq_false_iff.mpr h
-  simp [Controller.stepCost, comp, left, h', observe_pad, Op.timeCost_rename, pad_comp_castLE]
+  simp [Controller.stepCost, Action.timeCost, comp, left, h', observe_pad,
+    Op.timeCost_rename, pad_comp_castLE]
 
 @[simp] theorem stepCost_right (c : Cfg l Q') :
-    (comp M N).stepCost treeCosts.time (right c) = N.stepCost treeCosts.time c := by
-  simp [Controller.stepCost, comp, right, observe_pad, Op.timeCost_rename, pad_comp_castLE]
+    (comp M N).stepCost Action.timeCost (right c) = N.stepCost Action.timeCost c := by
+  simp [Controller.stepCost, Action.timeCost, comp, right, observe_pad,
+    Op.timeCost_rename, pad_comp_castLE]
 
 theorem runFrom_left (c : Cfg k Q) (n : ℕ)
     (h : ∀ j < n, ¬M.Halted (M.runFrom c j)) :
@@ -171,8 +173,8 @@ private theorem step_bridge (ρ : Fin (max k l + 1) → Tree)
 
 private theorem stepCost_bridge (ρ : Fin (max k l + 1) → Tree)
     (hz : ρ ⟨max k l, by omega⟩ = .nil) {n : ℕ} (hn : n < max k l - 1) :
-    (comp M N).stepCost treeCosts.time (bridge (Q := Q) N ρ n) = 1 := by
-  simp [Controller.stepCost, bridge, next, hn, comp, Op.timeCost, clear, hz,
+    (comp M N).stepCost Action.timeCost (bridge (Q := Q) N ρ n) = 1 := by
+  simp [Controller.stepCost, Action.timeCost, bridge, next, hn, comp, Op.timeCost, clear, hz,
     show ¬max k l ≤ n by omega]
 
 private theorem runFrom_bridge (ρ : Fin (max k l + 1) → Tree)
@@ -203,8 +205,9 @@ private theorem step_left_halted (c : Cfg k Q) (h : M.Halted c) :
   apply Cfg.ext <;> simp [step_eq, comp, left, bridge, h']
 
 private theorem stepCost_left_halted (c : Cfg k Q) (h : M.Halted c) :
-    (comp M N).stepCost treeCosts.time (left (l := l) (Q' := Q') c) = 1 := by
-  simp [Controller.stepCost, left, comp, show M.halt c.state = true from h, Op.timeCost]
+    (comp M N).stepCost Action.timeCost (left (l := l) (Q' := Q') c) = 1 := by
+  simp [Controller.stepCost, Action.timeCost, left, comp, show M.halt c.state = true from h,
+    Op.timeCost]
 
 private theorem clear_eq_input {r : ℕ} (ρ : Fin (r + 1) → Tree)
     (hz : ρ ⟨r, by omega⟩ = .nil) : clear ρ (r - 1) = input 0 (ρ 0) := by
@@ -319,6 +322,7 @@ theorem comp_computesInTimeAndSpace [NeZero k] [NeZero l]
     rw [cost_add, cost_add, Controller.runFrom_add, ← Controller.run, h₁, h₂, h₀,
       Comp.cost_left M N _ n hn.2, Comp.cost_clear M N c hn.1, Comp.cost_right M N]
     exact Nat.add_le_add (Nat.add_le_add_right hc _) hd
+  apply Controller.computes_iff.mpr
   refine ⟨n + max k l + m, ?_, ?_, hw, ?_⟩
   · change C.Halted (C.run (Cfg (max k l + 1) (Comp.State k l Q Q')) x (n + max k l + m))
     rw [hright]
@@ -327,9 +331,8 @@ theorem comp_computesInTimeAndSpace [NeZero k] [NeZero l]
       x (n + max k l + m)).regs 0 = b
     rw [hright]
     exact (pad_get (by omega) (N.run (Cfg l Q') a m).regs 0).trans hb
-  · apply (C.runConfigMax_le_iff treeCosts.space x _ _).2
+  · apply (C.runConfigMax_le_iff Cfg.mass x _ _).2
     intro d _
-    simp only [treeCosts_space]
     by_cases hdn : d ≤ n
     · rw [hleft d hdn, Comp.mass_left]
       exact (Nat.add_le_add_right (hM.mass_le d) _).trans (Nat.le_max_left _ _)

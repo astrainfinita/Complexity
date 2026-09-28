@@ -32,7 +32,7 @@ private theorem convert_left (a : Tree) :
   · simp [Controller.run, Controller.runFrom_succ, step_eq, convert,
       initInput_tree, Op.eval]
   · simpa [Controller.runActionSum, Controller.runActionSumFrom_succ,
-      Controller.stepCost, treeCosts, convert, initInput_tree, Op.timeCost,
+      Controller.stepCost, Action.timeCost, convert, initInput_tree, Op.timeCost,
       Action.assign, Op.dst, Op.eval, input_get] using
       Tree.size_left_le a
 
@@ -43,7 +43,7 @@ private theorem convert_pair (a : Tree) :
   · simp [Controller.run, Controller.runFrom_succ, step_eq, convert,
       initInput_tree, Op.eval]
   · simp [Controller.runActionSum, Controller.runActionSumFrom_succ,
-      Controller.stepCost, treeCosts, convert, initInput_tree, Op.timeCost,
+      Controller.stepCost, Action.timeCost, convert, initInput_tree, Op.timeCost,
       Action.assign, Op.dst, Op.eval, input_get, input_get_of_ne, Tree.size]
     omega
 

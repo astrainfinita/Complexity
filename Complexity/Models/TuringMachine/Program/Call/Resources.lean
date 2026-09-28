@@ -10,7 +10,7 @@ public import Complexity.Control.Transition.Simulation
 
 /-! # Calling a machine with its complete visit history
 
-Calls preserve the source execution on tracked configurations, including earlier visits.
+Calls preserve the source execution history, including earlier visits.
 Space bounds follow from the exact final configuration in the call specification.
 -/
 
@@ -19,13 +19,15 @@ Space bounds follow from the exact final configuration in the call specification
 namespace Complexity.TM.Program
 
 open Std.WP
+open Controller (History)
 
 variable {κ : Type} {Γ Q : Type} [FinEnum Q] [Inhabited Γ] {xs : Array Γ}
 
 /-- Compiling a call only relabels the source control state. -/
-theorem step_callFrom (M : TM Id κ Γ Q) (q : Q) (c : TrackedCfg κ Γ Q xs) :
+theorem step_callFrom (M : TM Id κ Γ Q) (q : Q) (c : History (Cfg κ Γ Q xs) (Action κ Γ Q)) :
     (compile (callFrom M q)).step
-      (Config := TrackedCfg κ Γ ((callFrom M q).State ⊕ (callFrom M q).Exit) xs)
+      (Config := History (Cfg κ Γ ((callFrom M q).State ⊕ (callFrom M q).Exit) xs)
+        (Action κ Γ ((callFrom M q).State ⊕ (callFrom M q).Exit)))
       (c.mapState (callRoute M)) =
       (M.step c).mapState (callRoute M) := by
   have hn (r : Q) (a : Γ) (v : κ → Γ) :
@@ -38,75 +40,75 @@ theorem step_callFrom (M : TM Id κ Γ Q) (q : Q) (c : TrackedCfg κ Γ Q xs) :
     cases hh : M.halt ((M.transition r (a, v)).run).state <;>
       simp only [blockRoute, callRoute, hh, Bool.false_eq_true, ↓reduceIte,
         Program.Syntax.callLabel, Program.Syntax.callCont] <;> rfl
-  simp only [Controller.step_eq, TrackedCfg.state_def, Cfg.state_def]
+  rw [Controller.step_eq, Controller.step_eq]
+  simp only [History.state_def, Cfg.state_def]
+  erw [History.last_mapState, History.observe_mapState]
   erw [halt_callRoute]
-  split_ifs with h
-  · rfl
-  · have hf : M.halt c.cfg.state = false := Bool.eq_false_iff.mpr h
-    have ht : ((compile (callFrom M q)).transition (callRoute M c.cfg.state)
-        (c.cfg.inputSymbol, c.cfg.workSymbols)).run =
-        ((M.transition c.cfg.state (c.cfg.inputSymbol, c.cfg.workSymbols)).run).mapState
+  by_cases h : M.halt c.last.state = true
+  · erw [ite_eq_left h, ite_eq_left h]
+    rfl
+  · erw [ite_eq_right h, ite_eq_right h]
+    have hf : M.halt c.last.state = false := Bool.eq_false_iff.mpr h
+    have ht : ((compile (callFrom M q)).transition (callRoute M c.last.state)
+        (c.last.inputSymbol, c.last.workSymbols)).run =
+        ((M.transition c.last.state (c.last.inputSymbol, c.last.workSymbols)).run).mapState
           (callRoute M) := by
       simp only [callRoute, hf, Bool.false_eq_true, ↓reduceIte]
       change (let r := (((callFrom M q).toControl eval).next
-          (.inl (FinEnum.equiv c.cfg.state)) (c.cfg.inputSymbol, c.cfg.workSymbols))
+          (.inl (FinEnum.equiv c.last.state)) (c.last.inputSymbol, c.last.workSymbols))
         r.1.mapState (fun _ ↦ r.2)) = _
       rw [hn]
       rfl
     erw [ht]
-    exact TrackedCfg.apply_mapState _ _ _
+    exact History.apply_mapState _ _ _
 
 /-- Calls have exactly the source machine's configurations, including halted padding. -/
-theorem runFrom_callFrom (M : TM Id κ Γ Q) (q : Q) (c : TrackedCfg κ Γ Q xs)
+theorem runFrom_callFrom (M : TM Id κ Γ Q) (q : Q) (c : History (Cfg κ Γ Q xs) (Action κ Γ Q))
     (n : ℕ) :
     (compile (callFrom M q)).runFrom
-      (Config := TrackedCfg κ Γ ((callFrom M q).State ⊕ (callFrom M q).Exit) xs)
+      (Config := History (Cfg κ Γ ((callFrom M q).State ⊕ (callFrom M q).Exit) xs)
+        (Action κ Γ ((callFrom M q).State ⊕ (callFrom M q).Exit)))
       (c.mapState (callRoute M)) n =
       (M.runFrom c n).mapState (callRoute M) := by
   exact Transition.runN_map (fun c ↦ c.mapState (callRoute M)) (step_callFrom M q) c n
-
-/-- Running a compiled call from fresh tapes reproduces the selected source execution. -/
-theorem run_callFrom (M : TM Id κ Γ Q) (q : Q) (xs : List Γ) (n : ℕ) :
-    (compile (callFrom M q)).run
-      (TrackedCfg κ Γ ((callFrom M q).State ⊕ (callFrom M q).Exit) xs.toArray) xs n =
-      (M.runFrom ((rawExecution (κ := κ) xs).init q).track n).mapState (callRoute M) := by
-  rw [Controller.run, initInput_tracked, initInput_raw, start_callFrom]
-  exact runFrom_callFrom M q ((rawExecution (κ := κ) xs).init q).track n
 
 /-- A call preserves a common interval bound containing its actual source execution.
 The caller's existing visitation history and remaining time credits are retained. -/
 @[spec]
 theorem spec_callFrom_visited_le (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs)
     (n r : ℕ) (V : κ → NonemptyInterval ℤ) (hh : M.Halted (M.runFrom c n))
-    (hw : (M.runFrom c.track n).visited ≤ V) :
+    (hw : (M.runHistoryFrom c n).visited ≤ V) :
     Triple ((callFrom M c.state).verify (semantics xs))
-      (fun s b ↦ s.cfg = c.mapState (fun _ ↦ ()) ∧ s.visited ≤ V ∧ n + r ≤ b)
+      (fun s b ↦ s.last = c.mapState (fun _ ↦ ()) ∧ s.visited ≤ V ∧ n + r ≤ b)
       (fun a s b ↦ a = (M.runFrom c n).state ∧
-        s.cfg = (M.runFrom c n).mapState (fun _ ↦ ()) ∧
+        s.last = (M.runFrom c n).mapState (fun _ ↦ ()) ∧
         s.visited ≤ V ∧ r ≤ b) () := by
   constructor
   rintro s b ⟨hc, hv, hb⟩
   let u := s.mapState (fun _ ↦ c.state)
-  have hu : u.cfg = c := by
-    simp only [u, TrackedCfg.mapState_cfg, hc, Cfg.mapState_mapState]
+  have hu : u.last = c := by
+    simp only [u, History.last_mapState, hc, Cfg.mapState_mapState]
     rfl
-  apply (spec_callFrom M u n r (by simpa [hu] using hh)).entails_wp_of_post
-    ?_ s b ⟨rfl, hb⟩
+  rw [← hu] at hh hw ⊢
+  apply (spec_callFrom M u n r (by simpa using hh)).entails_wp_of_post
+    ?_ s b ⟨by
+      simp only [u, History.mapState_mapState]
+      exact (History.mapState_id s).symm, hb⟩
   rintro a t b' ⟨ha, rfl, hr⟩
-  refine ⟨by simpa [hu] using ha, by simp [hu], ?_, hr⟩
-  rw [TrackedCfg.mapState_visited, tracked_runFrom_visited_sup]
-  exact sup_le hv (by simpa [hu] using hw)
+  refine ⟨by simpa using ha, by simp, ?_, hr⟩
+  rw [History.visited_mapState, Controller.runFrom_history, History.visited_append]
+  exact sup_le (by simpa [u] using hv) hw
 
 /-- The initial-state call uses the same interval rule without resetting caller storage. -/
 @[spec]
 theorem spec_call_visited_le (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs)
     (n r : ℕ) (V : κ → NonemptyInterval ℤ) (hc : c.state = M.q₀)
     (hh : M.Halted (M.runFrom c n))
-    (hw : (M.runFrom c.track n).visited ≤ V) :
+    (hw : (M.runHistoryFrom c n).visited ≤ V) :
     Triple ((call M).verify (semantics xs))
-      (fun s b ↦ s.cfg = c.mapState (fun _ ↦ ()) ∧ s.visited ≤ V ∧ n + r ≤ b)
+      (fun s b ↦ s.last = c.mapState (fun _ ↦ ()) ∧ s.visited ≤ V ∧ n + r ≤ b)
       (fun a s b ↦ a = (M.runFrom c n).state ∧
-        s.cfg = (M.runFrom c n).mapState (fun _ ↦ ()) ∧
+        s.last = (M.runFrom c n).mapState (fun _ ↦ ()) ∧
         s.visited ≤ V ∧ r ≤ b) () := by
   simpa only [call, hc] using spec_callFrom_visited_le M c n r V hh hw
 

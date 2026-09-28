@@ -6,6 +6,7 @@ Authors: Yuyang Zhao
 module
 
 public import Complexity.Models.TuringMachine.Program.Correctness
+public import Complexity.Control.Controller.History.Execution
 public import Complexity.Models.TuringMachine.Program.Specification.Configuration
 public import Complexity.Control.Program.Loop
 
@@ -22,6 +23,7 @@ The fixed input is supplied to the interpretation only; it does not change the c
 namespace Complexity.TM.Program
 
 open Std.WP
+open Controller (History)
 
 variable {κ : Type} {Γ α : Type} [Inhabited Γ]
 
@@ -29,25 +31,23 @@ variable {κ : Type} {Γ α : Type} [Inhabited Γ]
 @[simps eval observe act]
 def semantics (xs : Array Γ) :
     Program.Semantics (Γ × (κ → Γ)) (Action κ Γ Unit) (Op κ Γ) Op.Result
-      (TrackedCfg κ Γ Unit xs) where
+      (History (Cfg κ Γ Unit xs) (Action κ Γ Unit)) where
   eval := eval
   observe := Controller.observe
   act := apply
 
-/-- An idle step preserves the configuration and its recorded intervals. -/
-@[simp]
-theorem apply_idle {xs : Array Γ} (s : TrackedCfg κ Γ Unit xs) :
-    apply (idle (κ := κ) (Γ := Γ)) s = s := by
-  apply TrackedCfg.ext (idle_apply s.cfg)
-  funext i
-  rw [TrackedCfg.apply_visited, idle_apply]
-  exact sup_eq_left.mpr (s.head_mem i)
+@[simp 1100] theorem visited_snoc_idle {xs : Array Γ}
+    (s : History (Cfg κ Γ Unit xs) (Action κ Γ Unit)) :
+    (s.snoc idle).visited = s.visited := by
+  rw [History.visited_snoc]
+  simp only [idle_apply]
+  exact sup_eq_left.mpr s.head_mem
 
 /-- A head move preserves a footprint whenever its new position remains inside it. -/
 theorem moveAction_visited_le [DecidableEq κ] {xs : Array Γ} (j : κ) (d : SignType)
-    (s : TrackedCfg κ Γ Unit xs) (V : κ → NonemptyInterval ℤ)
+    (s : History (Cfg κ Γ Unit xs) (Action κ Γ Unit)) (V : κ → NonemptyInterval ℤ)
     (hF : s.visited ≤ V)
-    (hj : (apply (moveAction (Γ := Γ) j d) s.cfg).workPos j ∈ V j) :
+    (hj : (apply (moveAction (Γ := Γ) j d) s.last).workPos j ∈ V j) :
     (apply (moveAction (Γ := Γ) j d) s).visited ≤ V := by
   apply (s.apply_visited_le_iff _ V).mpr
   refine ⟨hF, ?_⟩
@@ -56,54 +56,58 @@ theorem moveAction_visited_le [DecidableEq κ] {xs : Array Γ} (j : κ) (d : Sig
   · subst i; exact hj
   · simpa [hi] using s.head_mem_of_visited_le hF i
 
-/-- A total loop rule on tracked configurations; the dispatcher consumes one time credit. -/
+/-- A total loop rule on histories; the dispatcher consumes one time credit. -/
 @[spec]
 theorem spec_repeatUntil {xs : Array Γ} (p : TM.Program κ Γ Bool)
-    (I : Program.Invariant (TrackedCfg κ Γ Unit xs) (ℕ → Prop))
-    (Q : Unit → TrackedCfg κ Γ Unit xs → ℕ → Prop)
+    (I : Program.Invariant (History (Cfg κ Γ Unit xs) (Action κ Γ Unit)) (ℕ → Prop))
+    (Q : Unit → History (Cfg κ Γ Unit xs) (Action κ Γ Unit) → ℕ → Prop)
+    (ha : ∀ s b, I s b → I (s.snoc idle) b)
     (hp : ∀ s b, I s b → 0 < b)
     (hb : Triple (p.verify (semantics xs)) (fun s b ↦ I s (b + 1))
       (fun r s b ↦ if r then Q () s b else I s b) ()) :
     Triple ((repeatUntil p).verify (semantics xs)) (fun s b ↦ I s b) Q () :=
-  Program.spec_repeatUntilWith_nop idle p (semantics xs) I Q ()
-    apply_idle hp hb
+  Program.spec_repeatUntilWith_of_invariant idle p (semantics xs) I Q () ha hp hb
 
 /-- A local action consumes one transition and updates the visited endpoints. -/
 @[spec]
-theorem spec_act (a : Action κ Γ Unit) (xs : Array Γ) (s : TrackedCfg κ Γ Unit xs)
+theorem spec_act (a : Action κ Γ Unit) (xs : Array Γ)
+    (s : History (Cfg κ Γ Unit xs) (Action κ Γ Unit))
     (b : ℕ) (h : 0 < b) (x : Unit) :
     Triple ((act a).verify (semantics xs)) (fun t c => t = s ∧ c = b)
       (fun r t c => r = () ∧ t = apply a s ∧ c = b - 1) x :=
   Program.spec_perform (Op.act a) (semantics xs) s b h x
 
-/-- Reading the input preserves the tracked configuration and consumes one transition. -/
+/-- Reading the input preserves the tape configuration and consumes one transition. -/
 @[spec]
-theorem spec_readInput [FinEnum Γ] (xs : Array Γ) (s : TrackedCfg κ Γ Unit xs)
+theorem spec_readInput [FinEnum Γ] (xs : Array Γ)
+    (s : History (Cfg κ Γ Unit xs) (Action κ Γ Unit))
     (b : ℕ) (h : 0 < b) (x : Unit) :
     Triple (readInput.verify (semantics xs)) (fun t c => t = s ∧ c = b)
-      (fun r t c => r = s.cfg.inputSymbol ∧ t = s ∧ c = b - 1) x := by
+      (fun r t c => r = s.last.inputSymbol ∧ t = s.snoc idle ∧ c = b - 1) x := by
   simpa [readInput, eval] using
     Program.spec_perform (Op.readInput (κ := κ) (Γ := Γ) inferInstance)
       (semantics xs) s b h x
 
-/-- Reading a work symbol preserves the tracked configuration and consumes one transition. -/
+/-- Reading a work symbol preserves the tape configuration and consumes one transition. -/
 @[spec]
-theorem spec_read [FinEnum Γ] (i : κ) (xs : Array Γ) (s : TrackedCfg κ Γ Unit xs)
+theorem spec_read [FinEnum Γ] (i : κ) (xs : Array Γ)
+    (s : History (Cfg κ Γ Unit xs) (Action κ Γ Unit))
     (b : ℕ) (h : 0 < b) (x : Unit) :
     Triple ((read i).verify (semantics xs)) (fun t c => t = s ∧ c = b)
-      (fun r t c => r = s.cfg.workSymbols i ∧ t = s ∧ c = b - 1) x := by
+      (fun r t c => r = s.last.workSymbols i ∧ t = s.snoc idle ∧ c = b - 1) x := by
   simpa [read, eval] using
     Program.spec_perform (Op.read (Γ := Γ) inferInstance i)
       (semantics xs) s b h x
 
 /-- The state used to verify a complete program on an input. -/
-def initial (xs : Array Γ) : TrackedCfg κ Γ Unit xs := ((rawExecution xs.toList).init ()).track
+def initial (xs : Array Γ) : History (Cfg κ Γ Unit xs) (Action κ Γ Unit) :=
+  History.nil ((rawExecution xs.toList).init ())
 
 /-- A program-level total specification suffices for the compiled machine's resource bound. -/
 theorem computesInTimeAndSpace [Fintype κ] {p : TM.Program κ Γ α} {xs ys : Array Γ} {t s : ℕ}
-    {P : TrackedCfg κ Γ Unit xs → ℕ → Prop}
+    {P : History (Cfg κ Γ Unit xs) (Action κ Γ Unit) → ℕ → Prop}
     (h : Triple (p.verify (semantics xs)) P
-      (fun _ v _ ↦ v.cfg.output = ys ∧ v.space ≤ s) ())
+      (fun _ v _ ↦ v.last.output = ys ∧ v.space ≤ s) ())
     (hp : P (initial xs) t) :
     (compile p).ComputesInTimeAndSpace xs.toList ys.toList t s := by
   obtain ⟨n, a, v, hn, he, ho, hs⟩ := Program.exec_of_spec h hp
@@ -114,16 +118,17 @@ section Configuration
 variable {xs : Array Γ}
 
 /-- Forget the history in an already verified total specification. -/
-theorem cfg_of_tracked {p : TM.Program κ Γ α}
-    {P : TrackedCfg κ Γ Unit xs → ℕ → Prop} {Q : α → TrackedCfg κ Γ Unit xs → ℕ → Prop}
+theorem cfg_of_history {p : TM.Program κ Γ α}
+    {P : History (Cfg κ Γ Unit xs) (Action κ Γ Unit) → ℕ → Prop}
+    {Q : α → History (Cfg κ Γ Unit xs) (Action κ Γ Unit) → ℕ → Prop}
     {P' : Cfg κ Γ Unit xs → ℕ → Prop} {Q' : α → Cfg κ Γ Unit xs → ℕ → Prop}
     (h : Triple (p.verify (semantics xs)) P Q ())
-    (hp : ∀ c b, P' c b → P c.track b)
-    (hq : ∀ a s b, Q a s b → Q' a s.cfg b) :
+    (hp : ∀ c b, P' c b → P (History.nil c) b)
+    (hq : ∀ a s b, Q a s b → Q' a s.last b) :
     Triple (p.verify (cfgSemantics xs)) P' Q' () := by
-  exact Program.spec_simulate (fun s c ↦ c = s.cfg)
-    (by rintro s _ rfl; rfl) (by rintro a s _ rfl; rfl) h
-    (fun c b hc ↦ ⟨c.track, hp c b hc, rfl⟩)
+  exact Program.spec_simulate (fun s c ↦ c = s.last)
+    (by rintro s _ rfl; rfl) (by rintro a s _ rfl; simp) h
+    (fun c b hc ↦ ⟨History.nil c, hp c b hc, rfl⟩)
     (by rintro a s _ b rfl hs; exact hq a s b hs)
 
 /-- A total time specification gives the compiled machine's time and coarse space bounds. -/
@@ -133,12 +138,12 @@ theorem cfg_computesInTimeAndSpace [Fintype κ] {p : TM.Program κ Γ α} {ys : 
     (hp : P ((rawExecution xs.toList).init ()) t) :
     (compile p).ComputesInTimeAndSpace xs.toList ys.toList t (Fintype.card κ * (t + 1)) := by
   obtain ⟨n, a, c, hn, he, ho⟩ := Program.exec_of_spec h hp
-  obtain ⟨v, hv, hr⟩ := Program.Exec.lift TrackedCfg.cfg
+  obtain ⟨v, hv, hr⟩ := Program.Exec.lift History.last
     (e' := semantics xs)
-    (fun _ ↦ rfl) (fun _ _ ↦ rfl) he (((rawExecution xs.toList).init ()).track) rfl
+    (fun _ ↦ rfl) (fun _ _ ↦ by simp) he (History.nil ((rawExecution xs.toList).init ())) rfl
   apply computesInTimeAndSpace_of_exec p hr hn (by rw [hv]; exact ho)
-  rw [← runConfigMaxFrom_compile hr.toControl]
-  exact ((compile p).runConfigMaxFrom_track_le_time _ n).trans
+  rw [← history_space_compile hr.toControl]
+  exact ((compile p).runHistoryFrom_space_le_time _ n).trans
     (Nat.mul_le_mul_left (Fintype.card κ) (by omega))
 
 end Configuration

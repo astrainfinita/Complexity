@@ -6,6 +6,7 @@ Authors: Yuyang Zhao
 module
 
 public import Complexity.Control.BinaryChoice
+public import Complexity.Control.Controller.History.Execution
 public import Complexity.Models.TuringMachine.Cost
 
 /-!
@@ -13,8 +14,8 @@ public import Complexity.Models.TuringMachine.Cost
 
 `NTM` specializes the existing tape model to two labelled alternatives. Finite runs use
 the default `Multiset` interpretation, retaining the multiplicity of computation paths.
-Time bounds cover every branch. Each branch carries its own `TrackedCfg` visit intervals;
-space bounds cover every finite prefix, including nonhalting branches.
+Time bounds cover every branch. Space is read from each branch's execution history
+and bounds every finite prefix, including nonhalting branches.
 
 `Terminates` requires a finite deadline for all branches on this input. No uniform bound
 across input lengths is part of that property. Decision outputs are exactly one Boolean,
@@ -30,6 +31,8 @@ abbrev NTM (κ : Type*) (Γ Q : Type*) := TM BinaryChoice κ Γ Q
 
 namespace NTM
 
+open Controller (History)
+
 variable {κ : Type*} {Γ Q : Type*} [Inhabited Γ] {xs : List Γ}
 
 /-- Every computation branch has halted by this deadline. -/
@@ -43,16 +46,18 @@ def Terminates (M : NTM κ Γ Q) (xs : List Γ) : Prop :=
 /-- Every finite computation prefix stays within the work-space bound.
 This property alone does not require termination. -/
 def UsesSpace [Fintype κ] (M : NTM κ Γ Q) (xs : List Γ) (s : ℕ) : Prop :=
-  ∀ n c, c ∈ M.runWith (TM.TrackedCfg κ Γ Q xs.toArray) Multiset xs n → c.space ≤ s
+  ∀ n h, h ∈ M.runHistoryWith (TM.Cfg κ Γ Q xs.toArray) Multiset xs n → h.space ≤ s
 
 /-- A step invariant bounds space on every finite computation prefix. -/
 theorem usesSpace_of_invariant [Fintype κ] (M : NTM κ Γ Q) {xs : List Γ} {s : ℕ}
-    {P : TM.TrackedCfg κ Γ Q xs.toArray → Prop}
-    (hinit : P (M.initInput xs))
+    {P : History (TM.Cfg κ Γ Q xs.toArray) (TM.Action κ Γ Q) → Prop}
+    (hinit : P (History.nil (M.initInput xs)))
     (hstep : ∀ c, P c → ∀ d ∈ M.stepWith Multiset c, P d)
     (hspace : ∀ c, P c → c.space ≤ s) : M.UsesSpace xs s := by
-  intro n c hc
-  exact hspace c (Transition.forall_mem_runN (M.stepWith Multiset) hstep hinit n c hc)
+  intro n h hh
+  change h ∈ M.runHistoryFromWith Multiset (M.initInput xs) n at hh
+  rw [← M.runFromWith_nil Multiset] at hh
+  exact hspace h (Transition.forall_mem_runN (M.stepWith Multiset) hstep hinit n h hh)
 
 theorem UsesTime.mono {M : NTM κ Γ Q} {xs : List Γ} {t t' : ℕ}
     (h : M.UsesTime xs t) (ht : t ≤ t') : M.UsesTime xs t' :=
@@ -69,9 +74,8 @@ theorem UsesSpace.mono [Fintype κ] {M : NTM κ Γ Q} {xs : List Γ} {s s' : ℕ
 /-- Initial head positions count toward space, even at time zero. -/
 theorem UsesSpace.tapes_le [Fintype κ] {M : NTM κ Γ Q} {xs : List Γ} {s : ℕ}
     (h : M.UsesSpace xs s) : Fintype.card κ ≤ s := by
-  have hh := h 0 (M.initInput (Config := TM.TrackedCfg κ Γ Q xs.toArray) xs)
-    (Multiset.mem_singleton_self _)
-  simpa only [TM.initInput_tracked, TM.Cfg.space_track] using hh
+  have hh := h 0 _ (Multiset.mem_singleton_self _)
+  simpa only [History.space_nil] using hh
 
 /-- Once every branch has halted, additional padding leaves the entire endpoint multiset fixed. -/
 theorem runWith_eq_of_usesTime {M : NTM κ Γ Q} {xs : List Γ} {t t' : ℕ}

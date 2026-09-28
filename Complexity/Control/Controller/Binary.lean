@@ -7,6 +7,7 @@ module
 
 public import Complexity.Control.BinaryChoice
 public import Complexity.Control.Controller.Execution
+public import Complexity.Control.Controller.History.Execution
 
 /-!
 # Deterministic controllers as binary choices
@@ -69,5 +70,17 @@ variable [Observe Config Observation] [Apply Config Action]
     [Execution Config Q Output input] :
     d ∈ M.toBinary.runWith Config Multiset input n ↔ d = M.run Config input n :=
   M.mem_runFromWith_toBinary_iff (M.initInput input) d n
+
+/-- Duplicated deterministic choices record exactly the original action history. -/
+theorem mem_runHistoryFromWith_toBinary_iff (c : Config)
+    (h : History Config Action) (n : ℕ) :
+    h ∈ M.toBinary.runHistoryFromWith Multiset c n ↔ h = M.runHistoryFrom c n := by
+  rw [← M.toBinary.runFromWith_nil Multiset, M.mem_runFromWith_toBinary_iff, M.runFrom_nil]
+
+/-- Duplicated deterministic choices preserve standard-input histories. -/
+theorem mem_runHistoryWith_toBinary_iff (input : Input) (h : History Config Action) (n : ℕ)
+    [Execution Config Q Output input] :
+    h ∈ M.toBinary.runHistoryWith Config Multiset input n ↔ h = M.runHistory Config input n :=
+  M.mem_runHistoryFromWith_toBinary_iff (M.initInput input) h n
 
 end Complexity.Controller

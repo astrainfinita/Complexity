@@ -112,7 +112,7 @@ private theorem spec_outputBody_cons (c : Cfg κ (Option Bool) Unit xs) (j : κ)
   have hr := reads_root c j (b :: bs) h
   have hb := reads_bit c j b bs h
   cases b <;> simp only [outputBody, advance] <;> vcgen
-  all_goals simp_all [chunk, emit_at (j := j), move_at, at_at] <;> omega
+  all_goals simp_all [chunk, emit_at (j := j), move_at, at_at]
 
 private theorem spec_outputBody_nil (c : Cfg κ (Option Bool) Unit xs) (j : κ)
     (q : ℕ) (h : Reads c j []) :
@@ -122,7 +122,7 @@ private theorem spec_outputBody_nil (c : Cfg κ (Option Bool) Unit xs) (j : κ)
   have hr := reads_root c j [] h
   simp only [outputBody, advance]
   vcgen
-  all_goals simp_all <;> omega
+  all_goals simp_all
 
 private def cost (bs : List Bool) : ℕ := (bs.flatMap chunk).length + 4 * bs.length + 2
 

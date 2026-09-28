@@ -63,20 +63,20 @@ theorem HaltsAt.unique {M : TM Id κ Γ Q} {xs : List Γ} {s t : ℕ}
 
 /-- Every finite execution prefix uses at most `s` work cells, whether or not the run halts. -/
 def UsesSpace [Fintype κ] (M : TM Id κ Γ Q) (xs : List Γ) (s : ℕ) : Prop :=
-  ∀ t, M.runConfigMax (Config := TrackedCfg κ Γ Q xs.toArray) TrackedCfg.space xs t ≤ s
+  ∀ t, (M.runHistory (Cfg κ Γ Q xs.toArray) xs t).space ≤ s
 
-/-- Compute with unit action time and visited-cell space on one tracked execution. -/
+/-- Compute with unit action time and visited-cell space on one execution history. -/
 def ComputesInTimeAndSpace [Fintype κ] (M : TM Id κ Γ Q) (xs ys : List Γ)
     (t s : ℕ) : Prop :=
-  M.computes (Config := TrackedCfg κ Γ Q xs.toArray) visitedCosts xs ys t s
+  M.computes (Config := Cfg κ Γ Q xs.toArray) visitedCosts xs ys t s
 
 /-- Read the ordinary run's result without carrying its visitation history. -/
 theorem ComputesInTimeAndSpace.run_spec [Fintype κ] {M : TM Id κ Γ Q}
     {xs ys : List Γ} {t s : ℕ} (h : M.ComputesInTimeAndSpace xs ys t s) :
     M.Halted (M.run (Cfg κ Γ Q xs.toArray) xs t) ∧
       (M.run (Cfg κ Γ Q xs.toArray) xs t).output = ys.toArray := by
-  have ⟨hh, ho, _⟩ := (Controller.computes_unit_iff visitedCosts_time).mp h
-  simpa only [TrackedCfg.hasOutput_def, tracked_halted_iff, tracked_run_cfg] using And.intro hh ho
+  have ⟨hh, ho, _⟩ := (Controller.computes_unit_iff (show visitedCosts.time = _ from rfl)).mp h
+  simpa only [rawExecution_hasOutput] using And.intro hh ho
 
 theorem ComputesInTimeAndSpace.terminates [Fintype κ] {M : TM Id κ Γ Q}
     {xs ys : List Γ} {t s : ℕ}
@@ -87,6 +87,6 @@ theorem ComputesInTimeAndSpace.terminates [Fintype κ] {M : TM Id κ Γ Q}
 theorem ComputesInTimeAndSpace.usesSpace [Fintype κ] {M : TM Id κ Γ Q}
     {xs ys : List Γ} {t s : ℕ}
     (h : M.ComputesInTimeAndSpace xs ys t s) : M.UsesSpace xs s :=
-  fun u ↦ Controller.computes_runConfigMax_le h u
+  fun u ↦ Controller.computes_space_le h (M.runHistoryFrom_space_mono _) u
 
 end Complexity.TM

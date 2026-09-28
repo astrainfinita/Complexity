@@ -6,7 +6,7 @@ Authors: Yuyang Zhao
 module
 
 public import Complexity.Control.Program.Traverse
-public import Complexity.Models.TuringMachine.Program.Specification.Tracked
+public import Complexity.Models.TuringMachine.Program.Specification.History
 public import Complexity.Models.TuringMachine.Program.Word.Basic
 
 /-! # A finite program for appending a binary suffix from another work tape -/
@@ -18,6 +18,7 @@ set_option experimental.vcgen true
 namespace Complexity.TM.Program.Word
 
 open Std.WP
+open Controller (History)
 
 variable {κ : Type} [DecidableEq κ] {xs : Array (Option Bool)}
 
@@ -112,8 +113,9 @@ private theorem copied_next (c : TM.Cfg κ (Option Bool) Unit xs) (i j : κ)
 /-- Complete configuration and footprint at the end of a copy. -/
 def CopyPost (c : TM.Cfg κ (Option Bool) Unit xs) (i j : κ) (w v : List Bool)
     (V : κ → NonemptyInterval ℤ) (z : ℕ)
-    (s : TM.TrackedCfg κ (Option Bool) Unit xs) (b : ℕ) : Prop :=
-  s.cfg = copied c i j w v ∧ s.visited ≤ V ∧ b = z
+    (s : History (TM.Cfg κ (Option Bool) Unit xs) (TM.Action κ (Option Bool) Unit))
+    (b : ℕ) : Prop :=
+  s.last = copied c i j w v ∧ s.visited ≤ V ∧ b = z
 
 /-- Copy an arbitrary suffix to a different tape's end, retaining all unused credits.
 
@@ -126,32 +128,32 @@ theorem spec_copy (c : TM.Cfg κ (Option Bool) Unit xs) (i j : κ)
     (hp : c.workPos j = u.length) (hw : c.workTapes i = tape w)
     (hi : c.workPos i = w.length) (hF : CopyFootprint c i j v V) :
     Triple ((copy i j).verify (TM.Program.semantics xs))
-      (fun s b ↦ s.cfg = c ∧ s.visited ≤ V ∧ b = 3 * v.length + 2 + z)
+      (fun s b ↦ s.last = c ∧ s.visited ≤ V ∧ b = 3 * v.length + 2 + z)
       (fun _ s b ↦ CopyPost c i j w v V z s b) () := by
-  let I := fun r (s : TM.TrackedCfg κ (Option Bool) Unit xs) ↦
-    s.cfg = copied c i j w (v.take r) ∧ s.visited ≤ V
+  let I := fun r (s : History (TM.Cfg κ (Option Bool) Unit xs) (TM.Action κ (Option Bool) Unit)) ↦
+    s.last = copied c i j w (v.take r) ∧ s.visited ≤ V
   have hl : Triple ((copy i j).verify (TM.Program.semantics xs))
       (fun s b ↦ I 0 s ∧ b = 3 * v.length + 2 + z)
-      (fun _ s b ↦ (s.cfg = copied c i j w v ∧ s.visited ≤ V) ∧ b = z) () := by
+      (fun _ s b ↦ (s.last = copied c i j w v ∧ s.visited ≤ V) ∧ b = z) () := by
     apply Program.spec_repeatUntilWith_count TM.Program.idle (copyBody i j)
       (TM.Program.semantics xs) I _ v.length 2 1 z
     · intro r hr s hs
-      exact TM.Program.apply_idle s
+      simpa [I] using hs
     · intro r hr q
       have he : (copied c i j w (v.take r)).workSymbols j = some v[r] := by
         rw [copied_read c i j w u v hij ht hp r hr.le, List.getElem?_eq_getElem hr]
-      have hn (s : TM.TrackedCfg κ (Option Bool) Unit xs) (hs : I r s) :
+      have hn (s : History (TM.Cfg κ (Option Bool) Unit xs) (TM.Action κ (Option Bool) Unit))
+      (hs : I r s) :
           I (r + 1) (apply (copyToken i j (some v[r])) s) := by
-        have hc : (apply (copyToken i j (some v[r])) s).cfg =
+        have hc : (apply (copyToken i j (some v[r])) s).last =
             copied c i j w (v.take (r + 1)) := by
-          change apply (copyToken i j (some v[r])) s.cfg = _
-          rw [hs.1, copied_next c i j w v hi r hr]
+          rw [History.apply_last, hs.1, copied_next c i j w v hi r hr]
         refine ⟨hc, ?_⟩
         apply (s.apply_visited_le_iff _ V).mpr
         refine ⟨hs.2, ?_⟩
         intro l
         have hhead := s.head_mem_of_visited_le hs.2 l
-        rw [← TrackedCfg.apply_cfg, hc]
+        rw [← History.apply_last, hc]
         simp only [hs.1, copied_workPos, List.length_take, Nat.min_eq_left hr.le,
           Nat.min_eq_left hr, NonemptyInterval.mem_def] at hhead ⊢
         rcases hF with ⟨⟨_, hFi⟩, ⟨_, hFj⟩⟩
@@ -161,6 +163,7 @@ theorem spec_copy (c : TM.Cfg κ (Option Bool) Unit xs) (i j : κ)
       unfold copyBody
       vcgen
       all_goals simp_all [I, copied_next]
+      aesop
     · intro q
       have he : (copied c i j w (v.take v.length)).workSymbols j = none := by
         rw [copied_read c i j w u v hij ht hp v.length le_rfl]
@@ -173,7 +176,8 @@ theorem spec_copy (c : TM.Cfg κ (Option Bool) Unit xs) (i j : κ)
 /-- The preserved footprint gives a space bound independently of the elapsed time. -/
 theorem CopyPost.space_le [Fintype κ] {c : TM.Cfg κ (Option Bool) Unit xs} {i j : κ}
     {w v : List Bool} {V : κ → NonemptyInterval ℤ} {z b : ℕ}
-    {s : TM.TrackedCfg κ (Option Bool) Unit xs} (h : CopyPost c i j w v V z s b) :
+    {s : History (TM.Cfg κ (Option Bool) Unit xs) (TM.Action κ (Option Bool) Unit)}
+    (h : CopyPost c i j w v V z s b) :
     s.space ≤ ∑ l, ((V l).snd + 1 - (V l).fst).toNat :=
   s.space_le_of_visited_le V h.2.1
 

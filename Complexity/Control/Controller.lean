@@ -89,6 +89,12 @@ def stepWith (M : Controller F Observation Action Q)
     M.stepWith m c = pure c := by
   simp [stepWith, hc]
 
+theorem stepWith_of_not_halted (M : Controller F Observation Action Q)
+    (c : Config) (h : ¬M.Halted c) :
+    M.stepWith m c = (fun a ↦ apply a c) <$>
+      monadLift (M.transition (state c) (observe c)) := by
+  simp only [stepWith, ite_eq_right (show M.halt (state c) ≠ true from h)]
+
 /-- Execute a bounded number of steps in the target monad. -/
 def runFromWith (M : Controller F Observation Action Q)
     (c : Config) (n : ℕ) : m Config :=
@@ -186,6 +192,10 @@ theorem step_eq (c : Config) :
 
 @[simp] theorem step_of_halted (c : Config) (h : M.Halted c) : M.step c = c :=
   congrArg Id.run (M.stepWith_of_halted Id c h)
+
+theorem step_of_not_halted (c : Config) (h : ¬M.Halted c) :
+    M.step c = apply ((M.transition (state c) (observe c)).run) c :=
+  congrArg Id.run (M.stepWith_of_not_halted Id c h)
 
 /-- Execute a bounded number of deterministic transitions from a configuration. -/
 def runFrom (c : Config) (n : ℕ) : Config :=

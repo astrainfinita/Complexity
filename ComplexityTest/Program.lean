@@ -5,11 +5,12 @@ Authors: Yuyang Zhao
 -/
 module
 
-import Complexity.Models.TuringMachine.Program.Specification.Tracked
+import Complexity.Models.TuringMachine.Program.Specification.History
 
 set_option experimental.vcgen true
 
 open Complexity (TM)
+open Complexity.Controller (History)
 open Complexity.TM
 open Std.WP
 
@@ -26,27 +27,28 @@ def eraseAfterRead : TM.Program (Fin 1) Bool Unit := do
   Program.move 0 .neg
   Program.write 0 default
 
-def start : TrackedCfg (Fin 1) Bool Unit #[] :=
-  ((rawExecution []).init ()).track
+def start : History (Cfg (Fin 1) Bool Unit #[]) (Action (Fin 1) Bool Unit) :=
+  History.nil ((rawExecution []).init ())
 
 -- Both cells are blank at the end, but both remain part of the visited footprint.
-def finish : TrackedCfg (Fin 1) Bool Unit #[] where
-  cfg := { (rawExecution []).init () with output := #[true] }
-  visited := fun _ ↦ ⟨(0, 1), by decide⟩
-  head_mem := by intro i; change (0 : ℤ) ≤ 0 ∧ 0 ≤ 1; decide
+def finish : Cfg (Fin 1) Bool Unit #[] :=
+  { (rawExecution []).init () with output := #[true] }
 
-theorem finish_space : finish.space = 2 := by
-  simp [TrackedCfg.space, finish]
+theorem finish_space {s : History (Cfg (Fin 1) Bool Unit #[]) (Action (Fin 1) Bool Unit)}
+    (h : s.visited = fun _ ↦ ⟨(0, 1), by decide⟩) : s.space = 2 := by
+  simp [History.space, h]
 
 theorem eraseAfterRead_spec :
     Triple (eraseAfterRead.verify (Program.semantics #[])) (fun s b ↦ s = start ∧ b = 8)
-      (fun _ s b ↦ s = finish ∧ b = 0) () := by
+      (fun _ s b ↦ s.last = finish ∧ s.visited = (fun _ ↦ ⟨(0, 1), by decide⟩) ∧ b = 0) () := by
   unfold eraseAfterRead
   vcgen
   all_goals simp_all [Program.idle, start,
-    Cfg.track, Cfg.workSymbols, SignType.cast, finish, Fin.eq_zero]
-  ext i j <;> simp [Fin.eq_zero]
-  by_cases h : (0 : ℤ) = j <;> by_cases h' : (1 : ℤ) = j <;> simp [h, h']
+    Cfg.workSymbols, SignType.cast, finish, Fin.eq_zero]
+  constructor
+  · ext i j <;> simp [Fin.eq_zero]
+    by_cases h : (0 : ℤ) = j <;> by_cases h' : (1 : ℤ) = j <;> simp [h, h']
+  · rfl
 
 theorem eraseAfterRead_computesInTimeAndSpace :
     eraseAfterRead.compile.ComputesInTimeAndSpace [] [true] 8 2 := by
@@ -55,6 +57,6 @@ theorem eraseAfterRead_computesInTimeAndSpace :
   constructor
   apply Triple.entails_wp_of_post eraseAfterRead_spec
   intro a s b h
-  rcases h with ⟨rfl, _⟩
-  exact ⟨rfl, finish_space.le⟩
+  rcases h with ⟨hl, hv, _⟩
+  exact ⟨by rw [hl]; rfl, (finish_space hv).le⟩
 end ProgramTest

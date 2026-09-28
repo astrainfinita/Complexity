@@ -117,19 +117,19 @@ theorem runFrom_cfgAlong (e : (κ ⊕ Unit) ↪ τ)
 /-- The original work tapes record the same intervals after embedding. -/
 theorem visited_embed (e : (κ ⊕ Unit) ↪ τ)
     (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs) (d : Cfg τ Γ Δ xs) (n : ℕ) (j : κ) :
-    ((compilerAlong e M).runFrom (cfgAlong e c d).track n).visited (e (.inl j)) =
-      (M.runFrom c.track n).visited j := by
-  apply TM.tracked_runFrom_visited_congr
+    ((compilerAlong e M).runHistoryFrom (cfgAlong e c d) n).visited (e (.inl j)) =
+      (M.runHistoryFrom c n).visited j := by
+  apply TM.runHistoryFrom_visited_congr
   intro m _
   simp [runFrom_cfgAlong]
 
 /-- The output buffer stays between its starting and ending output lengths. -/
 theorem visited_self_le (e : (κ ⊕ Unit) ↪ τ)
     (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs) (d : Cfg τ Γ Δ xs) (n : ℕ) :
-    ((compilerAlong e M).runFrom (cfgAlong e c d).track n).visited (e (.inr ())) ≤
+    ((compilerAlong e M).runHistoryFrom (cfgAlong e c d) n).visited (e (.inr ())) ≤
       ⟨(c.output.size, (M.runFrom c n).output.size),
         Int.ofNat_le.mpr (M.output_size_le_runFrom c n)⟩ := by
-  apply (TM.tracked_runFrom_visited_le_iff _ _ _ _ _).mpr
+  apply (TM.runHistoryFrom_visited_le_iff _ _ _ _ _).mpr
   intro m hm
   simp only [runFrom_cfgAlong, cfgAlong_workPos, Function.Embedding.replace_apply,
     Sum.elim_inr, NonemptyInterval.mem_mk]
@@ -140,12 +140,16 @@ theorem visited_self_le (e : (κ ⊕ Unit) ↪ τ)
 theorem visited_extra (e : (κ ⊕ Unit) ↪ τ)
     (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs) (d : Cfg τ Γ Δ xs) (n : ℕ)
     (j : τ) (hj : j ∉ Set.range e) :
-    ((compilerAlong e M).runFrom (cfgAlong e c d).track n).visited j =
+    ((compilerAlong e M).runHistoryFrom (cfgAlong e c d) n).visited j =
       NonemptyInterval.pure (d.workPos j) := by
-  apply SetLike.ext
-  intro p
-  simp [TM.mem_tracked_runFrom_visited, runFrom_cfgAlong, hj,
-    show ∃ m : ℕ, m ≤ n from ⟨0, Nat.zero_le n⟩]
+  apply le_antisymm
+  · apply (TM.runHistoryFrom_visited_le_iff _ _ _ _ _).mpr
+    intro m _
+    simp [runFrom_cfgAlong, hj]
+  · change d.workPos j ∈ ((compilerAlong e M).runHistoryFrom (cfgAlong e c d) n).visited j
+    have h := ((compilerAlong e M).runHistoryFrom (cfgAlong e c d) n).first_head_mem j
+    simpa only [Controller.first_runHistoryFrom, cfgAlong_workPos,
+      Function.Embedding.replace_of_not_mem _ _ _ hj] using h
 
 @[simp↓]
 theorem cfg_init (e : (κ ⊕ Unit) ↪ τ) (xs : List Γ) (q : Q) :

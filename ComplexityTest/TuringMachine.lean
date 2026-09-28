@@ -36,7 +36,7 @@ def copyInput : TM Id (Fin 0) Γ Bool where
 #guard (copyInput.run (Input := List Γ) (Cfg (Fin 0) Γ Bool [.one, .zero, .one].toArray) [.one, .zero, .one] 20).output = #[.one, .zero, .one]
 #guard (copyInput.run (Input := List Γ) (Cfg (Fin 0) Γ Bool [].toArray) [] 1).state = true
 #guard (copyInput.run (Input := List Γ) (Cfg (Fin 0) Γ Bool [].toArray) [] 1).output = #[]
-#guard copyInput.runConfigMax (Config := TrackedCfg (Fin 0) Γ Bool [.one, .zero].toArray) TrackedCfg.space ([.one, .zero] : List Γ) 10 = 0
+#guard (copyInput.runHistory (Cfg (Fin 0) Γ Bool [.one, .zero].toArray) ([.one, .zero] : List Γ) 10).space = 0
 
 -- Outward input moves clamp, including on an empty input.
 #guard (moveInputPos (0 : Fin 5) .neg).val = 0
@@ -84,9 +84,9 @@ def haltAfterWrite : TM Id (Fin 2) Γ Bool where
 
 #guard (haltAfterWrite.run (Input := List Γ) (Cfg (Fin 2) Γ Bool [].toArray) [] 10).output = #[.one]
 #guard ((haltAfterWrite.run (Input := List Γ) (Cfg (Fin 2) Γ Bool [].toArray) [] 10).workTapes 0)[(0 : ℤ)] = .one
-#guard haltAfterWrite.runConfigMax (Config := TrackedCfg (Fin 2) Γ Bool #[]) TrackedCfg.space ([] : List Γ) 0 = 2
-#guard haltAfterWrite.runConfigMax (Config := TrackedCfg (Fin 2) Γ Bool #[]) TrackedCfg.space ([] : List Γ) 1 = 4
-#guard haltAfterWrite.runConfigMax (Config := TrackedCfg (Fin 2) Γ Bool #[]) TrackedCfg.space ([] : List Γ) 10 = 4
+#guard (haltAfterWrite.runHistory (Cfg (Fin 2) Γ Bool #[]) ([] : List Γ) 0).space = 2
+#guard (haltAfterWrite.runHistory (Cfg (Fin 2) Γ Bool #[]) ([] : List Γ) 1).space = 4
+#guard (haltAfterWrite.runHistory (Cfg (Fin 2) Γ Bool #[]) ([] : List Γ) 10).space = 4
 
 -- Space counts visited blank cells, even when a machine never writes or halts.
 def walkLeft : TM Id (Fin 1) Γ Bool where
@@ -98,7 +98,7 @@ def walkLeft : TM Id (Fin 1) Γ Bool where
       output := none
       state := false }
 
-#guard walkLeft.runConfigMax (Config := TrackedCfg (Fin 1) Γ Bool #[]) TrackedCfg.space ([] : List Γ) 5 = 6
+#guard (walkLeft.runHistory (Cfg (Fin 1) Γ Bool #[]) ([] : List Γ) 5).space = 6
 #guard ((walkLeft.run (Input := List Γ) (Cfg (Fin 1) Γ Bool [].toArray) [] 5).workTapes 0)[(-3 : ℤ)] = .blank
 
 -- Distinct choices with equal successors retain their multiplicity in the Multiset monad.
@@ -112,7 +112,7 @@ def fork : TM BinaryChoice (Fin 0) Γ Bool where
 #guard (fork.runWith (Cfg (Fin 0) Γ (Bool) #[]) Multiset ([] : List Γ) 1).map (·.output) = ↑[#[Γ.one], #[Γ.one]]
 #guard (fork.runWith (Cfg (Fin 0) Γ (Bool) #[]) Multiset ([] : List Γ) 5).map (·.output) = ↑[#[Γ.one], #[Γ.one]]
 
-#guard (fork.runWith (TrackedCfg (Fin 0) Γ Bool #[]) Multiset ([] : List Γ) 2).map TrackedCfg.space = ↑[0, 0]
+#guard (fork.runHistoryWith (Cfg (Fin 0) Γ Bool #[]) Multiset ([] : List Γ) 2).map (fun h ↦ h.space) = ↑[0, 0]
 
 -- Failure of an effect is distinct from a halting state.
 def abort : TM Option (Fin 0) Γ Bool where

@@ -5,7 +5,7 @@ Authors: Yuyang Zhao
 -/
 module
 
-public import Complexity.Models.TuringMachine.Program.Specification.Tracked
+public import Complexity.Models.TuringMachine.Program.Specification.History
 public import Complexity.Models.TreeMachine.Simulation.Program.Correctness
 public import Complexity.Models.TreeMachine.Simulation.BitList.Input
 public import Complexity.Models.TreeMachine.Simulation.BitList.Output

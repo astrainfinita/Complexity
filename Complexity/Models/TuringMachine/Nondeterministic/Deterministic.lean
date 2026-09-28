@@ -35,7 +35,6 @@ variable (M : TM Id κ Γ Q)
 
 @[simp] theorem usesSpace_toBinary_iff [Fintype κ] (xs : List Γ) (s : ℕ) :
     NTM.UsesSpace M.toBinary xs s ↔ M.UsesSpace xs s := by
-  simp only [NTM.UsesSpace, Controller.mem_runWith_toBinary_iff, forall_eq,
-    UsesSpace, runConfigMax_tracked]
+  simp only [NTM.UsesSpace, UsesSpace, Controller.mem_runHistoryWith_toBinary_iff, forall_eq]
 
 end Complexity.TM

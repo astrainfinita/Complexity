@@ -7,6 +7,7 @@ module
 
 public import Complexity.Models.TreeMachine.Basic
 public import Complexity.Control.Cost
+public import Complexity.Control.Controller.History.Cost
 public import Mathlib.Algebra.BigOperators.Group.Finset.Piecewise
 public import Mathlib.Algebra.Order.BigOperators.Group.Finset
 
@@ -60,11 +61,14 @@ theorem Op.timeCost_rename {l : ℕ} (f : Fin k → Fin l) (ρ : Fin l → Tree)
     (o.rename f).timeCost ρ = o.timeCost (ρ ∘ f) := by
   cases o <;> simp [timeCost, rename, eval, Function.comp_def]
 
-/-- Charge the written tree's size and measure the total expanded register size. -/
+/-- The charge for the instruction selected at this configuration. -/
+def Action.timeCost (a : Action k Q) (c : Cfg k Q) : ℕ := a.op.timeCost c.regs
+
+/-- Charge the written tree's size and measure the peak expanded register size. -/
 @[simps]
 def treeCosts : CostModel (Action k Q) (Cfg k Q) where
-  time action cfg := action.op.timeCost cfg.regs
-  space cfg := cfg.mass
+  time h := h.actionSum Action.timeCost
+  space h := h.configSup Cfg.mass
 
 private theorem sum_size_update_le (ρ : Fin k → Tree) (i : Fin k) (a : Tree) :
     (∑ j, (Function.update ρ i a j).size) ≤ (∑ j, (ρ j).size) + a.size := by
@@ -77,15 +81,15 @@ private theorem sum_size_update_le (ρ : Fin k → Tree) (i : Fin k) (a : Tree) 
 
 /-- Each instruction's charge pays for the possible increase in total register size. -/
 theorem Cfg.mass_apply_le (c : Cfg k Q) (a : Action k Q) :
-    (apply a c).mass ≤ c.mass + treeCosts.time a c := by
+    (apply a c).mass ≤ c.mass + a.timeCost c := by
   rcases a with ⟨o, q⟩
   cases o with
-  | nop => simp [mass, Op.timeCost]
-  | left i j => simpa [mass, Op.timeCost] using
+  | nop => simp [mass, Action.timeCost, Op.timeCost]
+  | left i j => simpa [mass, Action.timeCost, Op.timeCost] using
       sum_size_update_le c.regs i (c.regs j).left
-  | right i j => simpa [mass, Op.timeCost] using
+  | right i j => simpa [mass, Action.timeCost, Op.timeCost] using
       sum_size_update_le c.regs i (c.regs j).right
-  | pair i j l => simpa [mass, Op.timeCost] using
+  | pair i j l => simpa [mass, Action.timeCost, Op.timeCost] using
       sum_size_update_le c.regs i (.pair (c.regs j) (c.regs l))
 
 end Complexity.TreeMachine

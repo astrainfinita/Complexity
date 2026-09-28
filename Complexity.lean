@@ -25,6 +25,10 @@ public import Complexity.Control.Controller
 public import Complexity.Control.Controller.Binary
 public import Complexity.Control.Controller.Cost
 public import Complexity.Control.Controller.Execution
+public import Complexity.Control.Controller.History
+public import Complexity.Control.Controller.History.Cost
+public import Complexity.Control.Controller.History.Execution
+public import Complexity.Control.Controller.RunHistory
 public import Complexity.Control.Cost
 public import Complexity.Control.Program
 public import Complexity.Control.Program.Bound
@@ -40,7 +44,6 @@ public import Complexity.Control.Program.Syntax
 public import Complexity.Control.Program.Traverse
 public import Complexity.Control.Program.WP
 public import Complexity.Control.Transition
-public import Complexity.Control.Transition.Cost
 public import Complexity.Control.Transition.Simulation
 public import Complexity.Data.Embedding
 public import Complexity.Data.FinEnum
@@ -94,6 +97,7 @@ public import Complexity.Models.TuringMachine.Basic
 public import Complexity.Models.TuringMachine.Configuration
 public import Complexity.Models.TuringMachine.Cost
 public import Complexity.Models.TuringMachine.Deterministic
+public import Complexity.Models.TuringMachine.History
 public import Complexity.Models.TuringMachine.Nondeterministic
 public import Complexity.Models.TuringMachine.Nondeterministic.Deterministic
 public import Complexity.Models.TuringMachine.Program
@@ -107,7 +111,7 @@ public import Complexity.Models.TuringMachine.Program.Move
 public import Complexity.Models.TuringMachine.Program.Seek
 public import Complexity.Models.TuringMachine.Program.Specification.Basic
 public import Complexity.Models.TuringMachine.Program.Specification.Configuration
-public import Complexity.Models.TuringMachine.Program.Specification.Tracked
+public import Complexity.Models.TuringMachine.Program.Specification.History
 public import Complexity.Models.TuringMachine.Program.Tapes
 public import Complexity.Models.TuringMachine.Program.Word
 public import Complexity.Models.TuringMachine.Program.Word.Append

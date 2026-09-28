@@ -5,6 +5,7 @@ Authors: Yuyang Zhao
 -/
 module
 
+import all Init.Data.List.Scan.Basic
 import Complexity.Models.TreeMachine.Deterministic
 import Mathlib.Tactic.NormNum
 
@@ -18,7 +19,7 @@ def pairOnce : TreeMachine Id 1 Bool where
   transition _ _ := pure <| Action.assign true (.pair 0 0 0)
 
 def unitCosts {k : ℕ} {Q : Type*} : CostModel (Action k Q) (Cfg k Q) :=
-  { treeCosts with time := (fun _ _ => 1) }
+  { treeCosts with time := Controller.History.length }
 
 def freeSpaceCosts {k : ℕ} {Q : Type*} : CostModel (Action k Q) (Cfg k Q) :=
   { unitCosts with space := fun _ => 0 }

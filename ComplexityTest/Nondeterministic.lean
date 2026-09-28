@@ -5,6 +5,7 @@ Authors: Yuyang Zhao
 -/
 module
 
+import all Init.Data.List.Scan.Basic
 import Complexity.Classes.NP
 import Complexity.Models.TuringMachine.Nondeterministic.Deterministic
 meta import Complexity.Models.TuringMachine.Nondeterministic
@@ -18,6 +19,7 @@ meta import Complexity.Data.IntMemory
 
 open Complexity
 open TM (apply)
+open Controller (History)
 
 namespace NondeterministicTest
 
@@ -66,7 +68,7 @@ theorem guess_spec : guess.DecidesInTimeAndSpace (fun _ : List Bool => True)
   · intro xs _ _
     exact ⟨(guess_time _).terminates, guess_boolean _, iff_true_intro (guess_accepts _)⟩
   · intro xs _ _ n c _
-    simp [TM.TrackedCfg.space]
+    simp [History.space]
 
 example : (fun _ : List Bool => True) ∈ NTISP (fun _ => 1) (fun _ => 0) :=
   NTISP.of_decidableInTimeAndSpace guess_spec.decidableInTimeAndSpace
@@ -83,15 +85,16 @@ def splitHeads : NTM (Fin 1) (Option Bool) Bool where
     { inputMove := 0, work := fun _ => (none, if i = 0 then -1 else 1)
       output := some (some (i == 1)), state := true }
 
-#guard (splitHeads.runWith (TM.TrackedCfg (Fin 1) (Option Bool) Bool #[])
-  Multiset ([] : List (Option Bool)) 1).map TM.TrackedCfg.space = ↑[2, 2]
-#guard (splitHeads.runWith (TM.TrackedCfg (Fin 1) (Option Bool) Bool #[])
-  Multiset ([] : List (Option Bool)) 4).map TM.TrackedCfg.space = ↑[2, 2]
+#guard (splitHeads.runHistoryWith (TM.Cfg (Fin 1) (Option Bool) Bool #[])
+  Multiset ([] : List (Option Bool)) 1).map (fun h ↦ h.space) = ↑[2, 2]
+#guard (splitHeads.runHistoryWith (TM.Cfg (Fin 1) (Option Bool) Bool #[])
+  Multiset ([] : List (Option Bool)) 4).map (fun h ↦ h.space) = ↑[2, 2]
 
 -- A local invariant proves the space bound at every depth, including halted padding.
 example : splitHeads.UsesSpace [] 2 := by
   apply splitHeads.usesSpace_of_invariant
-    (P := fun c ↦ c = splitHeads.initInput ([] : List (Option Bool)) ∨ splitHeads.Halted c ∧ c.space ≤ 2)
+    (P := fun h ↦ h = History.nil (splitHeads.initInput ([] : List (Option Bool))) ∨
+      splitHeads.Halted h ∧ h.space ≤ 2)
   · exact Or.inl rfl
   · intro c hc d hd
     rcases hc with rfl | ⟨hh, hs⟩
@@ -119,7 +122,7 @@ def rejoinHeads : NTM Unit Bool (Fin 4) where
 
 #guard (rejoinHeads.runWith (TM.Cfg Unit Bool (Fin 4) #[]) Multiset ([] : List Bool) 2).map
   (fun c => (c.state, c.workPos ())) = ↑([(3, 0), (3, 0), (3, 0), (3, 0)] : List (Fin 4 × ℤ))
-#guard (rejoinHeads.runWith (TM.TrackedCfg Unit Bool (Fin 4) #[]) Multiset ([] : List Bool) 2).map
+#guard (rejoinHeads.runHistoryWith (TM.Cfg Unit Bool (Fin 4) #[]) Multiset ([] : List Bool) 2).map
   (fun c => ((c.visited ()).fst, (c.visited ()).snd)) = ↑([(-1, 0), (-1, 0), (0, 1), (0, 1)] : List (ℤ × ℤ))
 
 -- An early accepting branch does not excuse another branch missing the time bound.
@@ -151,7 +154,7 @@ def forever : TM Id (Fin 0) (Option Bool) Unit where
 
 example (xs : List (Option Bool)) : NTM.UsesSpace forever.toBinary xs 0 := by
   intro n c _
-  simp [TM.TrackedCfg.space]
+  simp [History.space]
 
 private theorem forever_diverges (xs : List (Option Bool)) : ¬NTM.Terminates forever.toBinary xs := by
   rw [TM.terminates_toBinary_iff]

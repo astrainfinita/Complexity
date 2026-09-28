@@ -22,6 +22,7 @@ set_option experimental.vcgen true
 namespace Complexity.TM.Program.Word
 
 open Std.WP
+open Controller (History)
 
 variable {κ : Type} [DecidableEq κ] {xs : Array (Option Bool)}
 
@@ -66,8 +67,9 @@ theorem setWorkPos_appended (c : TM.Cfg κ (Option Bool) Unit xs) (i j : κ)
 /-- The complete output of appending, with history and unused credits retained. -/
 def AppendPost (c : TM.Cfg κ (Option Bool) Unit xs) (i j : κ) (w v : List Bool)
     (V : κ → NonemptyInterval ℤ) (z : ℕ)
-    (s : TM.TrackedCfg κ (Option Bool) Unit xs) (b : ℕ) : Prop :=
-  s.cfg = appended c i j w v ∧ s.visited ≤ V ∧ b = z
+    (s : History (TM.Cfg κ (Option Bool) Unit xs) (TM.Action κ (Option Bool) Unit))
+    (b : ℕ) : Prop :=
+  s.last = appended c i j w v ∧ s.visited ≤ V ∧ b = z
 
 /-- The copy and rewind bounds add exactly, retaining credits for later programs.
 
@@ -82,7 +84,7 @@ theorem spec_append (c : TM.Cfg κ (Option Bool) Unit xs) (i j : κ)
     (hi : c.workPos i = w.length) (hF : CopyFootprint c i j v V)
     (hleft : (-1 : ℤ) ∈ V j) :
     Triple ((append i j).verify (TM.Program.semantics xs))
-      (fun s b ↦ s.cfg = c ∧ s.visited ≤ V ∧
+      (fun s b ↦ s.last = c ∧ s.visited ≤ V ∧
         b = (3 * v.length + 2) + (3 * (u.length + v.length) + 4) + z)
       (fun _ s b ↦ AppendPost c i j w v V z s b) () := by
   have hc := spec_copy c i j w u v V (3 * (u.length + v.length) + 4 + z)
@@ -106,7 +108,8 @@ theorem spec_append (c : TM.Cfg κ (Option Bool) Unit xs) (i j : κ)
 /-- Appending obeys the shared visited-cell bound, independently of execution time. -/
 theorem AppendPost.space_le [Fintype κ] {c : TM.Cfg κ (Option Bool) Unit xs} {i j : κ}
     {w v : List Bool} {V : κ → NonemptyInterval ℤ} {z b : ℕ}
-    {s : TM.TrackedCfg κ (Option Bool) Unit xs} (h : AppendPost c i j w v V z s b) :
+    {s : History (TM.Cfg κ (Option Bool) Unit xs) (TM.Action κ (Option Bool) Unit)}
+    (h : AppendPost c i j w v V z s b) :
     s.space ≤ ∑ l, ((V l).snd + 1 - (V l).fst).toNat :=
   s.space_le_of_visited_le V h.2.1
 

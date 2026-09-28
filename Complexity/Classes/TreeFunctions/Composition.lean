@@ -52,9 +52,6 @@ theorem id : (id : α → α) ∈ TreeFP := by
   refine ⟨a, hx, 0, rfl, ?_, ?_, ?_⟩
   · exact TreeMachine.input_get (0 : Fin 1) a
   · simp
-  · rw [Controller.runConfigMax_zero]
-    change (∑ i : Fin 1, (TreeMachine.input 0 a i).size) ≤ a.size
-    rw [TreeMachine.sum_size_input]
-    simp
+  · simp [TreeMachine.Cfg.mass]
 
 end Complexity.TreeFP

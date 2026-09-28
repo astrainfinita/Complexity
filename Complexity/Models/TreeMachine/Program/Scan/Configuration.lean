@@ -6,7 +6,7 @@ Authors: Yuyang Zhao
 module
 
 public import Complexity.Models.TreeMachine.Program.Scan
-public import Complexity.Models.TuringMachine.Program.Specification.Tracked
+public import Complexity.Models.TuringMachine.Program.Specification.History
 
 /-! # A configuration-only contract for the prefix scanner -/
 
@@ -51,11 +51,12 @@ theorem spec_scan_cfg (u : Cfg κ (Option Bool) Unit zs) (s d c : κ) (copy : Bo
     simp only [scanCfg_workPos, scanWord, V, NonemptyInterval.mem_mk]
     split_ifs <;> (try simp only [List.length_append, List.length_take, length_code]) <;>
       constructor <;> omega
-  apply cfg_of_tracked (spec_scan u s d c copy a xs ys ws V q hs hc hd hx hy hz hp hi hj hF)
+  apply cfg_of_history (spec_scan u s d c copy a xs ys ws V q hs hc hd hx hy hz hp hi hj hF)
   · rintro v b ⟨hv, hb⟩
     subst v
     refine ⟨rfl, ?_, hb⟩
     intro i
+    rw [Controller.History.visited_nil]
     change u.workPos i ∈ V i
     simpa only [scanCfg_zero u s d c copy a xs.length ys hy hp hi hj] using hF 0 (by omega) i
   · intro r v b h

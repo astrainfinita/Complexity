@@ -6,6 +6,7 @@ Authors: Yuyang Zhao
 module
 
 import Complexity.Models.TuringMachine.Simulation
+import Complexity.Control.Controller.History.Execution
 meta import Complexity.Models.TuringMachine.Deterministic
 meta import Complexity.Models.TuringMachine.Cost
 meta import Complexity.Models.TuringMachine.Basic
@@ -14,7 +15,6 @@ meta import Complexity.Control.Controller.Cost
 meta import Complexity.Control.Controller
 meta import Complexity.Control.BinaryChoice
 meta import Complexity.Control.Cost
-meta import Complexity.Control.Transition.Cost
 
 open Complexity
 
@@ -33,68 +33,65 @@ private def excursion : TM Id Unit Bool (Fin 5) where
 private def start : TM.Cfg Unit Bool (Fin 5) #[] :=
   excursion.initInput ([] : List Bool)
 
-private def tracked (n : ℕ) : TM.TrackedCfg Unit Bool (Fin 5) #[] :=
-  excursion.run _ ([] : List Bool) n
+private def history (n : ℕ) := excursion.runHistoryFrom start n
 
 -- The starting work cell counts even before any action has run.
-#guard (tracked 0).space = 1
-#guard (tracked 2).space = 3
+#guard (history 0).space = 1
+#guard (history 2).space = 3
 
 -- Returning the head over blank data does not forget historical visits.
-#guard (tracked 4).cfg.workPos () = 0
-#guard (tracked 4).cfg.workSymbols () = false
-#guard (tracked 4).visited () = ⟨⟨0, 2⟩, by decide⟩
-#guard (tracked 4).space = 3
+#guard (history 4).last.workPos () = 0
+#guard (history 4).last.workSymbols () = false
+#guard (history 4).visited () = ⟨⟨0, 2⟩, by decide⟩
+#guard (history 4).space = 3
 
 -- Halting padding changes neither the stored data nor its historical footprint.
-#guard (tracked 20).cfg.workPos () = 0
-#guard (tracked 20).space = 3
-#guard excursion.runConfigMax (Config := TM.TrackedCfg Unit Bool (Fin 5) #[])
-  TM.TrackedCfg.space ([] : List Bool) 20 = 3
-#guard excursion.runActionSum (Config := TM.TrackedCfg Unit Bool (Fin 5) #[])
-  TM.visitedCosts.time ([] : List Bool) 20 = 4
+#guard (history 20).last.workPos () = 0
+#guard (history 20).space = 3
+#guard (excursion.runHistory (TM.Cfg Unit Bool (Fin 5) #[]) ([] : List Bool) 20).space = 3
+#guard (history 20).length = 4
 
--- The correspondence covers every prefix, not only this machine's halting endpoint.
-example (n : ℕ) : (tracked n).cfg = excursion.runFrom start n :=
-  excursion.tracked_runFrom_cfg start.track n
+-- The endpoint projection covers every prefix, including halted padding.
+example (n : ℕ) : (history n).last = excursion.runFrom start n :=
+  excursion.last_runHistoryFrom start n
 
-example (n : ℕ) : excursion.runConfigMaxFrom TM.TrackedCfg.space
-    start.track n = (tracked n).space :=
-  excursion.runConfigMaxFrom_tracked start.track n
-
--- Pointwise head bounds give a space bound through the shared interval.
+-- Pointwise head bounds give the same interval bound on the actual history.
 example {κ Γ Q : Type*} [Inhabited Γ] [Fintype κ] {xs : Array Γ}
     (M : TM Id κ Γ Q) (c : TM.Cfg κ Γ Q xs) (n : ℕ) (V : κ → NonemptyInterval ℤ)
     (hb : ∀ i m, m ≤ n → (M.runFrom c m).workPos i ∈ V i) :
-    M.runConfigMaxFrom TM.TrackedCfg.space c.track n ≤ ∑ i, ((V i).snd + 1 - (V i).fst).toNat :=
-  M.runConfigMaxFrom_le_of_visited_le c.track n V
-    (fun i ↦ (M.tracked_runFrom_visited_le_iff c n i (V i)).mpr (hb i))
+    (M.runHistoryFrom c n).space ≤ ∑ i, ((V i).snd + 1 - (V i).fst).toNat :=
+  (M.runHistoryFrom c n).space_le_of_visited_le V
+    (fun i ↦ (M.runHistoryFrom_visited_le_iff c n i (V i)).mpr (hb i))
 
 -- Recording can also begin in the middle of a computation, away from head zero.
-private def freshResume : TM.TrackedCfg Unit Bool (Fin 5) #[] :=
+private def freshResume : Controller.History (TM.Cfg Unit Bool (Fin 5) #[])
+    (TM.Action Unit Bool (Fin 5)) :=
   let c : TM.Cfg Unit Bool (Fin 5) #[] :=
     { start with state := 2, workPos := fun _ => 7 }
-  excursion.runFrom c.track 2
+  excursion.runHistoryFrom c 2
 
-#guard freshResume.cfg.workPos () = 5
+#guard freshResume.last.workPos () = 5
 #guard freshResume.visited () = ⟨⟨5, 7⟩, by decide⟩
 #guard freshResume.space = 3
 
 -- Resume at the left boundary while retaining cells visited earlier on the right.
-private def resumeStart : TM.TrackedCfg Unit Bool (Fin 5) #[] where
-  cfg := { start with state := 2, workPos := fun _ => -2 }
-  visited := fun _ => ⟨⟨-2, 3⟩, by decide⟩
-  head_mem := by intro i; change (-2 : ℤ) ≤ -2 ∧ -2 ≤ 3; decide
+private def resumeStart : Controller.History (TM.Cfg Unit Bool (Fin 5) #[])
+    (TM.Action Unit Bool (Fin 5)) :=
+  (fun h ↦ h.snoc
+    { inputMove := 0
+      work := fun _ ↦ (none, -1)
+      output := none
+      state := 2 })^[5]
+    (Controller.History.nil { start with state := 2, workPos := fun _ ↦ 3 })
 
-private def resumed : TM.TrackedCfg Unit Bool (Fin 5) #[] :=
-  excursion.runFrom resumeStart 2
+private def resumed := excursion.runFrom resumeStart 2
 
-#guard resumed.cfg.workPos () = -4
+#guard resumed.last.workPos () = -4
 #guard (resumed.visited ()).fst = -4
 #guard (resumed.visited ()).snd = 3
 #guard resumed.space = 8
 
 -- Peak space also preserves the prior history through halted padding.
-#guard excursion.runConfigMaxFrom TM.TrackedCfg.space resumeStart 20 = 8
+#guard (excursion.runFrom resumeStart 20).space = 8
 
 end Complexity.TuringMachineCostTest

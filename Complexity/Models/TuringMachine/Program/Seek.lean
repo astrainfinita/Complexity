@@ -43,29 +43,29 @@ variable (e : Program.Semantics (Γ × (κ → Γ)) (Action κ Γ Unit)
 
 include he
 
-/-- A stopping read takes one step and preserves a state on which idle is the identity. -/
+/-- A stopping read takes one step and applies the read action. -/
 theorem exec_seekBody_stop (j : κ) (d : SignType) (stop : Γ → Prop)
-    [DecidablePred stop] (s : S) (hi : e.act idle s = s)
+    [DecidablePred stop] (s : S)
     (hs : stop ((e.observe s).2 j)) :
-    (seekBody j d stop).Exec e s 1 true s := by
-  have hr : (read j).Exec e s 1 ((e.observe s).2 j) s := by
-    simpa only [read, he, eval, hi] using
+    (seekBody j d stop).Exec e s 1 true (e.act idle s) := by
+  have hr : (read j).Exec e s 1 ((e.observe s).2 j) (e.act idle s) := by
+    simpa only [read, he, eval] using
       Program.Exec.perform e (Op.read (Γ := Γ) inferInstance j) s
   unfold seekBody
   apply Program.Exec.bind (m := 1) (n := 0) hr
-  simpa only [ite_eq_left hs, Pure.pure] using Program.Exec.pure e true s
+  simpa only [ite_eq_left hs, Pure.pure] using Program.Exec.pure e true (e.act idle s)
 
 /-- A continuing iteration takes one read and one move, independently of ghost fields. -/
 theorem exec_seekBody_move (j : κ) (d : SignType) (stop : Γ → Prop)
-    [DecidablePred stop] (s : S) (hi : e.act idle s = s)
+    [DecidablePred stop] (s : S)
     (hs : ¬stop ((e.observe s).2 j)) :
-    (seekBody j d stop).Exec e s 2 false (e.act (moveAction j d) s) := by
-  have hr : (read j).Exec e s 1 ((e.observe s).2 j) s := by
-    simpa only [read, he, eval, hi] using
+    (seekBody j d stop).Exec e s 2 false (e.act (moveAction j d) (e.act idle s)) := by
+  have hr : (read j).Exec e s 1 ((e.observe s).2 j) (e.act idle s) := by
+    simpa only [read, he, eval] using
       Program.Exec.perform e (Op.read (Γ := Γ) inferInstance j) s
-  have hm : (move j d).Exec e s 1 () (e.act (moveAction j d) s) := by
+  have hm : (move j d).Exec e (e.act idle s) 1 () (e.act (moveAction j d) (e.act idle s)) := by
     simpa only [move_eq_act, act, he, eval] using
-      Program.Exec.perform e (Op.act (moveAction j d)) s
+      Program.Exec.perform e (Op.act (moveAction j d)) (e.act idle s)
   unfold seekBody
   apply Program.Exec.bind (m := 1) (n := 1) hr
   simp only [ite_eq_right hs]
@@ -76,7 +76,7 @@ theorem exec_seekBody_move (j : κ) (d : SignType) (stop : Γ → Prop)
 The interpretation may include any ghost state, provided idle preserves the invariant. -/
 theorem spec_seek (j : κ) (d : SignType) (stop : Γ → Prop) [DecidablePred stop]
     (I : ℕ → S → Prop) (n q : ℕ)
-    (hi : ∀ r ≤ n, ∀ s, I r s → e.act idle s = s)
+    (hi : ∀ r ≤ n, ∀ s, I r s → I r (e.act idle s))
     (hm : ∀ r < n, ∀ s, I r s →
       ¬stop ((e.observe s).2 j) ∧ I (r + 1) (e.act (moveAction j d) s))
     (hs : ∀ s, I n s → stop ((e.observe s).2 j)) :
@@ -88,15 +88,16 @@ theorem spec_seek (j : κ) (d : SignType) (stop : Γ → Prop) [DecidablePred st
   · intro r hr v
     constructor
     rintro s b ⟨hI, rfl⟩
-    obtain ⟨hstop, hmove⟩ := hm r hr s hI
-    exact ⟨2, false, e.act (moveAction j d) s, by omega,
-      exec_seekBody_move e he j d stop s (hi r hr.le s hI) hstop,
+    have hstop := (hm r hr s hI).1
+    have hmove := (hm r hr (e.act idle s) (hi r hr.le s hI)).2
+    exact ⟨2, false, e.act (moveAction j d) (e.act idle s), by omega,
+      exec_seekBody_move e he j d stop s hstop,
       rfl, hmove, by omega⟩
   · intro v
     constructor
     rintro s b ⟨hI, rfl⟩
-    exact ⟨1, true, s, by omega,
-      exec_seekBody_stop e he j d stop s (hi n le_rfl s hI) (hs s hI),
-      rfl, hI, by omega⟩
+    exact ⟨1, true, e.act idle s, by omega,
+      exec_seekBody_stop e he j d stop s (hs s hI),
+      rfl, hi n le_rfl s hI, by omega⟩
 
 end Complexity.TM.Program

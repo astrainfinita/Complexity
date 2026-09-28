@@ -5,7 +5,7 @@ Authors: Yuyang Zhao
 -/
 module
 
-import Complexity.Models.TuringMachine.Program.Specification.Tracked
+import Complexity.Models.TuringMachine.Program.Specification.History
 
 set_option experimental.vcgen true
 
@@ -25,7 +25,7 @@ theorem once_cfg :
   | inv1 => fun _ n ↦ n = 1
   all_goals simp_all
 
-theorem once_tracked :
+theorem once_history :
     Triple (once.verify (Program.semantics #[])) (fun _ b ↦ b = 1)
       (fun _ _ b ↦ b = 0) () := by
   unfold once

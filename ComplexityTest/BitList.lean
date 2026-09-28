@@ -84,9 +84,7 @@ theorem identity_spec (xs : List Bool) :
   refine ⟨0, rfl, ?_, le_rfl, ?_⟩
   · change TreeMachine.input (0 : Fin 1) (Tree.encodeBitList xs) 0 = _
     simp
-  · rw [Controller.runConfigMax_zero]
-    change (∑ i : Fin 1, (TreeMachine.input 0 (Tree.encodeBitList xs) i).size) ≤ _
-    simp [TreeMachine.input]
+  · simp [TreeMachine.Cfg.mass]
 
 -- One fixed finite TM computes identity on every raw list, including [] and [false].
 example (xs : List Bool) :

@@ -5,7 +5,7 @@ Authors: Yuyang Zhao
 -/
 module
 
-public import Complexity.Models.TuringMachine.Program.Specification.Tracked
+public import Complexity.Models.TuringMachine.Program.Specification.History
 public import Complexity.Models.TuringMachine.Program.Word.Append
 public import Complexity.Control.Program.Bound
 
@@ -46,10 +46,11 @@ theorem spec_copy_cfg (c : Cfg κ (Option Bool) Unit xs) (i j : κ)
     Triple ((copy i j).verify (cfgSemantics xs))
       (fun s b ↦ s = c ∧ b = 3 * v.length + 2 + z)
       (fun _ s b ↦ s = copied c i j w v ∧ b = z) () := by
-  apply cfg_of_tracked (spec_copy c i j w u v (bounds c v.length) z hij ht hp hw hi
+  apply cfg_of_history (spec_copy c i j w u v (bounds c v.length) z hij ht hp hw hi
     (bounds_copy c i j v v.length le_rfl))
   · rintro s b ⟨hs, hb⟩
     subst s
+    rw [Controller.History.visited_nil]
     exact ⟨rfl, bounds_head c v.length, hb⟩
   · intro a s b h
     exact ⟨h.1, h.2.2⟩
@@ -62,10 +63,11 @@ theorem spec_rewind_cfg (c : Cfg κ (Option Bool) Unit xs) (j : κ) (bs : List B
     Triple ((rewind j).verify (cfgSemantics xs))
       (fun s b ↦ s = c ∧ b = 3 * h + 4 + z)
       (fun _ s b ↦ s = { c with workPos := Function.update c.workPos j 0 } ∧ b = z) () := by
-  apply cfg_of_tracked (spec_rewind_credit c j bs h z (bounds c h) hw hp hlen
+  apply cfg_of_history (spec_rewind_credit c j bs h z (bounds c h) hw hp hlen
     (by simp [bounds, NonemptyInterval.mem_mk]; omega))
   · rintro s b ⟨hs, hb⟩
     subst s
+    rw [Controller.History.visited_nil]
     exact ⟨rfl, bounds_head c h, hb⟩
   · intro a s b h
     exact ⟨h.1, h.2.2⟩
@@ -92,11 +94,12 @@ theorem spec_append_cfg (c : Cfg κ (Option Bool) Unit xs) (i j : κ)
       (fun s b ↦ s = c ∧
         b = (3 * v.length + 2) + (3 * (u.length + v.length) + 4) + z)
       (fun _ s b ↦ s = appended c i j w v ∧ b = z) () := by
-  apply cfg_of_tracked (spec_append c i j w u v (bounds c (u.length + v.length)) z
+  apply cfg_of_history (spec_append c i j w u v (bounds c (u.length + v.length)) z
     hij ht hp hw hi (bounds_copy c i j v _ (by omega))
     (by simp [bounds, NonemptyInterval.mem_mk]; omega))
   · rintro s b ⟨hs, hb⟩
     subst s
+    rw [Controller.History.visited_nil]
     exact ⟨rfl, bounds_head c (u.length + v.length), hb⟩
   · intro a s b h
     exact ⟨h.1, h.2.2⟩

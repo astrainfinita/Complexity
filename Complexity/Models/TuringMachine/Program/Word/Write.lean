@@ -6,7 +6,7 @@ Authors: Yuyang Zhao
 module
 
 public import Complexity.Models.TuringMachine.Program.Word.Basic
-public import Complexity.Models.TuringMachine.Program.Specification.Tracked
+public import Complexity.Models.TuringMachine.Program.Specification.History
 public import Complexity.Control.Program.Bound
 
 /-! # Writing symbols and fixed binary words -/
@@ -18,6 +18,7 @@ set_option experimental.vcgen true
 namespace Complexity.TM.Program.Word
 
 open Std.WP
+open Controller (History)
 
 variable {κ : Type} [DecidableEq κ]
 
@@ -39,8 +40,9 @@ theorem workPos_putAction {xs : Array (Option Bool)}
 
 /-- A write stays within the caller's footprint when its advancing head remains inside it. -/
 theorem putAction_visited_le {xs : Array (Option Bool)}
-    (s : TrackedCfg κ (Option Bool) Unit xs) (i : κ) (a : Option Bool) (V : κ → NonemptyInterval ℤ)
-    (hs : s.visited ≤ V) (hi : s.cfg.workPos i + 1 ∈ V i) :
+    (s : History (Cfg κ (Option Bool) Unit xs) (Action κ (Option Bool) Unit))
+    (i : κ) (a : Option Bool) (V : κ → NonemptyInterval ℤ)
+    (hs : s.visited ≤ V) (hi : s.last.workPos i + 1 ∈ V i) :
     (apply (putAction i a) s).visited ≤ V := by
   apply (s.apply_visited_le_iff _ V).mpr
   refine ⟨hs, ?_⟩

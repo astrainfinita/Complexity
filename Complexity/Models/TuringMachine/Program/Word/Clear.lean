@@ -97,7 +97,7 @@ private theorem clear_loop_spec (c : Cfg κ (Option Bool) Unit xs) (i : κ)
     (cfgSemantics xs) (fun r s ↦ s = clearAt c i w r)
     (fun s ↦ s = clearAt c i w w.length) w.length 2 1 z
   · intro r hr s hs
-    exact idle_apply s
+    simpa only [cfgSemantics_act, idle_apply] using hs
   · intro r hr q
     have he := clearAt_read c i w r hr
     have hn := clearAt_next c i w r hr
@@ -123,7 +123,7 @@ private theorem seek_end_spec (c : Cfg κ (Option Bool) Unit xs) (i : κ)
       (fun _ s b ↦ I w.length s ∧ b = z) () := by
     apply spec_seek (cfgSemantics xs) rfl i .pos (· = none) I w.length z
     · intro r hr s hs
-      exact idle_apply s
+      simpa only [cfgSemantics_act, idle_apply] using hs
     · intro r hr s hs
       subst s
       constructor

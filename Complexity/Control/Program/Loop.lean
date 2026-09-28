@@ -22,15 +22,15 @@ open Std.WP
 
 variable {O A Op S α β : Type} {Ret : Op → Type}
 
-/-- An invariant-local no-op removes the dispatch action from a body's precondition. -/
-private theorem spec_nop_pre (a : A) {p : Program O A Op Ret α}
+/-- A dispatcher preserving the invariant satisfies the body's precondition. -/
+private theorem spec_dispatch_pre (a : A) {p : Program O A Op Ret α}
     {e : Semantics O A Op Ret S} {I : S → ℕ → Prop} {Q : α → S → ℕ → Prop} {x : Unit}
-    (ha : ∀ s b, I s b → e.act a s = s)
+    (ha : ∀ s b, I s b → I (e.act a s) b)
     (h : Triple (p.verify e) (fun s b ↦ I s (b + 1)) Q x) :
     Triple (p.verify e) (fun s b ↦ ∃ t, I t (b + 1) ∧ s = e.act a t) Q x := by
   constructor
   rintro s b ⟨t, ht, rfl⟩
-  simpa only [ha t (b + 1) ht] using h.le_wp t b ht
+  exact h.le_wp (e.act a t) b (ha t (b + 1) ht)
 
 /-- A total loop rule. Every entry consumes a budget unit before executing its body. -/
 @[spec]
@@ -60,12 +60,12 @@ theorem spec_loop {n r : ℕ} (a : A) (f : Fin n → Program O A Op Ret (Fin n �
       convert hq using 1
       omega
 
-/-- A dispatcher need only preserve states satisfying the current loop invariant. -/
-theorem spec_loop_nop_of_invariant {n r : ℕ}
+/-- A dispatcher preserving the loop invariant leaves the body precondition unchanged. -/
+theorem spec_loop_of_invariant {n r : ℕ}
     (a : A) (f : Fin n → Program O A Op Ret (Fin n ⊕ Fin r))
     (i : Fin n) (e : Semantics O A Op Ret S) (I : Invariant (Fin n) (S → ℕ → Prop))
     (Q : Fin r → S → ℕ → Prop) (x : Unit)
-    (ha : ∀ i s b, I i s b → e.act a s = s)
+    (ha : ∀ i s b, I i s b → I i (e.act a s) b)
     (hpos : ∀ i s b, I i s b → 0 < b)
     (hstep : ∀ i, Triple ((f i).verify e)
       (fun s b => I i s (b + 1))
@@ -73,7 +73,7 @@ theorem spec_loop_nop_of_invariant {n r : ℕ}
     Triple ((loop a f i).verify e) (I i) Q x := by
   apply spec_loop a f i e I Q x hpos
   intro j
-  exact spec_nop_pre a (ha j) (hstep j)
+  exact spec_dispatch_pre a (ha j) (hstep j)
 
 /-- For a semantic no-op, a loop body starts in the same state with one fewer credit. -/
 theorem spec_loop_nop {n r : ℕ} (a : A) (f : Fin n → Program O A Op Ret (Fin n ⊕ Fin r))
@@ -85,7 +85,7 @@ theorem spec_loop_nop {n r : ℕ} (a : A) (f : Fin n → Program O A Op Ret (Fin
       (fun s b => I i s (b + 1))
       (fun j s b => match j with | .inl k => I k s b | .inr k => Q k s b) x) :
     Triple ((loop a f i).verify e) (I i) Q x :=
-  spec_loop_nop_of_invariant a f i e I Q x (fun _ s _ _ ↦ ha s) hpos hstep
+  spec_loop_of_invariant a f i e I Q x (fun _ s _ hs ↦ by simpa only [ha s] using hs) hpos hstep
 
 /-- A total repeat-until rule, including the action executed before each body entry. -/
 @[spec]
@@ -109,17 +109,17 @@ theorem spec_repeatUntilWith (a : A) (p : Program O A Op Ret Bool) (e : Semantic
   · intro _
     exact spec_pure () e Q x
 
-/-- A repeat dispatcher need only preserve states satisfying its invariant. -/
-theorem spec_repeatUntilWith_nop_of_invariant
+/-- A repeat dispatcher may update the state while preserving its invariant. -/
+theorem spec_repeatUntilWith_of_invariant
     (a : A) (p : Program O A Op Ret Bool) (e : Semantics O A Op Ret S)
     (I : Invariant S (ℕ → Prop)) (Q : Unit → S → ℕ → Prop) (x : Unit)
-    (ha : ∀ s b, I s b → e.act a s = s)
+    (ha : ∀ s b, I s b → I (e.act a s) b)
     (hpos : ∀ s b, I s b → 0 < b)
     (hstep : Triple (p.verify e) (fun s b => I s (b + 1))
       (fun r s b => if r then Q () s b else I s b) x) :
     Triple ((repeatUntilWith a p).verify e) (fun s b => I s b) Q x := by
   apply spec_repeatUntilWith a p e I Q x hpos
-  exact spec_nop_pre a ha hstep
+  exact spec_dispatch_pre a ha hstep
 
 /-- A no-op dispatcher changes only the remaining time budget. -/
 theorem spec_repeatUntilWith_nop (a : A) (p : Program O A Op Ret Bool) (e : Semantics O A Op Ret S)
@@ -129,7 +129,8 @@ theorem spec_repeatUntilWith_nop (a : A) (p : Program O A Op Ret Bool) (e : Sema
     (hstep : Triple (p.verify e) (fun s b => I s (b + 1))
       (fun r s b => if r then Q () s b else I s b) x) :
     Triple ((repeatUntilWith a p).verify e) (fun s b => I s b) Q x :=
-  spec_repeatUntilWith_nop_of_invariant a p e I Q x (fun s _ _ ↦ ha s) hpos hstep
+  spec_repeatUntilWith_of_invariant a p e I Q x
+    (fun s _ hs ↦ by simpa only [ha s] using hs) hpos hstep
 
 variable [FinEnum α] [FinEnum β]
 
@@ -219,18 +220,18 @@ theorem spec_loopOn (a : A) (b : α → Program O A Op Ret (α ⊕ β)) (i : α)
   intro r s n hr
   cases r <;> simpa only [Sum.map_inl, Sum.map_inr, Equiv.symm_apply_apply] using hr
 
-/-- The finite-value dispatcher may be a no-op only on invariant states. -/
-theorem spec_loopOn_nop_of_invariant
+/-- A finite-value dispatcher may update the state while preserving the carried invariant. -/
+theorem spec_loopOn_of_invariant
     (a : A) (b : α → Program O A Op Ret (α ⊕ β)) (i : α)
     (e : Semantics O A Op Ret S) (I : Invariant α (S → ℕ → Prop)) (Q : β → S → ℕ → Prop)
-    (ha : ∀ i s n, I i s n → e.act a s = s)
+    (ha : ∀ i s n, I i s n → I i (e.act a s) n)
     (hp : ∀ i s n, I i s n → 0 < n)
     (hb : ∀ i, Triple ((b i).verify e) (fun s n ↦ I i s (n + 1))
       (fun j s n ↦ match j with | .inl j => I j s n | .inr j => Q j s n) ()) :
     Triple ((loopOn a b i).verify e) (I i) Q () := by
   apply spec_loopOn a b i e I Q hp
   intro j
-  exact spec_nop_pre a (ha j) (hb j)
+  exact spec_dispatch_pre a (ha j) (hb j)
 
 /-- A globally inert finite-value dispatcher specializes the invariant-local rule. -/
 theorem spec_loopOn_nop (a : A) (b : α → Program O A Op Ret (α ⊕ β)) (i : α)
@@ -240,6 +241,6 @@ theorem spec_loopOn_nop (a : A) (b : α → Program O A Op Ret (α ⊕ β)) (i :
     (hb : ∀ i, Triple ((b i).verify e) (fun s n ↦ I i s (n + 1))
       (fun j s n ↦ match j with | .inl j => I j s n | .inr j => Q j s n) ()) :
     Triple ((loopOn a b i).verify e) (I i) Q () :=
-  spec_loopOn_nop_of_invariant a b i e I Q (fun _ s _ _ ↦ ha s) hp hb
+  spec_loopOn_of_invariant a b i e I Q (fun _ s _ hs ↦ by simpa only [ha s] using hs) hp hb
 
 end Complexity.Program

@@ -39,7 +39,7 @@ def Computes {κ : Type*} [Fintype κ] {Q : Type*} (M : TM Id κ (Option Bool) Q
   Complexity.Computes
     (fun xs ys time space =>
       M.computes (Output := List Bool)
-        (Config := TrackedCfg κ (Option Bool) Q ((xs.map some).toArray))
+        (Config := Cfg κ (Option Bool) Q ((xs.map some).toArray))
         visitedCosts xs ys time space)
     List.length f t s
 

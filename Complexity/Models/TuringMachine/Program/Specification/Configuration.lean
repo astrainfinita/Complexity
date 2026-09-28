@@ -24,6 +24,7 @@ open Std.WP
 variable {κ : Type} {Γ α β : Type} [Inhabited Γ] {xs : Array Γ}
 
 /-- Interpret a program on tape configurations, without a visitation ghost. -/
+@[simps eval observe act]
 def cfgSemantics (xs : Array Γ) :
     Program.Semantics (Γ × (κ → Γ)) (Action κ Γ Unit) (Op κ Γ) Op.Result
       (Cfg κ Γ Unit xs) where
@@ -45,7 +46,8 @@ theorem cfg_spec_readInput [FinEnum Γ] (xs : Array Γ) (s : Cfg κ Γ Unit xs)
     (b : ℕ) (h : 0 < b) (x : Unit) :
     Triple (readInput.verify (cfgSemantics xs)) (fun t c ↦ t = s ∧ c = b)
       (fun r t c ↦ r = s.inputSymbol ∧ t = s ∧ c = b - 1) x := by
-  simpa only [readInput, Op.Result, cfgSemantics, eval, idle_apply, Cfg.observe_def] using
+  simpa only [readInput, Op.Result, cfgSemantics_eval, cfgSemantics_observe,
+    cfgSemantics_act, eval, idle_apply, Cfg.observe_def] using
     Program.spec_perform (Op.readInput (κ := κ) (Γ := Γ) inferInstance)
       (cfgSemantics xs) s b h x
 
@@ -55,7 +57,8 @@ theorem cfg_spec_read [FinEnum Γ] (i : κ) (xs : Array Γ) (s : Cfg κ Γ Unit 
     (b : ℕ) (h : 0 < b) (x : Unit) :
     Triple ((read i).verify (cfgSemantics xs)) (fun t c ↦ t = s ∧ c = b)
       (fun r t c ↦ r = s.workSymbols i ∧ t = s ∧ c = b - 1) x := by
-  simpa only [read, Op.Result, cfgSemantics, eval, idle_apply, Cfg.observe_def] using
+  simpa only [read, Op.Result, cfgSemantics_eval, cfgSemantics_observe,
+    cfgSemantics_act, eval, idle_apply, Cfg.observe_def] using
     Program.spec_perform (Op.read (Γ := Γ) inferInstance i) (cfgSemantics xs) s b h x
 
 /-- A batch observation records its actual values without enumerating possible vectors. -/
@@ -65,7 +68,8 @@ theorem cfg_spec_observeBits {n : ℕ} (f : (Γ × (κ → Γ)) → Fin n → Bo
     Triple ((observeBits f).verify (cfgSemantics xs)) (fun t c ↦ t = s ∧ c = b)
       (fun v t c ↦ v = Vector.ofFn (f (s.inputSymbol, s.workSymbols)) ∧
         t = s ∧ c = b - 1) x := by
-  simpa only [observeBits, Op.Result, cfgSemantics, eval, idle_apply, Cfg.observe_def] using
+  simpa only [observeBits, Op.Result, cfgSemantics_eval, cfgSemantics_observe,
+    cfgSemantics_act, eval, idle_apply, Cfg.observe_def] using
     Program.spec_perform (Op.observeBits n f) (cfgSemantics xs) s b h x
 
 /-- A total loop rule on configurations; the dispatcher consumes one time credit. -/

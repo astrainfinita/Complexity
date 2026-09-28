@@ -5,29 +5,25 @@ Authors: Yuyang Zhao
 -/
 module
 
-public import Mathlib.Data.Nat.Basic
+public import Complexity.Control.Controller.History
 
 /-!
-# Local time and space costs
+# Resource measurements of execution histories
 
-An action cost depends on the action selected and the data state before it is
-executed. It is external to the controller and does not change the action's semantics.
-`CostModel` pairs this time charge with the space occupied by a data state.
-Running time adds action charges; running space takes the maximum state size,
-including the initial and final states. Input encodings, program types, and bounds
-on complete runs belong to other layers.
+Time and space are interpreted from the same history, so the measurements retain
+all configurations and actions of one execution branch.
 -/
 
 @[expose] public section
 
 namespace Complexity
 
-/-- Local costs, with actions and stored data supplied as type parameters. -/
+/-- Time and space measurements of a complete execution history. -/
 @[ext]
 structure CostModel (Action Config : Type*) where
-  /-- Charge for an action, measured on the data before execution. -/
-  time : Action → Config → ℕ
-  /-- Space occupied by the current data, maximized over a complete run. -/
-  space : Config → ℕ
+  /-- Time used by the recorded execution. -/
+  time : Controller.History Config Action → ℕ
+  /-- Space used by the recorded execution. -/
+  space : Controller.History Config Action → ℕ
 
 end Complexity
