@@ -56,17 +56,18 @@ theorem moveAction_visited_le [DecidableEq κ] {xs : Array Γ} (j : κ) (d : Sig
   · subst i; exact hj
   · simpa [hi] using s.head_mem_of_visited_le hF i
 
-/-- A total loop rule on histories; the dispatcher consumes one time credit. -/
+/-- A total loop rule for assertions about tape data and visited intervals. -/
 @[spec]
 theorem spec_repeatUntil {xs : Array Γ} (p : TM.Program κ Γ Bool)
-    (I : Program.Invariant (History (Cfg κ Γ Unit xs) (Action κ Γ Unit)) (ℕ → Prop))
+    (I : Program.Invariant (Cfg κ Γ Unit xs) ((κ → NonemptyInterval ℤ) → ℕ → Prop))
     (Q : Unit → History (Cfg κ Γ Unit xs) (Action κ Γ Unit) → ℕ → Prop)
-    (ha : ∀ s b, I s b → I (s.snoc idle) b)
-    (hp : ∀ s b, I s b → 0 < b)
-    (hb : Triple (p.verify (semantics xs)) (fun s b ↦ I s (b + 1))
-      (fun r s b ↦ if r then Q () s b else I s b) ()) :
-    Triple ((repeatUntil p).verify (semantics xs)) (fun s b ↦ I s b) Q () :=
-  Program.spec_repeatUntilWith_of_invariant idle p (semantics xs) I Q () ha hp hb
+    (hp : ∀ (s : History (Cfg κ Γ Unit xs) (Action κ Γ Unit)) b,
+      I s.last s.visited b → 0 < b)
+    (hb : Triple (p.verify (semantics xs)) (fun s b ↦ I s.last s.visited (b + 1))
+      (fun r s b ↦ if r then Q () s b else I s.last s.visited b) ()) :
+    Triple ((repeatUntil p).verify (semantics xs)) (fun s b ↦ I s.last s.visited b) Q () :=
+  Program.spec_repeatUntilWith_of_invariant idle p (semantics xs)
+    (fun s ↦ I s.last s.visited) Q () (fun s _ hs ↦ by simpa using hs) hp hb
 
 /-- A local action consumes one transition and updates the visited endpoints. -/
 @[spec]
@@ -142,9 +143,9 @@ theorem cfg_computesInTimeAndSpace [Fintype κ] {p : TM.Program κ Γ α} {ys : 
     (e' := semantics xs)
     (fun _ ↦ rfl) (fun _ _ ↦ by simp) he (History.nil ((rawExecution xs.toList).init ())) rfl
   apply computesInTimeAndSpace_of_exec p hr hn (by rw [hv]; exact ho)
-  rw [← history_space_compile hr.toControl]
-  exact ((compile p).runHistoryFrom_space_le_time _ n).trans
-    (Nat.mul_le_mul_left (Fintype.card κ) (by omega))
+  rw [← history_space_compile hr.toControl, History.mapState_nil, Controller.runFrom_nil]
+  exact (History.space_le_length _).trans (Nat.mul_le_mul_left _
+    (Nat.succ_le_succ (((compile p).runHistoryFrom_spec _ n).length_le.trans hn)))
 
 end Configuration
 

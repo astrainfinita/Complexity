@@ -322,7 +322,6 @@ theorem comp_computesInTimeAndSpace [NeZero k] [NeZero l]
     rw [cost_add, cost_add, Controller.runFrom_add, ← Controller.run, h₁, h₂, h₀,
       Comp.cost_left M N _ n hn.2, Comp.cost_clear M N c hn.1, Comp.cost_right M N]
     exact Nat.add_le_add (Nat.add_le_add_right hc _) hd
-  apply Controller.computes_iff.mpr
   refine ⟨n + max k l + m, ?_, ?_, hw, ?_⟩
   · change C.Halted (C.run (Cfg (max k l + 1) (Comp.State k l Q Q')) x (n + max k l + m))
     rw [hright]

@@ -49,8 +49,8 @@ example {κ Γ Q : Type*} [Inhabited Γ] [Fintype κ] {xs : Array Γ}
     (M : TM Id κ Γ Q) (c d : TM.Cfg κ Γ Q xs) (t s : ℕ) :
     M.ReachesInTimeAndSpace c d t s ↔
       ∃ n ≤ t, M.runFrom c n = d ∧
-        (M.runHistoryFrom c n).space ≤ s := by
-  simp only [TM.ReachesInTimeAndSpace, Controller.last_runHistoryFrom]
+        (M.runHistoryFrom c n).space ≤ s :=
+  Iff.rfl
 
 -- Zero action fees require an execution length separate from the time budget.
 private def oneAction : Controller Id Unit Unit Bool where

@@ -107,17 +107,16 @@ theorem runFrom_runActionSumFrom_unit (cfg : Config) (n : ℕ) :
 theorem runActionSumFrom_mono_cost {cost cost' : Action → Config → ℕ}
     (h : ∀ a c, cost a c ≤ cost' a c) (cfg : Config) (n : ℕ) :
     M.runActionSumFrom cost cfg n ≤ M.runActionSumFrom cost' cfg n :=
-  (M.runHistoryFrom cfg n).actionSum_mono h
+  (M.runHistoryFrom cfg n).actionSum_mono fun a c _ ↦ h a c
 
 /-- Unit action charges count every step before the first halt. -/
 theorem runActionSumFrom_unit_eq (cfg : Config) (n : ℕ)
     (h : ∀ i < n, ¬M.Halted (M.runFrom cfg i)) :
     M.runActionSumFrom (fun _ _ ↦ 1) cfg n = n := by
-  induction n with
-  | zero => simp
-  | succ n ih =>
-    rw [runActionSumFrom_succ', ih (fun i hi ↦ h i (by omega))]
-    simp [stepCost, show M.halt (state (M.runFrom cfg n)) ≠ true from h n (by omega)]
+  rw [runActionSumFrom, History.actionSum_unit]
+  have hr := M.runHistoryFrom_spec cfg n
+  refine hr.stopped.elim id fun hh ↦ le_antisymm hr.length_le (le_of_not_gt fun hlt ↦ ?_)
+  exact h _ hlt (by simpa only [M.runFrom_length_runHistoryFrom, ← M.last_runHistoryFrom] using hh)
 
 end Deterministic
 

@@ -30,20 +30,6 @@ open Controller (History)
 variable {κ : Type*} {Γ Q : Type*} [Inhabited Γ] {xs ys : Array Γ}
   {M : TM Id κ Γ Q}
 
-/-- Each action adds at most one new work cell per tape. -/
-theorem runHistoryFrom_space_le_time [Fintype κ] (M : TM Id κ Γ Q)
-    (c : Cfg κ Γ Q xs) (n : ℕ) :
-    (M.runHistoryFrom c n).space ≤ Fintype.card κ * (n + 1) := by
-  induction n generalizing c with
-  | zero => simp
-  | succ n ih =>
-    by_cases hh : M.Halted c
-    · simpa [M.runHistoryFrom_of_halted c hh] using
-        Nat.le_mul_of_pos_right (Fintype.card κ) (by omega : 0 < n + 1 + 1)
-    · rw [M.runHistoryFrom_succ_of_not_halted c hh]
-      exact (History.space_cons_le _ _ _ (M.first_runHistoryFrom _ n)).trans
-        ((Nat.add_le_add_right (ih _) _).trans_eq (Nat.mul_succ _ _).symm)
-
 /-- Concatenating execution segments combines their visited intervals. -/
 theorem runHistoryFrom_space_add_le [Fintype κ] (M : TM Id κ Γ Q)
     (c : Cfg κ Γ Q xs) (s t : ℕ) :
@@ -55,7 +41,7 @@ theorem runHistoryFrom_space_add_le [Fintype κ] (M : TM Id κ Γ Q)
 /-- A segment starts at `c`, reaches `d`, and bounds its own visited cells. -/
 def ReachesInTimeAndSpace [Fintype κ] (M : TM Id κ Γ Q) (c d : Cfg κ Γ Q xs)
     (t s : ℕ) : Prop :=
-  ∃ n ≤ t, (M.runHistoryFrom c n).last = d ∧ (M.runHistoryFrom c n).space ≤ s
+  ∃ n ≤ t, M.runFrom c n = d ∧ (M.runHistoryFrom c n).space ≤ s
 
 namespace ReachesInTimeAndSpace
 
@@ -79,9 +65,8 @@ theorem trans (h : M.ReachesInTimeAndSpace c d t s)
     M.ReachesInTimeAndSpace c e (t + u) (s + v) := by
   obtain ⟨n, hn, he, hc⟩ := h
   obtain ⟨n', hn', he', hc'⟩ := h'
-  simp only [Controller.last_runHistoryFrom] at he he'
   refine ⟨n + n', Nat.add_le_add hn hn', ?_, ?_⟩
-  · rw [Controller.last_runHistoryFrom, ← Controller.runFrom_runFrom, he, he']
+  · rw [← Controller.runFrom_runFrom, he, he']
   · have h := M.runHistoryFrom_space_add_le c n n'
     rw [he] at h
     exact h.trans (Nat.add_le_add hc hc')
@@ -91,10 +76,8 @@ theorem computesInTimeAndSpace {xs ys : List Γ} {d : Cfg κ Γ Q xs.toArray}
     (h : M.ReachesInTimeAndSpace (M.initInput xs) d t s)
     (hd : M.Halted d) (ho : d.output = ys.toArray) :
     M.ComputesInTimeAndSpace xs ys t s := by
-  obtain ⟨n, hn, he, hc⟩ := h
-  refine ⟨n, ?_, ?_, (M.runHistory_spec _ _ n).length_le.trans hn, hc⟩
-  · exact he.symm ▸ hd
-  · exact (congrArg Cfg.output he).trans ho
+  obtain ⟨n, hn, rfl, hc⟩ := h
+  exact ⟨n, hd, ho, (M.runHistory_spec _ _ n).length_le.trans hn, hc⟩
 
 end ReachesInTimeAndSpace
 

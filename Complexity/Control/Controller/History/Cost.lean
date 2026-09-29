@@ -55,27 +55,14 @@ theorem config_le_configSup {α : Type*} [SemilatticeSup α]
   simp [actionSum, length]
 
 theorem actionSum_mono (h : History Config Action) {cost cost' : Action → Config → ℕ}
-    (hc : ∀ a c, cost a c ≤ cost' a c) : h.actionSum cost ≤ h.actionSum cost' :=
-  List.sum_le_sum fun _ _ ↦ hc _ _
+    (hc : ∀ a c, (a, c) ∈ h.actions.zip h.configs → cost a c ≤ cost' a c) :
+    h.actionSum cost ≤ h.actionSum cost' :=
+  List.sum_le_sum fun ⟨a, c⟩ hm ↦ hc a c hm
 
 @[simp] theorem actionSum_cons (c : Config) (a : Action) (h : History Config Action)
     (he : h.first = apply a c) (cost : Action → Config → ℕ) :
     (cons c a h he).actionSum cost = cost a c + h.actionSum cost := by
   simp [actionSum]
-
-/-- Local action bounds telescope to a bound on the final potential. -/
-theorem potential_last_le (h : History Config Action) (potential : Config → ℕ)
-    (cost : Action → Config → ℕ)
-    (hs : ∀ a c, (a, c) ∈ h.actions.zip h.configs →
-      potential (apply a c) ≤ potential c + cost a c) :
-    potential h.last ≤ potential h.first + h.actionSum cost := by
-  rcases h with ⟨c, as⟩
-  induction as generalizing c with
-  | nil => simp [last, actionSum]
-  | cons a as ih =>
-    simp [configs, or_imp, forall_and] at hs
-    simpa [last, actionSum, configs, Nat.add_assoc] using
-      (ih (apply a c) hs.2).trans (Nat.add_le_add_right hs.1 _)
 
 @[simp] theorem configSup_cons {α : Type*} [SemilatticeSup α]
     (c : Config) (a : Action) (h : History Config Action)
@@ -85,6 +72,22 @@ theorem potential_last_le (h : History Config Action) (potential : Config → �
   intro b
   simp only [configSup_le_iff, configs_cons, List.mem_cons, forall_eq_or_imp,
     sup_le_iff]
+
+/-- Local action bounds control the peak potential throughout a history. -/
+theorem configSup_le_add_actionSum (h : History Config Action) (potential : Config → ℕ)
+    (cost : Action → Config → ℕ)
+    (hs : ∀ a c, (a, c) ∈ h.actions.zip h.configs →
+      potential (apply a c) ≤ potential c + cost a c) :
+    h.configSup potential ≤ potential h.first + h.actionSum cost := by
+  rcases h with ⟨c, as⟩
+  induction as generalizing c with
+  | nil => simp [configSup, configs, actionSum]
+  | cons a as ih =>
+    simp [configs, or_imp, forall_and] at hs
+    apply (configSup_cons c a ⟨apply a c, as⟩ rfl potential).trans_le
+    apply sup_le (Nat.le_add_right _ _)
+    simpa [actionSum, configs, Nat.add_assoc] using
+      (ih (apply a c) hs.2).trans (Nat.add_le_add_right hs.1 _)
 
 @[simp] theorem actionSum_append (p q : History Config Action) (h : p.last = q.first)
     (cost : Action → Config → ℕ) :

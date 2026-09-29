@@ -142,12 +142,10 @@ theorem visited_extra (e : (κ ⊕ Unit) ↪ τ)
     (j : τ) (hj : j ∉ Set.range e) :
     ((compilerAlong e M).runHistoryFrom (cfgAlong e c d) n).visited j =
       NonemptyInterval.pure (d.workPos j) := by
-  apply eq_of_forall_ge_iff
-  intro V
-  rw [TM.runHistoryFrom_visited_le_iff]
-  simp only [runFrom_cfgAlong, cfgAlong_workPos,
-    Function.Embedding.replace_of_not_mem _ _ _ hj]
-  exact ⟨fun h ↦ h 0 (Nat.zero_le n), fun h _ _ ↦ h⟩
+  apply SetLike.ext
+  intro p
+  simp [Controller.History.mem_visited_iff, Controller.mem_configs_runHistoryFrom,
+    runFrom_cfgAlong, hj, show ∃ m : ℕ, m ≤ n from ⟨0, Nat.zero_le n⟩]
 
 @[simp↓]
 theorem cfg_init (e : (κ ⊕ Unit) ↪ τ) (xs : List Γ) (q : Q) :

@@ -72,14 +72,13 @@ private theorem at_step (xs : List Bool) (i : ℕ) (h : i < xs.length) :
     simp only [input, Array.toList_push, List.toList_toArray,
       List.take_succ_eq_append_getElem h, List.map_append, List.map_cons, List.map_nil]
 
-private def Inv (xs : List Bool)
-    (s : History (Cfg (Fin 0) Symbol Unit (input xs)) (Action (Fin 0) Symbol Unit)) (b : ℕ) : Prop :=
-  ∃ i h, s.last = state xs i h ∧ b = 4 * (xs.length - i) + 2
+private def Inv (xs : List Bool) (s : Cfg (Fin 0) Symbol Unit (input xs)) (b : ℕ) : Prop :=
+  ∃ i h, s = state xs i h ∧ b = 4 * (xs.length - i) + 2
 
 private theorem inv_done (xs : List Bool)
-    {s : History (Cfg (Fin 0) Symbol Unit (input xs)) (Action (Fin 0) Symbol Unit)}
-    {b : ℕ} (h : Inv xs s b) (ha : s.last.inputSymbol = none) :
-    s.last.output = input xs ∧ s.space ≤ 0 := by
+    {s : Cfg (Fin 0) Symbol Unit (input xs)}
+    {b : ℕ} (h : Inv xs s b) (ha : s.inputSymbol = none) :
+    s.output = input xs := by
   obtain ⟨i, hi, hs, _⟩ := h
   rw [hs] at ha
   have he : i = xs.length := by
@@ -88,13 +87,13 @@ private theorem inv_done (xs : List Bool)
     rw [at_input_lt xs i hl] at ha
     contradiction
   subst i
-  simp [hs, state, History.space]
+  simp [hs, state]
 
 private theorem inv_next (xs : List Bool)
-    {s : History (Cfg (Fin 0) Symbol Unit (input xs)) (Action (Fin 0) Symbol Unit)}
-    {b : ℕ} (h : Inv xs s (b + 1)) (ha : s.last.inputSymbol ≠ none) :
+    {s : Cfg (Fin 0) Symbol Unit (input xs)}
+    {b : ℕ} (h : Inv xs s (b + 1)) (ha : s.inputSymbol ≠ none) :
     Inv xs (apply { Program.idle (κ := Fin 0) (Γ := Symbol) with inputMove := 1 }
-      (apply { Program.idle (κ := Fin 0) (Γ := Symbol) with output := some s.last.inputSymbol } s))
+      (apply { Program.idle (κ := Fin 0) (Γ := Symbol) with output := some s.inputSymbol } s))
       (b - 3) := by
   obtain ⟨i, hi, hs, hb⟩ := h
   rw [hs] at ha
@@ -104,11 +103,11 @@ private theorem inv_next (xs : List Bool)
     subst i
     exact ha (at_input_end xs)
   refine ⟨i + 1, hl, ?_, by omega⟩
-  simpa only [History.apply_last, hs, at_input_lt xs i hl] using at_step xs i hl
+  simpa only [hs, at_input_lt xs i hl] using at_step xs i hl
 
 private theorem inv_budget (xs : List Bool)
-    {s : History (Cfg (Fin 0) Symbol Unit (input xs)) (Action (Fin 0) Symbol Unit)}
-    {b : ℕ} (h : Inv xs s (b + 1)) (ha : s.last.inputSymbol ≠ none) : 4 < b := by
+    {s : Cfg (Fin 0) Symbol Unit (input xs)}
+    {b : ℕ} (h : Inv xs s (b + 1)) (ha : s.inputSymbol ≠ none) : 4 < b := by
   obtain ⟨i, hi, hs, hb⟩ := h
   rw [hs] at ha
   have hn : i ≠ xs.length := by
@@ -119,14 +118,14 @@ private theorem inv_budget (xs : List Bool)
 
 private theorem body_spec (xs : List Bool) :
     Triple (body.verify (Program.semantics (input xs)))
-      (fun s b ↦ Inv xs s (b + 1))
-      (fun r s b ↦ if r then s.last.output = input xs ∧ s.space ≤ 0 else Inv xs s b) () := by
+      (fun s b ↦ Inv xs s.last (b + 1))
+      (fun r s b ↦ if r then s.last.output = input xs ∧ s.space ≤ 0 else Inv xs s.last b) () := by
   unfold body
   vcgen
   case vc1 =>
     rename_i s b hs a t c hr ha
     rcases hr with ⟨rfl, rfl, rfl⟩
-    simpa [History.space] using inv_done xs hs ha
+    exact ⟨by simpa using inv_done xs hs ha, by simp [History.space]⟩
   case vc2 =>
     rename_i s b hs a t c hr ha u v d he w z f hm
     rcases hr with ⟨rfl, rfl, rfl⟩
@@ -151,12 +150,10 @@ private theorem body_spec (xs : List Bool) :
     omega
 
 private theorem copy_spec (xs : List Bool) :
-    Triple (copyInput.verify (Program.semantics (input xs))) (Inv xs)
+    Triple (copyInput.verify (Program.semantics (input xs))) (fun s b ↦ Inv xs s.last b)
       (fun _ s _ ↦ s.last.output = input xs ∧ s.space ≤ 0) () := by
   unfold copyInput
-  apply Program.spec_repeatUntil
-  · intro s b hs
-    simpa [Inv] using hs
+  apply Program.spec_repeatUntil body (fun s _ ↦ Inv xs s)
   · rintro s b ⟨i, hi, he, rfl⟩
     omega
   · exact body_spec xs

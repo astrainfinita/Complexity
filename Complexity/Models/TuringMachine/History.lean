@@ -66,6 +66,26 @@ theorem head_mem_of_visited_le (h : History (TM.Cfg κ Γ Q xs) (TM.Action κ Γ
     (cons c a h he).visited = (fun k ↦ NonemptyInterval.pure (c.workPos k)) ⊔ h.visited :=
   configSup_cons _ _ _ _ _
 
+/-- A visited interval contains exactly the head positions recorded by the history. -/
+theorem mem_visited_iff (h : History (TM.Cfg κ Γ Q xs) (TM.Action κ Γ Q)) (i : κ) (p : ℤ) :
+    p ∈ h.visited i ↔ ∃ c ∈ h.configs, p = c.workPos i := by
+  rcases h with ⟨c, as⟩
+  induction as generalizing c with
+  | nil => simp [visited, configSup, configs, NonemptyInterval.mem_pure]
+  | cons a as ih =>
+    let t : History (TM.Cfg κ Γ Q xs) (TM.Action κ Γ Q) := ⟨apply a c, as⟩
+    have hv : (apply a c).workPos i ∈ t.visited i := t.first_head_mem i
+    have hm := a.workPos_apply_bounds c i
+    change p ∈ (cons c a t rfl).visited i ↔ ∃ d ∈ (cons c a t rfl).configs, p = d.workPos i
+    rw [visited_cons, configs_cons]
+    simp only [List.mem_cons, or_and_right, exists_or, exists_eq_left]
+    rw [← ih (apply a c)]
+    change p ∈ (NonemptyInterval.pure (c.workPos i) ⊔ t.visited i) ↔
+      p = c.workPos i ∨ p ∈ t.visited i
+    simp only [NonemptyInterval.mem_def, NonemptyInterval.fst_sup,
+      NonemptyInterval.snd_sup, NonemptyInterval.pure_fst, NonemptyInterval.pure_snd] at *
+    omega
+
 /-- Joining segments joins their visited intervals, without resetting prior visits. -/
 @[simp] theorem visited_append (p q : History (TM.Cfg κ Γ Q xs) (TM.Action κ Γ Q))
     (he : p.last = q.first) : (p.append q he).visited = p.visited ⊔ q.visited :=
@@ -126,6 +146,19 @@ theorem space_cons_le [Fintype κ] (c : TM.Cfg κ Γ Q xs) (a : TM.Action κ Γ 
     NonemptyInterval.snd_sup, NonemptyInterval.pure_fst, NonemptyInterval.pure_snd]
   rcases hv with ⟨hl, hr⟩
   omega
+
+/-- Each action adds at most one visited work cell per tape. -/
+theorem space_le_length [Fintype κ]
+    (h : History (TM.Cfg κ Γ Q xs) (TM.Action κ Γ Q)) :
+    h.space ≤ Fintype.card κ * (h.length + 1) := by
+  rcases h with ⟨c, as⟩
+  induction as generalizing c with
+  | nil =>
+    change (nil c).space ≤ Fintype.card κ * (0 + 1)
+    simp
+  | cons a as ih =>
+    exact (space_cons_le c a ⟨apply a c, as⟩ rfl).trans
+      ((Nat.add_le_add_right (ih _) _).trans_eq (Nat.mul_succ _ _).symm)
 
 private theorem interval_size_sup_le {u v : NonemptyInterval ℤ} {p : ℤ}
     (hu : p ∈ u) (hv : p ∈ v) :

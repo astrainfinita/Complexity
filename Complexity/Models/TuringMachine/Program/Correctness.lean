@@ -58,15 +58,14 @@ theorem run_compile {p : TM.Program κ Γ α} {q : p.State ⊕ p.Exit}
     · simp only [step_compile p q u hq, History.apply_last, apply_state,
         Action.mapState_state, ← hu, History.observe_mapState]
 
-/-- A fresh source execution and its compiled history visit the same work cells. -/
+/-- Compilation preserves space, including visits recorded before the source execution. -/
 theorem history_space_compile [Fintype κ] {p : TM.Program κ Γ α}
-    {q : p.State ⊕ p.Exit} {c : Cfg κ Γ Unit xs}
-    {t : History (Cfg κ Γ Unit xs) (Action κ Γ Unit)} {n : ℕ} {a : α}
-    (h : Program.Control.Run (p.toControl eval) p.result observe (apply)
-      q (History.nil c) n a t) :
-    ((compile p).runHistoryFrom (c.mapState (fun _ ↦ q)) n).space = t.space := by
-  obtain ⟨_, _, _, hr⟩ := run_compile h (History.nil (c.mapState (fun _ ↦ q))) rfl rfl
-  simp only [Controller.runFrom_nil] at hr
+    {q : p.State ⊕ p.Exit} {s t : History (Cfg κ Γ Unit xs) (Action κ Γ Unit)}
+    {n : ℕ} {a : α}
+    (h : Program.Control.Run (p.toControl eval) p.result observe (apply) q s n a t) :
+    ((compile p).runFrom (s.mapState (fun _ ↦ q)) n).space = t.space := by
+  obtain ⟨_, _, _, hr⟩ := run_compile h (s.mapState (fun _ ↦ q))
+    (by rw [History.mapState_mapState]; exact History.mapState_id s) (by simp)
   simpa only [History.space_mapState] using congrArg History.space hr
 
 /-- A source execution proves output, time, and visited-cell space of the compiled machine. -/
@@ -81,6 +80,7 @@ theorem computesInTimeAndSpace_of_exec [Fintype κ] (p : TM.Program κ Γ α) {y
     (History.nil ((rawExecution xs.toList).init (compile p).q₀)) rfl rfl
   simp only [Controller.runFrom_nil] at hh hr
   simp only [← hr, History.last_mapState, Cfg.mapState_output, History.space_mapState] at ho hs
+  simp only [Controller.last_runHistoryFrom] at hh ho
   exact ⟨n, (congrArg (compile p).halt hh).trans rfl, ho,
     ((compile p).runHistory_spec _ _ n).length_le.trans hn, hs⟩
 

@@ -200,21 +200,14 @@ def computes (M : Controller Id Observation Action Q)
     (input : Input) (output : Output) (time space : ℕ)
     [exe : Execution Config Q Output input] : Prop :=
   ∃ n,
+    let final := M.run Config input n
     let history := M.runHistory Config input n
-    M.Halted history.last ∧ exe.hasOutput history.last output ∧
+    M.Halted final ∧ exe.hasOutput final output ∧
       timeCost history ≤ time ∧ spaceCost history ≤ space
 
 variable {M : Controller Id Observation Action Q}
   {timeCost spaceCost : History Config Action → ℕ}
   {input : Input} {output : Output} {time space : ℕ}
-
-/-- The endpoint of a computation agrees with the ordinary standard-input run. -/
-theorem computes_iff [exe : Execution Config Q Output input] :
-    M.computes timeCost spaceCost input output time space ↔
-      ∃ n, M.Halted (M.run Config input n) ∧ exe.hasOutput (M.run Config input n) output ∧
-        timeCost (M.runHistory Config input n) ≤ time ∧
-        spaceCost (M.runHistory Config input n) ≤ space := by
-  simp only [computes, last_runHistory]
 
 /-- Enlarging budgets preserves the same execution. -/
 theorem computes_mono [Execution Config Q Output input] {time' space' : ℕ}
@@ -229,7 +222,7 @@ theorem computes_runActionSum_le [Execution Config Q Output input]
     {cost : Action → Config → ℕ}
     (h : M.computes (fun h ↦ h.actionSum cost) spaceCost input output time space) (u : ℕ) :
     M.runActionSum cost input u ≤ time := by
-  obtain ⟨n, hn, _, ht, _⟩ := computes_iff.mp h
+  obtain ⟨n, hn, _, ht, _⟩ := h
   by_cases hu : u ≤ n
   · exact (M.runActionSum_mono cost input hu).trans ht
   · rw [M.runActionSum_eq_of_halted cost input hn (by omega : n ≤ u)]
@@ -240,7 +233,7 @@ theorem computes_space_le [Execution Config Q Output input]
     (h : M.computes timeCost spaceCost input output time space)
     (hmono : Monotone fun n ↦ spaceCost (M.runHistory Config input n))
     (u : ℕ) : spaceCost (M.runHistory Config input u) ≤ space := by
-  obtain ⟨n, hn, _, _, hs⟩ := computes_iff.mp h
+  obtain ⟨n, hn, _, _, hs⟩ := h
   by_cases hu : u ≤ n
   · exact (hmono hu).trans hs
   · rw [M.runHistory_eq_of_halted input hn (by omega : n ≤ u)]
@@ -258,7 +251,7 @@ theorem computes_unit_iff [exe : Execution Config Q Output input] :
       M.Halted (M.run Config input time) ∧
       exe.hasOutput (M.run Config input time) output ∧
       spaceCost (M.runHistory Config input time) ≤ space := by
-  rw [computes_iff]
+  unfold computes
   constructor
   · rintro ⟨n, hn, ho, ht, hs⟩
     have he : M.run Config input (M.runHistory Config input n).length =

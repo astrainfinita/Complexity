@@ -69,18 +69,15 @@ theorem timeUsed_le_cost (M : TreeMachine Id k Q) (c : Cfg k Q) (t : ℕ) :
   intro a c
   exact Nat.succ_le_of_lt (Op.timeCost_pos a.op c.regs)
 
-theorem mass_runFrom_le (M : TreeMachine Id k Q) (c : Cfg k Q) {s t : ℕ} (h : s ≤ t) :
-    (M.runFrom c s).mass ≤ c.mass + M.cost c t := by
-  have hp := (M.runHistoryFrom c s).potential_last_le Cfg.mass Action.timeCost
-    (fun a c _ ↦ c.mass_apply_le a)
-  simp only [M.last_runHistoryFrom, M.first_runHistoryFrom] at hp
-  exact hp.trans (Nat.add_le_add_left (M.cost_mono c h) _)
-
 theorem runConfigMaxFrom_le_mass_add_cost (M : TreeMachine Id k Q) (c : Cfg k Q) (t : ℕ) :
     M.runConfigMaxFrom Cfg.mass c t ≤ c.mass + M.cost c t := by
-  apply (Controller.runConfigMaxFrom_le_iff M Cfg.mass c t _).2
-  intro s hs
-  exact M.mass_runFrom_le c hs
+  simpa [Controller.runConfigMaxFrom, cost, Controller.runActionSumFrom] using
+    (M.runHistoryFrom c t).configSup_le_add_actionSum Cfg.mass Action.timeCost
+      (fun a c _ ↦ c.mass_apply_le a)
+
+theorem mass_runFrom_le (M : TreeMachine Id k Q) (c : Cfg k Q) {s t : ℕ} (h : s ≤ t) :
+    (M.runFrom c s).mass ≤ c.mass + M.cost c t :=
+  (M.space_le_runConfigMaxFrom Cfg.mass c h).trans (M.runConfigMaxFrom_le_mass_add_cost c t)
 
 theorem timeUsed_eq_of_not_halted (M : TreeMachine Id k Q) (c : Cfg k Q) (t : ℕ)
     (h : ∀ s < t, ¬M.Halted (M.runFrom c s)) : M.timeUsed c t = t :=
@@ -148,7 +145,6 @@ theorem ComputesInTimeAndSpace.of_run {M : TreeMachine Id k Q} {a b : Tree} {n t
     (ho : (M.run (Cfg k Q) a n).regs 0 = b)
     (ht : M.runActionSum Action.timeCost a n ≤ t) (hs : a.size + k + t ≤ s) :
     M.ComputesInTimeAndSpace a b t s := by
-  apply Controller.computes_iff.mpr
   refine ⟨n, hh, ho, ht, ?_⟩
   exact (M.runConfigMaxFrom_le_mass_add_cost _ n).trans
     ((Nat.add_le_add (mass_input_le M a) ht).trans hs)
@@ -157,13 +153,13 @@ theorem ComputesInTimeAndSpace.of_run {M : TreeMachine Id k Q} {a b : Tree} {n t
 theorem ComputesInTimeAndSpace.space_of_time {M : TreeMachine Id k Q} {a b : Tree} {t s : ℕ}
     (h : M.ComputesInTimeAndSpace a b t s) :
     M.ComputesInTimeAndSpace a b t (a.size + k + t) := by
-  obtain ⟨n, hh, ho, ht, _⟩ := Controller.computes_iff.mp h
+  obtain ⟨n, hh, ho, ht, _⟩ := h
   exact .of_run hh ho ht le_rfl
 
 theorem ComputesInTimeAndSpace.terminates {M : TreeMachine Id k Q} {a : Tree}
     {b : Tree} {t s : ℕ} (h : M.ComputesInTimeAndSpace a b t s) :
     M.Terminates a := by
-  obtain ⟨n, hn, _⟩ := Controller.computes_iff.mp h
+  obtain ⟨n, hn, _⟩ := h
   exact ⟨n, hn⟩
 
 /-- The witness can be chosen to be the first halting time, which is at most the time budget. -/
@@ -172,7 +168,7 @@ theorem ComputesInTimeAndSpace.exists_haltsAt {M : TreeMachine Id k Q} {a : Tree
     ∃ n ≤ t, M.HaltsAt a n ∧ (M.run (Cfg k Q) a n).regs 0 = b ∧
       M.cost (M.initInput (Config := Cfg k Q) a) n ≤ t ∧
       M.runConfigMax (Config := Cfg k Q) Cfg.mass a n ≤ s := by
-  obtain ⟨u, hu, ha, ht, hs⟩ := Controller.computes_iff.mp h
+  obtain ⟨u, hu, ha, ht, hs⟩ := h
   change (M.run (Cfg k Q) a u).regs 0 = b at ha
   obtain ⟨n, hn, hh⟩ := M.exists_haltsAt_le a hu
   have hc := (M.runActionSum_mono Action.timeCost a hn).trans ht
@@ -218,7 +214,7 @@ theorem ComputesInTimeAndSpace.output_size_le_space
     {M : TreeMachine Id k Q} {a : Tree} {b : Tree} {t s : ℕ}
     (h : M.ComputesInTimeAndSpace a b t s) : b.size ≤ s := by
   have hm := h.mass_le
-  obtain ⟨n, _, ha, _, _⟩ := Controller.computes_iff.mp h
+  obtain ⟨n, _, ha, _, _⟩ := h
   rw [← ha]
   exact ((M.run (Cfg k Q) a n).reg_size_le_mass 0).trans (hm n)
 
@@ -228,7 +224,7 @@ theorem ComputesInTimeAndSpace.output_size_le_mass_add_time
     (h : M.ComputesInTimeAndSpace a b t s) :
     b.size ≤ (M.initInput (Config := Cfg k Q) a).mass + t := by
   have hm := h.mass_le_mass_add_time
-  obtain ⟨n, _, ha, _, _⟩ := Controller.computes_iff.mp h
+  obtain ⟨n, _, ha, _, _⟩ := h
   rw [← ha]
   exact ((M.run (Cfg k Q) a n).reg_size_le_mass 0).trans (hm n)
 

@@ -197,10 +197,8 @@ private theorem at_token (u : TM.Cfg κ (Option Bool) Unit zs) (s d c : κ)
     At u s d c copy a p ys V (n + 1)
       (apply
         (scanToken s d c copy ((BitList.encodeTree a)[n]'(by simpa using hn))) v) := by
-  have he : apply
-      (scanToken s d c copy ((BitList.encodeTree a)[n]'(by simpa using hn))) v.last =
-      scanCfg u s d c copy a p ys (n + 1) := by
-    rw [hv.1, scanToken_apply u s d c copy a p ys hs hc hd hn]
+  have he := scanToken_apply u s d c copy a p ys hs hc hd hn
+  rw [← hv.1] at he
   refine ⟨by simpa only [History.apply_last] using he, ?_⟩
   apply (v.apply_visited_le_iff _ V).mpr
   refine ⟨hv.2, ?_⟩
@@ -233,12 +231,11 @@ private theorem body_progress (u : TM.Cfg κ (Option Bool) Unit zs) (s d c : κ)
       rw [hv.1,scanCfg_read u s d c copy a xs ys ws hs hx hn]
       cases ((BitList.encodeTree a)[n]'(by simpa using hn)) <;> rfl
     simp only [he] at h₃ ⊢
-    have hv' := at_token u s d c copy a xs.length ys V hs hc hd hF
-      (v := v.snoc TM.Program.idle) hn (by simpa [At] using hv)
+    have hv' := at_token u s d c copy a xs.length ys V hs hc hd hF hn hv
     rcases h₃ with ⟨rfl,rfl,rfl⟩
     refine ⟨by simpa [At] using hv', ?_, by omega⟩
-    simp only [decide_eq_true_eq, hv'.1]
-    exact scanCfg_counter u s d c copy a xs.length ys hc hd hz (by omega)
+    simpa [← hv'.1] using
+      scanCfg_counter u s d c copy a xs.length ys hc hd hz (show n + 1 ≤ Tree.size a by omega)
   all_goals omega
 
 /-- A common footprint contains the heads at every prefix boundary. -/

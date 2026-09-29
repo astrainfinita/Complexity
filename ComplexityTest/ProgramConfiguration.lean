@@ -30,7 +30,7 @@ theorem once_history :
       (fun _ _ b ↦ b = 0) () := by
   unfold once
   vcgen invariants
-  | inv1 => fun _ n ↦ n = 1
+  | inv1 => fun _ _ n ↦ n = 1
   all_goals simp_all
 
 def echo : TM.Program (Fin 0) Bool Unit := do
