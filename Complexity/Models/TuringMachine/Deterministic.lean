@@ -24,16 +24,7 @@ variable {κ : Type*} {Γ Q : Type*} [Inhabited Γ] {xs : Array Γ}
 /-- Execution only appends to the output. -/
 theorem output_size_le_runFrom (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs) (n : ℕ) :
     c.output.size ≤ (M.runFrom c n).output.size := by
-  induction n generalizing c with
-  | zero => exact le_rfl
-  | succ n ih =>
-    have hs : c.output.size ≤ (M.step c).output.size := by
-      simp only [step_eq]
-      split
-      · exact le_rfl
-      · simp only [apply_output]
-        split <;> simp
-    exact hs.trans (ih (M.step c))
+  simpa using (M.runHistoryFrom c n).output_size_le_last
 
 /-- The output length is monotone along a bounded run. -/
 theorem output_size_runFrom_mono (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs)

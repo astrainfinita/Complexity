@@ -150,6 +150,13 @@ def runConfigMax (M : Controller Id Observation Action Q)
     runActionSum M cost input 0 = 0 := by
   simp [runActionSum]
 
+/-- Unit charges count exactly the actions recorded from standard input. -/
+@[simp] theorem runActionSum_unit (M : Controller Id Observation Action Q)
+    (input : Input) (n : ℕ) [Execution Config Q Output input] :
+    M.runActionSum (Config := Config) (fun _ _ ↦ 1) input n =
+      (M.runHistory Config input n).length :=
+  M.runActionSumFrom_unit (M.initInput input) n
+
 @[simp] theorem runConfigMax_zero (M : Controller Id Observation Action Q)
     (space : Config → ℕ) (input : Input)
     [Execution Config Q Output input] :

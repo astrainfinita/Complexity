@@ -10,7 +10,7 @@ public import Complexity.Models.TreeMachine.Cost
 /-!
 # Deterministic tree machines and resource bounds
 
-`timeUsed` counts active transitions and `cost` charges the size written to the selected register.
+History length counts active transitions; `cost` charges the size written to the selected register.
 The generic controller space measure records the largest total expanded tree size seen so far.
 All three ignore halted padding.
 The cumulative cost bounds time and, together with initial mass, every intermediate mass.
@@ -59,15 +59,11 @@ theorem cost_eq_of_halted (M : TreeMachine Id k Q) (c : Cfg k Q)
     {t u : ℕ} (h : M.Halted (M.runFrom c t)) (hu : t ≤ u) : M.cost c u = M.cost c t :=
   Controller.runActionSumFrom_eq_of_halted M Action.timeCost c h hu
 
-/-- Number of active transitions, independent of the sizes of their operands. -/
-def timeUsed (M : TreeMachine Id k Q) (c : Cfg k Q) (t : ℕ) : ℕ :=
-  M.runActionSumFrom (fun _ _ => 1) c t
-
-theorem timeUsed_le_cost (M : TreeMachine Id k Q) (c : Cfg k Q) (t : ℕ) :
-    M.timeUsed c t ≤ M.cost c t := by
-  apply M.runActionSumFrom_mono_cost
-  intro a c
-  exact Nat.succ_le_of_lt (Op.timeCost_pos a.op c.regs)
+theorem length_runHistoryFrom_le_cost (M : TreeMachine Id k Q) (c : Cfg k Q) (t : ℕ) :
+    (M.runHistoryFrom c t).length ≤ M.cost c t := by
+  rw [← M.runActionSumFrom_unit]
+  exact M.runActionSumFrom_mono_cost
+    (fun a c ↦ Nat.succ_le_of_lt (Op.timeCost_pos a.op c.regs)) c t
 
 theorem runConfigMaxFrom_le_mass_add_cost (M : TreeMachine Id k Q) (c : Cfg k Q) (t : ℕ) :
     M.runConfigMaxFrom Cfg.mass c t ≤ c.mass + M.cost c t := by
@@ -78,10 +74,6 @@ theorem runConfigMaxFrom_le_mass_add_cost (M : TreeMachine Id k Q) (c : Cfg k Q)
 theorem mass_runFrom_le (M : TreeMachine Id k Q) (c : Cfg k Q) {s t : ℕ} (h : s ≤ t) :
     (M.runFrom c s).mass ≤ c.mass + M.cost c t :=
   (M.space_le_runConfigMaxFrom Cfg.mass c h).trans (M.runConfigMaxFrom_le_mass_add_cost c t)
-
-theorem timeUsed_eq_of_not_halted (M : TreeMachine Id k Q) (c : Cfg k Q) (t : ℕ)
-    (h : ∀ s < t, ¬M.Halted (M.runFrom c s)) : M.timeUsed c t = t :=
-  M.runActionSumFrom_unit_eq c t h
 
 section Canonical
 
@@ -122,10 +114,8 @@ theorem Terminates.exists_haltsAt {M : TreeMachine Id k Q} {a : Tree}
 theorem HaltsAt.le_cost {M : TreeMachine Id k Q} {a : Tree} {t : ℕ}
     (h : M.HaltsAt a t) :
     t ≤ M.cost (M.initInput (Config := Cfg k Q) a) t := by
-  have h₁ := M.timeUsed_le_cost
-    (M.initInput (Config := Cfg k Q) a) t
-  rwa [M.timeUsed_eq_of_not_halted
-    (M.initInput (Config := Cfg k Q) a) t h.2] at h₁
+  have hc := M.length_runHistoryFrom_le_cost (M.initInput (Config := Cfg k Q) a) t
+  rwa [M.length_runHistoryFrom_eq _ _ h.2] at hc
 
 /-- Every finite prefix stays within the given expanded-tree space bound. -/
 def UsesSpace (M : TreeMachine Id k Q) (a : Tree) (s : ℕ) : Prop :=

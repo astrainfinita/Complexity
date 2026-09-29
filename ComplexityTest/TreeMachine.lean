@@ -63,7 +63,7 @@ def c : Cfg 3 Bool := Cfg.mk grow.q₀ ![b, a, Tree.nil]
 #guard (grow.step c).regs 2 = Tree.nil
 #guard grow.cost c 1 = 7
 #guard grow.cost c 20 = 7
-#guard grow.timeUsed c 20 = 1
+#guard (grow.runHistoryFrom c 20).length = 1
 #guard Controller.runConfigMaxFrom grow Cfg.mass c 20 = 13
 #guard (grow.runHistoryFrom c 20).actionSum Action.timeCost = 7
 
@@ -97,7 +97,7 @@ def idle (q : Bool) : TreeMachine Id 0 Bool where
 
 #guard (idle false).cost (Cfg.mk (idle false).q₀ Fin.elim0) 5 = 5
 #guard (idle true).cost (Cfg.mk (idle true).q₀ Fin.elim0) 5 = 0
-#guard (idle true).timeUsed (Cfg.mk (idle true).q₀ Fin.elim0) 5 = 0
+#guard ((idle true).runHistoryFrom (Cfg.mk (idle true).q₀ Fin.elim0) 5).length = 0
 #guard Controller.runConfigMaxFrom (idle true) Cfg.mass
   (Cfg.mk (idle true).q₀ Fin.elim0) 5 = 0
 

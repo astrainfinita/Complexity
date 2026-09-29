@@ -253,6 +253,14 @@ theorem runFrom_length_runHistoryFrom (cfg : Config) (fuel : ℕ) :
         History.cons_length, M.runFrom_succ, M.runFrom_succ]
       rw [M.step_of_not_halted cfg h, ih]
 
+/-- Before the first halt, the action count equals the supplied fuel. -/
+theorem length_runHistoryFrom_eq (cfg : Config) (n : ℕ)
+    (h : ∀ i < n, ¬M.Halted (M.runFrom cfg i)) :
+    (M.runHistoryFrom cfg n).length = n := by
+  have hr := M.runHistoryFrom_spec cfg n
+  refine hr.stopped.elim id fun hh ↦ le_antisymm hr.length_le (le_of_not_gt fun hlt ↦ ?_)
+  exact h _ hlt (by simpa only [M.runFrom_length_runHistoryFrom, ← M.last_runHistoryFrom] using hh)
+
 /-- Recorded configurations are exactly the states reached within the supplied fuel. -/
 theorem mem_configs_runHistoryFrom (cfg : Config) (fuel : ℕ) (c : Config) :
     c ∈ (M.runHistoryFrom cfg fuel).configs ↔ ∃ i ≤ fuel, M.runFrom cfg i = c := by

@@ -10,7 +10,7 @@ public import Complexity.Models.TuringMachine.Configuration
 public import Mathlib.Algebra.Order.BigOperators.Group.Finset
 public import Mathlib.Order.Interval.Basic
 
-/-! # Visited work cells of Turing-machine histories
+/-! # Output and visited work cells of Turing-machine histories
 
 The configurations of a history determine the nonempty interval visited on each work tape.
 Both endpoints are included. No additional configuration or running visit record is needed.
@@ -21,6 +21,16 @@ Both endpoints are included. No additional configuration or running visit record
 namespace Complexity.Controller.History
 
 variable {κ Γ Q : Type*} [Inhabited Γ] {xs : Array Γ}
+
+/-- Output length cannot decrease along an action history. -/
+theorem output_size_le_last (h : History (TM.Cfg κ Γ Q xs) (TM.Action κ Γ Q)) :
+    h.first.output.size ≤ h.last.output.size := by
+  refine h.actions.foldlRecOn (motive := fun c ↦ h.first.output.size ≤ (TM.Cfg.output c).size)
+    (fun c a ↦ apply a c) le_rfl ?_
+  intro c hc a _
+  apply hc.trans
+  simp only [TM.apply_output]
+  split <;> simp
 
 /-- The interval covered by the work-head positions, including both endpoints. -/
 def visited (h : History (TM.Cfg κ Γ Q xs) (TM.Action κ Γ Q)) :

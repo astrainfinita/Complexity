@@ -7,6 +7,7 @@ module
 
 public import Complexity.Models.TreeMachine.Deterministic
 public import Complexity.Models.TreeMachine.Embedding
+public import Complexity.Control.Transition.Simulation
 
 /-!
 # Sequential composition with shared registers
@@ -106,11 +107,9 @@ private theorem observe_pad {r : ℕ} (h : k ≤ r) (c : Cfg k Q) (q : Q') :
 theorem runFrom_left (c : Cfg k Q) (n : ℕ)
     (h : ∀ j < n, ¬M.Halted (M.runFrom c j)) :
     (comp M N).runFrom (left (l := l) (Q' := Q') c) n = left (M.runFrom c n) := by
-  induction n with
-  | zero => rfl
-  | succ n ih =>
-    rw [Controller.runFrom_succ', ih (fun j hj => h j (by omega)),
-      step_left M N _ (h n (by omega)), Controller.runFrom_succ']
+  exact Transition.rel_runN_of_not_halted (H := M.Halted)
+    (R := fun c d ↦ d = left (l := l) (Q' := Q') c)
+    rfl (by rintro c _ rfl hc; exact step_left M N c hc) h
 
 theorem cost_left (c : Cfg k Q) (n : ℕ)
     (h : ∀ j < n, ¬M.Halted (M.runFrom c j)) :
@@ -124,9 +123,7 @@ theorem cost_left (c : Cfg k Q) (n : ℕ)
 
 theorem runFrom_right (c : Cfg l Q') (n : ℕ) :
     (comp M N).runFrom (right (k := k) (Q := Q) c) n = right (N.runFrom c n) := by
-  induction n with
-  | zero => rfl
-  | succ n ih => rw [Controller.runFrom_succ', ih, step_right, Controller.runFrom_succ']
+  exact Transition.runN_map right (step_right M N) c n
 
 theorem cost_right (c : Cfg l Q') (n : ℕ) :
     (comp M N).cost (right c) n = N.cost c n := by

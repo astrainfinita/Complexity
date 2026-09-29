@@ -52,6 +52,11 @@ variable (M : Controller Id Observation Action Q)
 def runActionSumFrom (cfg : Config) (n : ℕ) : ℕ :=
   (M.runHistoryFrom cfg n).actionSum cost
 
+/-- Unit charges count exactly the actions recorded in the execution history. -/
+@[simp] theorem runActionSumFrom_unit (cfg : Config) (n : ℕ) :
+    M.runActionSumFrom (fun _ _ ↦ 1) cfg n = (M.runHistoryFrom cfg n).length :=
+  (M.runHistoryFrom cfg n).actionSum_unit
+
 @[simp] theorem runActionSumFrom_zero (cfg : Config) : M.runActionSumFrom cost cfg 0 = 0 := by
   simp [runActionSumFrom]
 
@@ -92,31 +97,11 @@ theorem runActionSumFrom_eq_of_halted (cfg : Config) {n k : ℕ}
     M.runActionSumFrom cost cfg k = M.runActionSumFrom cost cfg n := by
   simp only [runActionSumFrom, M.runHistoryFrom_eq_of_halted cfg h hk]
 
-/-- Unit charges count at most one executed action per padded transition. -/
-theorem runActionSumFrom_unit_le (cfg : Config) (n : ℕ) :
-    M.runActionSumFrom (fun _ _ => 1) cfg n ≤ n := by
-  simpa [runActionSumFrom] using (M.runHistoryFrom_spec cfg n).length_le
-
-/-- Removing halting padding by counting unit-cost actions preserves the endpoint. -/
-theorem runFrom_runActionSumFrom_unit (cfg : Config) (n : ℕ) :
-    M.runFrom cfg (M.runActionSumFrom (fun _ _ => 1) cfg n) = M.runFrom cfg n := by
-  simpa only [runActionSumFrom, History.actionSum_unit] using
-    M.runFrom_length_runHistoryFrom cfg n
-
 /-- Pointwise larger action charges give a larger total on the same history. -/
 theorem runActionSumFrom_mono_cost {cost cost' : Action → Config → ℕ}
     (h : ∀ a c, cost a c ≤ cost' a c) (cfg : Config) (n : ℕ) :
     M.runActionSumFrom cost cfg n ≤ M.runActionSumFrom cost' cfg n :=
   (M.runHistoryFrom cfg n).actionSum_mono fun a c _ ↦ h a c
-
-/-- Unit action charges count every step before the first halt. -/
-theorem runActionSumFrom_unit_eq (cfg : Config) (n : ℕ)
-    (h : ∀ i < n, ¬M.Halted (M.runFrom cfg i)) :
-    M.runActionSumFrom (fun _ _ ↦ 1) cfg n = n := by
-  rw [runActionSumFrom, History.actionSum_unit]
-  have hr := M.runHistoryFrom_spec cfg n
-  refine hr.stopped.elim id fun hh ↦ le_antisymm hr.length_le (le_of_not_gt fun hlt ↦ ?_)
-  exact h _ hlt (by simpa only [M.runFrom_length_runHistoryFrom, ← M.last_runHistoryFrom] using hh)
 
 end Deterministic
 
