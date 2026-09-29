@@ -7,7 +7,6 @@ module
 
 public import Complexity.Models.TuringMachine.Basic
 public import Complexity.Models.TuringMachine.History
-public import Complexity.Control.Cost
 public import Complexity.Control.Controller.Cost
 
 /-! # Time and visited-cell space of Turing-machine histories -/
@@ -19,12 +18,6 @@ namespace Complexity.TM
 open Controller (History)
 
 variable {κ Γ Q : Type*} [Inhabited Γ] {xs : Array Γ}
-
-/-- Actual action count and the total historical work-cell footprint. -/
-@[simps time space]
-def visitedCosts [Fintype κ] : CostModel (Action κ Γ Q) (Cfg κ Γ Q xs) where
-  time := History.length
-  space := History.space
 
 /-- Extending a run can only enlarge its visited intervals. -/
 theorem runHistoryFrom_visited_mono (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs) :
@@ -55,8 +48,7 @@ theorem runHistoryFrom_visited_congr {κ' Γ' Q' : Type*} [Inhabited Γ'] {ys : 
     (M.runHistoryFrom c n).visited i = (N.runHistoryFrom d n).visited j := by
   apply eq_of_forall_ge_iff
   intro v
-  simp only [runHistoryFrom_visited_le_iff]
-  exact forall_congr' fun m ↦ forall_congr' fun hm ↦ by rw [h m hm]
+  simp +contextual only [runHistoryFrom_visited_le_iff, h]
 
 namespace Cfg
 

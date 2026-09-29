@@ -65,7 +65,7 @@ def c : Cfg 3 Bool := Cfg.mk grow.q₀ ![b, a, Tree.nil]
 #guard grow.cost c 20 = 7
 #guard grow.timeUsed c 20 = 1
 #guard Controller.runConfigMaxFrom grow Cfg.mass c 20 = 13
-#guard treeCosts.time (grow.runHistoryFrom c 20) = 7
+#guard (grow.runHistoryFrom c 20).actionSum Action.timeCost = 7
 
 -- Writing an empty leaf costs one even when it replaces a larger tree.
 def shrink : TreeMachine Id 3 Bool where
@@ -113,7 +113,8 @@ def fork : TreeMachine BinaryChoice 1 Bool where
   transition _ _ _ := Action.assign true (.pair 0 0 0)
 
 #guard ((fork.runWith (Cfg 1 Bool) Multiset Tree.nil 5).map (fun c ↦ c.regs 0)) = ↑[a, a]
-#guard ((fork.runHistoryWith (Cfg 1 Bool) Multiset Tree.nil 5).map treeCosts.time) = ↑[3, 3]
+#guard ((fork.runHistoryWith (Cfg 1 Bool) Multiset Tree.nil 5).map
+  (fun h ↦ h.actionSum Action.timeCost)) = ↑[3, 3]
 
 -- Two `nop` branches remain distinct effects, even though their resulting banks agree.
 def forkNop : TreeMachine BinaryChoice 1 Bool where
@@ -122,7 +123,8 @@ def forkNop : TreeMachine BinaryChoice 1 Bool where
   transition _ _ _ := Action.assign true .nop
 
 #guard ((forkNop.runWith (Cfg 1 Bool) Multiset b 5).map (fun c ↦ c.regs 0)) = ↑[b, b]
-#guard ((forkNop.runHistoryWith (Cfg 1 Bool) Multiset b 5).map treeCosts.time) = ↑[1, 1]
+#guard ((forkNop.runHistoryWith (Cfg 1 Bool) Multiset b 5).map
+  (fun h ↦ h.actionSum Action.timeCost)) = ↑[1, 1]
 
 -- Shrinking to a nonempty tree still pays for that entire tree.
 #guard Action.timeCost (Action.assign true (.left 0 0)) c = 3
@@ -134,7 +136,7 @@ def sameEndpoint : TreeMachine BinaryChoice 3 Bool where
   transition _ _ i := if i = 0 then Action.keep true else Action.assign true (.pair 0 1 2)
 
 #guard ((sameEndpoint.runHistoryFromWith Multiset c 5).map
-  (fun h ↦ (h.last.state, h.last.regs 0, treeCosts.time h))) = ↑[(true, b, 1), (true, b, 5)]
+  (fun h ↦ (h.last.state, h.last.regs 0, h.actionSum Action.timeCost))) = ↑[(true, b, 1), (true, b, 5)]
 
 -- Two fresh choices reach all four leaves, including paths 01 and 10.
 def twoChoices : TreeMachine BinaryChoice 0 (Fin 7) where

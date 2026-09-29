@@ -139,7 +139,8 @@ and a maximum expanded-tree space budget. The transition count is an existential
 since the external time charge depends on the size written to the selected register. -/
 def ComputesInTimeAndSpace (M : TreeMachine Id k Q) (a : Tree)
     (b : Tree) (t s : ℕ) : Prop :=
-  Controller.computes (Config := Cfg k Q) M treeCosts a b t s
+  M.computes (Config := Cfg k Q)
+    (fun h ↦ h.actionSum Action.timeCost) (fun h ↦ h.configSup Cfg.mass) a b t s
 
 /-- A halted run's time budget also bounds its peak space by input size and register count. -/
 theorem ComputesInTimeAndSpace.of_run {M : TreeMachine Id k Q} {a b : Tree} {n t s : ℕ}
@@ -183,12 +184,12 @@ theorem ComputesInTimeAndSpace.exists_haltsAt {M : TreeMachine Id k Q} {a : Tree
 theorem ComputesInTimeAndSpace.usesSpace {M : TreeMachine Id k Q} {a : Tree}
     {b : Tree} {t s : ℕ} (h : M.ComputesInTimeAndSpace a b t s) :
     M.UsesSpace a s :=
-  fun u => Controller.computes_runConfigMax_le rfl h u
+  fun u => Controller.computes_runConfigMax_le h u
 
 theorem ComputesInTimeAndSpace.cost_le {M : TreeMachine Id k Q} {a : Tree}
     {b : Tree} {t s : ℕ} (h : M.ComputesInTimeAndSpace a b t s)
     (u : ℕ) : M.cost (M.initInput (Config := Cfg k Q) a) u ≤ t :=
-  Controller.computes_runActionSum_le rfl h u
+  Controller.computes_runActionSum_le h u
 
 /-- The time budget controls space even without using the explicit space budget. -/
 theorem ComputesInTimeAndSpace.runConfigMaxFrom_le_mass_add_time

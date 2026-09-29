@@ -27,9 +27,7 @@ public import Complexity.Control.Controller.Cost
 public import Complexity.Control.Controller.Execution
 public import Complexity.Control.Controller.History
 public import Complexity.Control.Controller.History.Cost
-public import Complexity.Control.Controller.History.Execution
 public import Complexity.Control.Controller.RunHistory
-public import Complexity.Control.Cost
 public import Complexity.Control.Program
 public import Complexity.Control.Program.Bound
 public import Complexity.Control.Program.Compiler

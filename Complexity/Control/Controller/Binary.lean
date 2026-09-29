@@ -7,7 +7,7 @@ module
 
 public import Complexity.Control.BinaryChoice
 public import Complexity.Control.Controller.Execution
-public import Complexity.Control.Controller.History.Execution
+public import Complexity.Control.Controller.RunHistory
 
 /-!
 # Deterministic controllers as binary choices

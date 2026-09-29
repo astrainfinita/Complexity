@@ -6,7 +6,7 @@ Authors: Yuyang Zhao
 module
 
 public import Complexity.Control.BinaryChoice
-public import Complexity.Control.Controller.History.Execution
+public import Complexity.Control.Controller.RunHistory
 public import Complexity.Models.TuringMachine.Cost
 
 /-!

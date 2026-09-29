@@ -105,8 +105,7 @@ private theorem run_callBlock (M : TM Id κ Γ Q) (q : Q)
       simp only [blockRoute, he, ↓reduceIte]
       exact Program.Control.Run.done _ _
     · have hf : M.halt (state c) = false := Bool.eq_false_iff.mpr hc
-      have hs := Controller.step_eq M c
-      simp only [hf, Bool.false_eq_true, ite_false] at hs
+      have hs := M.step_of_not_halted c hc
       have hn : M.runFrom c (n + 1) = M.runFrom (M.step c) n := rfl
       obtain ⟨m, hm, hr⟩ := ih (M.step c) (hn ▸ hh)
       refine ⟨m + 1, by omega, ?_⟩

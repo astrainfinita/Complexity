@@ -22,14 +22,15 @@ example {k : ℕ} {Q : Type*} (M : TreeMachine Id k Q) (c : TreeMachine.Cfg k Q)
 example {k : ℕ} [NeZero k] {Q : Type*} (M : TreeMachine Id k Q)
     (a b : Tree) (t s : ℕ) :
     Controller.computes (Config := TreeMachine.Cfg k Q) M
-      TreeMachine.treeCosts a b t s ↔
+      (fun h ↦ h.actionSum TreeMachine.Action.timeCost)
+      (fun h ↦ h.configSup TreeMachine.Cfg.mass) a b t s ↔
       M.ComputesInTimeAndSpace a b t s :=
   Iff.rfl
 
 example {κ Γ Q : Type*} [Inhabited Γ] [Fintype κ]
     (M : TM Id κ Γ Q) (xs ys : List Γ) (t s : ℕ) :
     Controller.computes (Config := TM.Cfg κ Γ Q xs.toArray)
-      M TM.visitedCosts xs ys t s ↔
+      M Controller.History.length Controller.History.space xs ys t s ↔
       M.ComputesInTimeAndSpace xs ys t s :=
   Iff.rfl
 
@@ -40,8 +41,8 @@ example {κ Γ Q : Type*} [Inhabited Γ] [Fintype κ]
       M.Halted (M.run (TM.Cfg κ Γ Q xs.toArray) xs t) ∧
       (M.run (TM.Cfg κ Γ Q xs.toArray) xs t).output = ys.toArray ∧
       (M.runHistory (TM.Cfg κ Γ Q xs.toArray) xs t).space ≤ s := by
-  refine (Controller.computes_unit_iff rfl).trans ?_
-  simp only [TM.visitedCosts_space, TM.rawExecution_hasOutput]
+  refine Controller.computes_unit_iff.trans ?_
+  simp only [TM.rawExecution_hasOutput]
 
 -- Block bounds still measure fresh visits and retain ordinary configuration endpoints.
 example {κ Γ Q : Type*} [Inhabited Γ] [Fintype κ] {xs : Array Γ}
@@ -73,24 +74,24 @@ private instance : Controller.Execution (Bool × ℕ) Bool
   hasOutput cfg n := cfg.2 = n
 
 example : Controller.computes (Config := Bool × ℕ)
-    oneAction ⟨fun _ => 0, fun h ↦ h.configSup Prod.snd⟩ () 1 0 1 := by
+    oneAction (fun _ ↦ 0) (fun h ↦ h.configSup Prod.snd) () 1 0 1 := by
   refine ⟨1, rfl, rfl, ?_, ?_⟩ <;> decide
 
 -- Unit costs permit halted padding, but cannot hide the first active step in a zero budget.
-example (time : Controller.History (Bool × ℕ) Unit → ℕ) (htime : time = Controller.History.length) :
-    oneAction.computes ⟨time, fun h ↦ h.configSup Prod.snd⟩ () 1 5 1 :=
-  (Controller.computes_unit_iff htime).mpr ⟨rfl, rfl, by dsimp only; decide⟩
+example : oneAction.computes (Config := Bool × ℕ)
+    Controller.History.length (fun h ↦ h.configSup Prod.snd) () 1 5 1 :=
+  Controller.computes_unit_iff.mpr ⟨rfl, rfl, by decide⟩
 
 example : ¬oneAction.computes (Config := Bool × ℕ)
-    ⟨Controller.History.length, fun h ↦ h.configSup Prod.snd⟩ () 1 0 1 := by
+    Controller.History.length (fun h ↦ h.configSup Prod.snd) () 1 0 1 := by
   intro h
-  have hh := ((Controller.computes_unit_iff rfl).mp h).1
+  have hh := (Controller.computes_unit_iff.mp h).1
   contradiction
 
 -- The unit-time equivalence also handles history measurements that decrease.
 example : oneAction.computes (Config := Bool × ℕ)
-    ⟨Controller.History.length, fun h ↦ if h.length = 0 then 1 else 0⟩ () 1 5 0 :=
-  (Controller.computes_unit_iff rfl).mpr ⟨rfl, rfl, by decide⟩
+    Controller.History.length (fun h ↦ if h.length = 0 then 1 else 0) () 1 5 0 :=
+  Controller.computes_unit_iff.mpr ⟨rfl, rfl, by decide⟩
 
 -- The standard output type is inferred from the execution instance.
 example : Controller.Execution.hasOutput (Config := Bool × ℕ)

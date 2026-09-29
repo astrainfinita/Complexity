@@ -40,15 +40,11 @@ theorem step_callFrom (M : TM Id κ Γ Q) (q : Q) (c : History (Cfg κ Γ Q xs) 
     cases hh : M.halt ((M.transition r (a, v)).run).state <;>
       simp only [blockRoute, callRoute, hh, Bool.false_eq_true, ↓reduceIte,
         Program.Syntax.callLabel, Program.Syntax.callCont] <;> rfl
-  rw [Controller.step_eq, Controller.step_eq]
-  simp only [History.state_def, Cfg.state_def]
-  erw [History.last_mapState, History.observe_mapState]
-  erw [halt_callRoute]
-  by_cases h : M.halt c.last.state = true
-  · erw [ite_eq_left h, ite_eq_left h]
-    rfl
-  · erw [ite_eq_right h, ite_eq_right h]
-    have hf : M.halt c.last.state = false := Bool.eq_false_iff.mpr h
+  simp only [Controller.step_eq, History.state_def, Cfg.state_def]
+  erw [History.last_mapState, History.observe_mapState, halt_callRoute]
+  split_ifs with h
+  · rfl
+  · have hf : M.halt c.last.state = false := Bool.eq_false_iff.mpr h
     have ht : ((compile (callFrom M q)).transition (callRoute M c.last.state)
         (c.last.inputSymbol, c.last.workSymbols)).run =
         ((M.transition c.last.state (c.last.inputSymbol, c.last.workSymbols)).run).mapState

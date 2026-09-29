@@ -6,7 +6,7 @@ Authors: Yuyang Zhao
 module
 
 public import Complexity.Models.TuringMachine.Program.Correctness
-public import Complexity.Control.Controller.History.Execution
+public import Complexity.Control.Controller.RunHistory
 public import Complexity.Models.TuringMachine.Program.Specification.Configuration
 public import Complexity.Control.Program.Loop
 

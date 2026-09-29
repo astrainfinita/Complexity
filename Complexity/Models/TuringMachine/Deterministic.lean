@@ -68,14 +68,15 @@ def UsesSpace [Fintype κ] (M : TM Id κ Γ Q) (xs : List Γ) (s : ℕ) : Prop :
 /-- Compute with unit action time and visited-cell space on one execution history. -/
 def ComputesInTimeAndSpace [Fintype κ] (M : TM Id κ Γ Q) (xs ys : List Γ)
     (t s : ℕ) : Prop :=
-  M.computes (Config := Cfg κ Γ Q xs.toArray) visitedCosts xs ys t s
+  M.computes (Config := Cfg κ Γ Q xs.toArray)
+    Controller.History.length Controller.History.space xs ys t s
 
 /-- Read the ordinary run's result without carrying its visitation history. -/
 theorem ComputesInTimeAndSpace.run_spec [Fintype κ] {M : TM Id κ Γ Q}
     {xs ys : List Γ} {t s : ℕ} (h : M.ComputesInTimeAndSpace xs ys t s) :
     M.Halted (M.run (Cfg κ Γ Q xs.toArray) xs t) ∧
       (M.run (Cfg κ Γ Q xs.toArray) xs t).output = ys.toArray := by
-  have ⟨hh, ho, _⟩ := (Controller.computes_unit_iff (show visitedCosts.time = _ from rfl)).mp h
+  have ⟨hh, ho, _⟩ := Controller.computes_unit_iff.mp h
   simpa only [rawExecution_hasOutput] using And.intro hh ho
 
 theorem ComputesInTimeAndSpace.terminates [Fintype κ] {M : TM Id κ Γ Q}

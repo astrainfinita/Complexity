@@ -6,7 +6,7 @@ Authors: Yuyang Zhao
 module
 
 import Complexity.Models.TuringMachine.Simulation
-import Complexity.Control.Controller.History.Execution
+import Complexity.Control.Controller.RunHistory
 meta import Complexity.Models.TuringMachine.Deterministic
 meta import Complexity.Models.TuringMachine.Cost
 meta import Complexity.Models.TuringMachine.Basic
@@ -14,7 +14,6 @@ meta import Complexity.Models.TuringMachine.Configuration
 meta import Complexity.Control.Controller.Cost
 meta import Complexity.Control.Controller
 meta import Complexity.Control.BinaryChoice
-meta import Complexity.Control.Cost
 
 open Complexity
 

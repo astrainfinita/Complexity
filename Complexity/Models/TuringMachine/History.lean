@@ -117,26 +117,22 @@ theorem space_mono [Fintype κ] {p q : History (TM.Cfg κ Γ Q xs) (TM.Action κ
 theorem space_cons_le [Fintype κ] (c : TM.Cfg κ Γ Q xs) (a : TM.Action κ Γ Q)
     (h : History (TM.Cfg κ Γ Q xs) (TM.Action κ Γ Q)) (he : h.first = apply a c) :
     (cons c a h he).space ≤ h.space + Fintype.card κ := by
-  calc
-    _ ≤ ∑ k, (((h.visited k).snd + 1 - (h.visited k).fst).toNat + 1) := by
-      apply Finset.sum_le_sum
-      intro k _
-      have hm := a.workPos_apply_bounds c k
-      have hv := h.first_head_mem k
-      rw [he] at hv
-      simp only [visited_cons, Pi.sup_apply, NonemptyInterval.fst_sup,
-        NonemptyInterval.snd_sup, NonemptyInterval.pure_fst, NonemptyInterval.pure_snd]
-      rcases hv with ⟨hl, hr⟩
-      omega
-    _ = h.space + Fintype.card κ := by simp [Finset.sum_add_distrib, space]
+  rw [space, space, show Fintype.card κ = ∑ _ : κ, 1 by simp, ← Finset.sum_add_distrib]
+  apply Finset.sum_le_sum
+  intro k _
+  have hm := a.workPos_apply_bounds c k
+  have hv := he ▸ h.first_head_mem k
+  simp only [visited_cons, Pi.sup_apply, NonemptyInterval.fst_sup,
+    NonemptyInterval.snd_sup, NonemptyInterval.pure_fst, NonemptyInterval.pure_snd]
+  rcases hv with ⟨hl, hr⟩
+  omega
 
 private theorem interval_size_sup_le {u v : NonemptyInterval ℤ} {p : ℤ}
     (hu : p ∈ u) (hv : p ∈ v) :
     ((u ⊔ v).snd + 1 - (u ⊔ v).fst).toNat ≤
       (u.snd + 1 - u.fst).toNat + (v.snd + 1 - v.fst).toNat := by
-  rcases hu with ⟨hu₁, hu₂⟩
-  rcases hv with ⟨hv₁, hv₂⟩
-  simp only [NonemptyInterval.fst_sup, NonemptyInterval.snd_sup]
+  simp only [NonemptyInterval.mem_def, NonemptyInterval.fst_sup,
+    NonemptyInterval.snd_sup] at *
   omega
 
 /-- Adjacent segments share a head position, so their combined footprint is subadditive. -/

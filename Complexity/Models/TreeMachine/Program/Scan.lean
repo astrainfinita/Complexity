@@ -233,13 +233,11 @@ private theorem body_progress (u : TM.Cfg κ (Option Bool) Unit zs) (s d c : κ)
       rw [hv.1,scanCfg_read u s d c copy a xs ys ws hs hx hn]
       cases ((BitList.encodeTree a)[n]'(by simpa using hn)) <;> rfl
     simp only [he] at h₃ ⊢
-    have hv' := at_token u s d c copy a xs.length ys V hs hc hd hF hn hv
+    have hv' := at_token u s d c copy a xs.length ys V hs hc hd hF
+      (v := v.snoc TM.Program.idle) hn (by simpa [At] using hv)
     rcases h₃ with ⟨rfl,rfl,rfl⟩
     refine ⟨by simpa [At] using hv', ?_, by omega⟩
-    have hvlast := hv'.1
-    simp only [History.apply_last] at hvlast
-    simp only [decide_eq_true_eq, History.last_snoc, History.apply_last,
-      TM.Program.idle_apply, hvlast]
+    simp only [decide_eq_true_eq, hv'.1]
     exact scanCfg_counter u s d c copy a xs.length ys hc hd hz (by omega)
   all_goals omega
 

@@ -55,10 +55,8 @@ theorem spec_scan_cfg (u : Cfg κ (Option Bool) Unit zs) (s d c : κ) (copy : Bo
   · rintro v b ⟨hv, hb⟩
     subst v
     refine ⟨rfl, ?_, hb⟩
-    intro i
     rw [Controller.History.visited_nil]
-    change u.workPos i ∈ V i
-    simpa only [scanCfg_zero u s d c copy a xs.length ys hy hp hi hj] using hF 0 (by omega) i
+    exact scanCfg_zero u s d c copy a xs.length ys hy hp hi hj ▸ hF 0 (by omega)
   · intro r v b h
     exact ⟨h.1, h.2.2⟩
 

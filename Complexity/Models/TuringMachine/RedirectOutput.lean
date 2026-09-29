@@ -142,14 +142,12 @@ theorem visited_extra (e : (κ ⊕ Unit) ↪ τ)
     (j : τ) (hj : j ∉ Set.range e) :
     ((compilerAlong e M).runHistoryFrom (cfgAlong e c d) n).visited j =
       NonemptyInterval.pure (d.workPos j) := by
-  apply le_antisymm
-  · apply (TM.runHistoryFrom_visited_le_iff _ _ _ _ _).mpr
-    intro m _
-    simp [runFrom_cfgAlong, hj]
-  · change d.workPos j ∈ ((compilerAlong e M).runHistoryFrom (cfgAlong e c d) n).visited j
-    have h := ((compilerAlong e M).runHistoryFrom (cfgAlong e c d) n).first_head_mem j
-    simpa only [Controller.first_runHistoryFrom, cfgAlong_workPos,
-      Function.Embedding.replace_of_not_mem _ _ _ hj] using h
+  apply eq_of_forall_ge_iff
+  intro V
+  rw [TM.runHistoryFrom_visited_le_iff]
+  simp only [runFrom_cfgAlong, cfgAlong_workPos,
+    Function.Embedding.replace_of_not_mem _ _ _ hj]
+  exact ⟨fun h ↦ h 0 (Nat.zero_le n), fun h _ _ ↦ h⟩
 
 @[simp↓]
 theorem cfg_init (e : (κ ⊕ Unit) ↪ τ) (xs : List Γ) (q : Q) :

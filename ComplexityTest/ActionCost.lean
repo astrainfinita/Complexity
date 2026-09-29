@@ -7,10 +7,8 @@ module
 
 import Complexity.Control.BinaryChoice
 import Complexity.Control.Controller.Cost
-import Complexity.Control.Cost
 meta import Complexity.Control.Controller.Cost
 meta import Complexity.Control.Controller
-meta import Complexity.Control.Cost
 meta import Complexity.Control.BinaryChoice
 meta import Complexity.Control.Controller.RunHistory
 meta import Complexity.Control.Controller.History
@@ -108,22 +106,20 @@ example (n : ℕ) (h : Controller.History Bool Bool)
   have hr := branches.runHistoryFromWith_mem_spec false n hh
   exact ⟨hr.first_eq, hr.length_le⟩
 
-def counterModel : CostModel Unit ℕ where
-  time h := h.actionSum counterCost
-  space h := h.configSup (fun data ↦ if data = 1 then 20 else data + 2)
+def counterSpace (data : ℕ) : ℕ := if data = 1 then 20 else data + 2
 
 -- Zero steps still charge the initial data, and the endpoint is included.
-#guard counterModel.space (counter.runHistoryFrom 0 0) = 2
-#guard counterModel.space (counter.runHistoryFrom 0 1) = 20
+#guard (counter.runHistoryFrom 0 0).configSup counterSpace = 2
+#guard (counter.runHistoryFrom 0 1).configSup counterSpace = 20
 
 -- The peak survives after the data becomes smaller and after the controller halts.
-#guard counterModel.space (counter.runHistoryFrom 0 3) = 20
-#guard counterModel.space (counter.runHistoryFrom 0 20) = 20
-#guard counterModel.space (counter.runHistoryFrom 3 20) = 5
+#guard (counter.runHistoryFrom 0 3).configSup counterSpace = 20
+#guard (counter.runHistoryFrom 0 20).configSup counterSpace = 20
+#guard (counter.runHistoryFrom 3 20).configSup counterSpace = 5
 
 -- One history supplies the endpoint, total charge, and an earlier space peak.
 #guard
   let h := counter.runHistoryFrom 0 20
-  (h.last, counterModel.time h, counterModel.space h) = (3, 6, 20)
+  (h.last, h.actionSum counterCost, h.configSup counterSpace) = (3, 6, 20)
 
 end Complexity.ActionCostTest

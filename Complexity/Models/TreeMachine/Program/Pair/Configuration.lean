@@ -40,10 +40,7 @@ theorem spec_pair_cfg (c : TM.Cfg κ (Option Bool) Unit xs) (i j l : κ)
   · rintro s b ⟨hs, hb⟩
     subst s
     refine ⟨rfl, fun q ↦ ?_, hb⟩
-    rw [Controller.History.visited_nil]
-    change c.workPos q ∈ V q
-    simp only [V, NonemptyInterval.mem_mk]
-    omega
+    simp [V, NonemptyInterval.le_def]
   · intro a s b h
     exact ⟨h.1, h.2.2⟩
 

@@ -68,8 +68,7 @@ theorem runActionSumFrom_succ (cfg : Config) (n : ℕ) :
 theorem runActionSumFrom_add (cfg : Config) (n k : ℕ) :
     M.runActionSumFrom cost cfg (n + k) = M.runActionSumFrom cost cfg n +
       M.runActionSumFrom cost (M.runFrom cfg n) k := by
-  simp only [runActionSumFrom, runHistoryFrom_add, History.actionSum_append]
-  simp only [← runActionSumFrom.eq_def, last_runHistoryFrom]
+  simp only [runActionSumFrom, runHistoryFrom_add, History.actionSum_append, last_runHistoryFrom]
 
 theorem runActionSumFrom_mono (cfg : Config) {n k : ℕ} (h : n ≤ k) :
     M.runActionSumFrom cost cfg n ≤ M.runActionSumFrom cost cfg k := by
@@ -91,8 +90,7 @@ theorem runActionSumFrom_eq_of_halted (cfg : Config) {n k : ℕ}
     (h : M.Halted (Config := Config) (M.runFrom cfg n))
     (hk : n ≤ k) :
     M.runActionSumFrom cost cfg k = M.runActionSumFrom cost cfg n := by
-  obtain ⟨j, rfl⟩ := Nat.exists_eq_add_of_le hk
-  rw [runActionSumFrom_add, M.runActionSumFrom_of_halted cost _ h, Nat.add_zero]
+  simp only [runActionSumFrom, M.runHistoryFrom_eq_of_halted cfg h hk]
 
 /-- Unit charges count at most one executed action per padded transition. -/
 theorem runActionSumFrom_unit_le (cfg : Config) (n : ℕ) :
@@ -140,8 +138,7 @@ def runConfigMaxFrom (cfg : Config) (n : ℕ) : ℕ :=
 theorem runConfigMaxFrom_add (cfg : Config) (n k : ℕ) :
     M.runConfigMaxFrom space cfg (n + k) = max (M.runConfigMaxFrom space cfg n)
       (M.runConfigMaxFrom space (M.runFrom cfg n) k) := by
-  simp only [runConfigMaxFrom, runHistoryFrom_add, History.configSup_append]
-  simp only [← runConfigMaxFrom.eq_def, last_runHistoryFrom]
+  simp only [runConfigMaxFrom, runHistoryFrom_add, History.configSup_append, last_runHistoryFrom]
 
 theorem runConfigMaxFrom_mono (cfg : Config) {n k : ℕ} (h : n ≤ k) :
     M.runConfigMaxFrom space cfg n ≤ M.runConfigMaxFrom space cfg k := by

@@ -6,7 +6,6 @@ Authors: Yuyang Zhao
 module
 
 public import Complexity.Models.TreeMachine.Basic
-public import Complexity.Control.Cost
 public import Complexity.Control.Controller.History.Cost
 public import Mathlib.Algebra.BigOperators.Group.Finset.Piecewise
 public import Mathlib.Algebra.Order.BigOperators.Group.Finset
@@ -63,12 +62,6 @@ theorem Op.timeCost_rename {l : ℕ} (f : Fin k → Fin l) (ρ : Fin l → Tree)
 
 /-- The charge for the instruction selected at this configuration. -/
 def Action.timeCost (a : Action k Q) (c : Cfg k Q) : ℕ := a.op.timeCost c.regs
-
-/-- Charge the written tree's size and measure the peak expanded register size. -/
-@[simps]
-def treeCosts : CostModel (Action k Q) (Cfg k Q) where
-  time h := h.actionSum Action.timeCost
-  space h := h.configSup Cfg.mass
 
 private theorem sum_size_update_le (ρ : Fin k → Tree) (i : Fin k) (a : Tree) :
     (∑ j, (Function.update ρ i a j).size) ≤ (∑ j, (ρ j).size) + a.size := by

@@ -7,7 +7,7 @@ module
 
 public import Complexity.Models.TuringMachine.Program.Basic
 public import Complexity.Control.Program.Correctness
-public import Complexity.Control.Controller.History.Execution
+public import Complexity.Control.Controller.RunHistory
 public import Complexity.Models.TuringMachine.Simulation
 
 /-!
@@ -51,21 +51,12 @@ theorem run_compile {p : TM.Program κ Γ α} {q : p.State ⊕ p.Exit}
   induction h generalizing u with
   | done e s => exact ⟨e, rfl, hq, hu⟩
   | step q s h ih =>
-    have ho : (observe u : Γ × (κ → Γ)) = observe s := by
-      simp only [← hu, History.observe_mapState]
-    have hstep : (compile p).step u =
-        apply (((p.toControl eval).next q (observe s)).1.mapState
-          (fun _ ↦ ((p.toControl eval).next q (observe s)).2)) u := by
-      rw [step_compile p q u hq, ho]
-    have hu' : ((compile p).step u).mapState (fun _ ↦ ()) =
-        apply ((p.toControl eval).next q (observe s)).1 s := by
-      rw [hstep, ← History.apply_mapState, Action.mapState_mapState, hu]
+    apply ih ((compile p).step u)
+    · rw [step_compile p q u hq, ← History.apply_mapState,
+        Action.mapState_mapState, ← hu, History.observe_mapState]
       rfl
-    have hq' : ((compile p).step u).last.state =
-        ((p.toControl eval).next q (observe s)).2 := by
-      rw [hstep, History.apply_last]
-      rfl
-    exact ih ((compile p).step u) hu' hq'
+    · simp only [step_compile p q u hq, History.apply_last, apply_state,
+        Action.mapState_state, ← hu, History.observe_mapState]
 
 /-- A fresh source execution and its compiled history visit the same work cells. -/
 theorem history_space_compile [Fintype κ] {p : TM.Program κ Γ α}
@@ -74,11 +65,7 @@ theorem history_space_compile [Fintype κ] {p : TM.Program κ Γ α}
     (h : Program.Control.Run (p.toControl eval) p.result observe (apply)
       q (History.nil c) n a t) :
     ((compile p).runHistoryFrom (c.mapState (fun _ ↦ q)) n).space = t.space := by
-  have hu : (History.nil (Action := Action κ Γ (p.State ⊕ p.Exit))
-      (c.mapState (fun _ ↦ q))).mapState (fun _ ↦ ()) = History.nil c := by
-    rw [History.mapState_nil, Cfg.mapState_mapState]
-    rfl
-  obtain ⟨_, _, _, hr⟩ := run_compile h (History.nil (c.mapState (fun _ ↦ q))) hu rfl
+  obtain ⟨_, _, _, hr⟩ := run_compile h (History.nil (c.mapState (fun _ ↦ q))) rfl rfl
   simp only [Controller.runFrom_nil] at hr
   simpa only [History.space_mapState] using congrArg History.space hr
 
@@ -90,12 +77,9 @@ theorem computesInTimeAndSpace_of_exec [Fintype κ] (p : TM.Program κ Γ α) {y
       p (History.nil ((rawExecution xs.toList).init ())) n a v)
     (hn : n ≤ t) (ho : v.last.output = ys) (hs : v.space ≤ s) :
     (compile p).ComputesInTimeAndSpace xs.toList ys.toList t s := by
-  let u := History.nil (Action := Action κ Γ (p.State ⊕ p.Exit))
-    ((rawExecution (κ := κ) xs.toList).init (compile p).q₀)
-  obtain ⟨e, _, hh, hr⟩ := run_compile h.toControl u (by
-    rw [History.mapState_nil]
-    rfl) rfl
-  simp only [u, Controller.runFrom_nil] at hh hr
+  obtain ⟨e, _, hh, hr⟩ := run_compile h.toControl
+    (History.nil ((rawExecution xs.toList).init (compile p).q₀)) rfl rfl
+  simp only [Controller.runFrom_nil] at hh hr
   simp only [← hr, History.last_mapState, Cfg.mapState_output, History.space_mapState] at ho hs
   exact ⟨n, (congrArg (compile p).halt hh).trans rfl, ho,
     ((compile p).runHistory_spec _ _ n).length_le.trans hn, hs⟩

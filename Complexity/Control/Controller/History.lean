@@ -33,18 +33,42 @@ variable {Config Action Config' Action' : Type*}
 def length (p : History Config Action) : ℕ := p.actions.length
 
 /-- A history with no actions. -/
-@[simps actions]
+@[simps first actions]
 def nil (c : Config) : History Config Action := ⟨c, []⟩
 
 @[simp] theorem nil_length (c : Config) : (nil (Action := Action) c).length = 0 := rfl
 
 /-- Append one action at the last configuration. -/
-@[simps actions]
+@[simps first actions]
 def snoc (p : History Config Action) (a : Action) : History Config Action :=
   ⟨p.first, p.actions ++ [a]⟩
 
 @[simp] theorem snoc_length (p : History Config Action) (a : Action) :
     (p.snoc a).length = p.length + 1 := by simp [length]
+
+/-- Map the initial configuration and recorded actions. -/
+@[simps first actions]
+def map (p : History Config Action) (f : Config → Config') (g : Action → Action') :
+    History Config' Action' :=
+  ⟨f p.first, p.actions.map g⟩
+
+@[simp] theorem map_length (p : History Config Action) (f : Config → Config')
+    (g : Action → Action') : (p.map f g).length = p.length := by simp [length]
+
+@[simp] theorem map_nil (c : Config) (f : Config → Config') (g : Action → Action') :
+    (nil c).map f g = nil (f c) := rfl
+
+@[simp] theorem map_id (p : History Config Action) : p.map id id = p := by
+  cases p; simp [map]
+
+@[simp] theorem map_map (p : History Config Action) (f : Config → Config')
+    (g : Action → Action') {Config'' Action'' : Type*}
+    (f' : Config' → Config'') (g' : Action' → Action'') :
+    (p.map f g).map f' g' = p.map (f' ∘ f) (g' ∘ g) := by simp [map, List.map_map]
+
+@[simp] theorem map_snoc (p : History Config Action) (a : Action)
+    (f : Config → Config') (g : Action → Action') :
+    (p.snoc a).map f g = (p.map f g).snoc (g a) := by simp [map, snoc]
 
 variable [Apply Config Action] [Apply Config' Action']
 
@@ -70,24 +94,18 @@ theorem first_mem_configs (p : History Config Action) : p.first ∈ p.configs :=
 theorem last_mem_configs (p : History Config Action) : p.last ∈ p.configs := by
   simpa only [configs, last, List.getLast_scanl] using List.getLast_mem p.configs_ne_nil
 
-omit [Apply Config Action] in
-@[simp] theorem first_nil (c : Config) : (nil (Action := Action) c).first = c := rfl
-
 @[simp] theorem last_nil (c : Config) : (nil (Action := Action) c).last = c := rfl
 
 @[simp] theorem configs_nil (c : Config) :
     (nil (Action := Action) c).configs = [c] := by simp [configs]
 
 /-- Prepend an action whose successor is the first configuration of the remaining history. -/
-@[simps actions]
+@[simps first actions]
 def cons (c : Config) (a : Action) (tail : History Config Action)
     (_h : tail.first = apply a c) : History Config Action := ⟨c, a :: tail.actions⟩
 
 @[simp] theorem cons_length (c : Config) (a : Action) (tail : History Config Action)
     (h : tail.first = apply a c) : (cons c a tail h).length = tail.length + 1 := rfl
-
-@[simp] theorem first_cons (c : Config) (a : Action) (tail : History Config Action)
-    (h : tail.first = apply a c) : (cons c a tail h).first = c := rfl
 
 @[simp] theorem last_cons (c : Config) (a : Action) (tail : History Config Action)
     (h : tail.first = apply a c) : (cons c a tail h).last = tail.last := by
@@ -96,20 +114,6 @@ def cons (c : Config) (a : Action) (tail : History Config Action)
 @[simp] theorem configs_cons (c : Config) (a : Action) (tail : History Config Action)
     (h : tail.first = apply a c) : (cons c a tail h).configs = c :: tail.configs := by
   simp [configs, ← h]
-
-/-- Map the initial configuration and recorded actions. -/
-@[simps actions]
-def map (p : History Config Action) (f : Config → Config') (g : Action → Action') :
-    History Config' Action' :=
-  ⟨f p.first, p.actions.map g⟩
-
-omit [Apply Config Action] [Apply Config' Action'] in
-@[simp] theorem map_length (p : History Config Action) (f : Config → Config')
-    (g : Action → Action') : (p.map f g).length = p.length := by simp [length]
-
-omit [Apply Config Action] [Apply Config' Action'] in
-@[simp] theorem first_map (p : History Config Action) (f : Config → Config')
-    (g : Action → Action') : (p.map f g).first = f p.first := rfl
 
 @[simp] theorem last_map (p : History Config Action) (f : Config → Config')
     (g : Action → Action') (h : ∀ a c, f (apply a c) = apply (g a) (f c)) :
@@ -126,30 +130,13 @@ omit [Apply Config Action] [Apply Config' Action'] in
   | nil => simp
   | cons a as ih => simp [← h, ih]
 
-omit [Apply Config Action] [Apply Config' Action'] in
-@[simp] theorem map_nil (c : Config) (f : Config → Config') (g : Action → Action') :
-    (nil c).map f g = nil (f c) := rfl
-
-omit [Apply Config Action] in
-@[simp] theorem map_id (p : History Config Action) : p.map id id = p := by
-  cases p; simp [map]
-
-omit [Apply Config Action] [Apply Config' Action'] in
-@[simp] theorem map_map (p : History Config Action) (f : Config → Config')
-    (g : Action → Action') {Config'' Action'' : Type*}
-    (f' : Config' → Config'') (g' : Action' → Action'') :
-    (p.map f g).map f' g' = p.map (f' ∘ f) (g' ∘ g) := by simp [map, List.map_map]
-
 /-- Join histories at their common configuration, recording it only once. -/
-@[simps actions]
+@[simps first actions]
 def append (p q : History Config Action) (_h : p.last = q.first) : History Config Action :=
   ⟨p.first, p.actions ++ q.actions⟩
 
 @[simp] theorem append_length (p q : History Config Action) (h : p.last = q.first) :
     (p.append q h).length = p.length + q.length := by simp [length]
-
-@[simp] theorem first_append (p q : History Config Action) (h : p.last = q.first) :
-    (p.append q h).first = p.first := rfl
 
 @[simp] theorem last_append (p q : History Config Action) (h : p.last = q.first) :
     (p.append q h).last = q.last := by
@@ -183,10 +170,6 @@ theorem append_assoc (p q r : History Config Action)
     (p.append q hpq).append r (by simpa using hqr) =
       p.append (q.append r hqr) (by simpa using hpq) := by simp [append, List.append_assoc]
 
-omit [Apply Config Action] in
-@[simp] theorem first_snoc (p : History Config Action) (a : Action) :
-    (p.snoc a).first = p.first := rfl
-
 @[simp] theorem last_snoc (p : History Config Action) (a : Action) :
     (p.snoc a).last = apply a p.last := by simp [last]
 
@@ -197,13 +180,8 @@ omit [Apply Config Action] in
 theorem snoc_append (p q : History Config Action) (a : Action)
     (h : q.first = apply a p.last) :
     (p.snoc a).append q (by simpa only [last_snoc] using h.symm) =
-      p.append (cons p.last a q h) (by simp only [first_cons]) := by
+      p.append (cons p.last a q h) (by simp only [cons_first]) := by
   simp [append, List.append_assoc]
-
-omit [Apply Config Action] [Apply Config' Action'] in
-@[simp] theorem map_snoc (p : History Config Action) (a : Action)
-    (f : Config → Config') (g : Action → Action') :
-    (p.snoc a).map f g = (p.map f g).snoc (g a) := by simp [map, snoc]
 
 @[simps]
 instance {Q : Type*} [HasState Config Q] : HasState (History Config Action) Q where
@@ -222,4 +200,9 @@ instance : Apply (History Config Action) Action where
     (apply a p).last = apply a p.last := last_snoc _ _
 
 end History
+
+@[simp] theorem halted_history {F : Type _ → Type*} {Config Action Observation Q : Type*}
+    [Apply Config Action] [HasState Config Q] (M : Controller F Observation Action Q)
+    (p : History Config Action) : M.Halted p ↔ M.Halted p.last := Iff.rfl
+
 end Complexity.Controller

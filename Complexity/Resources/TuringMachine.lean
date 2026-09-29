@@ -40,7 +40,7 @@ def Computes {κ : Type*} [Fintype κ] {Q : Type*} (M : TM Id κ (Option Bool) Q
     (fun xs ys time space =>
       M.computes (Output := List Bool)
         (Config := Cfg κ (Option Bool) Q ((xs.map some).toArray))
-        visitedCosts xs ys time space)
+        Controller.History.length Controller.History.space xs ys time space)
     List.length f t s
 
 /-- The common bit-string execution recovers the original encoded machine specification. -/
