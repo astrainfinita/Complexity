@@ -37,36 +37,22 @@ theorem step_compile (p : TM.Program κ Γ α) (q : p.State)
   rw [Controller.step_eq, History.state_def, Cfg.state_def, hs]
   rfl
 
-/-- Erasing control labels identifies the compiled history with the source history.
-Earlier labels remain intact; only the final label is the returned exit. -/
+/-- Compilation preserves the final configuration and visited intervals. -/
 theorem run_compile {p : TM.Program κ Γ α} {q : p.State ⊕ p.Exit}
     {s t : History (Cfg κ Γ Unit xs) (Action κ Γ Unit)} {n : ℕ} {a : α}
-    (h : Program.Control.Run (p.toControl eval) p.result
-      observe (apply) q s n a t)
+    (h : Program.Control.Run (p.toControl eval) p.result observe (apply) q s n a t)
     (u : History (Cfg κ Γ (p.State ⊕ p.Exit) xs) (Action κ Γ (p.State ⊕ p.Exit)))
-    (hu : u.mapState (fun _ ↦ ()) = s) (hq : u.last.state = q) :
+    (hc : u.last = s.last.mapState (fun _ ↦ q)) (hv : u.visited = s.visited) :
     ∃ e : p.Exit, p.result e = a ∧
-      ((compile p).runFrom u n).last.state = .inr e ∧
-      ((compile p).runFrom u n).mapState (fun _ ↦ ()) = t := by
+      ((compile p).runFrom u n).last = t.last.mapState (fun _ ↦ Sum.inr e) ∧
+      ((compile p).runFrom u n).visited = t.visited := by
   induction h generalizing u with
-  | done e s => exact ⟨e, rfl, hq, hu⟩
+  | done e s => exact ⟨e, rfl, hc, hv⟩
   | step q s h ih =>
-    apply ih ((compile p).step u)
-    · rw [step_compile p q u hq, ← History.apply_mapState,
-        Action.mapState_mapState, ← hu, History.observe_mapState]
-      rfl
-    · simp only [step_compile p q u hq, History.apply_last, apply_state,
-        Action.mapState_state, ← hu, History.observe_mapState]
-
-/-- Compilation preserves space, including visits recorded before the source execution. -/
-theorem history_space_compile [Fintype κ] {p : TM.Program κ Γ α}
-    {q : p.State ⊕ p.Exit} {s t : History (Cfg κ Γ Unit xs) (Action κ Γ Unit)}
-    {n : ℕ} {a : α}
-    (h : Program.Control.Run (p.toControl eval) p.result observe (apply) q s n a t) :
-    ((compile p).runFrom (s.mapState (fun _ ↦ q)) n).space = t.space := by
-  obtain ⟨_, _, _, hr⟩ := run_compile h (s.mapState (fun _ ↦ q))
-    (by rw [History.mapState_mapState]; exact History.mapState_id s) (by simp)
-  simpa only [History.space_mapState] using congrArg History.space hr
+    have hq : u.last.state = .inl q := by simp [hc]
+    apply ih ((compile p).step u) <;>
+      simp [step_compile p q u hq, hc, hv, History.observe_def, Cfg.observe_def]
+    rfl
 
 /-- A source execution proves output, time, and visited-cell space of the compiled machine. -/
 theorem computesInTimeAndSpace_of_exec [Fintype κ] (p : TM.Program κ Γ α) {ys : Array Γ}
@@ -76,12 +62,11 @@ theorem computesInTimeAndSpace_of_exec [Fintype κ] (p : TM.Program κ Γ α) {y
       p (History.nil ((rawExecution xs.toList).init ())) n a v)
     (hn : n ≤ t) (ho : v.last.output = ys) (hs : v.space ≤ s) :
     (compile p).ComputesInTimeAndSpace xs.toList ys.toList t s := by
-  obtain ⟨e, _, hh, hr⟩ := run_compile h.toControl
-    (History.nil ((rawExecution xs.toList).init (compile p).q₀)) rfl rfl
-  simp only [Controller.runFrom_nil] at hh hr
-  simp only [← hr, History.last_mapState, Cfg.mapState_output, History.space_mapState] at ho hs
-  simp only [Controller.last_runHistoryFrom] at hh ho
-  exact ⟨n, (congrArg (compile p).halt hh).trans rfl, ho,
-    ((compile p).runHistory_spec _ _ n).length_le.trans hn, hs⟩
+  obtain ⟨e, _, hc, hv⟩ := run_compile h.toControl
+    (History.nil ((rawExecution xs.toList).init (compile p).q₀)) rfl (by simp)
+  simp only [Controller.runFrom_nil, Controller.last_runHistoryFrom] at hc hv
+  exact ⟨n, (congrArg ((compile p).halt ∘ Cfg.state) hc).trans rfl,
+    (congrArg Cfg.output hc).trans ho, ((compile p).runHistory_spec _ _ n).length_le.trans hn,
+    (History.space_le_of_visited_le _ _ hv.le).trans hs⟩
 
 end Complexity.TM.Program

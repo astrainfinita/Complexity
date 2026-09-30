@@ -162,7 +162,7 @@ theorem spec_copy (c : TM.Cfg κ (Option Bool) Unit xs) (i j : κ)
         · exact hhead
       unfold copyBody
       vcgen
-      all_goals aesop (add simp [I, copied_next])
+      all_goals simp_all [I, copied_next, -History.visited_snoc]
     · intro q
       have he : (copied c i j w (v.take v.length)).workSymbols j = none := by
         rw [copied_read c i j w u v hij ht hp v.length le_rfl]

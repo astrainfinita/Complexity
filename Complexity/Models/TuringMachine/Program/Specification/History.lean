@@ -142,10 +142,7 @@ theorem cfg_computesInTimeAndSpace [Fintype κ] {p : TM.Program κ Γ α} {ys : 
   obtain ⟨v, hv, hr⟩ := Program.Exec.lift History.last
     (e' := semantics xs)
     (fun _ ↦ rfl) (fun _ _ ↦ by simp) he (History.nil ((rawExecution xs.toList).init ())) rfl
-  apply computesInTimeAndSpace_of_exec p hr hn (by rw [hv]; exact ho)
-  rw [← history_space_compile hr.toControl, History.mapState_nil, Controller.runFrom_nil]
-  exact (History.space_le_length _).trans (Nat.mul_le_mul_left _
-    (Nat.succ_le_succ (((compile p).runHistoryFrom_spec _ n).length_le.trans hn)))
+  exact (computesInTimeAndSpace_of_exec p hr hn (by rw [hv]; exact ho) le_rfl).space_of_time
 
 end Configuration
 

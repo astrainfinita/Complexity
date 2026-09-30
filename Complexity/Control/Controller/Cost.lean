@@ -11,8 +11,8 @@ public import Complexity.Control.Controller.History.Cost
 /-!
 # Measurements of controller histories
 
-Action sums and configuration maxima are projections of the same execution history.
-Actions are charged at their source configuration. The maximum includes both endpoints.
+Action sums and configuration suprema are projections of the same execution history.
+Actions are charged at their source configuration. Configuration suprema include both endpoints.
 Halting padding adds neither actions nor configurations.
 -/
 
@@ -25,142 +25,75 @@ namespace Complexity.Controller
 variable {F : Type u → Type*} {Observation : Type*} {Action Config : Type u}
   {Q : Type*}
 
-section StepCost
-
-variable {Action Config : Type*}
-variable (M : Controller Id Observation Action Q)
-  [HasState Config Q] [Observe Config Observation] (cost : Action → Config → ℕ)
-
-/-- Charge the action selected by a deterministic controller, or zero after halting. -/
-def stepCost (cfg : Config) : ℕ :=
-  if M.halt (state cfg) then 0
-  else cost ((M.transition (state cfg) (observe cfg)).run) cfg
-
-theorem stepCost_of_halted (cfg : Config) (h : M.Halted cfg) :
-    M.stepCost cost cfg = 0 := by
-  simp [stepCost, show M.halt (state cfg) = true from h]
-
-end StepCost
-
 section Deterministic
 
 variable (M : Controller Id Observation Action Q)
   [HasState Config Q] [Observe Config Observation] [Apply Config Action]
   (cost : Action → Config → ℕ)
 
-/-- Accumulate action charges along deterministic execution. -/
-def runActionSumFrom (cfg : Config) (n : ℕ) : ℕ :=
-  (M.runHistoryFrom cfg n).actionSum cost
-
-/-- Unit charges count exactly the actions recorded in the execution history. -/
-@[simp] theorem runActionSumFrom_unit (cfg : Config) (n : ℕ) :
-    M.runActionSumFrom (fun _ _ ↦ 1) cfg n = (M.runHistoryFrom cfg n).length :=
-  (M.runHistoryFrom cfg n).actionSum_unit
-
-@[simp] theorem runActionSumFrom_zero (cfg : Config) : M.runActionSumFrom cost cfg 0 = 0 := by
-  simp [runActionSumFrom]
-
-theorem runActionSumFrom_succ (cfg : Config) (n : ℕ) :
-    M.runActionSumFrom cost cfg (n + 1) = M.stepCost cost cfg +
-      M.runActionSumFrom cost (M.step cfg) n := by
+/-- A one-step history charges the selected action, or zero if the machine has halted. -/
+theorem actionSum_runHistoryFrom_one (cfg : Config) :
+    (M.runHistoryFrom cfg 1).actionSum cost =
+      if M.halt (state cfg) then 0
+      else cost ((M.transition (state cfg) (observe cfg)).run) cfg := by
   by_cases h : M.Halted cfg
-  · rw [M.step_of_halted cfg h, M.stepCost_of_halted cost cfg h]
-    simp [runActionSumFrom, M.runHistoryFrom_of_halted cfg h]
-  · rw [M.step_of_not_halted cfg h]
-    simp [runActionSumFrom, M.runHistoryFrom_succ_of_not_halted cfg h, stepCost,
+  · simp [M.runHistoryFrom_of_halted cfg h, show M.halt (state cfg) = true from h]
+  · simp [M.runHistoryFrom_succ_of_not_halted cfg h,
       show M.halt (state cfg) ≠ true from h]
 
-theorem runActionSumFrom_add (cfg : Config) (n k : ℕ) :
-    M.runActionSumFrom cost cfg (n + k) = M.runActionSumFrom cost cfg n +
-      M.runActionSumFrom cost (M.runFrom cfg n) k := by
-  simp only [runActionSumFrom, runHistoryFrom_add, History.actionSum_append, last_runHistoryFrom]
+theorem actionSum_runHistoryFrom_add (cfg : Config) (n k : ℕ) :
+    (M.runHistoryFrom cfg (n + k)).actionSum cost =
+      (M.runHistoryFrom cfg n).actionSum cost +
+        (M.runHistoryFrom (M.runFrom cfg n) k).actionSum cost := by
+  simp only [runHistoryFrom_add, History.actionSum_append, last_runHistoryFrom]
 
-theorem runActionSumFrom_mono (cfg : Config) {n k : ℕ} (h : n ≤ k) :
-    M.runActionSumFrom cost cfg n ≤ M.runActionSumFrom cost cfg k := by
+theorem actionSum_runHistoryFrom_mono (cfg : Config) {n k : ℕ} (h : n ≤ k) :
+    (M.runHistoryFrom cfg n).actionSum cost ≤ (M.runHistoryFrom cfg k).actionSum cost := by
   obtain ⟨k, rfl⟩ := Nat.exists_eq_add_of_le h
-  rw [runActionSumFrom_add]
+  rw [actionSum_runHistoryFrom_add]
   exact Nat.le_add_right _ _
-
-theorem runActionSumFrom_succ' (cfg : Config) (n : ℕ) :
-    M.runActionSumFrom cost cfg (n + 1) = M.runActionSumFrom cost cfg n +
-      M.stepCost cost (M.runFrom cfg n) := by
-  rw [runActionSumFrom_add, runActionSumFrom_succ, runActionSumFrom_zero, Nat.add_zero]
-
-theorem runActionSumFrom_of_halted (cfg : Config) (h : M.Halted cfg) (n : ℕ) :
-    M.runActionSumFrom cost cfg n = 0 := by
-  simp [runActionSumFrom, M.runHistoryFrom_of_halted cfg h]
-
-/-- Padding a run after its halting point does not add action charges. -/
-theorem runActionSumFrom_eq_of_halted (cfg : Config) {n k : ℕ}
-    (h : M.Halted (Config := Config) (M.runFrom cfg n))
-    (hk : n ≤ k) :
-    M.runActionSumFrom cost cfg k = M.runActionSumFrom cost cfg n := by
-  simp only [runActionSumFrom, M.runHistoryFrom_eq_of_halted cfg h hk]
-
-/-- Pointwise larger action charges give a larger total on the same history. -/
-theorem runActionSumFrom_mono_cost {cost cost' : Action → Config → ℕ}
-    (h : ∀ a c, cost a c ≤ cost' a c) (cfg : Config) (n : ℕ) :
-    M.runActionSumFrom cost cfg n ≤ M.runActionSumFrom cost' cfg n :=
-  (M.runHistoryFrom cfg n).actionSum_mono fun a c _ ↦ h a c
 
 end Deterministic
 
-section Space
+section ConfigSup
 
 variable (M : Controller Id Observation Action Q)
-  [HasState Config Q] [Observe Config Observation] [Apply Config Action] (space : Config → ℕ)
+  [HasState Config Q] [Observe Config Observation] [Apply Config Action]
+  {α : Type*} [SemilatticeSup α] (space : Config → α)
 
-/-- Maximum configuration space charge through the given number of steps, including time zero. -/
-def runConfigMaxFrom (cfg : Config) (n : ℕ) : ℕ :=
-  (M.runHistoryFrom cfg n).configSup space
+/-- Sequential segments combine their configuration measurements by taking the supremum. -/
+theorem configSup_runHistoryFrom_add (cfg : Config) (n k : ℕ) :
+    (M.runHistoryFrom cfg (n + k)).configSup space =
+      (M.runHistoryFrom cfg n).configSup space ⊔
+        (M.runHistoryFrom (M.runFrom cfg n) k).configSup space := by
+  simp only [runHistoryFrom_add, History.configSup_append, last_runHistoryFrom]
 
-@[simp] theorem runConfigMaxFrom_zero (cfg : Config) :
-    M.runConfigMaxFrom space cfg 0 = space cfg := by
-  simp [runConfigMaxFrom]
-
-/-- Sequential segments combine their configuration peaks by taking the maximum. -/
-theorem runConfigMaxFrom_add (cfg : Config) (n k : ℕ) :
-    M.runConfigMaxFrom space cfg (n + k) = max (M.runConfigMaxFrom space cfg n)
-      (M.runConfigMaxFrom space (M.runFrom cfg n) k) := by
-  simp only [runConfigMaxFrom, runHistoryFrom_add, History.configSup_append, last_runHistoryFrom]
-
-theorem runConfigMaxFrom_mono (cfg : Config) {n k : ℕ} (h : n ≤ k) :
-    M.runConfigMaxFrom space cfg n ≤ M.runConfigMaxFrom space cfg k := by
+theorem configSup_runHistoryFrom_mono (cfg : Config) {n k : ℕ} (h : n ≤ k) :
+    (M.runHistoryFrom cfg n).configSup space ≤ (M.runHistoryFrom cfg k).configSup space := by
   obtain ⟨k, rfl⟩ := Nat.exists_eq_add_of_le h
-  rw [runConfigMaxFrom_add]
-  exact le_max_left _ _
+  rw [configSup_runHistoryFrom_add]
+  exact le_sup_left
 
-/-- The peak bounds each configuration, including the initial and final ones. -/
-theorem space_le_runConfigMaxFrom (cfg : Config) {i n : ℕ} (h : i ≤ n) :
-    space (M.runFrom cfg i) ≤ M.runConfigMaxFrom space cfg n :=
+/-- The supremum bounds each configuration measurement, including both endpoints. -/
+theorem config_le_configSup_runHistoryFrom (cfg : Config) {i n : ℕ} (h : i ≤ n) :
+    space (M.runFrom cfg i) ≤ (M.runHistoryFrom cfg n).configSup space :=
   (M.runHistoryFrom cfg n).config_le_configSup space
     ((M.mem_configs_runHistoryFrom cfg n _).mpr ⟨i, h, rfl⟩)
 
-theorem runConfigMaxFrom_le_iff (cfg : Config) (n bound : ℕ) :
-    M.runConfigMaxFrom space cfg n ≤ bound ↔
+theorem configSup_runHistoryFrom_le_iff (cfg : Config) (n : ℕ) (bound : α) :
+    (M.runHistoryFrom cfg n).configSup space ≤ bound ↔
       ∀ i ≤ n, space (M.runFrom cfg i) ≤ bound := by
-  simp only [runConfigMaxFrom, History.configSup_le_iff, mem_configs_runHistoryFrom,
+  simp only [History.configSup_le_iff, mem_configs_runHistoryFrom,
     forall_exists_index, and_imp, forall_apply_eq_imp_iff₂]
 
-/-- Extending a run retains the previous peak and includes the new endpoint. -/
-theorem runConfigMaxFrom_succ (cfg : Config) (n : ℕ) :
-    M.runConfigMaxFrom space cfg (n + 1) = max (M.runConfigMaxFrom space cfg n)
-      (space (M.runFrom cfg (n + 1))) := by
+/-- Extending a run retains the previous supremum and includes the new endpoint. -/
+theorem configSup_runHistoryFrom_succ (cfg : Config) (n : ℕ) :
+    (M.runHistoryFrom cfg (n + 1)).configSup space =
+      (M.runHistoryFrom cfg n).configSup space ⊔ space (M.runFrom cfg (n + 1)) := by
   apply eq_of_forall_ge_iff
   intro bound
-  simp only [runConfigMaxFrom_le_iff, max_le_iff, Nat.le_succ_iff, or_imp,
+  simp only [configSup_runHistoryFrom_le_iff, sup_le_iff, Nat.le_succ_iff, or_imp,
     forall_and, forall_eq]
 
-theorem runConfigMaxFrom_of_halted (cfg : Config) (h : M.Halted cfg) (n : ℕ) :
-    M.runConfigMaxFrom space cfg n = space cfg := by
-  simp [runConfigMaxFrom, M.runHistoryFrom_of_halted cfg h]
-
-/-- Once a run halts, padding preserves its peak space rather than only its final space. -/
-theorem runConfigMaxFrom_eq_of_halted (cfg : Config) {n k : ℕ}
-    (h : M.Halted (Config := Config) (M.runFrom cfg n))
-    (hk : n ≤ k) :
-    M.runConfigMaxFrom space cfg k = M.runConfigMaxFrom space cfg n := by
-  simp only [runConfigMaxFrom, M.runHistoryFrom_eq_of_halted cfg h hk]
-
-end Space
+end ConfigSup
 end Complexity.Controller

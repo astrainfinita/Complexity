@@ -61,11 +61,10 @@ def c : Cfg 3 Bool := Cfg.mk grow.q₀ ![b, a, Tree.nil]
 #guard (grow.step c).mass = 13
 #guard (grow.step c).regs 0 = b
 #guard (grow.step c).regs 2 = Tree.nil
-#guard grow.cost c 1 = 7
-#guard grow.cost c 20 = 7
-#guard (grow.runHistoryFrom c 20).length = 1
-#guard Controller.runConfigMaxFrom grow Cfg.mass c 20 = 13
+#guard (grow.runHistoryFrom c 1).actionSum Action.timeCost = 7
 #guard (grow.runHistoryFrom c 20).actionSum Action.timeCost = 7
+#guard (grow.runHistoryFrom c 20).length = 1
+#guard (grow.runHistoryFrom c 20).configSup Cfg.mass = 13
 
 -- Writing an empty leaf costs one even when it replaces a larger tree.
 def shrink : TreeMachine Id 3 Bool where
@@ -75,8 +74,8 @@ def shrink : TreeMachine Id 3 Bool where
 
 #guard (shrink.step c).mass = 5
 #guard (shrink.step c).regs 1 = a
-#guard shrink.cost c 20 = 1
-#guard Controller.runConfigMaxFrom shrink Cfg.mass c 20 = 9
+#guard (shrink.runHistoryFrom c 20).actionSum Action.timeCost = 1
+#guard (shrink.runHistoryFrom c 20).configSup Cfg.mass = 9
 
 -- Fully expanded destination size is charged even if the runtime can share subtrees.
 def double : TreeMachine Id 1 Bool where
@@ -85,9 +84,9 @@ def double : TreeMachine Id 1 Bool where
   transition _ _ := pure <| Action.assign false (.pair 0 0 0)
 
 #guard Tree.size ((double.run (Cfg 1 Bool) Tree.nil 6).regs 0) = 127
-#guard double.runActionSum Action.timeCost Tree.nil 6 = 246
-#guard double.runActionSum (Config := Cfg 1 Bool) (fun _ _ => 1) Tree.nil 6 = 6
-#guard double.runConfigMax (Config := Cfg 1 Bool) Cfg.mass Tree.nil 6 = 127
+#guard (double.runHistory _ Tree.nil 6).actionSum Action.timeCost = 246
+#guard (double.runHistory (Cfg 1 Bool) Tree.nil 6).length = 6
+#guard (double.runHistory (Cfg 1 Bool) Tree.nil 6).configSup Cfg.mass = 127
 
 -- An active identity transition still costs one; an initially halted machine costs zero.
 def idle (q : Bool) : TreeMachine Id 0 Bool where
@@ -95,11 +94,12 @@ def idle (q : Bool) : TreeMachine Id 0 Bool where
   halt := id
   transition _ _ := pure <| Action.keep false
 
-#guard (idle false).cost (Cfg.mk (idle false).q₀ Fin.elim0) 5 = 5
-#guard (idle true).cost (Cfg.mk (idle true).q₀ Fin.elim0) 5 = 0
+#guard ((idle false).runHistoryFrom (Cfg.mk (idle false).q₀ Fin.elim0) 5).actionSum
+  Action.timeCost = 5
+#guard ((idle true).runHistoryFrom (Cfg.mk (idle true).q₀ Fin.elim0) 5).actionSum
+  Action.timeCost = 0
 #guard ((idle true).runHistoryFrom (Cfg.mk (idle true).q₀ Fin.elim0) 5).length = 0
-#guard Controller.runConfigMaxFrom (idle true) Cfg.mass
-  (Cfg.mk (idle true).q₀ Fin.elim0) 5 = 0
+#guard ((idle true).runHistoryFrom (Cfg.mk (idle true).q₀ Fin.elim0) 5).configSup Cfg.mass = 0
 
 -- `nop` preserves a register bank while changing the selected control state.
 #guard (apply (Action.assign true (.nop : Op 2)) (Cfg.mk false ![a, b])).regs 0 = a

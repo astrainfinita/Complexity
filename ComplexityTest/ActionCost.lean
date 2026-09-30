@@ -73,17 +73,11 @@ example : inferredState = true := rfl
 #guard (counter.runHistoryFrom 0 20).length = 3
 #guard (counter.runHistoryFrom 0 0).length = 0
 #guard (counter.runHistoryFrom 0 20).configs = [0, 1, 2, 3]
-#guard counter.runActionSumFrom counterCost 0 20 = 6
-#guard counter.runActionSumFrom (fun _ _ => 1) 0 20 = 3
-#guard counter.runActionSumFrom counterCost 3 20 = 0
+#guard (counter.runHistoryFrom 3 20).actionSum counterCost = 0
 
 -- Reading a measurement does not change the recorded execution.
 example (data n : ℕ) : (counter.runHistoryFrom data n).last = counter.runFrom data n :=
   counter.last_runHistoryFrom data n
-
-example (data n : ℕ) :
-    (counter.runHistoryFrom data n).actionSum counterCost =
-      counter.runActionSumFrom counterCost data n := rfl
 
 -- Conditions can be attached to a history without changing its data type.
 example (data n : ℕ) (h : Controller.History ℕ Unit)

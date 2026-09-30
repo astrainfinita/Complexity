@@ -62,6 +62,14 @@ def ComputesInTimeAndSpace [Fintype κ] (M : TM Id κ Γ Q) (xs ys : List Γ)
   M.computes (Config := Cfg κ Γ Q xs.toArray)
     Controller.History.length Controller.History.space xs ys t s
 
+/-- Unit-time computation visits at most one new cell per tape per transition. -/
+theorem ComputesInTimeAndSpace.space_of_time [Fintype κ] {M : TM Id κ Γ Q}
+    {xs ys : List Γ} {t s : ℕ} (h : M.ComputesInTimeAndSpace xs ys t s) :
+    M.ComputesInTimeAndSpace xs ys t (Fintype.card κ * (t + 1)) := by
+  obtain ⟨n, hh, ho, ht, _⟩ := h
+  exact ⟨n, hh, ho, ht, (Controller.History.space_le_length _).trans
+    (Nat.mul_le_mul_left _ (Nat.succ_le_succ ht))⟩
+
 /-- Read the ordinary run's result without carrying its visitation history. -/
 theorem ComputesInTimeAndSpace.run_spec [Fintype κ] {M : TM Id κ Γ Q}
     {xs ys : List Γ} {t s : ℕ} (h : M.ComputesInTimeAndSpace xs ys t s) :

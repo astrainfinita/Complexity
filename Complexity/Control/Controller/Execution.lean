@@ -133,71 +133,30 @@ theorem runHistory_eq_of_halted (M : Controller Id Observation Action Q) (input 
     M.runHistory Config input k = M.runHistory Config input n :=
   M.runHistoryFrom_eq_of_halted (M.initInput input) h hk
 
-/-- The cumulative action cost of an execution prefix from its selected start. -/
-def runActionSum (M : Controller Id Observation Action Q) (cost : Action → Config → ℕ)
-    (input : Input) (n : ℕ) [Execution Config Q Output input] : ℕ :=
-  M.runActionSumFrom cost (M.initInput input) n
-
-/-- The peak configuration space of an execution prefix from its selected start. -/
-def runConfigMax (M : Controller Id Observation Action Q)
-    (space : Config → ℕ) (input : Input) (n : ℕ)
-    [Execution Config Q Output input] : ℕ :=
-  M.runConfigMaxFrom space (M.initInput input) n
-
-@[simp] theorem runActionSum_zero (M : Controller Id Observation Action Q)
-    (cost : Action → Config → ℕ) (input : Input)
-    [Execution Config Q Output input] :
-    runActionSum M cost input 0 = 0 := by
-  simp [runActionSum]
-
-/-- Unit charges count exactly the actions recorded from standard input. -/
-@[simp] theorem runActionSum_unit (M : Controller Id Observation Action Q)
-    (input : Input) (n : ℕ) [Execution Config Q Output input] :
-    M.runActionSum (Config := Config) (fun _ _ ↦ 1) input n =
-      (M.runHistory Config input n).length :=
-  M.runActionSumFrom_unit (M.initInput input) n
-
-@[simp] theorem runConfigMax_zero (M : Controller Id Observation Action Q)
-    (space : Config → ℕ) (input : Input)
-    [Execution Config Q Output input] :
-    runConfigMax M space input 0 = space (M.initInput input) := by
-  simp [runConfigMax]
-
 section Resources
 
-variable (M : Controller Id Observation Action Q)
+variable (M : Controller Id Observation Action Q) {α : Type*} [SemilatticeSup α]
 
-theorem runActionSum_mono (cost : Action → Config → ℕ) (input : Input)
+theorem actionSum_runHistory_mono (cost : Action → Config → ℕ) (input : Input)
     [Execution Config Q Output input] {n k : ℕ} (h : n ≤ k) :
-    M.runActionSum cost input n ≤ M.runActionSum cost input k :=
-  M.runActionSumFrom_mono cost (M.initInput input) h
+    (M.runHistory Config input n).actionSum cost ≤ (M.runHistory Config input k).actionSum cost :=
+  M.actionSum_runHistoryFrom_mono cost (M.initInput input) h
 
-theorem runActionSum_eq_of_halted (cost : Action → Config → ℕ) (input : Input)
-    [Execution Config Q Output input] {n k : ℕ}
-    (h : M.Halted (M.run Config input n)) (hk : n ≤ k) :
-    M.runActionSum cost input k = M.runActionSum cost input n :=
-  M.runActionSumFrom_eq_of_halted cost (M.initInput input) h hk
-
-theorem runConfigMax_mono (space : Config → ℕ) (input : Input)
+theorem configSup_runHistory_mono (space : Config → α) (input : Input)
     [Execution Config Q Output input] {n k : ℕ} (h : n ≤ k) :
-    M.runConfigMax space input n ≤ M.runConfigMax space input k :=
-  M.runConfigMaxFrom_mono space (M.initInput input) h
+    (M.runHistory Config input n).configSup space ≤ (M.runHistory Config input k).configSup space :=
+  M.configSup_runHistoryFrom_mono space (M.initInput input) h
 
-theorem runConfigMax_eq_of_halted (space : Config → ℕ) (input : Input)
-    [Execution Config Q Output input] {n k : ℕ}
-    (h : M.Halted (M.run Config input n)) (hk : n ≤ k) :
-    M.runConfigMax space input k = M.runConfigMax space input n :=
-  M.runConfigMaxFrom_eq_of_halted space (M.initInput input) h hk
-
-theorem space_le_runConfigMax (space : Config → ℕ) (input : Input)
+theorem config_le_configSup_runHistory (space : Config → α) (input : Input)
     [Execution Config Q Output input] {i n : ℕ} (h : i ≤ n) :
-    space (M.run Config input i) ≤ M.runConfigMax space input n :=
-  M.space_le_runConfigMaxFrom space (M.initInput input) h
+    space (M.run Config input i) ≤ (M.runHistory Config input n).configSup space :=
+  M.config_le_configSup_runHistoryFrom space (M.initInput input) h
 
-theorem runConfigMax_le_iff (space : Config → ℕ) (input : Input)
-    [Execution Config Q Output input] (n bound : ℕ) :
-    M.runConfigMax space input n ≤ bound ↔ ∀ i ≤ n, space (M.run Config input i) ≤ bound :=
-  M.runConfigMaxFrom_le_iff space (M.initInput input) n bound
+theorem configSup_runHistory_le_iff (space : Config → α) (input : Input)
+    [Execution Config Q Output input] (n : ℕ) (bound : α) :
+    (M.runHistory Config input n).configSup space ≤ bound ↔
+      ∀ i ≤ n, space (M.run Config input i) ≤ bound :=
+  M.configSup_runHistoryFrom_le_iff space (M.initInput input) n bound
 
 end Resources
 
@@ -225,14 +184,14 @@ theorem computes_mono [Execution Config Q Output input] {time' space' : ℕ}
   exact ⟨n, hn, ho, htime.trans ht, hspace.trans hs⟩
 
 /-- An additive action budget bounds every prefix, including halted padding. -/
-theorem computes_runActionSum_le [Execution Config Q Output input]
+theorem computes_actionSum_le [Execution Config Q Output input]
     {cost : Action → Config → ℕ}
     (h : M.computes (fun h ↦ h.actionSum cost) spaceCost input output time space) (u : ℕ) :
-    M.runActionSum cost input u ≤ time := by
+    (M.runHistory Config input u).actionSum cost ≤ time := by
   obtain ⟨n, hn, _, ht, _⟩ := h
   by_cases hu : u ≤ n
-  · exact (M.runActionSum_mono cost input hu).trans ht
-  · rw [M.runActionSum_eq_of_halted cost input hn (by omega : n ≤ u)]
+  · exact (M.actionSum_runHistory_mono cost input hu).trans ht
+  · rw [M.runHistory_eq_of_halted input hn (by omega : n ≤ u)]
     exact ht
 
 /-- A prefix-monotone history measurement bounds space throughout a computation. -/
@@ -247,10 +206,10 @@ theorem computes_space_le [Execution Config Q Output input]
     exact hs
 
 /-- A maximum configuration budget bounds every prefix, including halted padding. -/
-theorem computes_runConfigMax_le [Execution Config Q Output input] {size : Config → ℕ}
+theorem computes_configSup_le [Execution Config Q Output input] {size : Config → ℕ}
     (h : M.computes timeCost (fun h ↦ h.configSup size) input output time space) (u : ℕ) :
-    M.runConfigMax size input u ≤ space :=
-  computes_space_le h (fun _ _ hn ↦ M.runConfigMax_mono size input hn) u
+    (M.runHistory Config input u).configSup size ≤ space :=
+  computes_space_le h (fun _ _ hn ↦ M.configSup_runHistory_mono size input hn) u
 
 /-- Counting recorded actions describes the halted run at the advertised time bound. -/
 theorem computes_unit_iff [exe : Execution Config Q Output input] :

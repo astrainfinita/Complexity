@@ -30,14 +30,6 @@ open Controller (History)
 variable {κ : Type*} {Γ Q : Type*} [Inhabited Γ] {xs ys : Array Γ}
   {M : TM Id κ Γ Q}
 
-/-- Concatenating execution segments combines their visited intervals. -/
-theorem runHistoryFrom_space_add_le [Fintype κ] (M : TM Id κ Γ Q)
-    (c : Cfg κ Γ Q xs) (s t : ℕ) :
-    (M.runHistoryFrom c (s + t)).space ≤
-      (M.runHistoryFrom c s).space + (M.runHistoryFrom (M.runFrom c s) t).space := by
-  rw [Controller.runHistoryFrom_add]
-  exact (History.space_append_le _ _ _).trans_eq (by rw [M.last_runHistoryFrom])
-
 /-- A segment starts at `c`, reaches `d`, and bounds its own visited cells. -/
 def ReachesInTimeAndSpace [Fintype κ] (M : TM Id κ Γ Q) (c d : Cfg κ Γ Q xs)
     (t s : ℕ) : Prop :=
@@ -66,10 +58,9 @@ theorem trans (h : M.ReachesInTimeAndSpace c d t s)
   obtain ⟨n, hn, he, hc⟩ := h
   obtain ⟨n', hn', he', hc'⟩ := h'
   refine ⟨n + n', Nat.add_le_add hn hn', ?_, ?_⟩
-  · rw [← Controller.runFrom_runFrom, he, he']
-  · have h := M.runHistoryFrom_space_add_le c n n'
-    rw [he] at h
-    exact h.trans (Nat.add_le_add hc hc')
+  · rw [Controller.runFrom_add, he, he']
+  · simp only [Controller.runHistoryFrom_add, Controller.last_runHistoryFrom, he]
+    exact (History.space_append_le _ _ _).trans (Nat.add_le_add hc hc')
 
 /-- A halted endpoint can be padded to the advertised time bound without extra space. -/
 theorem computesInTimeAndSpace {xs ys : List Γ} {d : Cfg κ Γ Q xs.toArray}

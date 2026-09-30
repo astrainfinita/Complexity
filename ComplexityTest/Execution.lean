@@ -13,15 +13,17 @@ open Complexity
 
 namespace Complexity.ExecutionTest
 
--- Halting hypotheses simplify both shared execution and model-specific costs.
+-- Halting hypotheses simplify both shared execution and history statistics.
 example {k : ℕ} {Q : Type*} (M : TreeMachine Id k Q) (c : TreeMachine.Cfg k Q)
-    (h : M.Halted c) (n : ℕ) : M.step c = c ∧ M.runFrom c n = c ∧ M.cost c n = 0 := by
+    (h : M.Halted c) (n : ℕ) :
+    M.step c = c ∧ M.runFrom c n = c ∧
+      (M.runHistoryFrom c n).actionSum TreeMachine.Action.timeCost = 0 := by
   simp [h]
 
 -- Each model's complete interface recovers its existing resource relation.
 example {k : ℕ} [NeZero k] {Q : Type*} (M : TreeMachine Id k Q)
     (a b : Tree) (t s : ℕ) :
-    Controller.computes (Config := TreeMachine.Cfg k Q) M
+    M.computes (Config := TreeMachine.Cfg k Q)
       (fun h ↦ h.actionSum TreeMachine.Action.timeCost)
       (fun h ↦ h.configSup TreeMachine.Cfg.mass) a b t s ↔
       M.ComputesInTimeAndSpace a b t s :=
@@ -29,8 +31,8 @@ example {k : ℕ} [NeZero k] {Q : Type*} (M : TreeMachine Id k Q)
 
 example {κ Γ Q : Type*} [Inhabited Γ] [Fintype κ]
     (M : TM Id κ Γ Q) (xs ys : List Γ) (t s : ℕ) :
-    Controller.computes (Config := TM.Cfg κ Γ Q xs.toArray)
-      M Controller.History.length Controller.History.space xs ys t s ↔
+    M.computes (Config := TM.Cfg κ Γ Q xs.toArray)
+      Controller.History.length Controller.History.space xs ys t s ↔
       M.ComputesInTimeAndSpace xs ys t s :=
   Iff.rfl
 
@@ -73,8 +75,8 @@ private instance : Controller.Execution (Bool × ℕ) Bool
   state_init _ := rfl
   hasOutput cfg n := cfg.2 = n
 
-example : Controller.computes (Config := Bool × ℕ)
-    oneAction (fun _ ↦ 0) (fun h ↦ h.configSup Prod.snd) () 1 0 1 := by
+example : oneAction.computes (Config := Bool × ℕ)
+    (fun _ ↦ 0) (fun h ↦ h.configSup Prod.snd) () 1 0 1 := by
   refine ⟨1, rfl, rfl, ?_, ?_⟩ <;> decide
 
 -- Unit costs permit halted padding, but cannot hide the first active step in a zero budget.

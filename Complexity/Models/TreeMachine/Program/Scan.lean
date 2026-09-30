@@ -222,10 +222,8 @@ private theorem body_progress (u : TM.Cfg κ (Option Bool) Unit zs) (s d c : κ)
   case vc1 =>
     rename_i v b hv x v₁ b₁ h₁ y v₂ b₂ h₂ z v₃ b₃ h₃
     obtain ⟨hv,rfl⟩ := hv
-    rcases h₁ with ⟨rfl, h₁, rfl⟩
-    subst v₁
-    rcases h₂ with ⟨rfl, h₂, rfl⟩
-    subst v₂
+    rcases h₁ with ⟨rfl, rfl, rfl⟩
+    rcases h₂ with ⟨rfl, rfl, rfl⟩
     have he : decide (v.last.workSymbols s = some true) =
         ((BitList.encodeTree a)[n]'(by simpa using hn)) := by
       rw [hv.1,scanCfg_read u s d c copy a xs ys ws hs hx hn]

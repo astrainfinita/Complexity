@@ -21,12 +21,8 @@ variable {κ Γ Q : Type*} [Inhabited Γ] {xs : Array Γ}
 
 /-- Extending a run can only enlarge its visited intervals. -/
 theorem runHistoryFrom_visited_mono (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs) :
-    Monotone fun n ↦ (M.runHistoryFrom c n).visited := by
-  intro n k h
-  obtain ⟨k, rfl⟩ := Nat.exists_eq_add_of_le h
-  dsimp only
-  rw [Controller.runHistoryFrom_add, History.visited_append]
-  exact le_sup_left
+    Monotone fun n ↦ (M.runHistoryFrom c n).visited :=
+  fun _ _ h ↦ M.configSup_runHistoryFrom_mono _ c h
 
 theorem runHistoryFrom_space_mono [Fintype κ] (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs) :
     Monotone fun n ↦ (M.runHistoryFrom c n).space :=

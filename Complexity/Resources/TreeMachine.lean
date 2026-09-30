@@ -24,7 +24,7 @@ namespace Complexity.TreeMachine
 
 variable {α β : Type*} {k : ℕ} {Q : Type*} [NeZero k]
 
-/-- Growth cost also controls the size of an intermediate output code. -/
+/-- Destination-size charges also control the size of an intermediate output code. -/
 theorem ComputesInTimeAndSpace.output_size_le {M : TreeMachine Id k Q}
     {a b : Tree} {t s : ℕ}
     (h : M.ComputesInTimeAndSpace a b t s) : b.size ≤ a.size + k + t := by

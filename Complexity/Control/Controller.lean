@@ -226,11 +226,6 @@ theorem runFrom_eq_of_halted (c : Config) {t u : ℕ}
   rw [runFrom_add]
   exact M.runFrom_of_halted _ h v
 
-/-- Sequential deterministic runs compose by adding their lengths. -/
-theorem runFrom_runFrom (c : Config) (n l : ℕ) :
-    M.runFrom (M.runFrom c n) l = M.runFrom c (n + l) :=
-  (M.runFrom_add c n l).symm
-
 end Deterministic
 
 end Controller
