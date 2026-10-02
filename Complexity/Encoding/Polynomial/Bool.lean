@@ -46,19 +46,21 @@ private theorem convert_pair (a : Tree) :
       Action.assign, Op.dst, Op.eval, input_get, input_get_of_ne, Tree.size]
     omega
 
-private theorem left_mem_treeFP : (fun a : Tree => a.left) ∈ TreeFP := by
-  apply TreeFP.of_time_le (t := fun n => n) ?_ 1 1 (by simp)
-  refine ⟨fun n => 2 * n + 2, 2, inferInstance, Bool, inferInstance, convert (.left 0 0), ?_⟩
+private theorem left_mem_fp : (fun a : Tree => a.left) ∈ FP timeSpaceModel := by
+  apply FP.of_time_le (t := fun n => n) ?_ 1 1 (by simp)
+  refine ⟨fun n => 2 * n + 2,
+    Computes.computableInTimeAndSpace (M := convert (.left 0 0)) ?_⟩
   exact Computes.iff_of_uniqueEncoding.mpr convert_left
 
-private theorem pair_mem_treeFP : (fun a => Tree.pair a Tree.nil) ∈ TreeFP := by
-  apply TreeFP.of_time_le (t := fun n => n + 2) ?_ 2 1 (by intro n; simp; omega)
-  refine ⟨fun n => 2 * n + 4, 2, inferInstance, Bool, inferInstance, convert (.pair 0 0 1), ?_⟩
+private theorem pair_mem_fp : (fun a => Tree.pair a Tree.nil) ∈ FP timeSpaceModel := by
+  apply FP.of_time_le (t := fun n => n + 2) ?_ 2 1 (by intro n; simp; omega)
+  refine ⟨fun n => 2 * n + 4,
+    Computes.computableInTimeAndSpace (M := convert (.pair 0 0 1)) ?_⟩
   exact Computes.iff_of_uniqueEncoding.mpr convert_pair
 
 /-- Singleton bit strings and the leaf/pair encoding of Booleans admit
 polynomial-time conversions in both directions. -/
 instance : PolytimeCompatible Bool :=
-  PolytimeCompatible.ofEncode left_mem_treeFP pair_mem_treeFP (fun _ => rfl) (fun _ => rfl)
+  PolytimeCompatible.ofEncode left_mem_fp pair_mem_fp (fun _ => rfl) (fun _ => rfl)
 
 end Complexity.Encoding

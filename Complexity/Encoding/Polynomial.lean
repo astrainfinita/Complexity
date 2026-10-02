@@ -8,7 +8,7 @@ module
 public import Complexity.Encoding.Composition
 public import Complexity.Encoding.Tree
 public import Complexity.Classes.TreeFunctions.Composition
-public import Complexity.Classes.TreeFunctions.Encoding
+public import Complexity.Classes.Functions.Encoding
 
 /-!
 # Polynomial compatibility of bit-string and tree encodings
@@ -32,27 +32,28 @@ conversions on tree machines, using `Tree.encodeBitList` to store the bit string
 class PolytimeCompatible (α : Type*) [e : Encoding (List Bool) α] [d : Encoding Tree α] :
     Prop where
   /-- Convert a bit-list tree into a direct tree code for the same value. -/
-  fromBits : id ∈ @TreeFP α α (bitListEncoding.toEncoding.comp e) d
+  fromBits : id ∈ @FP Tree α α (bitListEncoding.toEncoding.comp e) d TreeMachine.timeSpaceModel
   /-- Convert any direct tree code into a bit-list tree for the same value. -/
-  toBits : id ∈ @TreeFP α α d (bitListEncoding.toEncoding.comp e)
+  toBits : id ∈ @FP Tree α α d (bitListEncoding.toEncoding.comp e) TreeMachine.timeSpaceModel
 
 /-- Construct compatibility using polynomial-time functions on raw trees and
 two equations on encodings. No change of encoding instances is needed at the call site. -/
 theorem PolytimeCompatible.ofEncode {α : Type*}
     [e : UniqueEncoding (List Bool) α] [d : UniqueEncoding Tree α]
-    {f g : Tree → Tree} (hf : f ∈ TreeFP) (hg : g ∈ TreeFP)
+    {f g : Tree → Tree} (hf : f ∈ FP TreeMachine.timeSpaceModel)
+    (hg : g ∈ FP TreeMachine.timeSpaceModel)
     (h : ∀ a : α, f (encode Tree (encode (List Bool) a)) = encode Tree a)
     (h' : ∀ a : α, g (encode Tree a) =
       encode Tree (encode (List Bool) a)) : PolytimeCompatible α where
-  fromBits := @TreeFP.of_encode α α (bitListEncoding.comp e) d f id hf h
-  toBits := @TreeFP.of_encode α α d (bitListEncoding.comp e) g id hg h'
+  fromBits := @FP.of_encode Tree α α (bitListEncoding.comp e) d TreeMachine.timeSpaceModel f id hf h
+  toBits := @FP.of_encode Tree α α d (bitListEncoding.comp e) TreeMachine.timeSpaceModel g id hg h'
 
 /-- Using the list-tree representation directly requires no conversion.
 This is an explicit witness for the specified encoding, not a global instance. -/
 theorem PolytimeCompatible.ofComp {α : Type*} (e : Encoding (List Bool) α) :
     @PolytimeCompatible α e (bitListEncoding.toEncoding.comp e) :=
   @PolytimeCompatible.mk α e (bitListEncoding.toEncoding.comp e)
-    (@TreeFP.id α (bitListEncoding.toEncoding.comp e))
-    (@TreeFP.id α (bitListEncoding.toEncoding.comp e))
+    (@TreeMachine.fp_id α (bitListEncoding.toEncoding.comp e))
+    (@TreeMachine.fp_id α (bitListEncoding.toEncoding.comp e))
 
 end Complexity.Encoding

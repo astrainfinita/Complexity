@@ -5,8 +5,8 @@ Authors: Yuyang Zhao
 -/
 module
 
-public import Complexity.Resources.Basic
-public import Complexity.Encoding.Tree
+public import Complexity.Resources.TimeSpaceModel
+public import Complexity.Encoding.Bool
 public import Complexity.Models.TreeMachine.Deterministic
 
 /-!
@@ -40,19 +40,26 @@ def Computes (M : TreeMachine Id k Q) (f : α → β)
   Complexity.Computes (fun a b => M.ComputesInTimeAndSpace a b)
     Tree.size f t s
 
-/-- A function has the stated bounds on some finite tree machine with fixed
-input and output register zero. -/
-def ComputableInTimeAndSpace (f : α → β) (t s : ℕ → ℕ) : Prop :=
-  ∃ (k : ℕ) (_ : NeZero k) (Q : Type) (_ : Finite Q) (M : TreeMachine Id k Q),
-    Computes M f t s
+/-- Finite tree machines with input and output register zero. Time sums destination
+sizes; space is the maximum total expanded register size. -/
+def timeSpaceModel : TimeSpaceModel Id Tree where
+  inputSize := Tree.size
+  behaviors := {R | ∃ (k : ℕ) (_ : NeZero k) (Q : Type) (_ : Finite Q)
+      (M : TreeMachine Id k Q), R = fun a result => M.ComputesInTimeAndSpace a result.run}
+  budget_mono := by
+    rintro R ⟨k, hk, Q, hQ, M, rfl⟩ x y t s t' s' h ht hs
+    exact Controller.computes_mono h ht hs
 
-/-- Some finite tree machine computes the function within the time bound. -/
-def ComputableInTime (f : α → β) (t : ℕ → ℕ) : Prop :=
-  ∃ s, ComputableInTimeAndSpace f t s
-
-/-- Some finite tree machine computes the function within the space bound. -/
-def ComputableInSpace (f : α → β) (s : ℕ → ℕ) : Prop :=
-  ∃ t, ComputableInTimeAndSpace f t s
+/-- Recover the single finite machine realizing the abstract resource behavior. -/
+theorem computableInTimeAndSpace_iff {f : α → β} {t s : ℕ → ℕ} :
+    timeSpaceModel.ComputableInTimeAndSpace f t s ↔
+      ∃ (k : ℕ) (_ : NeZero k) (Q : Type) (_ : Finite Q)
+        (M : TreeMachine Id k Q), Computes M f t s := by
+  constructor
+  · rintro ⟨R, ⟨k, hk, Q, hQ, M, rfl⟩, h⟩
+    exact ⟨k, hk, Q, hQ, M, h⟩
+  · rintro ⟨k, hk, Q, hQ, M, h⟩
+    exact ⟨_, ⟨k, hk, Q, hQ, M, rfl⟩, h⟩
 
 variable {f : α → β} {t s t' s' : ℕ → ℕ}
 
@@ -63,31 +70,7 @@ theorem Computes.mono {M : TreeMachine Id k Q}
 
 theorem Computes.computableInTimeAndSpace {Q : Type} [Finite Q]
     {M : TreeMachine Id k Q} (h : Computes M f t s) :
-    ComputableInTimeAndSpace f t s :=
-  ⟨k, inferInstance, Q, inferInstance, M, h⟩
-
-theorem ComputableInTimeAndSpace.mono (h : ComputableInTimeAndSpace f t s)
-    (ht : ∀ n, t n ≤ t' n) (hs : ∀ n, s n ≤ s' n) :
-    ComputableInTimeAndSpace f t' s' := by
-  obtain ⟨k, hk, Q, hQ, M, h⟩ := h
-  exact ⟨k, hk, Q, hQ, M, h.mono ht hs⟩
-
-theorem ComputableInTimeAndSpace.computableInTime (h : ComputableInTimeAndSpace f t s) :
-    ComputableInTime f t :=
-  ⟨s, h⟩
-
-theorem ComputableInTimeAndSpace.computableInSpace (h : ComputableInTimeAndSpace f t s) :
-    ComputableInSpace f s :=
-  ⟨t, h⟩
-
-theorem ComputableInTime.mono (h : ComputableInTime f t) (ht : ∀ n, t n ≤ t' n) :
-    ComputableInTime f t' := by
-  obtain ⟨s, h⟩ := h
-  exact ⟨s, h.mono ht (fun _ => le_rfl)⟩
-
-theorem ComputableInSpace.mono (h : ComputableInSpace f s) (hs : ∀ n, s n ≤ s' n) :
-    ComputableInSpace f s' := by
-  obtain ⟨t, h⟩ := h
-  exact ⟨t, h.mono (fun _ => le_rfl) hs⟩
+    timeSpaceModel.ComputableInTimeAndSpace f t s :=
+  computableInTimeAndSpace_iff.mpr ⟨k, inferInstance, Q, inferInstance, M, h⟩
 
 end Complexity.TreeMachine

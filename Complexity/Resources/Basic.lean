@@ -15,8 +15,8 @@ encoded types. It requires a terminating computation on every valid input code,
 with bounds measured on that actual code. Any valid code for the result is allowed.
 Invalid inputs impose no obligations, and decoding is not an extra machine operation.
 
-The machine-specific layers supply `run` and `size`. They quantify over a single
-finite machine before quantifying over input values and codes.
+A `TimeSpaceModel` supplies admissible relations and their input size. Concrete
+models can realize each relation by one finite machine for all inputs and budgets.
 -/
 
 @[expose] public section
@@ -51,12 +51,7 @@ theorem iff_of_uniqueOutput [Encoding Data α] [UniqueEncoding Data β] :
     Computes run size f t s ↔
       ∀ r a, a ∈ decode α r →
         run r (encode Data (f a)) (t (size r)) (s (size r)) := by
-  constructor
-  · intro h r a ha
-    obtain ⟨q, hq, hr⟩ := h r a ha
-    rwa [← UniqueEncoding.encode_of_mem_decode hq] at hr
-  · intro h r a ha
-    exact ⟨encode Data (f a), UniqueEncoding.mem_decode_iff.2 rfl, h r a ha⟩
+  simp only [Computes, UniqueEncoding.mem_decode_iff, exists_eq_left']
 
 /-- For unique input and output encodings, the representation-based specification
 reduces to computing the encoder's result on the encoder's input. -/
@@ -64,13 +59,8 @@ theorem iff_of_uniqueEncoding [UniqueEncoding Data α] [UniqueEncoding Data β] 
     Computes run size f t s ↔
       ∀ a, run (encode Data a) (encode Data (f a))
         (t (size (encode Data a))) (s (size (encode Data a))) := by
-  rw [iff_of_uniqueOutput]
-  constructor
-  · intro h a
-    exact h (encode Data a) a (UniqueEncoding.mem_decode_iff.2 rfl)
-  · intro h r a ha
-    obtain rfl := (UniqueEncoding.encode_of_mem_decode ha).symm
-    exact h a
+  simp only [iff_of_uniqueOutput, UniqueEncoding.mem_decode_iff]
+  exact forall_comm.trans (by simp only [forall_eq'])
 
 end Computes
 

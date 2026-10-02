@@ -6,7 +6,7 @@ Authors: Yuyang Zhao
 module
 
 public import Complexity.Classes.Functions
-public import Complexity.Classes.TreeFunctions
+public import Complexity.Resources.TuringMachine
 public import Complexity.Encoding.Polynomial
 public import Complexity.Models.TreeMachine.Simulation.BitList
 public import Mathlib.Data.Fintype.EquivFin
@@ -15,8 +15,8 @@ public import Mathlib.Data.Fintype.EquivFin
 # Polynomial tree computations on bit-string representations
 
 The existing tree-to-Turing compiler removes the list-tree representation at
-both boundaries. Its polynomial time bound turns a `TreeFP` computation using
-the composite bit-list encoding into an `FP` computation on the original bit strings.
+both boundaries. Its polynomial time bound transports polynomial-time computations from the tree
+model with the composite bit-list encoding to the Turing model on the original bit strings.
 
 For a direct tree encoding, polynomial conversions before and after the tree
 computation give the same inclusion. No converse simulation is assumed.
@@ -26,7 +26,7 @@ computation give the same inclusion. No converse simulation is assumed.
 
 namespace Complexity
 
-namespace TreeFP
+namespace TreeMachine
 
 open TreeMachine.Simulation
 
@@ -44,16 +44,16 @@ private theorem timeBound_polynomial (k : ℕ) (p : Polynomial ℕ) :
 
 /-- For bit-string encodings stored as list trees, the existing tree simulator
 gives polynomial time on the original bit strings, with no compatibility hypothesis. -/
-theorem subset_fp_comp {α β : Type*} [e : Encoding (List Bool) α]
+theorem fp_subset_tm_comp {α β : Type*} [e : Encoding (List Bool) α]
     [d : Encoding (List Bool) β] :
-    @TreeFP α β (bitListEncoding.toEncoding.comp e) (bitListEncoding.toEncoding.comp d) ⊆ FP := by
+    @FP Tree α β (bitListEncoding.toEncoding.comp e) (bitListEncoding.toEncoding.comp d)
+      timeSpaceModel ⊆ FP TM.timeSpaceModel := by
   classical
   let : Encoding Tree α := bitListEncoding.toEncoding.comp e
   let : Encoding Tree β := bitListEncoding.toEncoding.comp d
   intro f hf
-  obtain ⟨a, t, ht, ha⟩ := mem_iff_exists_ftime.mp hf
-  obtain ⟨p, hp⟩ := ha.exists_polynomial_bound
-  obtain ⟨s, k, hk, Q, hQ, M, h⟩ := ht.mono hp
+  obtain ⟨p, s, h⟩ := FP.exists_polynomial_bound hf
+  obtain ⟨k, hk, Q, hQ, M, h⟩ := computableInTimeAndSpace_iff.mp h
   let : Fintype Q := Fintype.ofFinite Q
   let : FinEnum Q := FinEnum.ofEquiv (Fin (Fintype.card Q)) (Fintype.equivFin Q)
   let t := fun n => BitList.timeBound k n (p.eval (4 * n + 1))
@@ -74,28 +74,28 @@ theorem subset_fp_comp {α β : Type*} [e : Encoding (List Bool) α]
 
 /-- Only the input conversion from bits and the output conversion to bits are
 needed to transport a tree computation to an ordinary bit-string machine. -/
-theorem subset_fp_of_conversions {α β : Type*}
+theorem fp_subset_tm_of_conversions {α β : Type*}
     [e : Encoding (List Bool) α] [d : Encoding (List Bool) β]
     [r : Encoding Tree α] [s : Encoding Tree β]
-    (hi : _root_.id ∈ @TreeFP α α (bitListEncoding.toEncoding.comp e) r)
-    (ho : _root_.id ∈ @TreeFP β β s (bitListEncoding.toEncoding.comp d)) :
-    TreeFP (α := α) (β := β) ⊆ FP := by
+    (hi : _root_.id ∈ @FP Tree α α (bitListEncoding.toEncoding.comp e) r timeSpaceModel)
+    (ho : _root_.id ∈ @FP Tree β β s (bitListEncoding.toEncoding.comp d) timeSpaceModel) :
+    FP (α := α) (β := β) timeSpaceModel ⊆ FP TM.timeSpaceModel := by
   intro f hf
-  have h := @comp α α β (bitListEncoding.toEncoding.comp e) r s _root_.id f hf hi
-  have h' := @comp α β β (bitListEncoding.toEncoding.comp e) s (bitListEncoding.toEncoding.comp d)
-    (f ∘ _root_.id) _root_.id ho h
-  exact subset_fp_comp h'
+  have h := @fp_comp α α β (bitListEncoding.toEncoding.comp e) r s _root_.id f hf hi
+  have h' := @fp_comp α β β (bitListEncoding.toEncoding.comp e) s
+    (bitListEncoding.toEncoding.comp d) (f ∘ _root_.id) _root_.id ho h
+  exact fp_subset_tm_comp h'
 
 /-- Polynomial compatibility of the input and output encodings turns every
 polynomial-time tree computation into a polynomial-time Turing computation. -/
-theorem subset_fp {α β : Type*}
+theorem fp_subset_tm {α β : Type*}
     [Encoding (List Bool) α] [Encoding (List Bool) β]
     [Encoding Tree α] [Encoding Tree β]
     [Encoding.PolytimeCompatible α] [Encoding.PolytimeCompatible β] :
-    TreeFP (α := α) (β := β) ⊆ FP :=
-  subset_fp_of_conversions Encoding.PolytimeCompatible.fromBits
+    FP (α := α) (β := β) timeSpaceModel ⊆ FP TM.timeSpaceModel :=
+  fp_subset_tm_of_conversions Encoding.PolytimeCompatible.fromBits
     Encoding.PolytimeCompatible.toBits
 
-end TreeFP
+end TreeMachine
 
 end Complexity

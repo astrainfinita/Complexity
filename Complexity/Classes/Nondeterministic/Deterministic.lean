@@ -6,9 +6,8 @@ Authors: Yuyang Zhao
 module
 
 public import Complexity.Resources.Nondeterministic.Deterministic
-public import Complexity.Classes.DTISP
-public import Complexity.Classes.P
-public import Complexity.Classes.NP
+public import Complexity.Classes.Deterministic
+public import Complexity.Classes.Nondeterministic
 
 /-! # Deterministic classes are contained in nondeterministic classes
 
@@ -18,25 +17,25 @@ and work-space bounds before taking asymptotic or polynomial classes.
 
 @[expose] public section
 
-namespace Complexity
+namespace Complexity.TM
 
 variable {α : Type*} [Encoding (List Bool) α]
 
-theorem DTIME.subset_ntime {T : ℕ → ℕ} : DTIME (α := α) T ⊆ NTIME T := by
+theorem dtime_subset_ntime {T : ℕ → ℕ} : DTIME timeSpaceModel (α := α) T ⊆ NTIME T := by
   rintro p ⟨f, ⟨t, h, ht⟩, hp⟩
-  exact ⟨t, h.decidableInTime hp, ht⟩
+  exact ⟨t, decidableInTime_of_computable h hp, ht⟩
 
-theorem DSPACE.subset_nspace {S : ℕ → ℕ} : DSPACE (α := α) S ⊆ NSPACE S := by
+theorem dspace_subset_nspace {S : ℕ → ℕ} : DSPACE timeSpaceModel (α := α) S ⊆ NSPACE S := by
   rintro p ⟨f, ⟨s, h, hs⟩, hp⟩
-  exact ⟨s, h.decidableInSpace hp, hs⟩
+  exact ⟨s, decidableInSpace_of_computable h hp, hs⟩
 
-theorem DTISP.subset_ntisp {T S : ℕ → ℕ} : DTISP (α := α) T S ⊆ NTISP T S := by
+theorem dtisp_subset_ntisp {T S : ℕ → ℕ} : DTISP timeSpaceModel (α := α) T S ⊆ NTISP T S := by
   rintro p ⟨f, ⟨t, s, h, ht, hs⟩, hp⟩
-  exact ⟨t, s, h.decidableInTimeAndSpace hp, ht, hs⟩
+  exact ⟨t, s, decidableInTimeAndSpace_of_computable h hp, ht, hs⟩
 
-theorem P.subset_np : P (α := α) ⊆ NP := by
+theorem p_subset_np : P timeSpaceModel (α := α) ⊆ NP := by
   intro p hp
   obtain ⟨d, hd⟩ := P.mem_iff_exists_dtime.mp hp
-  exact NP.mem_iff_exists_ntime.mpr ⟨d, DTIME.subset_ntime hd⟩
+  exact NP.mem_iff_exists_ntime.mpr ⟨d, dtime_subset_ntime hd⟩
 
-end Complexity
+end Complexity.TM

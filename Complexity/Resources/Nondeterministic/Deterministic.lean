@@ -52,20 +52,20 @@ theorem Computes.decidesInTimeAndSpace {κ : Type*} [Fintype κ] {Q : Type*}
   · intro xs a ha
     exact (M.usesSpace_toBinary_iff _ _).2 (hh xs a ha).usesSpace
 
-theorem ComputableInTimeAndSpace.decidableInTimeAndSpace
-    (h : ComputableInTimeAndSpace f t s) (hp : Decides f p) :
+theorem decidableInTimeAndSpace_of_computable
+    (h : timeSpaceModel.ComputableInTimeAndSpace f t s) (hp : Decides f p) :
     NTM.DecidableInTimeAndSpace p t s := by
-  obtain ⟨κ, hκ, Q, hQ, M, h⟩ := h
+  obtain ⟨κ, hκ, Q, hQ, M, h⟩ := computableInTimeAndSpace_iff.mp h
   exact ⟨κ, hκ, Q, hQ, M.toBinary, h.decidesInTimeAndSpace hp⟩
 
-theorem ComputableInTime.decidableInTime (h : ComputableInTime f t)
+theorem decidableInTime_of_computable (h : timeSpaceModel.ComputableInTime f t)
     (hp : Decides f p) : NTM.DecidableInTime p t := by
   obtain ⟨s, h⟩ := h
-  exact (h.decidableInTimeAndSpace hp).decidableInTime
+  exact (decidableInTimeAndSpace_of_computable h hp).decidableInTime
 
-theorem ComputableInSpace.decidableInSpace (h : ComputableInSpace f s)
+theorem decidableInSpace_of_computable (h : timeSpaceModel.ComputableInSpace f s)
     (hp : Decides f p) : NTM.DecidableInSpace p s := by
   obtain ⟨t, h⟩ := h
-  exact (h.decidableInTimeAndSpace hp).decidableInSpace
+  exact (decidableInTimeAndSpace_of_computable h hp).decidableInSpace
 
 end Complexity.TM

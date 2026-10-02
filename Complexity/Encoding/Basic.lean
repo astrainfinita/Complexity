@@ -157,7 +157,7 @@ end
 
 /-- Use raw values as their own codes. This is an explicit choice of encoding,
 so it does not silently override another interpretation of the same raw type. -/
-@[instance_reducible]
+@[instance_reducible, simps encode]
 def refl (R : Type*) : UniqueEncoding R R where
   decode := Part.some
   encode := id

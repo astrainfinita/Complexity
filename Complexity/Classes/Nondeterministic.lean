@@ -6,10 +6,10 @@ Authors: Yuyang Zhao
 module
 
 public import Complexity.Resources.Nondeterministic
-public import Complexity.Asymptotics.Basic
+public import Complexity.Asymptotics.Polynomial
 
 /-!
-# Nondeterministic time and space classes
+# Nondeterministic complexity classes
 
 Every valid input is decided by one fixed finite binary-choice machine. Resource
 bounds apply to every branch, and every branch terminates with Boolean output.
@@ -97,5 +97,28 @@ theorem subset_inter : NTISP (α := α) T S ⊆ NTIME T ∩ NSPACE S :=
   fun _ h => ⟨subset_time h, subset_space h⟩
 
 end NTISP
+
+/-- Predicates decidable by a finite nondeterministic machine in polynomial time. -/
+def NP : Set (α → Prop) :=
+  ⋃ d : ℕ, NTIME (fun n => n ^ d)
+
+namespace NP
+
+theorem mem_iff_exists_ntime : p ∈ NP ↔ ∃ d : ℕ, p ∈ NTIME (fun n => n ^ d) :=
+  Set.mem_iUnion
+
+/-- A pointwise bound by `c * (n + 1) ^ d` establishes polynomial time. -/
+theorem of_time_le {t : ℕ → ℕ} (h : NTM.DecidableInTime p t)
+    (c d : ℕ) (ht : ∀ n, t n ≤ c * (n + 1) ^ d) : p ∈ NP :=
+  mem_iff_exists_ntime.mpr ⟨d, t, h, IsBigO.of_le_mul_add_one_pow c d ht⟩
+
+theorem ntime_subset (d : ℕ) : NTIME (α := α) (fun n => n ^ d) ⊆ NP :=
+  fun _ h => mem_iff_exists_ntime.mpr ⟨d, h⟩
+
+theorem congr (h : p ∈ NP) (hp : ∀ a, p a ↔ q a) : q ∈ NP := by
+  obtain ⟨d, h⟩ := mem_iff_exists_ntime.mp h
+  exact mem_iff_exists_ntime.mpr ⟨d, NTIME.congr h hp⟩
+
+end NP
 
 end Complexity
