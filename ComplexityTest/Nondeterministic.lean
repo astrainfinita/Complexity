@@ -7,6 +7,7 @@ module
 
 import all Init.Data.List.Scan.Basic
 import Complexity.Classes.Nondeterministic
+import Complexity.Resources.Nondeterministic
 import Complexity.Models.TuringMachine.Nondeterministic.Deterministic
 meta import Complexity.Models.TuringMachine.Nondeterministic
 meta import Complexity.Models.TuringMachine.Basic
@@ -22,6 +23,32 @@ open TM (apply)
 open Controller (History)
 
 namespace NondeterministicTest
+
+private def fixedOutputs (ys : Multiset (List Bool)) : TimeSpaceModel Multiset (List Bool) where
+  inputSize := List.length
+  behaviors := {fun _ zs _ _ => zs = ys}
+  budget_mono := by
+    rintro R rfl x zs t s t' s' h _ _
+    exact h
+
+-- Finite failure rejects; it does not create an accepting branch.
+example : (fixedOutputs 0).NDecidableInTimeAndSpace
+    (fun _ : List Bool => False) (fun _ => 0) (fun _ => 0) := by
+  refine ⟨_, rfl, fun x a ha => ⟨0, rfl, ?_, ?_⟩⟩ <;> simp
+
+example : ¬(fixedOutputs 0).NDecidableInTimeAndSpace
+    (fun _ : List Bool => True) (fun _ => 0) (fun _ => 0) := by
+  rintro ⟨R, rfl, h⟩
+  obtain ⟨ys, rfl, _, h⟩ := h [] [] (Part.mem_some [])
+  simp at h
+
+-- Even alongside a valid accepting result, a malformed branch invalidates the decision.
+example : ¬(fixedOutputs {[], [true]}).NDecidableInTimeAndSpace
+    (fun _ : List Bool => True) (fun _ => 0) (fun _ => 0) := by
+  rintro ⟨R, rfl, h⟩
+  obtain ⟨ys, rfl, hb, _⟩ := h [] [] (Part.mem_some [])
+  obtain ⟨b, hb⟩ := Part.dom_iff_mem.mp (hb [] (by simp))
+  simp at hb
 
 def answer (b : Bool) : TM.Action (Fin 0) (Option Bool) Bool where
   inputMove := 0
@@ -64,18 +91,21 @@ private theorem guess_accepts (xs : List (Option Bool)) : guess.Accepts xs := by
 
 theorem guess_spec : guess.DecidesInTimeAndSpace (fun _ : List Bool => True)
     (fun _ => 1) (fun _ => 0) := by
-  refine ⟨⟨?_, fun xs _ _ => guess_time _⟩, ?_⟩
-  · intro xs _ _
-    exact ⟨(guess_time _).terminates, guess_boolean _, iff_true_intro (guess_accepts _)⟩
-  · intro xs _ _ n c _
-    simp [History.space]
+  intro xs _ _
+  refine ⟨guess_time _, ?_, guess_boolean _, iff_true_intro (guess_accepts _)⟩
+  intro n c _
+  simp [History.space]
 
-example : (fun _ : List Bool => True) ∈ NTISP (fun _ => 1) (fun _ => 0) :=
-  NTISP.of_decidableInTimeAndSpace guess_spec.decidableInTimeAndSpace
+example : (fun _ : List Bool => True) ∈ NTISP NTM.timeSpaceModel (fun _ => 1) (fun _ => 0) :=
+  guess_spec.decidableInTimeAndSpace.mem_ntisp
 
-example : (fun _ : List Bool => True) ∈ NP := by
+example : (fun _ : List Bool => True) ∈ NP NTM.timeSpaceModel := by
   apply NP.of_time_le guess_spec.decidesInTime.decidableInTime 1 0
   simp
+
+-- A space-only machine proof supplies its implicit time bound through the model bridge.
+example : NTM.timeSpaceModel.NDecidableInSpace (fun _ : List Bool => True) (fun _ => 0) :=
+  guess_spec.decidesInSpace.decidableInSpace
 
 -- The two branches visit [-1,0] and [0,1]: each uses two cells.
 def splitHeads : NTM (Fin 1) (Option Bool) Bool where
