@@ -28,12 +28,12 @@ private theorem bit_spec : TM.Computes bit (id : Bool → Bool) (fun _ => 1) (fu
     simp
   · simp [Controller.History.space]
 
-private theorem bit_fp : (id : Bool → Bool) ∈ FP :=
+private theorem bit_fp : (id : Bool → Bool) ∈ FP TM.timeSpaceModel :=
   FP.of_time_le bit_spec.computableInTimeAndSpace.computableInTime
     1 0 (by intro n; simp)
 
 -- The same function covers both acceptance and rejection, with no work tapes.
-example : (fun b : Bool => b = true) ∈ P := by
+example : (fun b : Bool => b = true) ∈ P TM.timeSpaceModel := by
   apply P.of_decides bit_fp
   intro b
   rfl
@@ -43,8 +43,8 @@ example : TM.Computes bit (id : Bool → Bool) (fun _ => 5) (fun _ => 0) :=
   bit_spec.mono (fun _ => by decide) (fun _ => le_rfl)
 
 -- The exact proof supplies a single machine for both asymptotic bounds.
-example : (fun b : Bool => b = true) ∈ DTISP (fun _ => 1) (fun _ => 0) :=
-  DTISP.of_decides bit_spec.computableInTimeAndSpace.computableInTimeAndSpaceO
+example : (fun b : Bool => b = true) ∈ DTISP TM.timeSpaceModel (fun _ => 1) (fun _ => 0) :=
+  DTISP.of_decides bit_spec.computableInTimeAndSpace.mem_ftisp
     (fun _ => Iff.rfl)
 
 -- A halted tree machine already has the Boolean result in its input/output register.
@@ -61,17 +61,17 @@ private theorem tree_spec :
   · exact TreeMachine.input_get (0 : Fin 1) _
   · simp [TreeMachine.Cfg.mass]
 
-private theorem tree_fp : (id : Bool → Bool) ∈ TreeFP :=
-  TreeFP.of_time_le tree_spec.computableInTimeAndSpace.computableInTime
+private theorem tree_fp : (id : Bool → Bool) ∈ FP TreeMachine.timeSpaceModel :=
+  FP.of_time_le tree_spec.computableInTimeAndSpace.computableInTime
     0 0 (by intro n; simp)
 
-example : (fun b : Bool => b = true) ∈ TreeP := by
-  apply TreeP.of_decides tree_fp
+example : (fun b : Bool => b = true) ∈ P TreeMachine.timeSpaceModel := by
+  apply P.of_decides tree_fp
   intro b
   rfl
 
-example : (fun b : Bool => b = true) ∈ TreeDTISP (fun _ => 0) id :=
-  TreeDTISP.of_decides tree_spec.computableInTimeAndSpace.computableInTimeAndSpaceO
+example : (fun b : Bool => b = true) ∈ DTISP TreeMachine.timeSpaceModel (fun _ => 0) id :=
+  DTISP.of_decides tree_spec.computableInTimeAndSpace.mem_ftisp
     (fun _ => Iff.rfl)
 
 -- Tree input storage counts toward space even when no transition is executed.
@@ -82,14 +82,19 @@ example : ¬TreeMachine.Computes tree (id : Bool → Bool) (fun _ => 0) (fun _ =
   change (TreeMachine.Cfg.mk () (TreeMachine.input (0 : Fin 1) Tree.nil)).mass ≤ 0 at hm
   simp [ TreeMachine.Cfg.mass] at hm
 
--- Constants and finite initial exceptions are absorbed by O(n).
-example {α : Type*} [Encoding (List Bool) α] :
-    DTIME (α := α) (fun n => 5 * n + 17) ⊆ DTIME id :=
+-- The abstract interface stays in Type, without storing a type of machine witnesses.
+example : Type := TimeSpaceModel Id (List Bool)
+
+-- Constants and finite initial exceptions are absorbed by O(n) for any model.
+example {Data α : Type*} [Encoding Data α] [Encoding Data Bool]
+    (model : TimeSpaceModel Id Data) :
+    DTIME model (α := α) (fun n => 5 * n + 17) ⊆ DTIME model id :=
   DTIME.mono (IsBigO.iff_exists_nat.2 ⟨22, 1, fun n hn => by dsimp; omega⟩)
 
 -- The simultaneous class projects to the two separate classes.
-example {α : Type*} [Encoding (List Bool) α] {p : α → Prop} {T S : ℕ → ℕ}
-    (h : p ∈ DTISP T S) : p ∈ DTIME T ∧ p ∈ DSPACE S :=
+example {Data α : Type*} [Encoding Data α] [Encoding Data Bool]
+    (model : TimeSpaceModel Id Data) {p : α → Prop} {T S : ℕ → ℕ}
+    (h : p ∈ DTISP model T S) : p ∈ DTIME model T ∧ p ∈ DSPACE model S :=
   DTISP.subset_inter h
 
 end Complexity.ClassesTest

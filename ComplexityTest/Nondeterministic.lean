@@ -6,7 +6,7 @@ Authors: Yuyang Zhao
 module
 
 import all Init.Data.List.Scan.Basic
-import Complexity.Classes.NP
+import Complexity.Classes.Nondeterministic
 import Complexity.Models.TuringMachine.Nondeterministic.Deterministic
 meta import Complexity.Models.TuringMachine.Nondeterministic
 meta import Complexity.Models.TuringMachine.Basic
