@@ -30,42 +30,33 @@ duplicating its transitions, without changing either resource bound. -/
 theorem Computes.decidesInTimeAndSpace {κ : Type*} [Fintype κ] {Q : Type*}
     {M : TM Id κ (Option Bool) Q} (h : Computes M f t s) (hp : Decides f p) :
     NTM.DecidesInTimeAndSpace M.toBinary p t s := by
-  rw [computes_iff] at h
-  have hh : ∀ (xs : List Bool) (a : α), a ∈ decode α xs →
-      M.ComputesInTimeAndSpace (xs.map some) [some (f a)]
-        (t xs.length) (s xs.length) := by
-    simpa using (Computes.iff_of_uniqueOutput.mp h)
-  refine ⟨⟨?_, ?_⟩, ?_⟩
-  · intro xs a ha
-    have hc := hh xs a ha
-    obtain ⟨hhalt, hout⟩ := hc.run_spec
-    have ht := (M.usesTime_toBinary_iff _ _).2 hhalt
-    refine ⟨ht.terminates, ?_, ?_⟩
-    · rw [NTM.booleanOutput_iff_of_usesTime ht]
-      intro c hc'
-      obtain rfl := (M.mem_runWith_toBinary_iff _ _ _).1 hc'
-      exact ⟨f a, hout⟩
-    · rw [NTM.accepts_iff_of_usesTime ht]
-      simpa [hout] using hp a
-  · intro xs a ha
-    exact (M.usesTime_toBinary_iff _ _).2 (hh xs a ha).run_spec.1
-  · intro xs a ha
-    exact (M.usesSpace_toBinary_iff _ _).2 (hh xs a ha).usesSpace
+  rw [computes_iff, Computes.iff_of_uniqueOutput] at h
+  intro xs a ha
+  have hc := h xs a ha
+  obtain ⟨hhalt, hout⟩ := hc.run_spec
+  have ht := (M.usesTime_toBinary_iff _ _).2 hhalt
+  refine ⟨ht, (M.usesSpace_toBinary_iff _ _).2 hc.usesSpace, ?_, ?_⟩
+  · rw [NTM.booleanOutput_iff_of_usesTime ht]
+    intro c hc'
+    obtain rfl := (M.mem_runWith_toBinary_iff _ _ _).1 hc'
+    exact ⟨f a, hout⟩
+  · rw [NTM.accepts_iff_of_usesTime ht]
+    simpa [hout] using hp a
 
 theorem decidableInTimeAndSpace_of_computable
     (h : timeSpaceModel.ComputableInTimeAndSpace f t s) (hp : Decides f p) :
-    NTM.DecidableInTimeAndSpace p t s := by
+    NTM.timeSpaceModel.NDecidableInTimeAndSpace p t s := by
   obtain ⟨κ, hκ, Q, hQ, M, h⟩ := computableInTimeAndSpace_iff.mp h
-  exact ⟨κ, hκ, Q, hQ, M.toBinary, h.decidesInTimeAndSpace hp⟩
+  exact (h.decidesInTimeAndSpace hp).decidableInTimeAndSpace
 
 theorem decidableInTime_of_computable (h : timeSpaceModel.ComputableInTime f t)
-    (hp : Decides f p) : NTM.DecidableInTime p t := by
+    (hp : Decides f p) : NTM.timeSpaceModel.NDecidableInTime p t := by
   obtain ⟨s, h⟩ := h
-  exact (decidableInTimeAndSpace_of_computable h hp).decidableInTime
+  exact (decidableInTimeAndSpace_of_computable h hp).ndecidableInTime
 
 theorem decidableInSpace_of_computable (h : timeSpaceModel.ComputableInSpace f s)
-    (hp : Decides f p) : NTM.DecidableInSpace p s := by
+    (hp : Decides f p) : NTM.timeSpaceModel.NDecidableInSpace p s := by
   obtain ⟨t, h⟩ := h
-  exact (decidableInTimeAndSpace_of_computable h hp).decidableInSpace
+  exact (decidableInTimeAndSpace_of_computable h hp).ndecidableInSpace
 
 end Complexity.TM

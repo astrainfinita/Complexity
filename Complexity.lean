@@ -120,6 +120,7 @@ public import Complexity.Models.TuringMachine.Tapes
 public import Complexity.Resources
 public import Complexity.Resources.Basic
 public import Complexity.Resources.TimeSpaceModel
+public import Complexity.Resources.TimeSpaceModel.Nondeterministic
 public import Complexity.Resources.Nondeterministic
 public import Complexity.Resources.Nondeterministic.Deterministic
 public import Complexity.Resources.TreeMachine

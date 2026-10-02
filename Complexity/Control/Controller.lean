@@ -159,14 +159,8 @@ theorem runFromWith_eq_of_forall_halted (c : Config) {n n' : ℕ}
     M.runFromWith Multiset c n' = M.runFromWith Multiset c n := by
   obtain ⟨l, rfl⟩ := Nat.exists_eq_add_of_le hn
   rw [runFromWith_add]
-  change (M.runFromWith Multiset c n).bind
-    (fun d => M.runFromWith Multiset d l) = _
-  calc
-    _ = (M.runFromWith Multiset c n).bind (fun d => {d}) :=
-      Multiset.bind_congr fun d hd => M.runFromWith_of_halted Multiset d (h d hd) l
-    _ = _ := by
-      rw [Multiset.bind_singleton]
-      exact Multiset.map_id _
+  simpa only [← Multiset.bind_def, bind_pure] using
+    Multiset.bind_congr fun d hd => M.runFromWith_of_halted Multiset d (h d hd) l
 
 /-- A common halting deadline remains valid when increased. -/
 theorem forall_halted_runFromWith_mono (c : Config) {n n' : ℕ}

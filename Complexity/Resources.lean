@@ -7,6 +7,7 @@ module
 
 public import Complexity.Resources.Basic
 public import Complexity.Resources.TimeSpaceModel
+public import Complexity.Resources.TimeSpaceModel.Nondeterministic
 public import Complexity.Resources.TuringMachine
 public import Complexity.Resources.Nondeterministic
 public import Complexity.Resources.Nondeterministic.Deterministic

@@ -21,19 +21,22 @@ namespace Complexity.TM
 
 variable {α : Type*} [Encoding (List Bool) α]
 
-theorem dtime_subset_ntime {T : ℕ → ℕ} : DTIME timeSpaceModel (α := α) T ⊆ NTIME T := by
+theorem dtime_subset_ntime {T : ℕ → ℕ} :
+    DTIME timeSpaceModel (α := α) T ⊆ NTIME NTM.timeSpaceModel T := by
   rintro p ⟨f, ⟨t, h, ht⟩, hp⟩
   exact ⟨t, decidableInTime_of_computable h hp, ht⟩
 
-theorem dspace_subset_nspace {S : ℕ → ℕ} : DSPACE timeSpaceModel (α := α) S ⊆ NSPACE S := by
+theorem dspace_subset_nspace {S : ℕ → ℕ} :
+    DSPACE timeSpaceModel (α := α) S ⊆ NSPACE NTM.timeSpaceModel S := by
   rintro p ⟨f, ⟨s, h, hs⟩, hp⟩
   exact ⟨s, decidableInSpace_of_computable h hp, hs⟩
 
-theorem dtisp_subset_ntisp {T S : ℕ → ℕ} : DTISP timeSpaceModel (α := α) T S ⊆ NTISP T S := by
+theorem dtisp_subset_ntisp {T S : ℕ → ℕ} :
+    DTISP timeSpaceModel (α := α) T S ⊆ NTISP NTM.timeSpaceModel T S := by
   rintro p ⟨f, ⟨t, s, h, ht, hs⟩, hp⟩
   exact ⟨t, s, decidableInTimeAndSpace_of_computable h hp, ht, hs⟩
 
-theorem p_subset_np : P timeSpaceModel (α := α) ⊆ NP := by
+theorem p_subset_np : P timeSpaceModel (α := α) ⊆ NP NTM.timeSpaceModel := by
   intro p hp
   obtain ⟨d, hd⟩ := P.mem_iff_exists_dtime.mp hp
   exact NP.mem_iff_exists_ntime.mpr ⟨d, dtime_subset_ntime hd⟩

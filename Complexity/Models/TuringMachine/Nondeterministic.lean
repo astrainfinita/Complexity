@@ -71,6 +71,29 @@ theorem UsesSpace.mono [Fintype κ] {M : NTM κ Γ Q} {xs : List Γ} {s s' : ℕ
     (h : M.UsesSpace xs s) (hs : s ≤ s') : M.UsesSpace xs s' :=
   fun n c hc => (h n c hc).trans hs
 
+/-- A time bound also bounds visited work cells on every finite computation prefix. -/
+theorem UsesTime.usesSpace [Fintype κ] {M : NTM κ Γ Q} {xs : List Γ} {t : ℕ}
+    (ht : M.UsesTime xs t) : M.UsesSpace xs (Fintype.card κ * (t + 1)) := by
+  let c : TM.Cfg κ Γ Q xs.toArray := M.initInput xs
+  intro n h hh
+  apply h.space_le_length.trans
+  apply Nat.mul_le_mul_left
+  apply Nat.succ_le_succ
+  by_cases hn : n ≤ t
+  · exact (M.runHistoryFromWith_mem_spec c n hh).length_le.trans hn
+  · have hall : ∀ p ∈ M.runFromWith Multiset
+        (History.nil (Action := TM.Action κ Γ Q) c) t, M.Halted p := by
+      change ∀ d ∈ M.runFromWith Multiset c t, M.Halted d at ht
+      rw [← M.last_runHistoryFromWith Multiset c t,
+        Multiset.fmap_def, Multiset.forall_mem_map_iff] at ht
+      simpa only [M.runFromWith_nil Multiset, Controller.halted_history] using ht
+    have he := M.runFromWith_eq_of_forall_halted
+      (History.nil (Action := TM.Action κ Γ Q) c) hall (Nat.le_of_not_ge hn)
+    simp only [M.runFromWith_nil Multiset] at he
+    change h ∈ M.runHistoryFromWith Multiset c n at hh
+    rw [he] at hh
+    exact (M.runHistoryFromWith_mem_spec c t hh).length_le
+
 /-- Initial head positions count toward space, even at time zero. -/
 theorem UsesSpace.tapes_le [Fintype κ] {M : NTM κ Γ Q} {xs : List Γ} {s : ℕ}
     (h : M.UsesSpace xs s) : Fintype.card κ ≤ s := by
@@ -127,15 +150,10 @@ theorem booleanOutput_iff_of_usesTime {t : ℕ} (h : M.UsesTime xs t) :
     M.BooleanOutput xs ↔ ∀ c ∈ M.runWith
       (TM.Cfg κ (Option Bool) Q xs.toArray) Multiset xs t,
         ∃ b : Bool, c.output = #[some b] := by
-  constructor
-  · intro hb c hc
-    obtain ⟨b, hb⟩ := hb c.output.toList
-      ((produces_iff_of_usesTime h).2 ⟨c, hc, by simp⟩)
-    exact ⟨b, by simpa using congrArg List.toArray hb⟩
-  · intro hb ys hy
-    obtain ⟨c, hc, hy⟩ := (produces_iff_of_usesTime h).1 hy
-    obtain ⟨b, hb⟩ := hb c hc
-    exact ⟨b, by simpa using congrArg Array.toList (hy.symm.trans hb)⟩
+  simp only [BooleanOutput, produces_iff_of_usesTime h, ← Array.toList_inj,
+    forall_exists_index, and_imp]
+  rw [forall_comm]
+  simp only [forall_comm (α := List (Option Bool)), forall_eq']
 
 end Boolean
 end NTM
