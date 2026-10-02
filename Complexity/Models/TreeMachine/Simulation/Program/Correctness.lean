@@ -59,68 +59,6 @@ private theorem rep_loaded (q : Q) (i : Fin k) (x : Tree) (B : ℕ) :
   refine ⟨rfl, rfl, fun _ ↦ [], rfl, ?_⟩
   simp
 
-private theorem spec_loop_of_body {xs : Array (Option Bool)} (M : TreeMachine Id k Q)
-    (r : Cfg k Q) (o : Fin k)
-    (c₀ : TM.Cfg (Fin (2 * k + 1)) (Option Bool) Unit xs) (b₀ : Bool)
-    (a : Tree) (n B : ℕ) (hr₀ : Rep r b₀ c₀ B)
-    (hc : ∀ (j : ℕ), j < n → ∀ (b : Bool)
-      (c : TM.Cfg (Fin (2 * k + 1)) (Option Bool) Unit xs) (q : ℕ),
-      Rep (M.runFrom r j) b c B →
-      Triple ((body M o ((M.runFrom r j).state, b)).verify
-        (TM.Program.cfgSemantics xs))
-        (fun s t ↦ s = c ∧ (1 + k * (50 * (B + 1))) + q ≤ t)
-        (fun v s t ↦ v = .inl ((M.runFrom r (j + 1)).state, !b) ∧
-          Rep (M.runFrom r (j + 1)) (!b) s B ∧ q ≤ t) ())
-    (he : ∀ (b : Bool)
-      (c : TM.Cfg (Fin (2 * k + 1)) (Option Bool) Unit xs),
-      Rep (M.runFrom r n) b c B →
-      Triple ((body M o ((M.runFrom r n).state, b)).verify
-        (TM.Program.cfgSemantics xs))
-        (fun s t ↦ s = c ∧ 3 * B + 2 ≤ t)
-        (fun v s _ ↦ v = .inr () ∧ s.output = (TreeMachine.code a).toArray) ()) :
-    Triple ((Program.loopOn TM.Program.idle (body M o) (r.state, b₀)).verify
-      (TM.Program.cfgSemantics xs))
-      (fun s t ↦ s = c₀ ∧ n * stepTime k B + (3 * B + 3) ≤ t)
-      (fun _ s _ ↦ s.output = (TreeMachine.code a).toArray) () := by
-  let I : (Q × Bool) →
-      TM.Cfg (Fin (2 * k + 1)) (Option Bool) Unit xs → ℕ → Prop :=
-    fun v c t ↦ ∃ j ≤ n, v.1 = (M.runFrom r j).state ∧ Rep (M.runFrom r j) v.2 c B ∧
-      (n - j) * stepTime k B + (3 * B + 3) ≤ t
-  have hl : Triple
-      ((Program.loopOn TM.Program.idle (body M o) (r.state, b₀)).verify
-        (TM.Program.cfgSemantics xs))
-      (I (r.state, b₀)) (fun _ s _ ↦ s.output = (TreeMachine.code a).toArray) () := by
-    apply TM.Program.cfg_spec_loopOn
-    · rintro v c t ⟨j, hj, hq, hr, ht⟩
-      omega
-    · rintro ⟨r, b⟩
-      constructor
-      rintro c t ⟨j, hj, hq, hr, ht⟩
-      dsimp only at hq
-      subst r
-      by_cases hj' : j < n
-      · have hb : (1 + k * (50 * (B + 1))) +
-            ((n - (j + 1)) * stepTime k B + (3 * B + 3)) ≤ t := by
-          have hn : n - j = (n - (j + 1)) + 1 := by omega
-          rw [hn, Nat.add_mul] at ht
-          dsimp only [stepTime] at ht ⊢
-          omega
-        apply (Triple.entails_wp_of_post
-          (hc j hj' b c ((n - (j + 1)) * stepTime k B + (3 * B + 3)) hr) ?_) c t ⟨rfl, hb⟩
-        rintro v d z ⟨rfl, hd, hz⟩
-        exact ⟨j + 1, by omega, rfl, hd, hz⟩
-      · have hj : j = n := by omega
-        subst j
-        have hb : 3 * B + 2 ≤ t := by simpa using ht
-        apply (Triple.entails_wp_of_post (he b c hr) ?_) c t ⟨rfl, hb⟩
-        rintro v d z ⟨rfl, hd⟩
-        exact hd
-  constructor
-  rintro c t ⟨hc, ht⟩
-  subst c
-  apply hl.le_wp c₀ t
-  exact ⟨0, Nat.zero_le _, rfl, hr₀, by simpa using ht⟩
-
 /-- Starting from any represented source configuration, the loop simulates its run
 and serializes the chosen output register. The source and target need not be initial
 configurations, and the target may have any external input. -/
@@ -136,37 +74,62 @@ theorem spec_loop {xs : Array (Option Bool)} (M : TreeMachine Id k Q)
       (TM.Program.cfgSemantics xs))
       (fun s t ↦ s = c₀ ∧ n * stepTime k B + (3 * B + 3) ≤ t)
       (fun _ s _ ↦ s.output = (TreeMachine.code a).toArray) () := by
-  apply spec_loop_of_body M r o c₀ b₀ a n B hr₀
-  · intro j hj b c q hr
-    obtain ⟨hp, hy, σ, hw, hσ⟩ := hr
-    have hf : M.halt (M.runFrom r j).state = false := Bool.eq_false_iff.mpr (hn j hj)
-    have he : M.step (M.runFrom r j) = M.runFrom r (j + 1) := (M.runFrom_succ' _ j).symm
-    have hs := spec_body_continue M o c (M.runFrom r j) b σ B q hf hw hp
-      (fun l ↦ ((M.runFrom r j).reg_size_le_mass l).trans (hm j (Nat.le_of_lt hj)))
-      (fun l ↦ by
-        rw [he]
-        exact ((M.runFrom r (j + 1)).reg_size_le_mass l).trans
-          (hm (j + 1) (Nat.succ_le_of_lt hj))) hσ
-    rw [he] at hs
-    constructor
-    apply Triple.entails_wp_of_post hs
-    rintro v d t ⟨hv, rfl, ht⟩
-    refine ⟨hv, ?_, ht⟩
-    refine ⟨rfl, hy, fun l ↦ BitList.encodeTree ((M.runFrom r j).regs l), rfl, ?_⟩
-    intro l
-    simpa only [BitList.length_encodeTree] using
-      ((M.runFrom r j).reg_size_le_mass l).trans (hm j (Nat.le_of_lt hj))
-  · intro b c hr
-    obtain ⟨hp, hy, σ, hw, hσ⟩ := hr
-    have hs := spec_body_halt M o c (M.runFrom r n) b a 0 hh
-      (by rw [hw, tapes_data, ha]) (by simp only [hp]) hy
-    have hb : a.size ≤ B := by
-      rw [← ha]
-      exact ((M.runFrom r n).reg_size_le_mass o).trans (hm n le_rfl)
-    constructor
-    rintro d t ⟨hd, ht⟩
-    exact (Triple.entails_wp_of_post hs (fun _ _ _ h ↦ ⟨h.1, h.2.1⟩)) d t
-      ⟨hd, by omega⟩
+  let I : (Q × Bool) →
+      TM.Cfg (Fin (2 * k + 1)) (Option Bool) Unit xs → ℕ → Prop :=
+    fun v c t ↦ ∃ j ≤ n, v.1 = (M.runFrom r j).state ∧ Rep (M.runFrom r j) v.2 c B ∧
+      (n - j) * stepTime k B + (3 * B + 3) ≤ t
+  have hl : Triple
+      ((Program.loopOn TM.Program.idle (body M o) (r.state, b₀)).verify
+        (TM.Program.cfgSemantics xs))
+      (I (r.state, b₀)) (fun _ s _ ↦ s.output = (TreeMachine.code a).toArray) () := by
+    apply TM.Program.cfg_spec_loopOn
+    · rintro v c t ⟨j, hj, hq, hr, ht⟩
+      omega
+    · rintro ⟨q, b⟩
+      constructor
+      rintro c t ⟨j, hj, hq, ⟨hp, hy, σ, hw, hσ⟩, ht⟩
+      dsimp only at hq
+      subst q
+      by_cases hj' : j < n
+      · let z := (n - (j + 1)) * stepTime k B + (3 * B + 3)
+        have hb : (1 + k * (50 * (B + 1))) + z ≤ t := by
+          have hn : n - j = (n - (j + 1)) + 1 := by omega
+          rw [hn, Nat.add_mul] at ht
+          dsimp only [stepTime, z] at ht ⊢
+          omega
+        have hf : M.halt (M.runFrom r j).state = false := Bool.eq_false_iff.mpr (hn j hj')
+        have he : M.step (M.runFrom r j) = M.runFrom r (j + 1) :=
+          (M.runFrom_succ' _ j).symm
+        have hs := spec_body_continue M o c (M.runFrom r j) b σ B z hf hw hp
+          (fun l ↦ ((M.runFrom r j).reg_size_le_mass l).trans (hm j hj'.le))
+          (fun l ↦ by
+            rw [he]
+            exact ((M.runFrom r (j + 1)).reg_size_le_mass l).trans (hm (j + 1) hj')) hσ
+        rw [he] at hs
+        apply (Triple.entails_wp_of_post hs ?_) c t ⟨rfl, hb⟩
+        rintro v d z ⟨rfl, rfl, hz⟩
+        refine ⟨j + 1, hj', rfl, ⟨rfl, hy, fun l ↦
+          BitList.encodeTree ((M.runFrom r j).regs l), rfl, ?_⟩, hz⟩
+        intro l
+        simpa only [BitList.length_encodeTree] using
+          ((M.runFrom r j).reg_size_le_mass l).trans (hm j hj'.le)
+      · have hj : j = n := by omega
+        subst j
+        have hs := spec_body_halt M o c (M.runFrom r n) b a 0 hh
+          (by rw [hw, tapes_data, ha]) (by simp only [hp]) hy
+        have hb : a.size ≤ B := by
+          rw [← ha]
+          exact ((M.runFrom r n).reg_size_le_mass o).trans (hm n le_rfl)
+        have ht' : 3 * a.size + 2 + 0 ≤ t := by
+          simp only [Nat.sub_self, Nat.zero_mul, Nat.zero_add] at ht
+          omega
+        apply (Triple.entails_wp_of_post hs ?_) c t ⟨rfl, ht'⟩
+        rintro v d z ⟨rfl, hd, _⟩
+        exact hd
+  constructor
+  rintro c t ⟨hc, ht⟩
+  subst c
+  exact hl.le_wp c₀ t ⟨0, Nat.zero_le _, rfl, hr₀, by simpa using ht⟩
 
 end Complexity.TreeMachine.Simulation.Program
 
