@@ -5,7 +5,7 @@ Authors: Yuyang Zhao
 -/
 module
 
-public import Complexity.Control.Transition
+public import Complexity.Control.Transition.Basic
 
 /-!
 # Simulation of a finite execution segment

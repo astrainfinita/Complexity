@@ -7,7 +7,7 @@ module
 
 public import Complexity.Resources.Nondeterministic.Deterministic
 public import Complexity.Classes.Deterministic
-public import Complexity.Classes.Nondeterministic
+public import Complexity.Classes.Nondeterministic.Basic
 
 /-! # Deterministic classes are contained in nondeterministic classes
 

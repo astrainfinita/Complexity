@@ -5,7 +5,7 @@ Authors: Yuyang Zhao
 -/
 module
 
-public import Complexity.Models.TuringMachine.Nondeterministic
+public import Complexity.Models.TuringMachine.Nondeterministic.Basic
 public import Complexity.Models.TuringMachine.Deterministic
 public import Complexity.Control.Controller.Binary
 

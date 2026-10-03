@@ -6,7 +6,7 @@ Authors: Yuyang Zhao
 module
 
 public import Complexity.Encoding.Bool
-public import Complexity.Encoding.Polynomial
+public import Complexity.Encoding.Polynomial.Basic
 
 /-! # Polynomial compatibility of Boolean encodings
 

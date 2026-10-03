@@ -5,7 +5,7 @@ Authors: Yuyang Zhao
 -/
 module
 
-public import Complexity.Resources.StackMachine
+public import Complexity.Resources.StackMachine.Basic
 public import Complexity.Resources.TuringMachine
 public import Complexity.Models.StackMachine.TuringMachine
 public import Mathlib.Data.Fintype.Option

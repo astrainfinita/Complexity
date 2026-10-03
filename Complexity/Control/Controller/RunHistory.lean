@@ -5,7 +5,7 @@ Authors: Yuyang Zhao
 -/
 module
 
-public import Complexity.Control.Controller.History
+public import Complexity.Control.Controller.History.Basic
 
 /-! # Bounded execution histories
 

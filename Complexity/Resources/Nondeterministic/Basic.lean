@@ -9,7 +9,7 @@ public import Complexity.Resources.TimeSpaceModel.Nondeterministic
 public import Complexity.Encoding.BitList
 public import Complexity.Encoding.Bool
 public import Mathlib.Data.Set.Finite.List
-public import Complexity.Models.TuringMachine.Nondeterministic
+public import Complexity.Models.TuringMachine.Nondeterministic.Basic
 
 /-!
 # Resource bounds for nondeterministic decisions

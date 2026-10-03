@@ -5,7 +5,7 @@ Authors: Yuyang Zhao
 -/
 module
 
-public import Complexity.Resources.TreeMachine
+public import Complexity.Resources.TreeMachine.Basic
 public import Complexity.Models.TreeMachine.Composition
 
 /-! # Composition of encoded tree computations

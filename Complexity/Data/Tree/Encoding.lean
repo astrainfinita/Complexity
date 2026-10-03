@@ -5,7 +5,7 @@ Authors: Yuyang Zhao
 -/
 module
 
-public import Complexity.Data.Tree
+public import Complexity.Data.Tree.Basic
 public import Mathlib.Data.Int.Basic
 
 /-!

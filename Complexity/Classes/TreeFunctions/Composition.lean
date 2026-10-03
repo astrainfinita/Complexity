@@ -5,7 +5,7 @@ Authors: Yuyang Zhao
 -/
 module
 
-public import Complexity.Classes.Functions
+public import Complexity.Classes.Functions.Basic
 public import Complexity.Resources.TreeMachine.Composition
 public import Mathlib.Basic.Finite.Sum
 public import Mathlib.Data.Fintype.Fin

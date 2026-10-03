@@ -5,7 +5,7 @@ Authors: Yuyang Zhao
 -/
 module
 
-public import Complexity.Control.BinaryChoice
+public import Complexity.Control.BinaryChoice.Basic
 public import Mathlib.Probability.Distributions.Uniform
 
 /-!

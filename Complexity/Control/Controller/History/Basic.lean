@@ -5,7 +5,7 @@ Authors: Yuyang Zhao
 -/
 module
 
-public import Complexity.Control.Controller
+public import Complexity.Control.Controller.Basic
 
 /-! # Finite action histories
 

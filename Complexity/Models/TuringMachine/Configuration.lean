@@ -5,8 +5,8 @@ Authors: Yuyang Zhao
 -/
 module
 
-public import Complexity.Control.Controller
-public import Complexity.Data.IntMemory
+public import Complexity.Control.Controller.Basic
+public import Complexity.Data.IntMemory.Basic
 public import Complexity.Models.Input
 
 /-!

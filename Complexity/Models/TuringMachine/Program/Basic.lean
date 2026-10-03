@@ -5,7 +5,7 @@ Authors: Yuyang Zhao
 -/
 module
 
-public import Complexity.Control.Program
+public import Complexity.Control.Program.Compiler
 public import Complexity.Models.TuringMachine.Basic
 
 /-!

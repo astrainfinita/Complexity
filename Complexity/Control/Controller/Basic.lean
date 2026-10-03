@@ -6,7 +6,7 @@ Authors: Yuyang Zhao
 module
 
 public import Mathlib.Data.Multiset.Functor
-public import Complexity.Control.Transition
+public import Complexity.Control.Transition.Basic
 
 /-!
 # Controllers over local observations and atomic actions

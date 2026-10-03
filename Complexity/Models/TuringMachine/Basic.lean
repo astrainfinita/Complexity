@@ -6,7 +6,7 @@ Authors: Yuyang Zhao
 module
 
 public import Complexity.Models.TuringMachine.Configuration
-public import Complexity.Control.Controller
+public import Complexity.Control.Controller.Basic
 public import Complexity.Control.Controller.Execution
 
 /-!

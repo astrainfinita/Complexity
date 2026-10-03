@@ -5,7 +5,7 @@ Authors: Yuyang Zhao
 -/
 module
 
-public import Complexity.Models.StackMachine.Program
+public import Complexity.Models.StackMachine.Program.Basic
 public import Complexity.Control.Program.Traverse
 
 /-! # Moving and copying stack words -/

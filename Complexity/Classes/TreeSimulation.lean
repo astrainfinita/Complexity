@@ -5,10 +5,10 @@ Authors: Yuyang Zhao
 -/
 module
 
-public import Complexity.Classes.Functions
-public import Complexity.Resources.StackMachine
-public import Complexity.Encoding.Polynomial
-public import Complexity.Models.TreeMachine.Simulation.BitList
+public import Complexity.Classes.Functions.Basic
+public import Complexity.Resources.StackMachine.Basic
+public import Complexity.Encoding.Polynomial.Basic
+public import Complexity.Models.TreeMachine.Simulation.BitList.Correctness
 public import Mathlib.Data.Fintype.EquivFin
 
 /-!

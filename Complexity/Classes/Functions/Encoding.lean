@@ -5,7 +5,7 @@ Authors: Yuyang Zhao
 -/
 module
 
-public import Complexity.Classes.Functions
+public import Complexity.Classes.Functions.Basic
 
 /-! # Lifting computations through unique encodings -/
 

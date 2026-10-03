@@ -5,7 +5,7 @@ Authors: Yuyang Zhao
 -/
 module
 
-public import Complexity.Resources.Nondeterministic
+public import Complexity.Resources.Nondeterministic.Basic
 public import Complexity.Resources.TuringMachine
 public import Complexity.Models.TuringMachine.Nondeterministic.Deterministic
 public import Complexity.Encoding.Bool

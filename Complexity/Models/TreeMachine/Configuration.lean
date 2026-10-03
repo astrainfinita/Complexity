@@ -5,8 +5,8 @@ Authors: Yuyang Zhao
 -/
 module
 
-public import Complexity.Control.Controller
-public import Complexity.Data.Tree
+public import Complexity.Control.Controller.Basic
+public import Complexity.Data.Tree.Basic
 public import Mathlib.Data.Fintype.Basic
 public import Mathlib.Logic.Function.Basic
 

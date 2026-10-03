@@ -5,7 +5,7 @@ Authors: Yuyang Zhao
 -/
 module
 
-public import Complexity.Control.Controller
+public import Complexity.Control.Controller.Basic
 public import Complexity.Models.Input
 
 /-! # Configurations and actions of a multiple-stack machine -/

@@ -5,7 +5,7 @@ Authors: Yuyang Zhao
 -/
 module
 
-public import Complexity.Classes.Functions
+public import Complexity.Classes.Functions.Basic
 public import Complexity.Resources.StackMachine.TuringMachine
 public import Mathlib.Analysis.Asymptotics.Ring
 

@@ -5,7 +5,7 @@ Authors: Yuyang Zhao
 -/
 module
 
-public import Complexity.Data.IntMemory
+public import Complexity.Data.IntMemory.Basic
 
 /-!
 # Lists stored in integer memory

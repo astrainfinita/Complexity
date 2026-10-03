@@ -6,7 +6,7 @@ Authors: Yuyang Zhao
 module
 
 public import Complexity.Classes.Basic
-public import Complexity.Classes.Functions
+public import Complexity.Classes.Functions.Basic
 
 /-! # Deterministic complexity classes
 

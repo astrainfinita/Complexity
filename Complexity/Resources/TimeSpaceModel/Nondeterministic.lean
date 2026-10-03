@@ -5,7 +5,7 @@ Authors: Yuyang Zhao
 -/
 module
 
-public import Complexity.Resources.TimeSpaceModel
+public import Complexity.Resources.TimeSpaceModel.Basic
 public import Mathlib.Data.Multiset.Basic
 
 /-!

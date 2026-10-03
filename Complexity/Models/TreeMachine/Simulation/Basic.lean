@@ -6,7 +6,7 @@ Authors: Yuyang Zhao
 module
 
 public import Complexity.Models.TreeMachine.Basic
-public import Complexity.Models.StackMachine.Program
+public import Complexity.Models.StackMachine.Program.Basic
 public import Complexity.Data.Tree.Encoding
 public import Complexity.Control.Program.For
 
