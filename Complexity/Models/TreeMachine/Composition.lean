@@ -94,17 +94,17 @@ private theorem observe_pad {r : ℕ} (h : k ≤ r) (c : Cfg k Q) (q : Q') :
     apply Cfg.ext <;> simp [step_eq, comp, right, h', observe_pad, pad_eval]
 
 @[simp] theorem actionSum_one_left (c : Cfg k Q) (h : ¬M.Halted c) :
-    ((comp M N).runHistoryFrom (left c) 1).actionSum Action.timeCost =
-      (M.runHistoryFrom c 1).actionSum Action.timeCost := by
+    ((comp M N).runHistoryFrom (left c) 1).actionSum Action.sizeCost =
+      (M.runHistoryFrom c 1).actionSum Action.sizeCost := by
   have h' : M.halt c.state = false := Bool.eq_false_iff.mpr h
-  simp [Controller.actionSum_runHistoryFrom_one, Action.timeCost, comp, left, h', observe_pad,
-    Op.timeCost_rename, pad_comp_castLE]
+  simp [Controller.actionSum_runHistoryFrom_one, Action.sizeCost, comp, left, h', observe_pad,
+    Op.sizeCost_rename, pad_comp_castLE]
 
 @[simp] theorem actionSum_one_right (c : Cfg l Q') :
-    ((comp M N).runHistoryFrom (right c) 1).actionSum Action.timeCost =
-      (N.runHistoryFrom c 1).actionSum Action.timeCost := by
-  simp [Controller.actionSum_runHistoryFrom_one, Action.timeCost, comp, right, observe_pad,
-    Op.timeCost_rename, pad_comp_castLE]
+    ((comp M N).runHistoryFrom (right c) 1).actionSum Action.sizeCost =
+      (N.runHistoryFrom c 1).actionSum Action.sizeCost := by
+  simp [Controller.actionSum_runHistoryFrom_one, Action.sizeCost, comp, right, observe_pad,
+    Op.sizeCost_rename, pad_comp_castLE]
 
 theorem runFrom_left (c : Cfg k Q) (n : ℕ)
     (h : ∀ j < n, ¬M.Halted (M.runFrom c j)) :
@@ -115,8 +115,8 @@ theorem runFrom_left (c : Cfg k Q) (n : ℕ)
 
 theorem actionSum_left (c : Cfg k Q) (n : ℕ)
     (h : ∀ j < n, ¬M.Halted (M.runFrom c j)) :
-    ((comp M N).runHistoryFrom (left c) n).actionSum Action.timeCost =
-      (M.runHistoryFrom c n).actionSum Action.timeCost := by
+    ((comp M N).runHistoryFrom (left c) n).actionSum Action.sizeCost =
+      (M.runHistoryFrom c n).actionSum Action.sizeCost := by
   induction n with
   | zero => rfl
   | succ n ih =>
@@ -129,8 +129,8 @@ theorem runFrom_right (c : Cfg l Q') (n : ℕ) :
   exact Transition.runN_map right (step_right M N) c n
 
 theorem actionSum_right (c : Cfg l Q') (n : ℕ) :
-    ((comp M N).runHistoryFrom (right c) n).actionSum Action.timeCost =
-      (N.runHistoryFrom c n).actionSum Action.timeCost := by
+    ((comp M N).runHistoryFrom (right c) n).actionSum Action.sizeCost =
+      (N.runHistoryFrom c n).actionSum Action.sizeCost := by
   induction n with
   | zero => rfl
   | succ n ih =>
@@ -174,9 +174,9 @@ private theorem step_bridge (ρ : Fin (max k l + 1) → Tree)
 
 private theorem actionSum_one_bridge (ρ : Fin (max k l + 1) → Tree)
     (hz : ρ ⟨max k l, by omega⟩ = .nil) {n : ℕ} (hn : n < max k l - 1) :
-    ((comp M N).runHistoryFrom (bridge (Q := Q) N ρ n) 1).actionSum Action.timeCost = 1 := by
-  simp [Controller.actionSum_runHistoryFrom_one, Action.timeCost, bridge, next, hn, comp,
-    Op.timeCost, clear, hz, show ¬max k l ≤ n by omega]
+    ((comp M N).runHistoryFrom (bridge (Q := Q) N ρ n) 1).actionSum Action.sizeCost = 1 := by
+  simp [Controller.actionSum_runHistoryFrom_one, Action.sizeCost, bridge, next, hn, comp,
+    Op.sizeCost, clear, hz, show ¬max k l ≤ n by omega]
 
 private theorem runFrom_bridge (ρ : Fin (max k l + 1) → Tree)
     (hz : ρ ⟨max k l, by omega⟩ = .nil) {n : ℕ} (hn : n ≤ max k l - 1) :
@@ -188,7 +188,7 @@ private theorem runFrom_bridge (ρ : Fin (max k l + 1) → Tree)
 
 private theorem actionSum_bridge (ρ : Fin (max k l + 1) → Tree)
     (hz : ρ ⟨max k l, by omega⟩ = .nil) {n : ℕ} (hn : n ≤ max k l - 1) :
-    ((comp M N).runHistoryFrom (bridge (Q := Q) N ρ 0) n).actionSum Action.timeCost = n := by
+    ((comp M N).runHistoryFrom (bridge (Q := Q) N ρ 0) n).actionSum Action.sizeCost = n := by
   induction n with
   | zero => rfl
   | succ n ih =>
@@ -206,9 +206,9 @@ private theorem step_left_halted (c : Cfg k Q) (h : M.Halted c) :
   apply Cfg.ext <;> simp [step_eq, comp, left, bridge, h']
 
 private theorem actionSum_one_left_halted (c : Cfg k Q) (h : M.Halted c) :
-    ((comp M N).runHistoryFrom (left c) 1).actionSum Action.timeCost = 1 := by
-  simp [Controller.actionSum_runHistoryFrom_one, Action.timeCost, left, comp,
-    show M.halt c.state = true from h, Op.timeCost]
+    ((comp M N).runHistoryFrom (left c) 1).actionSum Action.sizeCost = 1 := by
+  simp [Controller.actionSum_runHistoryFrom_one, Action.sizeCost, left, comp,
+    show M.halt c.state = true from h, Op.sizeCost]
 
 private theorem clear_eq_input {r : ℕ} (ρ : Fin (r + 1) → Tree)
     (hz : ρ ⟨r, by omega⟩ = .nil) : clear ρ (r - 1) = input 0 (ρ 0) := by
@@ -256,7 +256,7 @@ theorem runFrom_clear (c : Cfg k Q) (h : M.Halted c) :
 omit [NeZero l] in
 /-- Clearing writes an empty leaf and charges one per instruction. -/
 theorem actionSum_clear (c : Cfg k Q) (h : M.Halted c) :
-    ((comp M N).runHistoryFrom (left c) (max k l)).actionSum Action.timeCost = max k l := by
+    ((comp M N).runHistoryFrom (left c) (max k l)).actionSum Action.sizeCost = max k l := by
   have hk : 0 < k := NeZero.pos k
   conv_lhs => enter [1, 3]; rw [show max k l = 1 + (max k l - 1) by omega]
   rw [Controller.actionSum_runHistoryFrom_add, Controller.runFrom_succ, Controller.runFrom_zero,
@@ -319,7 +319,7 @@ theorem comp_computesInTimeAndSpace [NeZero k] [NeZero l]
     rw [Controller.run, Controller.runFrom_add, Controller.runFrom_add, ← Controller.run, h₁, h₂]
     exact Comp.runFrom_right M N _ d
   have hw : (C.runHistory (Cfg (max k l + 1) (Comp.State k l Q Q')) x
-      (n + max k l + m)).actionSum Action.timeCost ≤ t + max k l + u := by
+      (n + max k l + m)).actionSum Action.sizeCost ≤ t + max k l + u := by
     rw [Controller.runHistory, Controller.actionSum_runHistoryFrom_add,
       Controller.actionSum_runHistoryFrom_add, Controller.runFrom_add, ← Controller.run, h₁, h₂, h₀,
       Comp.actionSum_left M N _ n hn.2, Comp.actionSum_clear M N c hn.1, Comp.actionSum_right M N]

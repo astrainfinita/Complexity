@@ -16,7 +16,7 @@ Functions use bit-string encodings. External bits occupy `some b` cells and
 `none` is blank. Time counts transitions; space counts visited work cells and
 excludes the read-only input and append-only output.
 
-`timeSpaceModel.ComputableInTimeAndSpace` requires one fixed machine with finite control for
+`TimeSpaceModel.tm.ComputableInTimeAndSpace` requires one fixed machine with finite control for
 all valid inputs. Its bounds are pointwise functions of the actual input length.
 The time-only and space-only variants omit one bound, but still require termination.
 -/
@@ -53,7 +53,7 @@ theorem computes_iff {κ : Type*} [Fintype κ] {Q : Type*} {M : TM Id κ (Option
 
 /-- Finite Turing machines on bit strings, with transition time and visited
 work-cell space. Each behavior is realized by one machine for all inputs. -/
-def timeSpaceModel : TimeSpaceModel Id (List Bool) where
+def _root_.Complexity.TimeSpaceModel.tm : TimeSpaceModel Id (List Bool) where
   inputSize := List.length
   behaviors := {R | ∃ (κ : Type) (_ : Fintype κ) (Q : Type) (_ : Finite Q)
       (M : TM Id κ (Option Bool) Q),
@@ -64,7 +64,7 @@ def timeSpaceModel : TimeSpaceModel Id (List Bool) where
 
 /-- Recover the single finite machine realizing the abstract resource behavior. -/
 theorem computableInTimeAndSpace_iff {f : α → β} {t s : ℕ → ℕ} :
-    timeSpaceModel.ComputableInTimeAndSpace f t s ↔
+    TimeSpaceModel.tm.ComputableInTimeAndSpace f t s ↔
       ∃ (κ : Type) (_ : Fintype κ) (Q : Type) (_ : Finite Q)
         (M : TM Id κ (Option Bool) Q), Computes M f t s := by
   constructor
@@ -83,7 +83,7 @@ theorem mono {κ : Type*} [Fintype κ] {Q : Type*} {M : TM Id κ (Option Bool) Q
 
 theorem computableInTimeAndSpace {κ : Type} [Fintype κ] {Q : Type} [Finite Q]
     {M : TM Id κ (Option Bool) Q} {f : α → β} {t s : ℕ → ℕ}
-    (h : Computes M f t s) : timeSpaceModel.ComputableInTimeAndSpace f t s :=
+    (h : Computes M f t s) : TimeSpaceModel.tm.ComputableInTimeAndSpace f t s :=
   computableInTimeAndSpace_iff.mpr ⟨κ, inferInstance, Q, inferInstance, M, h⟩
 
 end Computes

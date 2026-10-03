@@ -30,19 +30,19 @@ theorem mass_input_le [NeZero k] (M : TreeMachine Id k Q) (a : Tree) :
   omega
 
 theorem length_runHistoryFrom_le_actionSum (M : TreeMachine Id k Q) (c : Cfg k Q) (t : ℕ) :
-    (M.runHistoryFrom c t).length ≤ (M.runHistoryFrom c t).actionSum Action.timeCost := by
+    (M.runHistoryFrom c t).length ≤ (M.runHistoryFrom c t).actionSum Action.sizeCost := by
   rw [← (M.runHistoryFrom c t).actionSum_unit]
   exact (M.runHistoryFrom c t).actionSum_mono
-    fun a c _ ↦ Nat.succ_le_of_lt (Op.timeCost_pos a.op c.regs)
+    fun a c _ ↦ Nat.succ_le_of_lt (Op.sizeCost_pos a.op c.regs)
 
 theorem configSup_mass_le (M : TreeMachine Id k Q) (c : Cfg k Q) (t : ℕ) :
     (M.runHistoryFrom c t).configSup Cfg.mass ≤
-      c.mass + (M.runHistoryFrom c t).actionSum Action.timeCost := by
+      c.mass + (M.runHistoryFrom c t).actionSum Action.sizeCost := by
   simpa using (M.runHistoryFrom c t).configSup_le_add_actionSum
-    Cfg.mass Action.timeCost (fun a c _ ↦ c.mass_apply_le a)
+    Cfg.mass Action.sizeCost (fun a c _ ↦ c.mass_apply_le a)
 
 theorem mass_runFrom_le (M : TreeMachine Id k Q) (c : Cfg k Q) {s t : ℕ} (h : s ≤ t) :
-    (M.runFrom c s).mass ≤ c.mass + (M.runHistoryFrom c t).actionSum Action.timeCost :=
+    (M.runFrom c s).mass ≤ c.mass + (M.runHistoryFrom c t).actionSum Action.sizeCost :=
   (M.config_le_configSup_runHistoryFrom Cfg.mass c h).trans (M.configSup_mass_le c t)
 
 section Canonical
@@ -83,7 +83,7 @@ theorem Terminates.exists_haltsAt {M : TreeMachine Id k Q} {a : Tree}
 
 theorem HaltsAt.le_actionSum {M : TreeMachine Id k Q} {a : Tree} {t : ℕ}
     (h : M.HaltsAt a t) :
-    t ≤ (M.runHistory (Cfg k Q) a t).actionSum Action.timeCost := by
+    t ≤ (M.runHistory (Cfg k Q) a t).actionSum Action.sizeCost := by
   exact (M.length_runHistoryFrom_eq _ _ h.2).symm.trans_le
     (M.length_runHistoryFrom_le_actionSum _ _)
 
@@ -97,13 +97,13 @@ since the external time charge depends on the size written to the selected regis
 def ComputesInTimeAndSpace (M : TreeMachine Id k Q) (a : Tree)
     (b : Tree) (t s : ℕ) : Prop :=
   M.computes (Config := Cfg k Q)
-    (fun h ↦ h.actionSum Action.timeCost) (fun h ↦ h.configSup Cfg.mass) a b t s
+    (fun h ↦ h.actionSum Action.sizeCost) (fun h ↦ h.configSup Cfg.mass) a b t s
 
 /-- A halted run's time budget also bounds its peak space by input size and register count. -/
 theorem ComputesInTimeAndSpace.of_run {M : TreeMachine Id k Q} {a b : Tree} {n t s : ℕ}
     (hh : M.Halted (M.run (Cfg k Q) a n))
     (ho : (M.run (Cfg k Q) a n).regs 0 = b)
-    (ht : (M.runHistory (Cfg k Q) a n).actionSum Action.timeCost ≤ t) (hs : a.size + k + t ≤ s) :
+    (ht : (M.runHistory (Cfg k Q) a n).actionSum Action.sizeCost ≤ t) (hs : a.size + k + t ≤ s) :
     M.ComputesInTimeAndSpace a b t s := by
   refine ⟨n, hh, ho, ht, ?_⟩
   exact (M.configSup_mass_le _ n).trans
@@ -126,12 +126,12 @@ theorem ComputesInTimeAndSpace.terminates {M : TreeMachine Id k Q} {a : Tree}
 theorem ComputesInTimeAndSpace.exists_haltsAt {M : TreeMachine Id k Q} {a : Tree}
     {b : Tree} {t s : ℕ} (h : M.ComputesInTimeAndSpace a b t s) :
     ∃ n ≤ t, M.HaltsAt a n ∧ (M.run (Cfg k Q) a n).regs 0 = b ∧
-      (M.runHistory (Cfg k Q) a n).actionSum Action.timeCost ≤ t ∧
+      (M.runHistory (Cfg k Q) a n).actionSum Action.sizeCost ≤ t ∧
       (M.runHistory (Cfg k Q) a n).configSup Cfg.mass ≤ s := by
   obtain ⟨u, hu, ha, ht, hs⟩ := h
   change (M.run (Cfg k Q) a u).regs 0 = b at ha
   obtain ⟨n, hn, hh⟩ := M.exists_haltsAt_le a hu
-  have hc := (M.actionSum_runHistory_mono Action.timeCost a hn).trans ht
+  have hc := (M.actionSum_runHistory_mono Action.sizeCost a hn).trans ht
   refine ⟨n, hh.le_actionSum.trans hc, hh, ?_, hc,
     (M.configSup_runHistory_mono Cfg.mass a hn).trans hs⟩
   rwa [M.run_eq_of_halted a hh.1 hn] at ha
@@ -144,7 +144,7 @@ theorem ComputesInTimeAndSpace.usesSpace {M : TreeMachine Id k Q} {a : Tree}
 
 theorem ComputesInTimeAndSpace.actionSum_le {M : TreeMachine Id k Q} {a : Tree}
     {b : Tree} {t s : ℕ} (h : M.ComputesInTimeAndSpace a b t s)
-    (u : ℕ) : (M.runHistory (Cfg k Q) a u).actionSum Action.timeCost ≤ t :=
+    (u : ℕ) : (M.runHistory (Cfg k Q) a u).actionSum Action.sizeCost ≤ t :=
   Controller.computes_actionSum_le h u
 
 /-- The time budget controls space even without using the explicit space budget. -/

@@ -8,20 +8,21 @@ module
 public import Complexity.Models.StackMachine.Deterministic
 public import Complexity.Models.TuringMachine.Deterministic
 public import Complexity.Data.IntMemory.List
+public import Complexity.Control.Transition.Simulation
 
 /-!
 # Simulating stacks by work tapes
 
-Each stack occupies the positive addresses of one tape, with its top under the head.
-Address zero is blank and represents the empty stack. Each source transition uses exactly
-two target transitions: move for pushes and erase/move for pops, then write pushed symbols.
+Each stack occupies the positive addresses of one tape. A newly pushed top stays in finite
+control until the next action; the remaining symbols are already on tape. This representation
+is preserved by one target transition, with each head always at its source stack height.
 -/
 
 @[expose] public section
 
 namespace Complexity.StackMachine
 
-variable {κ Γ Q Q' : Type} {xs : Array Γ}
+variable {κ Γ Q : Type} {xs : Array Γ}
 
 namespace Tape
 
@@ -56,137 +57,156 @@ def encode (s : List Γ) : IntMemory (Option Γ) := IntMemory.ofList (cells s)
     (encode (a :: s)).set (s.length + 1) none = encode s := by
   simpa [encode] using IntMemory.set_ofList_append_length (cells s) (some a)
 
+@[simp] theorem erase_above (s : List Γ) :
+    (encode s).set (s.length + 1) none = encode s := by
+  have h := IntMemory.ofList_append_default (cells s)
+  rw [← IntMemory.set_ofList_length] at h
+  simpa [encode] using h
+
 end Tape
 
-/-- Encode all stacks while selecting an arbitrary target control state. -/
-@[simps]
-def Cfg.toTM (c : Cfg κ Γ Q xs) (q : Q') : TM.Cfg κ (Option Γ) Q' (xs.toList.map some).toArray where
-  state := q
+/-- The control remembers a pushed top until the next action writes or discards it. -/
+abbrev ControlState (κ Γ Q : Type) := Q × (κ → Option Γ)
+
+/-- Encode a configuration, optionally keeping each top in finite control. -/
+@[simps state_fst state_snd inputPos_val workTapes workPos output]
+def Cfg.toTM (c : Cfg κ Γ Q xs) (cached : κ → Bool) :
+    TM.Cfg κ (Option Γ) (ControlState κ Γ Q) (xs.toList.map some).toArray where
+  state := (c.state, fun i ↦ if cached i then (c.stacks i).head? else none)
   inputPos := ⟨c.inputPos.val, by simp⟩
-  workTapes i := Tape.encode (c.stacks i)
+  workTapes i := Tape.encode (if cached i then (c.stacks i).tail else c.stacks i)
   workPos i := (c.stacks i).length
   output := c.output.map some
 
-theorem Cfg.observe_toTM (c : Cfg κ Γ Q xs) (q : Q') :
-    observe (c.toTM q) = (observe c : Option Γ × (κ → Option Γ)) := by
+/-- Cached symbols take precedence over the tape under the head. -/
+def ControlState.observe (q : ControlState κ Γ Q) (v : Option Γ × (κ → Option Γ)) :
+    Option Γ × (κ → Option Γ) := (v.1, fun i ↦ (q.2 i).or (v.2 i))
+
+theorem Cfg.observe_toTM (c : Cfg κ Γ Q xs) (cached : κ → Bool) :
+    (c.toTM cached).state.observe (observe (c.toTM cached)) = observe c := by
   apply Prod.ext
   · cases h : c.inputPos.val with
-    | zero => simp [TM.Cfg.inputSymbol, h]
-    | succ n => simp [TM.Cfg.inputSymbol, h]; cases xs[n]? <;> rfl
+    | zero => simp [ControlState.observe, TM.Cfg.inputSymbol, h]
+    | succ n => simp [ControlState.observe, TM.Cfg.inputSymbol, h]; cases xs[n]? <;> rfl
   · funext i
-    exact Tape.top (c.stacks i)
+    cases hc : cached i with
+    | false => simp [ControlState.observe, TM.Cfg.workSymbols, hc]
+    | true => cases hs : c.stacks i <;> simp [ControlState.observe, TM.Cfg.workSymbols, hc, hs]
 
-/-- The second phase remembers just the symbols to push and the next source label. -/
-abbrev ControlState (κ Γ Q : Type) := Q ⊕ ((κ → Option Γ) × Q)
-
-/-- A pushed symbol awaits the second target transition. -/
+/-- A pushed symbol is the only pending write after an action. -/
 def Op.pending : Op Γ → Option Γ
   | .push a => some a
   | _ => none
 
-/-- The first phase performs input/output and the movements/erasures on work tapes. -/
+/-- Write an old cached top before moving for a push; a pop discards it instead. -/
 @[simps]
-def Action.first (a : Action κ Γ Q) (top : κ → Option Γ) :
+def Action.toTM (a : Action κ Γ Q) (pending top : κ → Option Γ) :
     TM.Action κ (Option Γ) (ControlState κ Γ Q) where
   inputMove := a.inputMove
   work i := match a.work i with
-    | .nop => (none, 0)
-    | .push _ => (none, 1)
+    | .nop => ((pending i).map some, 0)
+    | .push _ => ((pending i).map some, 1)
     | .pop => match top i with
       | none => (none, 0)
       | some _ => (some none, -1)
   output := a.output.map some
-  state := .inr (fun i ↦ (a.work i).pending, a.state)
+  state := (a.state, fun i ↦ (a.work i).pending)
 
-/-- The second phase writes the pushed symbols without moving any heads. -/
-@[simps]
-def Action.second (pending : κ → Option Γ) (q : Q) :
-    TM.Action κ (Option Γ) (ControlState κ Γ Q) where
-  inputMove := 0
-  work i := ((pending i).map some, 0)
-  output := none
-  state := .inl q
-
-/-- Simulate each stack transition with two work-tape transitions. -/
+/-- Simulate stack transitions with cached tops in finite control. -/
 @[simps]
 def toTM (M : StackMachine Id κ Γ Q) : TM Id κ (Option Γ) (ControlState κ Γ Q) where
-  q₀ := .inl M.q₀
-  halt := fun q ↦ match q with
-    | .inl q => M.halt q
-    | .inr _ => false
-  transition q v := pure <| match q with
-    | .inl q => ((M.transition q v).run).first v.2
-    | .inr (pending, q') => Action.second pending q'
+  q₀ := (M.q₀, fun _ ↦ none)
+  halt q := M.halt q.1
+  transition q v := pure <|
+    ((M.transition q.1 (q.observe v)).run).toTM q.2 (q.observe v).2
 
-/-- Both target phases implement one simultaneous source action. -/
-theorem Action.apply_toTM (a : Action κ Γ Q) (c : Cfg κ Γ Q xs) :
-    apply (Action.second (fun i ↦ (a.work i).pending) a.state)
-      (apply (a.first (fun i ↦ (c.stacks i).head?))
-        (c.toTM (Sum.inl c.state : ControlState κ Γ Q))) =
-      (apply a c).toTM (Sum.inl a.state : ControlState κ Γ Q) := by
+/-- One target action preserves the encoding, caching precisely the newly pushed tops. -/
+theorem Action.apply_toTM (a : Action κ Γ Q) (c : Cfg κ Γ Q xs) (cached : κ → Bool) :
+    apply (a.toTM (c.toTM cached).state.2 (fun i ↦ (c.stacks i).head?)) (c.toTM cached) =
+      (apply a c).toTM (fun i ↦ (a.work i).pending.isSome) := by
   apply TM.Cfg.ext
-  · rfl
+  · apply Prod.ext
+    · rfl
+    · funext i; cases h : a.work i <;> simp [Op.pending, Op.apply, h]
   · apply Fin.ext
     cases h : a.inputMove <;> simp [h, Input.movePos]
   · funext i
-    cases h : a.work i with
-    | nop | push _ => simp [Op.pending, Op.apply, h]
-    | pop => cases hs : c.stacks i <;> simp [Op.pending, Op.apply, h, hs]
+    cases h : a.work i <;> cases hc : cached i <;> cases hs : c.stacks i <;>
+      simp [Op.pending, Op.apply, h, hc, hs]
   · funext i
     cases h : a.work i <;> cases hs : c.stacks i <;>
       simp [Op.pending, Op.apply, h, hs, SignType.cast]
   · cases h : a.output <;> simp [h]
 
-/-- Two target steps implement one source step, including halted padding. -/
-theorem runFrom_two_toTM (M : StackMachine Id κ Γ Q) (c : Cfg κ Γ Q xs) :
-    M.toTM.runFrom (c.toTM (.inl c.state)) 2 =
-      (M.step c).toTM (.inl (M.step c).state) := by
+/-- A source step has an encoded target successor, including halted padding. -/
+theorem step_toTM (M : StackMachine Id κ Γ Q) (c : Cfg κ Γ Q xs) (cached : κ → Bool) :
+    ∃ cached', M.toTM.step (c.toTM cached) = (M.step c).toTM cached' := by
   by_cases h : M.Halted c
-  · have ht : M.toTM.Halted (c.toTM (.inl c.state)) := h
-    rw [Controller.runFrom_of_halted _ _ ht, Controller.step_of_halted _ _ h]
-  · simpa [-TM.Cfg.observe_def, Controller.runFrom_succ, Controller.step_eq,
-      Cfg.observe_toTM, show M.halt c.state = false from Bool.eq_false_iff.mpr h]
-      using Action.apply_toTM ((M.transition c.state (observe c)).run) c
+  · have ht : M.toTM.Halted (c.toTM cached) := h
+    exact ⟨cached, by rw [M.toTM.step_of_halted _ ht, M.step_of_halted _ h]⟩
+  · refine ⟨fun i ↦ (((M.transition c.state (observe c)).run).work i).pending.isSome, ?_⟩
+    simpa [-TM.Cfg.observe_def, Controller.step_eq, ↓Cfg.observe_toTM,
+      show M.halt c.state = false from Bool.eq_false_iff.mpr h]
+      using Action.apply_toTM ((M.transition c.state (observe c)).run) c cached
 
-/-- Every bounded stack execution has the same result after twice as many target steps. -/
-theorem runFrom_toTM (M : StackMachine Id κ Γ Q) (c : Cfg κ Γ Q xs) (n : ℕ) :
-    M.toTM.runFrom (c.toTM (.inl c.state)) (2 * n) =
-      (M.runFrom c n).toTM (.inl (M.runFrom c n).state) := by
-  induction n generalizing c with
-  | zero => rfl
-  | succ n ih =>
-    rw [Nat.mul_add, Nat.mul_one, Nat.add_comm, Controller.runFrom_add,
-      runFrom_two_toTM, ih, Controller.runFrom_succ]
+/-- Bounded runs preserve the encoding without exposing the cache bookkeeping. -/
+theorem runFrom_toTM (M : StackMachine Id κ Γ Q) (c : Cfg κ Γ Q xs)
+    (cached : κ → Bool) (n : ℕ) :
+    ∃ cached', M.toTM.runFrom (c.toTM cached) n = (M.runFrom c n).toTM cached' :=
+  Transition.rel_runN (f := M.step) (g := M.toTM.step)
+    (R := fun (c : Cfg κ Γ Q xs) d ↦ ∃ cached, d = c.toTM cached)
+    (by rintro c _ ⟨cached, rfl⟩; exact M.step_toTM c cached) ⟨cached, rfl⟩ n
+
+/-- No simulated tape visits beyond the peak total number of live stack symbols. -/
+theorem space_runHistoryFrom_toTM_le [Fintype κ] (M : StackMachine Id κ Γ Q)
+    (c : Cfg κ Γ Q xs) (cached : κ → Bool) (n : ℕ) :
+    (M.toTM.runHistoryFrom (c.toTM cached) n).space ≤
+      Fintype.card κ * ((M.runHistoryFrom c n).configSup Cfg.mass + 1) := by
+  let s := (M.runHistoryFrom c n).configSup Cfg.mass
+  let v : NonemptyInterval ℤ := ⟨(0, s), by omega⟩
+  have hv : (M.toTM.runHistoryFrom (c.toTM cached) n).visited ≤ fun _ ↦ v := by
+    intro i
+    apply (M.toTM.runHistoryFrom_visited_le_iff _ _ i v).mpr
+    intro m hm
+    obtain ⟨cached', hc⟩ := M.runFrom_toTM c cached m
+    rw [hc, Cfg.toTM_workPos]
+    have hi : ((M.runFrom c m).stacks i).length ≤ s :=
+      (Finset.single_le_sum (fun _ _ ↦ Nat.zero_le _) (Finset.mem_univ i)).trans
+        (M.config_le_configSup_runHistoryFrom Cfg.mass c hm)
+    change 0 ≤ _ ∧ _ ≤ (s : ℤ)
+    exact ⟨by omega, by exact_mod_cast hi⟩
+  simpa [v] using Controller.History.space_le_of_visited_le _ (fun _ ↦ v) hv
 
 theorem init_toTM (xs : List Γ) (q : Q) :
-    ((execution (κ := κ) xs).init q).toTM (.inl q : ControlState κ Γ Q) =
-      (TM.rawExecution (xs.map some)).init (.inl q) := by
+    ((execution (κ := κ) xs).init q).toTM (fun _ ↦ false) =
+      (TM.rawExecution (xs.map some)).init (q, fun _ ↦ none) := by
   apply TM.Cfg.ext <;> first | rfl | simp [funext_iff]
 
 /-- The target run preserves the input/output convention of the source run. -/
 theorem run_toTM (M : StackMachine Id κ Γ Q) (xs : List Γ) (n : ℕ) :
-    M.toTM.run (TM.Cfg κ (Option Γ) (ControlState κ Γ Q) (xs.map some).toArray)
-      (xs.map some) (2 * n) =
-      (M.run (Cfg κ Γ Q xs.toArray) xs n).toTM
-        (.inl (M.run (Cfg κ Γ Q xs.toArray) xs n).state) := by
-  change M.toTM.runFrom ((TM.rawExecution (xs.map some)).init (.inl M.q₀)) _ = _
+    ∃ cached, M.toTM.run (TM.Cfg κ (Option Γ) (ControlState κ Γ Q) (xs.map some).toArray)
+      (xs.map some) n = (M.run (Cfg κ Γ Q xs.toArray) xs n).toTM cached := by
+  change ∃ cached, M.toTM.runFrom
+    ((TM.rawExecution (xs.map some)).init (M.q₀, fun _ ↦ none)) _ = _
   rw [← init_toTM]
-  exact M.runFrom_toTM (M.initInput (Config := Cfg κ Γ Q xs.toArray) xs) n
+  exact M.runFrom_toTM (M.initInput (Config := Cfg κ Γ Q xs.toArray) xs) (fun _ ↦ false) n
 
-/-- A stack computation yields a TM computation. This bound uses elapsed time;
-it does not claim to preserve the maximum number of live stack symbols. -/
+/-- Simulation preserves time and bounds every tape by the source peak stack space,
+including the blank bottom cell. -/
 theorem ComputesInTimeAndSpace.toTM [Fintype κ] {M : StackMachine Id κ Γ Q}
     {xs ys : List Γ} {t s : ℕ} (h : M.ComputesInTimeAndSpace xs ys t s) :
     M.toTM.ComputesInTimeAndSpace (xs.map some) (ys.map some)
-      (2 * t) (Fintype.card κ * (2 * t + 1)) := by
-  obtain ⟨hh, ho⟩ := h.run_spec
+      t (Fintype.card κ * (s + 1)) := by
+  obtain ⟨hh, ho, hs⟩ := Controller.computes_unit_iff.mp h
+  obtain ⟨cached, hr⟩ := M.run_toTM xs t
   apply Controller.computes_unit_iff.mpr
   refine ⟨?_, ?_, ?_⟩
-  · simpa only [run_toTM, Controller.Halted, TM.Cfg.state_def, Cfg.toTM_state,
+  · simpa only [hr, Controller.Halted, TM.Cfg.state_def, Cfg.toTM_state_fst,
       toTM_halt, state_def] using hh
-  · simpa only [TM.rawExecution_hasOutput, run_toTM, Cfg.toTM_output,
+  · simpa only [TM.rawExecution_hasOutput, hr, Cfg.toTM_output,
       List.map_toArray] using congrArg (Array.map some) ho
-  · exact (Controller.History.space_le_length _).trans
-      (Nat.mul_le_mul_left _ (Nat.succ_le_succ (M.toTM.runHistory_spec _ _ (2 * t)).length_le))
+  · have hv := M.space_runHistoryFrom_toTM_le ((execution xs).init M.q₀) (fun _ ↦ false) t
+    simp only [init_toTM] at hv
+    exact hv.trans (Nat.mul_le_mul_left _ (Nat.succ_le_succ hs))
 
 end Complexity.StackMachine

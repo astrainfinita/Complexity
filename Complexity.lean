@@ -54,10 +54,12 @@ public import Complexity.Models.Input
 public import Complexity.Models.StackMachine.Basic
 public import Complexity.Models.StackMachine.Configuration
 public import Complexity.Models.StackMachine.Deterministic
+public import Complexity.Models.StackMachine.FromTuringMachine
 public import Complexity.Models.StackMachine.Program.Basic
 public import Complexity.Models.StackMachine.Program.Correctness
 public import Complexity.Models.StackMachine.Program.IO
 public import Complexity.Models.StackMachine.Program.Word
+public import Complexity.Models.StackMachine.Tape
 public import Complexity.Models.StackMachine.TuringMachine
 public import Complexity.Models.TreeMachine.Basic
 public import Complexity.Models.TreeMachine.Composition

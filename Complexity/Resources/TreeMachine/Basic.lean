@@ -42,7 +42,7 @@ def Computes (M : TreeMachine Id k Q) (f : α → β)
 
 /-- Finite tree machines with input and output register zero. Time sums destination
 sizes; space is the maximum total expanded register size. -/
-def timeSpaceModel : TimeSpaceModel Id Tree where
+def _root_.Complexity.TimeSpaceModel.sizeCostTree : TimeSpaceModel Id Tree where
   inputSize := Tree.size
   behaviors := {R | ∃ (k : ℕ) (_ : NeZero k) (Q : Type) (_ : Finite Q)
       (M : TreeMachine Id k Q), R = fun a result => M.ComputesInTimeAndSpace a result.run}
@@ -52,7 +52,7 @@ def timeSpaceModel : TimeSpaceModel Id Tree where
 
 /-- Recover the single finite machine realizing the abstract resource behavior. -/
 theorem computableInTimeAndSpace_iff {f : α → β} {t s : ℕ → ℕ} :
-    timeSpaceModel.ComputableInTimeAndSpace f t s ↔
+    TimeSpaceModel.sizeCostTree.ComputableInTimeAndSpace f t s ↔
       ∃ (k : ℕ) (_ : NeZero k) (Q : Type) (_ : Finite Q)
         (M : TreeMachine Id k Q), Computes M f t s := by
   constructor
@@ -70,7 +70,7 @@ theorem Computes.mono {M : TreeMachine Id k Q}
 
 theorem Computes.computableInTimeAndSpace {Q : Type} [Finite Q]
     {M : TreeMachine Id k Q} (h : Computes M f t s) :
-    timeSpaceModel.ComputableInTimeAndSpace f t s :=
+    TimeSpaceModel.sizeCostTree.ComputableInTimeAndSpace f t s :=
   computableInTimeAndSpace_iff.mpr ⟨k, inferInstance, Q, inferInstance, M, h⟩
 
 end Complexity.TreeMachine

@@ -21,8 +21,8 @@ variable {α β γ : Type*} [Encoding Tree α] [Encoding Tree β] [Encoding Tree
 
 /-- Polynomial-time tree computations are closed under composition, even when
 valid codes are not unique. -/
-theorem fp_comp (hg : g ∈ FP timeSpaceModel) (hf : f ∈ FP timeSpaceModel) :
-    g ∘ f ∈ FP timeSpaceModel := by
+theorem fp_comp (hg : g ∈ FP .sizeCostTree) (hf : f ∈ FP .sizeCostTree) :
+    g ∘ f ∈ FP .sizeCostTree := by
   obtain ⟨p, s, hf⟩ := FP.exists_polynomial_bound hf
   obtain ⟨q, v, hg⟩ := FP.exists_polynomial_bound hg
   obtain ⟨k, hk, Q, hQ, M, hf⟩ := computableInTimeAndSpace_iff.mp hf
@@ -42,7 +42,7 @@ private def identity : TreeMachine Id 1 Unit where
   transition _ _ := pure <| .keep ()
 
 /-- Leaving the input register unchanged computes the identity at zero time cost. -/
-theorem fp_id : (id : α → α) ∈ FP timeSpaceModel := by
+theorem fp_id : (id : α → α) ∈ FP .sizeCostTree := by
   apply FP.of_time_le (t := fun _ => 0) (c := 0) (d := 0) _ (by simp)
   refine ⟨fun n => n, Computes.computableInTimeAndSpace (M := identity) ?_⟩
   intro a x hx

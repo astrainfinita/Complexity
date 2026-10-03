@@ -28,7 +28,7 @@ def Computes {κ Q : Type*} [Fintype κ] (M : StackMachine Id κ Bool Q)
   Complexity.Computes (fun xs ys ↦ M.ComputesInTimeAndSpace xs ys) List.length f t s
 
 /-- Finite stack machines with transition time and peak work-stack space. -/
-def timeSpaceModel : TimeSpaceModel Id (List Bool) where
+def _root_.Complexity.TimeSpaceModel.stack : TimeSpaceModel Id (List Bool) where
   inputSize := List.length
   behaviors := {R | ∃ (κ : Type) (_ : Fintype κ) (Q : Type) (_ : Finite Q)
       (M : StackMachine Id κ Bool Q), R = fun xs result ↦ M.ComputesInTimeAndSpace xs result.run}
@@ -38,7 +38,7 @@ def timeSpaceModel : TimeSpaceModel Id (List Bool) where
 
 /-- Recover the single finite machine realizing the abstract resource behavior. -/
 theorem computableInTimeAndSpace_iff {f : α → β} {t s : ℕ → ℕ} :
-    timeSpaceModel.ComputableInTimeAndSpace f t s ↔
+    TimeSpaceModel.stack.ComputableInTimeAndSpace f t s ↔
       ∃ (κ : Type) (_ : Fintype κ) (Q : Type) (_ : Finite Q)
         (M : StackMachine Id κ Bool Q), Computes M f t s := by
   constructor
@@ -54,7 +54,7 @@ theorem Computes.mono {κ Q : Type*} [Fintype κ] {M : StackMachine Id κ Bool Q
 
 theorem Computes.computableInTimeAndSpace {κ Q : Type} [Fintype κ] [Finite Q]
     {M : StackMachine Id κ Bool Q} {f : α → β} {t s : ℕ → ℕ}
-    (h : Computes M f t s) : timeSpaceModel.ComputableInTimeAndSpace f t s :=
+    (h : Computes M f t s) : TimeSpaceModel.stack.ComputableInTimeAndSpace f t s :=
   computableInTimeAndSpace_iff.mpr ⟨κ, inferInstance, Q, inferInstance, M, h⟩
 
 end Complexity.StackMachine

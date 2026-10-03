@@ -47,7 +47,7 @@ gives polynomial time on the original bit strings, with no compatibility hypothe
 theorem fp_subset_stack_comp {α β : Type*} [e : Encoding (List Bool) α]
     [d : Encoding (List Bool) β] :
     @FP Tree α β (bitListEncoding.toEncoding.comp e) (bitListEncoding.toEncoding.comp d)
-      timeSpaceModel ⊆ FP StackMachine.timeSpaceModel := by
+      .sizeCostTree ⊆ FP .stack := by
   classical
   let : Encoding Tree α := bitListEncoding.toEncoding.comp e
   let : Encoding Tree β := bitListEncoding.toEncoding.comp d
@@ -76,9 +76,9 @@ needed to transport a tree computation to an ordinary bit-string machine. -/
 theorem fp_subset_stack_of_conversions {α β : Type*}
     [e : Encoding (List Bool) α] [d : Encoding (List Bool) β]
     [r : Encoding Tree α] [s : Encoding Tree β]
-    (hi : _root_.id ∈ @FP Tree α α (bitListEncoding.toEncoding.comp e) r timeSpaceModel)
-    (ho : _root_.id ∈ @FP Tree β β s (bitListEncoding.toEncoding.comp d) timeSpaceModel) :
-    FP (α := α) (β := β) timeSpaceModel ⊆ FP StackMachine.timeSpaceModel := by
+    (hi : _root_.id ∈ @FP Tree α α (bitListEncoding.toEncoding.comp e) r .sizeCostTree)
+    (ho : _root_.id ∈ @FP Tree β β s (bitListEncoding.toEncoding.comp d) .sizeCostTree) :
+    FP (α := α) (β := β) .sizeCostTree ⊆ FP .stack := by
   intro f hf
   have h := @fp_comp α α β (bitListEncoding.toEncoding.comp e) r s _root_.id f hf hi
   have h' := @fp_comp α β β (bitListEncoding.toEncoding.comp e) s
@@ -91,7 +91,7 @@ theorem fp_subset_stack {α β : Type*}
     [Encoding (List Bool) α] [Encoding (List Bool) β]
     [Encoding Tree α] [Encoding Tree β]
     [Encoding.PolytimeCompatible α] [Encoding.PolytimeCompatible β] :
-    FP (α := α) (β := β) timeSpaceModel ⊆ FP StackMachine.timeSpaceModel :=
+    FP (α := α) (β := β) .sizeCostTree ⊆ FP .stack :=
   fp_subset_stack_of_conversions Encoding.PolytimeCompatible.fromBits
     Encoding.PolytimeCompatible.toBits
 

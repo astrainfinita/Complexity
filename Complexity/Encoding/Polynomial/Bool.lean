@@ -32,7 +32,7 @@ private theorem convert_left (a : Tree) :
   · simp [Controller.run, Controller.runFrom_succ, step_eq, convert,
       initInput_tree, Op.eval]
   · simpa [Controller.runHistory, Controller.actionSum_runHistoryFrom_one,
-      Action.timeCost, convert, initInput_tree, Op.timeCost, Action.assign, Op.dst, Op.eval,
+      Action.sizeCost, convert, initInput_tree, Op.sizeCost, Action.assign, Op.dst, Op.eval,
       input_get] using Tree.size_left_le a
 
 private theorem convert_pair (a : Tree) :
@@ -42,17 +42,17 @@ private theorem convert_pair (a : Tree) :
   · simp [Controller.run, Controller.runFrom_succ, step_eq, convert,
       initInput_tree, Op.eval]
   · simp [Controller.runHistory, Controller.actionSum_runHistoryFrom_one,
-      Action.timeCost, convert, initInput_tree, Op.timeCost,
+      Action.sizeCost, convert, initInput_tree, Op.sizeCost,
       Action.assign, Op.dst, Op.eval, input_get, input_get_of_ne, Tree.size]
     omega
 
-private theorem left_mem_fp : (fun a : Tree => a.left) ∈ FP timeSpaceModel := by
+private theorem left_mem_fp : (fun a : Tree => a.left) ∈ FP .sizeCostTree := by
   apply FP.of_time_le (t := fun n => n) ?_ 1 1 (by simp)
   refine ⟨fun n => 2 * n + 2,
     Computes.computableInTimeAndSpace (M := convert (.left 0 0)) ?_⟩
   exact Computes.iff_of_uniqueEncoding.mpr convert_left
 
-private theorem pair_mem_fp : (fun a => Tree.pair a Tree.nil) ∈ FP timeSpaceModel := by
+private theorem pair_mem_fp : (fun a => Tree.pair a Tree.nil) ∈ FP .sizeCostTree := by
   apply FP.of_time_le (t := fun n => n + 2) ?_ 2 1 (by intro n; simp; omega)
   refine ⟨fun n => 2 * n + 4,
     Computes.computableInTimeAndSpace (M := convert (.pair 0 0 1)) ?_⟩

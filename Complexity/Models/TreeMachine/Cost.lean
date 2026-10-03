@@ -43,25 +43,25 @@ theorem Cfg.reg_size_le_mass (c : Cfg k Q) (i : Fin k) : (c.regs i).size ≤ c.m
     (fun _ _ ↦ Nat.zero_le _) (Finset.mem_univ i)
 
 /-- The size written to the destination, or one for a control-only instruction. -/
-def Op.timeCost (o : Op k) (ρ : Fin k → Tree) : ℕ :=
+def Op.sizeCost (o : Op k) (ρ : Fin k → Tree) : ℕ :=
   match o.dst with
   | none => 1
   | some i => (o.eval ρ i).size
 
 /-- Every active instruction incurs a positive charge, including writes of `nil`. -/
-theorem Op.timeCost_pos (o : Op k) (ρ : Fin k → Tree) : 0 < o.timeCost ρ := by
-  unfold timeCost
+theorem Op.sizeCost_pos (o : Op k) (ρ : Fin k → Tree) : 0 < o.sizeCost ρ := by
+  unfold sizeCost
   split
   · decide
   · exact Tree.size_pos _
 
 /-- Instruction costs depend only on the trees in the renamed registers. -/
-theorem Op.timeCost_rename {l : ℕ} (f : Fin k → Fin l) (ρ : Fin l → Tree) (o : Op k) :
-    (o.rename f).timeCost ρ = o.timeCost (ρ ∘ f) := by
-  cases o <;> simp [timeCost, rename, eval, Function.comp_def]
+theorem Op.sizeCost_rename {l : ℕ} (f : Fin k → Fin l) (ρ : Fin l → Tree) (o : Op k) :
+    (o.rename f).sizeCost ρ = o.sizeCost (ρ ∘ f) := by
+  cases o <;> simp [sizeCost, rename, eval, Function.comp_def]
 
 /-- The charge for the instruction selected at this configuration. -/
-def Action.timeCost (a : Action k Q) (c : Cfg k Q) : ℕ := a.op.timeCost c.regs
+def Action.sizeCost (a : Action k Q) (c : Cfg k Q) : ℕ := a.op.sizeCost c.regs
 
 private theorem sum_size_update_le (ρ : Fin k → Tree) (i : Fin k) (a : Tree) :
     (∑ j, (Function.update ρ i a j).size) ≤ (∑ j, (ρ j).size) + a.size := by
@@ -74,15 +74,15 @@ private theorem sum_size_update_le (ρ : Fin k → Tree) (i : Fin k) (a : Tree) 
 
 /-- Each instruction's charge pays for the possible increase in total register size. -/
 theorem Cfg.mass_apply_le (c : Cfg k Q) (a : Action k Q) :
-    (apply a c).mass ≤ c.mass + a.timeCost c := by
+    (apply a c).mass ≤ c.mass + a.sizeCost c := by
   rcases a with ⟨o, q⟩
   cases o with
-  | nop => simp [mass, Action.timeCost, Op.timeCost]
-  | left i j => simpa [mass, Action.timeCost, Op.timeCost] using
+  | nop => simp [mass, Action.sizeCost, Op.sizeCost]
+  | left i j => simpa [mass, Action.sizeCost, Op.sizeCost] using
       sum_size_update_le c.regs i (c.regs j).left
-  | right i j => simpa [mass, Action.timeCost, Op.timeCost] using
+  | right i j => simpa [mass, Action.sizeCost, Op.sizeCost] using
       sum_size_update_le c.regs i (c.regs j).right
-  | pair i j l => simpa [mass, Action.timeCost, Op.timeCost] using
+  | pair i j l => simpa [mass, Action.sizeCost, Op.sizeCost] using
       sum_size_update_le c.regs i (.pair (c.regs j) (c.regs l))
 
 end Complexity.TreeMachine

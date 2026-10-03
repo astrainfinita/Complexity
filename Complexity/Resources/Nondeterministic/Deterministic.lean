@@ -44,18 +44,18 @@ theorem Computes.decidesInTimeAndSpace {κ : Type*} [Fintype κ] {Q : Type*}
     simpa [hout] using hp a
 
 theorem decidableInTimeAndSpace_of_computable
-    (h : timeSpaceModel.ComputableInTimeAndSpace f t s) (hp : Decides f p) :
-    NTM.timeSpaceModel.NDecidableInTimeAndSpace p t s := by
+    (h : TimeSpaceModel.tm.ComputableInTimeAndSpace f t s) (hp : Decides f p) :
+    TimeSpaceModel.ntm.NDecidableInTimeAndSpace p t s := by
   obtain ⟨κ, hκ, Q, hQ, M, h⟩ := computableInTimeAndSpace_iff.mp h
   exact (h.decidesInTimeAndSpace hp).decidableInTimeAndSpace
 
-theorem decidableInTime_of_computable (h : timeSpaceModel.ComputableInTime f t)
-    (hp : Decides f p) : NTM.timeSpaceModel.NDecidableInTime p t := by
+theorem decidableInTime_of_computable (h : TimeSpaceModel.tm.ComputableInTime f t)
+    (hp : Decides f p) : TimeSpaceModel.ntm.NDecidableInTime p t := by
   obtain ⟨s, h⟩ := h
   exact (decidableInTimeAndSpace_of_computable h hp).ndecidableInTime
 
-theorem decidableInSpace_of_computable (h : timeSpaceModel.ComputableInSpace f s)
-    (hp : Decides f p) : NTM.timeSpaceModel.NDecidableInSpace p s := by
+theorem decidableInSpace_of_computable (h : TimeSpaceModel.tm.ComputableInSpace f s)
+    (hp : Decides f p) : TimeSpaceModel.ntm.NDecidableInSpace p s := by
   obtain ⟨t, h⟩ := h
   exact (decidableInTimeAndSpace_of_computable h hp).ndecidableInSpace
 
