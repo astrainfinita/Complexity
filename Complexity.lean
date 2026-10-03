@@ -67,6 +67,14 @@ public import Complexity.Models.TreeMachine.Configuration
 public import Complexity.Models.TreeMachine.Cost
 public import Complexity.Models.TreeMachine.Deterministic
 public import Complexity.Models.TreeMachine.Embedding
+public import Complexity.Models.TreeMachine.Language.Closure
+public import Complexity.Models.TreeMachine.Language.Code
+public import Complexity.Models.TreeMachine.Language.Compiler
+public import Complexity.Models.TreeMachine.Language.Expression
+public import Complexity.Models.TreeMachine.Language.Semantics
+public import Complexity.Models.TreeMachine.Language.Verification
+public import Complexity.Models.TreeMachine.Program.Basic
+public import Complexity.Models.TreeMachine.Program.Correctness
 public import Complexity.Models.TreeMachine.Simulation.Bank
 public import Complexity.Models.TreeMachine.Simulation.Basic
 public import Complexity.Models.TreeMachine.Simulation.BitList.Correctness

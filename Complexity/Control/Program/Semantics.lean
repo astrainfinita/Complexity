@@ -155,5 +155,20 @@ theorem repeatUntilWith_done (a : A) (p : Program O A Op Ret Bool) {s t : S} {m 
     hl.bind (f := fun _ ↦ Program.pure ())
     (Exec.pure e () t)
 
+/-- An unsuccessful test continues at the next charged dispatch. -/
+theorem repeatUntilWith_next (a : A) (p : Program O A Op Ret Bool)
+    {s t u : S} {m n : ℕ}
+    (h : p.Exec e (e.act a s) m false t)
+    (hc : (repeatUntilWith a p).Exec e t n () u) :
+    (repeatUntilWith a p).Exec e s (m + n + 1) () u := by
+  have hb := h.bind (f := fun b ↦ Program.pure
+    (if b then Sum.inr (0 : Fin 1) else Sum.inl (0 : Fin 1)))
+    (Exec.pure e (Sum.inl (0 : Fin 1)) t)
+  apply Syntax.Exec.loop_next (m := m) (l := n) (j := 0) a 0 _ _
+  · simpa only [repeatUntilWith, Bind.bind, Pure.pure, loop, bind, Syntax.bindTo,
+      Syntax.mapResult_comp, Function.id_comp, Nat.add_zero, id_eq] using
+      hb.mapResult (β := Unit) (w := .branch 1 1) id
+  · exact hc
+
 end Exec
 end Complexity.Program
