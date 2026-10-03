@@ -8,15 +8,14 @@ module
 import Complexity.Models.TuringMachine.Program.Call
 import all Init.Data.List.Scan.Basic
 
-meta import Complexity.Control.Controller.History
+meta import Complexity.Control.Controller.History.Basic
 meta import Complexity.Models.TuringMachine.History
-meta import Complexity.Control.Program
-meta import Complexity.Control.Program.Syntax
 meta import Complexity.Control.Program.Compiler
+meta import Complexity.Control.Program.Syntax
 meta import Complexity.Control.Program.Loop
-meta import Complexity.Control.Transition
+meta import Complexity.Control.Transition.Basic
 meta import Complexity.Data.FinEnum
-meta import Complexity.Data.IntMemory
+meta import Complexity.Data.IntMemory.Basic
 meta import Complexity.Data.NatMemory
 meta import Complexity.Models.TuringMachine.Program.Basic
 meta import Complexity.Models.TuringMachine.Basic

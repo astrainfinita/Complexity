@@ -5,7 +5,7 @@ Authors: Yuyang Zhao
 -/
 module
 
-import Complexity.Encoding
+import Complexity.Encoding.Polynomial.Bool
 
 open Complexity
 

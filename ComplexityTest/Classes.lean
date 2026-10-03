@@ -5,7 +5,8 @@ Authors: Yuyang Zhao
 -/
 module
 
-import Complexity.Classes
+import Complexity.Classes.Nondeterministic.Deterministic
+import Complexity.Classes.TreeTuringSimulation
 
 open Complexity
 

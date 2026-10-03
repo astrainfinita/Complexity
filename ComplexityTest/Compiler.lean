@@ -18,14 +18,13 @@ meta import Complexity.Models.TreeMachine.Simulation.Correctness
 meta import Complexity.Models.TreeMachine.StackProgram
 meta import Complexity.Models.StackMachine.Configuration
 meta import Complexity.Models.StackMachine.Basic
-meta import Complexity.Models.StackMachine.Program
+meta import Complexity.Models.StackMachine.Program.Basic
 meta import Complexity.Models.StackMachine.Program.Word
 meta import Complexity.Models.StackMachine.Program.IO
 meta import Complexity.Models.StackMachine.Program.Correctness
 meta import Complexity.Models.StackMachine.TuringMachine
-meta import Complexity.Control.Program
-meta import Complexity.Control.Program.Syntax
 meta import Complexity.Control.Program.Compiler
+meta import Complexity.Control.Program.Syntax
 meta import Complexity.Control.Program.Loop
 meta import Complexity.Control.Program.For
 meta import Complexity.Models.TreeMachine.Basic
@@ -33,8 +32,8 @@ meta import Complexity.Models.TreeMachine.Configuration
 meta import Complexity.Models.TuringMachine.Basic
 meta import Complexity.Models.TuringMachine.Configuration
 meta import Complexity.Data.Tree.Encoding
-meta import Complexity.Data.Tree
-meta import Complexity.Data.IntMemory
+meta import Complexity.Data.Tree.Basic
+meta import Complexity.Data.IntMemory.Basic
 import Mathlib.Data.Fin.VecNotation
 meta import Mathlib.Data.Fin.VecNotation
 

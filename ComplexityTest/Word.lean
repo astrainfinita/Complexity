@@ -13,12 +13,11 @@ import Complexity.Models.StackMachine.Program.Correctness
 import Complexity.Models.StackMachine.TuringMachine
 import Complexity.Control.Program.For
 
-meta import Complexity.Control.Program
-meta import Complexity.Control.Program.Syntax
 meta import Complexity.Control.Program.Compiler
+meta import Complexity.Control.Program.Syntax
 meta import Complexity.Control.Program.For
-meta import Complexity.Control.Transition
-meta import Complexity.Data.IntMemory
+meta import Complexity.Control.Transition.Basic
+meta import Complexity.Data.IntMemory.Basic
 meta import Complexity.Data.IntMemory.List
 meta import Complexity.Data.NatMemory
 meta import Complexity.Models.TuringMachine.Basic
@@ -26,7 +25,7 @@ meta import Complexity.Models.TuringMachine.Configuration
 meta import Complexity.Models.TuringMachine.Program.Basic
 meta import Complexity.Models.StackMachine.Configuration
 meta import Complexity.Models.StackMachine.Basic
-meta import Complexity.Models.StackMachine.Program
+meta import Complexity.Models.StackMachine.Program.Basic
 meta import Complexity.Models.StackMachine.Program.Word
 meta import Complexity.Models.StackMachine.Program.IO
 meta import Complexity.Models.StackMachine.Program.Correctness

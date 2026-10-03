@@ -5,13 +5,13 @@ Authors: Yuyang Zhao
 -/
 module
 
-import Complexity.Control.BinaryChoice
+import Complexity.Control.BinaryChoice.Basic
 import Complexity.Control.Controller.Cost
 meta import Complexity.Control.Controller.Cost
-meta import Complexity.Control.Controller
-meta import Complexity.Control.BinaryChoice
+meta import Complexity.Control.Controller.Basic
+meta import Complexity.Control.BinaryChoice.Basic
 meta import Complexity.Control.Controller.RunHistory
-meta import Complexity.Control.Controller.History
+meta import Complexity.Control.Controller.History.Basic
 meta import Complexity.Control.Controller.History.Cost
 
 open Complexity

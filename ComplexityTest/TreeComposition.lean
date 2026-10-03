@@ -12,7 +12,7 @@ meta import Complexity.Models.TreeMachine.Deterministic
 meta import Complexity.Models.TreeMachine.Cost
 meta import Complexity.Models.TreeMachine.Basic
 meta import Complexity.Models.TreeMachine.Configuration
-meta import Complexity.Data.Tree
+meta import Complexity.Data.Tree.Basic
 
 open Complexity Complexity.TreeMachine
 

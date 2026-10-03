@@ -12,8 +12,8 @@ meta import Complexity.Models.TuringMachine.Cost
 meta import Complexity.Models.TuringMachine.Basic
 meta import Complexity.Models.TuringMachine.Configuration
 meta import Complexity.Control.Controller.Cost
-meta import Complexity.Control.Controller
-meta import Complexity.Control.BinaryChoice
+meta import Complexity.Control.Controller.Basic
+meta import Complexity.Control.BinaryChoice.Basic
 
 open Complexity
 

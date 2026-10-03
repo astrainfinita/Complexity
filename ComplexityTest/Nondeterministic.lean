@@ -6,17 +6,17 @@ Authors: Yuyang Zhao
 module
 
 import all Init.Data.List.Scan.Basic
-import Complexity.Classes.Nondeterministic
-import Complexity.Resources.Nondeterministic
+import Complexity.Classes.Nondeterministic.Basic
+import Complexity.Resources.Nondeterministic.Basic
 import Complexity.Models.TuringMachine.Nondeterministic.Deterministic
-meta import Complexity.Models.TuringMachine.Nondeterministic
+meta import Complexity.Models.TuringMachine.Nondeterministic.Basic
 meta import Complexity.Models.TuringMachine.Basic
 meta import Complexity.Models.TuringMachine.Cost
 meta import Complexity.Models.TuringMachine.Configuration
-meta import Complexity.Control.Controller
-meta import Complexity.Control.BinaryChoice
-meta import Complexity.Control.Transition
-meta import Complexity.Data.IntMemory
+meta import Complexity.Control.Controller.Basic
+meta import Complexity.Control.BinaryChoice.Basic
+meta import Complexity.Control.Transition.Basic
+meta import Complexity.Data.IntMemory.Basic
 
 open Complexity
 open TM (apply)

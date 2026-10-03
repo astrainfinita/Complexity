@@ -5,17 +5,17 @@ Authors: Yuyang Zhao
 -/
 module
 
-import Complexity.Control.BinaryChoice
-meta import Complexity.Control.BinaryChoice
+import Complexity.Control.BinaryChoice.Basic
+meta import Complexity.Control.BinaryChoice.Basic
 import Complexity.Models.TreeMachine.Deterministic
 meta import Complexity.Models.TreeMachine.Deterministic
 meta import Complexity.Models.TreeMachine.Cost
 meta import Complexity.Models.TreeMachine.Basic
 meta import Complexity.Models.TreeMachine.Configuration
 meta import Complexity.Control.Controller.RunHistory
-meta import Complexity.Control.Controller.History
+meta import Complexity.Control.Controller.History.Basic
 meta import Complexity.Control.Controller.History.Cost
-meta import Complexity.Data.Tree
+meta import Complexity.Data.Tree.Basic
 import Mathlib.Data.Fin.VecNotation
 meta import Mathlib.Data.Fin.VecNotation
 

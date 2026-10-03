@@ -5,25 +5,24 @@ Authors: Yuyang Zhao
 -/
 module
 
-import Complexity.Models.TreeMachine.Simulation.BitList
+import Complexity.Models.TreeMachine.Simulation.BitList.Correctness
 
-meta import Complexity.Control.Program
 meta import Complexity.Control.Program.Compiler
 meta import Complexity.Control.Program.Enumeration
 meta import Complexity.Control.Program.For
 meta import Complexity.Control.Program.Loop
 meta import Complexity.Control.Program.Syntax
-meta import Complexity.Control.Transition
+meta import Complexity.Control.Transition.Basic
 meta import Complexity.Data.FinEnum
-meta import Complexity.Data.IntMemory
+meta import Complexity.Data.IntMemory.Basic
 meta import Complexity.Data.IntMemory.List
 meta import Complexity.Data.NatMemory
-meta import Complexity.Data.Tree
+meta import Complexity.Data.Tree.Basic
 meta import Complexity.Data.Tree.BitList
 meta import Complexity.Data.Tree.Encoding
 meta import Complexity.Models.TreeMachine.Basic
 meta import Complexity.Models.TreeMachine.Configuration
-meta import Complexity.Models.TreeMachine.Simulation.BitList
+meta import Complexity.Models.TreeMachine.Simulation.BitList.Correctness
 meta import Complexity.Models.TreeMachine.Simulation.Basic
 meta import Complexity.Models.TreeMachine.Simulation.Build
 meta import Complexity.Models.TreeMachine.Simulation.Bank
@@ -32,7 +31,7 @@ meta import Complexity.Models.TreeMachine.Simulation.Correctness
 meta import Complexity.Models.TreeMachine.StackProgram
 meta import Complexity.Models.StackMachine.Configuration
 meta import Complexity.Models.StackMachine.Basic
-meta import Complexity.Models.StackMachine.Program
+meta import Complexity.Models.StackMachine.Program.Basic
 meta import Complexity.Models.StackMachine.Program.Word
 meta import Complexity.Models.StackMachine.Program.IO
 meta import Complexity.Models.StackMachine.Program.Correctness

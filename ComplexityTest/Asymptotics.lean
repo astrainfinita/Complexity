@@ -5,7 +5,7 @@ Authors: Yuyang Zhao
 -/
 module
 
-import Complexity.Asymptotics
+import Complexity.Asymptotics.Polynomial
 
 open Complexity
 

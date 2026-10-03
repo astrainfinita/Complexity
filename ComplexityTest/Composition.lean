@@ -8,13 +8,12 @@ module
 meta import Complexity.Models.TuringMachine.Basic
 meta import Complexity.Models.TuringMachine.Configuration
 meta import Complexity.Data.Embedding
-meta import Complexity.Control.Transition
+meta import Complexity.Control.Transition.Basic
 meta import Complexity.Models.TuringMachine.Program.Call
 meta import Complexity.Models.TuringMachine.Program.Basic
-meta import Complexity.Control.Program
-meta import Complexity.Control.Program.Syntax
 meta import Complexity.Control.Program.Compiler
-meta import Complexity.Data.IntMemory
+meta import Complexity.Control.Program.Syntax
+meta import Complexity.Data.IntMemory.Basic
 meta import Complexity.Data.NatMemory
 
 import Mathlib.Basic.Finite.Prod

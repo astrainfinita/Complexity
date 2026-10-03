@@ -5,8 +5,8 @@ Authors: Yuyang Zhao
 -/
 module
 
-import Complexity.Data.IntMemory
-meta import Complexity.Data.IntMemory
+import Complexity.Data.IntMemory.Basic
+meta import Complexity.Data.IntMemory.Basic
 meta import Complexity.Data.NatMemory
 
 open Complexity

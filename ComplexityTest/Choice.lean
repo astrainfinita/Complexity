@@ -6,9 +6,9 @@ Authors: Yuyang Zhao
 module
 
 import Complexity.Control.BinaryChoice.Probability
-import Complexity.Control.Controller
-meta import Complexity.Control.Controller
-meta import Complexity.Control.BinaryChoice
+import Complexity.Control.Controller.Basic
+meta import Complexity.Control.Controller.Basic
+meta import Complexity.Control.BinaryChoice.Basic
 
 open Complexity
 

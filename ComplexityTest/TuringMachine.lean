@@ -5,14 +5,14 @@ Authors: Yuyang Zhao
 -/
 module
 
-import Complexity.Control.BinaryChoice
-meta import Complexity.Control.BinaryChoice
+import Complexity.Control.BinaryChoice.Basic
+meta import Complexity.Control.BinaryChoice.Basic
 import Complexity.Models.TuringMachine.Deterministic
 meta import Complexity.Models.TuringMachine.Deterministic
 meta import Complexity.Models.TuringMachine.Basic
 meta import Complexity.Models.TuringMachine.Cost
 meta import Complexity.Models.TuringMachine.Configuration
-meta import Complexity.Data.IntMemory
+meta import Complexity.Data.IntMemory.Basic
 
 open Complexity Complexity.TM
 -- Symbols and states are ordinary inhabited types, without an Option wrapper.
