@@ -70,10 +70,10 @@ def wider := dirty.comp (needsClean 4)
 
 -- Cleanup costs exactly K, including the initial control transfer.
 #guard (wider.runHistoryFrom
-  (wider.run (Cfg (max 3 4 + 1) (Comp.State 3 4 (Fin 4) Bool)) a 3) 4).actionSum Action.timeCost = 4
+  (wider.run (Cfg (max 3 4 + 1) (Comp.State 3 4 (Fin 4) Bool)) a 3) 4).actionSum Action.sizeCost = 4
 #guard
   let h := wider.runHistory (Cfg (max 3 4 + 1) (Comp.State 3 4 (Fin 4) Bool)) a 20
-  (h.actionSum Action.timeCost, h.length, h.configSup Cfg.mass) = (28, 8, 23)
+  (h.actionSum Action.sizeCost, h.length, h.configSup Cfg.mass) = (28, 8, 23)
 
 -- A smaller destination also clears the old scratch slot it does not itself use.
 def narrower := dirty.comp (needsClean 2)
@@ -87,7 +87,7 @@ def narrower := dirty.comp (needsClean 2)
     (Cfg (max 3 2 + 1) (Comp.State 3 2 (Fin 4) Bool)) a n.val).regs 3 = .nil
 #guard
   let h := narrower.runHistory (Cfg (max 3 2 + 1) (Comp.State 3 2 (Fin 4) Bool)) a 20
-  (h.actionSum Action.timeCost, h.configSup Cfg.mass) = (27, 22)
+  (h.actionSum Action.sizeCost, h.configSup Cfg.mass) = (27, 22)
 
 -- Initially halted endpoints still perform the bridge, including the K = 1 case.
 #guard (dirty.comp (halted 2)).Halted ((dirty.comp (halted 2)).run
@@ -98,7 +98,7 @@ def narrower := dirty.comp (needsClean 2)
     (Cfg (max 3 2 + 1) (Comp.State 3 2 (Fin 4) Unit)) a 6).regs 1 = .nil
 #guard ((dirty.comp (halted 2)).run
     (Cfg (max 3 2 + 1) (Comp.State 3 2 (Fin 4) Unit)) a 6).regs 2 = .nil
-#guard ((dirty.comp (halted 2)).runHistory _ a 20).actionSum Action.timeCost = 24
+#guard ((dirty.comp (halted 2)).runHistory _ a 20).actionSum Action.sizeCost = 24
 #guard ((halted 3).comp (needsClean 4)).Halted (((halted 3).comp (needsClean 4)).run (Cfg (max 3 4 + 1) (Comp.State 3 4 Unit Bool)) a 5)
 #guard (((halted 3).comp (needsClean 4)).run
     (Cfg (max 3 4 + 1) (Comp.State 3 4 Unit Bool)) a 5).regs 0 = .nil
@@ -108,7 +108,7 @@ def narrower := dirty.comp (needsClean 2)
     (Cfg (max 1 1 + 1) (Comp.State 1 1 Unit Unit)) a 1)
 #guard (((halted 1).comp (halted 1)).run
     (Cfg (max 1 1 + 1) (Comp.State 1 1 Unit Unit)) a 1).regs 0 = a
-#guard (((halted 1).comp (halted 1)).runHistory _ a 20).actionSum Action.timeCost = 1
+#guard (((halted 1).comp (halted 1)).runHistory _ a 20).actionSum Action.sizeCost = 1
 
 private theorem dirty_computes : dirty.ComputesInTimeAndSpace a (.pair a a) 21 21 := by
   refine ⟨3, rfl, rfl, ?_, ?_⟩ <;> decide

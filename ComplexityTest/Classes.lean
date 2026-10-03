@@ -29,12 +29,12 @@ private theorem bit_spec : TM.Computes bit (id : Bool → Bool) (fun _ => 1) (fu
     simp
   · simp [Controller.History.space]
 
-private theorem bit_fp : (id : Bool → Bool) ∈ FP TM.timeSpaceModel :=
+private theorem bit_fp : (id : Bool → Bool) ∈ FP .tm :=
   FP.of_time_le bit_spec.computableInTimeAndSpace.computableInTime
     1 0 (by intro n; simp)
 
 -- The same function covers both acceptance and rejection, with no work tapes.
-example : (fun b : Bool => b = true) ∈ P TM.timeSpaceModel := by
+example : (fun b : Bool => b = true) ∈ P .tm := by
   apply P.of_decides bit_fp
   intro b
   rfl
@@ -44,7 +44,7 @@ example : TM.Computes bit (id : Bool → Bool) (fun _ => 5) (fun _ => 0) :=
   bit_spec.mono (fun _ => by decide) (fun _ => le_rfl)
 
 -- The exact proof supplies a single machine for both asymptotic bounds.
-example : (fun b : Bool => b = true) ∈ DTISP TM.timeSpaceModel (fun _ => 1) (fun _ => 0) :=
+example : (fun b : Bool => b = true) ∈ DTISP .tm (fun _ => 1) (fun _ => 0) :=
   DTISP.of_decides bit_spec.computableInTimeAndSpace.mem_ftisp
     (fun _ => Iff.rfl)
 
@@ -62,16 +62,16 @@ private theorem tree_spec :
   · exact TreeMachine.input_get (0 : Fin 1) _
   · simp [TreeMachine.Cfg.mass]
 
-private theorem tree_fp : (id : Bool → Bool) ∈ FP TreeMachine.timeSpaceModel :=
+private theorem tree_fp : (id : Bool → Bool) ∈ FP .sizeCostTree :=
   FP.of_time_le tree_spec.computableInTimeAndSpace.computableInTime
     0 0 (by intro n; simp)
 
-example : (fun b : Bool => b = true) ∈ P TreeMachine.timeSpaceModel := by
+example : (fun b : Bool => b = true) ∈ P .sizeCostTree := by
   apply P.of_decides tree_fp
   intro b
   rfl
 
-example : (fun b : Bool => b = true) ∈ DTISP TreeMachine.timeSpaceModel (fun _ => 0) id :=
+example : (fun b : Bool => b = true) ∈ DTISP .sizeCostTree (fun _ => 0) id :=
   DTISP.of_decides tree_spec.computableInTimeAndSpace.mem_ftisp
     (fun _ => Iff.rfl)
 

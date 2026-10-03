@@ -61,8 +61,8 @@ def c : Cfg 3 Bool := Cfg.mk grow.q₀ ![b, a, Tree.nil]
 #guard (grow.step c).mass = 13
 #guard (grow.step c).regs 0 = b
 #guard (grow.step c).regs 2 = Tree.nil
-#guard (grow.runHistoryFrom c 1).actionSum Action.timeCost = 7
-#guard (grow.runHistoryFrom c 20).actionSum Action.timeCost = 7
+#guard (grow.runHistoryFrom c 1).actionSum Action.sizeCost = 7
+#guard (grow.runHistoryFrom c 20).actionSum Action.sizeCost = 7
 #guard (grow.runHistoryFrom c 20).length = 1
 #guard (grow.runHistoryFrom c 20).configSup Cfg.mass = 13
 
@@ -74,7 +74,7 @@ def shrink : TreeMachine Id 3 Bool where
 
 #guard (shrink.step c).mass = 5
 #guard (shrink.step c).regs 1 = a
-#guard (shrink.runHistoryFrom c 20).actionSum Action.timeCost = 1
+#guard (shrink.runHistoryFrom c 20).actionSum Action.sizeCost = 1
 #guard (shrink.runHistoryFrom c 20).configSup Cfg.mass = 9
 
 -- Fully expanded destination size is charged even if the runtime can share subtrees.
@@ -84,7 +84,7 @@ def double : TreeMachine Id 1 Bool where
   transition _ _ := pure <| Action.assign false (.pair 0 0 0)
 
 #guard Tree.size ((double.run (Cfg 1 Bool) Tree.nil 6).regs 0) = 127
-#guard (double.runHistory _ Tree.nil 6).actionSum Action.timeCost = 246
+#guard (double.runHistory _ Tree.nil 6).actionSum Action.sizeCost = 246
 #guard (double.runHistory (Cfg 1 Bool) Tree.nil 6).length = 6
 #guard (double.runHistory (Cfg 1 Bool) Tree.nil 6).configSup Cfg.mass = 127
 
@@ -95,9 +95,9 @@ def idle (q : Bool) : TreeMachine Id 0 Bool where
   transition _ _ := pure <| Action.keep false
 
 #guard ((idle false).runHistoryFrom (Cfg.mk (idle false).q₀ Fin.elim0) 5).actionSum
-  Action.timeCost = 5
+  Action.sizeCost = 5
 #guard ((idle true).runHistoryFrom (Cfg.mk (idle true).q₀ Fin.elim0) 5).actionSum
-  Action.timeCost = 0
+  Action.sizeCost = 0
 #guard ((idle true).runHistoryFrom (Cfg.mk (idle true).q₀ Fin.elim0) 5).length = 0
 #guard ((idle true).runHistoryFrom (Cfg.mk (idle true).q₀ Fin.elim0) 5).configSup Cfg.mass = 0
 
@@ -114,7 +114,7 @@ def fork : TreeMachine BinaryChoice 1 Bool where
 
 #guard ((fork.runWith (Cfg 1 Bool) Multiset Tree.nil 5).map (fun c ↦ c.regs 0)) = ↑[a, a]
 #guard ((fork.runHistoryWith (Cfg 1 Bool) Multiset Tree.nil 5).map
-  (fun h ↦ h.actionSum Action.timeCost)) = ↑[3, 3]
+  (fun h ↦ h.actionSum Action.sizeCost)) = ↑[3, 3]
 
 -- Two `nop` branches remain distinct effects, even though their resulting banks agree.
 def forkNop : TreeMachine BinaryChoice 1 Bool where
@@ -124,10 +124,10 @@ def forkNop : TreeMachine BinaryChoice 1 Bool where
 
 #guard ((forkNop.runWith (Cfg 1 Bool) Multiset b 5).map (fun c ↦ c.regs 0)) = ↑[b, b]
 #guard ((forkNop.runHistoryWith (Cfg 1 Bool) Multiset b 5).map
-  (fun h ↦ h.actionSum Action.timeCost)) = ↑[1, 1]
+  (fun h ↦ h.actionSum Action.sizeCost)) = ↑[1, 1]
 
 -- Shrinking to a nonempty tree still pays for that entire tree.
-#guard Action.timeCost (Action.assign true (.left 0 0)) c = 3
+#guard Action.sizeCost (Action.assign true (.left 0 0)) c = 3
 
 -- Equal endpoints can have different fees: a no-op and writing back the same tree.
 def sameEndpoint : TreeMachine BinaryChoice 3 Bool where
@@ -136,7 +136,7 @@ def sameEndpoint : TreeMachine BinaryChoice 3 Bool where
   transition _ _ i := if i = 0 then Action.keep true else Action.assign true (.pair 0 1 2)
 
 #guard ((sameEndpoint.runHistoryFromWith Multiset c 5).map
-  (fun h ↦ (h.last.state, h.last.regs 0, h.actionSum Action.timeCost))) = ↑[(true, b, 1), (true, b, 5)]
+  (fun h ↦ (h.last.state, h.last.regs 0, h.actionSum Action.sizeCost))) = ↑[(true, b, 1), (true, b, 5)]
 
 -- Two fresh choices reach all four leaves, including paths 01 and 10.
 def twoChoices : TreeMachine BinaryChoice 0 (Fin 7) where

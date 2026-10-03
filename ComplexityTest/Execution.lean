@@ -17,14 +17,14 @@ namespace Complexity.ExecutionTest
 example {k : ℕ} {Q : Type*} (M : TreeMachine Id k Q) (c : TreeMachine.Cfg k Q)
     (h : M.Halted c) (n : ℕ) :
     M.step c = c ∧ M.runFrom c n = c ∧
-      (M.runHistoryFrom c n).actionSum TreeMachine.Action.timeCost = 0 := by
+      (M.runHistoryFrom c n).actionSum TreeMachine.Action.sizeCost = 0 := by
   simp [h]
 
 -- Each model's complete interface recovers its existing resource relation.
 example {k : ℕ} [NeZero k] {Q : Type*} (M : TreeMachine Id k Q)
     (a b : Tree) (t s : ℕ) :
     M.computes (Config := TreeMachine.Cfg k Q)
-      (fun h ↦ h.actionSum TreeMachine.Action.timeCost)
+      (fun h ↦ h.actionSum TreeMachine.Action.sizeCost)
       (fun h ↦ h.configSup TreeMachine.Cfg.mass) a b t s ↔
       M.ComputesInTimeAndSpace a b t s :=
   Iff.rfl

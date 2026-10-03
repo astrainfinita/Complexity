@@ -38,8 +38,10 @@ namespace WordTests
 def source : List Bool := [false, true, false]
 
 -- Raw input bits are copied without a delimiter, including false bits and the empty input.
-def stackMatches (m : IntMemory (Option Bool)) (word : List Bool) : Bool :=
-  (List.range 32).all fun i ↦ m[(i : ℤ) - 4] == (StackMachine.Tape.encode word)[(i : ℤ) - 4]
+def stackMatches (m : IntMemory (Option Bool)) (cached : Option Bool) (word : List Bool) : Bool :=
+  let stored := if cached.isSome then word.tail else word
+  (cached.isNone || cached == word.head?) &&
+    (List.range 32).all fun i ↦ m[(i : ℤ) - 4] == (StackMachine.Tape.encode stored)[(i : ℤ) - 4]
 
 def checkLoad (word : List Bool) (suffix : List Bool := []) : Bool :=
   let xs := word.toArray.map some
@@ -51,12 +53,13 @@ def checkLoad (word : List Bool) (suffix : List Bool := []) : Bool :=
         else if j = 2 then StackMachine.Tape.encode source else ∅
       workPos := fun j ↦ if j = 0 then suffix.length else if j = 2 then source.length else 0
       output := #[some false, none, some true] }
-  let steps := 2 * (6 * word.length + 4)
+  let steps := 6 * word.length + 4
   let d := if word.length ≤ 1 then M.runFrom c steps else TMRun.runFrom M c steps
   M.halt d.state && (d.inputPos.val == xs.size + 1) && (d.output == c.output) &&
     (d.workPos 0 == (word ++ suffix).length) && (d.workPos 1 == 0) && (d.workPos 2 == source.length) &&
-    stackMatches (d.workTapes 0) (word ++ suffix) && stackMatches (d.workTapes 1) [] &&
-    stackMatches (d.workTapes 2) source
+    stackMatches (d.workTapes 0) (d.state.2 0) (word ++ suffix) &&
+    stackMatches (d.workTapes 1) (d.state.2 1) [] &&
+    stackMatches (d.workTapes 2) (d.state.2 2) source
 
 #guard checkLoad []
 #guard checkLoad [false]
@@ -73,14 +76,15 @@ def checkStackAction : Bool :=
       state := () }
   let p := StackMachine.Program.act a
   let M := p.compile.toTM
-  let c : StackMachine.Cfg (Fin 3) Bool Unit #[true, false] :=
-    { state := (), inputPos := 1, output := #[true]
+  let c : StackMachine.Cfg (Fin 3) Bool _ #[true, false] :=
+    { state := p.compile.q₀, inputPos := 1, output := #[true]
       «stacks» := fun i ↦ if i = 0 then [] else if i = 1 then [true] else [false, true] }
-  let d := M.runFrom (c.toTM M.q₀) 2
+  let d := M.runFrom (c.toTM (fun _ ↦ false)) 1
   M.halt d.state && d.inputPos.val == 2 && d.output == #[some true, some false] &&
     d.workPos 0 == 0 && d.workPos 1 == 2 && d.workPos 2 == 1 &&
-    stackMatches (d.workTapes 0) [] && stackMatches (d.workTapes 1) [false, true] &&
-    stackMatches (d.workTapes 2) [true]
+    stackMatches (d.workTapes 0) (d.state.2 0) [] &&
+    stackMatches (d.workTapes 1) (d.state.2 1) [false, true] &&
+    stackMatches (d.workTapes 2) (d.state.2 2) [true]
 
 #guard checkStackAction
 
@@ -88,19 +92,19 @@ def checkStackAction : Bool :=
 def checkStacks (p : StackMachine.Program (Fin 3) Bool Unit)
     (before after : Fin 3 → List Bool) (steps : ℕ) : Bool :=
   let M := p.compile.toTM
-  let c : StackMachine.Cfg (Fin 3) Bool Unit #[true, false, true] :=
-    { state := (), inputPos := 2, output := #[true, false], «stacks» := before }
-  let d := TMRun.runFrom M (c.toTM M.q₀) steps
+  let c : StackMachine.Cfg (Fin 3) Bool _ #[true, false, true] :=
+    { state := p.compile.q₀, inputPos := 2, output := #[true, false], «stacks» := before }
+  let d := TMRun.runFrom M (c.toTM (fun _ ↦ false)) steps
   M.halt d.state && d.inputPos.val == 2 && d.output == #[some true, some false] &&
     (List.finRange 3).all fun i ↦
-      d.workPos i == (after i).length && stackMatches (d.workTapes i) (after i)
+      d.workPos i == (after i).length && stackMatches (d.workTapes i) (d.state.2 i) (after i)
 
 -- Generic copying restores its source and scratch, and retains the target's old suffix.
 def checkStackCopy (word suffix : List Bool) : Bool :=
   checkStacks (StackMachine.Program.Word.copy 0 1 2)
     (fun i ↦ if i = 0 then word else if i = 1 then suffix else [])
     (fun i ↦ if i = 0 then word else if i = 1 then word ++ suffix else [])
-    (2 * (6 * word.length + 4))
+    (6 * word.length + 4)
 
 #guard checkStackCopy [] [true]
 #guard checkStackCopy [false] []
@@ -110,7 +114,7 @@ def checkStackCopy (word suffix : List Bool) : Bool :=
 def checkStackClear (word : List Bool) : Bool :=
   checkStacks (StackMachine.Program.Word.clear 0)
     (fun i ↦ if i = 0 then word else source)
-    (fun i ↦ if i = 0 then [] else source) (2 * (3 * word.length + 2))
+    (fun i ↦ if i = 0 then [] else source) (3 * word.length + 2)
 
 #guard checkStackClear []
 #guard checkStackClear [false]

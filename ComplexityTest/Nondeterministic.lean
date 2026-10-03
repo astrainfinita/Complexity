@@ -96,15 +96,15 @@ theorem guess_spec : guess.DecidesInTimeAndSpace (fun _ : List Bool => True)
   intro n c _
   simp [History.space]
 
-example : (fun _ : List Bool => True) ∈ NTISP NTM.timeSpaceModel (fun _ => 1) (fun _ => 0) :=
+example : (fun _ : List Bool => True) ∈ NTISP .ntm (fun _ => 1) (fun _ => 0) :=
   guess_spec.decidableInTimeAndSpace.mem_ntisp
 
-example : (fun _ : List Bool => True) ∈ NP NTM.timeSpaceModel := by
+example : (fun _ : List Bool => True) ∈ NP .ntm := by
   apply NP.of_time_le guess_spec.decidesInTime.decidableInTime 1 0
   simp
 
 -- A space-only machine proof supplies its implicit time bound through the model bridge.
-example : NTM.timeSpaceModel.NDecidableInSpace (fun _ : List Bool => True) (fun _ => 0) :=
+example : TimeSpaceModel.ntm.NDecidableInSpace (fun _ : List Bool => True) (fun _ => 0) :=
   guess_spec.decidesInSpace.decidableInSpace
 
 -- The two branches visit [-1,0] and [0,1]: each uses two cells.

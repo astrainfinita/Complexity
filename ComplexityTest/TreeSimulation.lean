@@ -15,13 +15,13 @@ namespace TreeSimulationTest
 -- Bool's direct tree code differs from its singleton-list tree code.
 example : Encoding.PolytimeCompatible Bool := inferInstance
 
-example (f : Bool → Bool) (h : f ∈ FP TreeMachine.timeSpaceModel) :
-    f ∈ FP StackMachine.timeSpaceModel := TreeMachine.fp_subset_stack h
+example (f : Bool → Bool) (h : f ∈ FP .sizeCostTree) :
+    f ∈ FP .stack := TreeMachine.fp_subset_stack h
 
-example (f : Bool → Bool) (h : f ∈ FP TreeMachine.timeSpaceModel) : f ∈ FP TM.timeSpaceModel :=
+example (f : Bool → Bool) (h : f ∈ FP .sizeCostTree) : f ∈ FP .tm :=
   TreeMachine.fp_subset_tm h
 
-example : (id : Bool → Bool) ∈ FP TM.timeSpaceModel :=
+example : (id : Bool → Bool) ∈ FP .tm :=
   TreeMachine.fp_subset_tm TreeMachine.fp_id
 
 -- All bit strings denote the same value: conversion must not assume unique codes.
@@ -39,7 +39,7 @@ example : Encoding.PolytimeCompatible Unit := by
   fail_if_success exact inferInstance
   exact Encoding.PolytimeCompatible.ofComp redundant
 
-example : (id : Unit → Unit) ∈ FP TM.timeSpaceModel := by
+example : (id : Unit → Unit) ∈ FP .tm := by
   let : Encoding.PolytimeCompatible Unit := Encoding.PolytimeCompatible.ofComp redundant
   exact TreeMachine.fp_subset_tm TreeMachine.fp_id
 
