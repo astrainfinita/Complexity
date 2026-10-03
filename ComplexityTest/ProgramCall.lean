@@ -23,7 +23,6 @@ meta import Complexity.Models.TuringMachine.Basic
 meta import Complexity.Models.TuringMachine.Cost
 meta import Mathlib.Order.Interval.Basic
 meta import Complexity.Models.TuringMachine.Configuration
-meta import Complexity.Models.TuringMachine.Tapes
 meta import Complexity.Models.TuringMachine.Program.Call
 
 set_option experimental.vcgen true

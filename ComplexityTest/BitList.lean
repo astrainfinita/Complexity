@@ -23,35 +23,24 @@ meta import Complexity.Data.Tree.BitList
 meta import Complexity.Data.Tree.Encoding
 meta import Complexity.Models.TreeMachine.Basic
 meta import Complexity.Models.TreeMachine.Configuration
-meta import Complexity.Models.TreeMachine.Encoding
-meta import Complexity.Models.TreeMachine.Program.Pair
-meta import Complexity.Models.TreeMachine.Program.Project
-meta import Complexity.Models.TreeMachine.Program.Scan
 meta import Complexity.Models.TreeMachine.Simulation.BitList
+meta import Complexity.Models.TreeMachine.Simulation.Basic
+meta import Complexity.Models.TreeMachine.Simulation.Build
+meta import Complexity.Models.TreeMachine.Simulation.Bank
+meta import Complexity.Models.TreeMachine.Simulation.Init
+meta import Complexity.Models.TreeMachine.Simulation.Correctness
+meta import Complexity.Models.TreeMachine.StackProgram
+meta import Complexity.Models.StackMachine.Configuration
+meta import Complexity.Models.StackMachine.Basic
+meta import Complexity.Models.StackMachine.Program
+meta import Complexity.Models.StackMachine.Program.Word
+meta import Complexity.Models.StackMachine.Program.IO
+meta import Complexity.Models.StackMachine.Program.Correctness
 meta import Complexity.Models.TreeMachine.Simulation.BitList.Encoding
 meta import Complexity.Models.TreeMachine.Simulation.BitList.Input
 meta import Complexity.Models.TreeMachine.Simulation.BitList.Output
-meta import Complexity.Models.TreeMachine.Simulation.Layout
-meta import Complexity.Models.TreeMachine.Simulation.Program.Compiler
 meta import Complexity.Models.TuringMachine.Basic
 meta import Complexity.Models.TuringMachine.Configuration
-meta import Complexity.Models.TuringMachine.Program.Basic
-meta import Complexity.Models.TuringMachine.Program.Call
-meta import Complexity.Models.TuringMachine.Program.Call.Buffered
-meta import Complexity.Models.TuringMachine.Program.Enumeration
-meta import Complexity.Models.TuringMachine.Program.Move
-meta import Complexity.Models.TuringMachine.Program.Seek
-meta import Complexity.Models.TuringMachine.Program.Word.Append
-meta import Complexity.Models.TuringMachine.Program.Word.Basic
-meta import Complexity.Models.TuringMachine.Program.Word.Clear
-meta import Complexity.Models.TuringMachine.Program.Word.Configuration
-meta import Complexity.Models.TuringMachine.Program.Word.Copy
-meta import Complexity.Models.TuringMachine.Program.Word.IO
-meta import Complexity.Models.TuringMachine.Program.Word.Rewind
-meta import Complexity.Models.TuringMachine.Program.Word.Write
-meta import Complexity.Models.TuringMachine.RedirectInput
-meta import Complexity.Models.TuringMachine.RedirectOutput
-meta import Complexity.Models.TuringMachine.Tapes
 meta import Complexity.Data.Embedding
 
 open Complexity Complexity.TreeMachine
@@ -86,19 +75,33 @@ theorem identity_spec (xs : List Bool) :
     simp
   · simp [TreeMachine.Cfg.mass]
 
--- One fixed finite TM computes identity on every raw list, including [] and [false].
+-- One fixed finite stack machine computes identity on every raw list, including [] and [false].
 example (xs : List Bool) :
-    (compiler identity).ComputesInTimeAndSpace (xs.map some) (xs.map some)
+    (compiler identity).ComputesInTimeAndSpace xs xs
       (timeBound 1 xs.length 0) (spaceBound 1 xs.length 0) :=
   computesInTimeAndSpace identity (identity_spec xs)
 
--- Execute the complete input adapter, simulator, and output adapter.
-def checkIdentity (xs : List Bool) : Bool :=
-  let M := compiler identity
-  let c := M.run (TM.Cfg (Fin 3 ⊕ Bool) _ _ (xs.map some).toArray) (xs.map some) 1024
-  M.halt c.state && c.output == xs.toArray.map some
+-- Execute all three stages, including initially halted and nontrivial source runs.
+def check (M : TreeMachine Id 1 Bool) (xs ys : List Bool) : Bool :=
+  let N := compiler M
+  let c := N.run (StackMachine.Cfg (Simulation.Work 1) Bool _ xs.toArray) xs 2048
+  N.halt c.state && c.output == ys.toArray
 
-#guard checkIdentity []
-#guard checkIdentity [false, true, false]
+def halted : TreeMachine Id 1 Bool where
+  q₀ := true
+  halt := id
+  transition _ _ := pure <| Action.assign false (.pair 0 0 0)
+
+def tail : TreeMachine Id 1 Bool where
+  q₀ := false
+  halt := id
+  transition _ _ := pure <| Action.assign true (.right 0 0)
+
+#guard check halted [] []
+#guard check halted [false] [false]
+#guard check halted [true] [true]
+#guard check halted [false, true, false] [false, true, false]
+#guard check tail [] []
+#guard check tail [true, false, true] [false, true]
 
 end Complexity.BitListTest

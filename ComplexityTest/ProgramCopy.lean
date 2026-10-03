@@ -10,7 +10,7 @@ import Mathlib.Data.Fintype.Option
 
 set_option experimental.vcgen true
 
-open Complexity (TM)
+open Complexity
 open Complexity.Controller (History)
 open Complexity.TM
 open Std.WP
@@ -65,7 +65,7 @@ private theorem at_step (xs : List Bool) (i : ℕ) (h : i < xs.length) :
   apply cfg_ext
   · simp only [apply_inputPos]
     apply Fin.ext
-    simp [Program.idle, state, moveInputPos, input]
+    simp [Program.idle, state, Input.movePos, input]
     omega
   · change (input (xs.take i)).push (.some xs[i]) = input (xs.take (i + 1))
     apply Array.toList_inj.mp

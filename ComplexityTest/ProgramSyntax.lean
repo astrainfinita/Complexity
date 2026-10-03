@@ -18,7 +18,6 @@ meta import Complexity.Data.NatMemory
 meta import Complexity.Models.TuringMachine.Program.Basic
 meta import Complexity.Models.TuringMachine.Basic
 meta import Complexity.Models.TuringMachine.Configuration
-meta import Complexity.Models.TuringMachine.Tapes
 
 open Complexity (TM Program)
 open Complexity.TM

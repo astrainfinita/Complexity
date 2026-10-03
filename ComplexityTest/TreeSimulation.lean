@@ -5,7 +5,7 @@ Authors: Yuyang Zhao
 -/
 module
 
-import Complexity.Classes.TreeSimulation
+import Complexity.Classes.TreeTuringSimulation
 import Complexity.Encoding.Polynomial.Bool
 
 open Complexity
@@ -14,6 +14,9 @@ namespace TreeSimulationTest
 
 -- Bool's direct tree code differs from its singleton-list tree code.
 example : Encoding.PolytimeCompatible Bool := inferInstance
+
+example (f : Bool → Bool) (h : f ∈ FP TreeMachine.timeSpaceModel) :
+    f ∈ FP StackMachine.timeSpaceModel := TreeMachine.fp_subset_stack h
 
 example (f : Bool → Bool) (h : f ∈ FP TreeMachine.timeSpaceModel) : f ∈ FP TM.timeSpaceModel :=
   TreeMachine.fp_subset_tm h

@@ -5,26 +5,29 @@ Authors: Yuyang Zhao
 -/
 module
 
-import Complexity.Models.TreeMachine.Simulation.Program.Correctness
-meta import Complexity.Models.TreeMachine.Simulation.Layout
-meta import Complexity.Models.TreeMachine.Simulation.Program.Compiler
-meta import Complexity.Models.TuringMachine.Program.Word.Append
-meta import Complexity.Models.TuringMachine.Program.Word.Basic
-meta import Complexity.Models.TuringMachine.Program.Word.Write
-meta import Complexity.Models.TuringMachine.Program.Word.Clear
-meta import Complexity.Models.TuringMachine.Program.Word.IO
-meta import Complexity.Models.TreeMachine.Program.Project
-meta import Complexity.Models.TreeMachine.Program.Pair
-meta import Complexity.Models.TuringMachine.Program.Word.Copy
-meta import Complexity.Models.TuringMachine.Program.Word.Rewind
-meta import Complexity.Models.TreeMachine.Program.Scan
-meta import Complexity.Models.TuringMachine.Program.Basic
+import ComplexityTest.TMRun
+meta import ComplexityTest.TMRun
+
+import Complexity.Models.TreeMachine.Simulation.Correctness
+import Complexity.Models.StackMachine.TuringMachine
+meta import Complexity.Models.TreeMachine.Simulation.Basic
+meta import Complexity.Models.TreeMachine.Simulation.Build
+meta import Complexity.Models.TreeMachine.Simulation.Bank
+meta import Complexity.Models.TreeMachine.Simulation.Init
+meta import Complexity.Models.TreeMachine.Simulation.Correctness
+meta import Complexity.Models.TreeMachine.StackProgram
+meta import Complexity.Models.StackMachine.Configuration
+meta import Complexity.Models.StackMachine.Basic
+meta import Complexity.Models.StackMachine.Program
+meta import Complexity.Models.StackMachine.Program.Word
+meta import Complexity.Models.StackMachine.Program.IO
+meta import Complexity.Models.StackMachine.Program.Correctness
+meta import Complexity.Models.StackMachine.TuringMachine
 meta import Complexity.Control.Program
 meta import Complexity.Control.Program.Syntax
 meta import Complexity.Control.Program.Compiler
 meta import Complexity.Control.Program.Loop
 meta import Complexity.Control.Program.For
-meta import Complexity.Models.TreeMachine.Encoding
 meta import Complexity.Models.TreeMachine.Basic
 meta import Complexity.Models.TreeMachine.Configuration
 meta import Complexity.Models.TuringMachine.Basic
@@ -35,9 +38,12 @@ meta import Complexity.Data.IntMemory
 import Mathlib.Data.Fin.VecNotation
 meta import Mathlib.Data.Fin.VecNotation
 
-open Complexity TreeMachine TreeMachine.Simulation Std.WP
+open ComplexityTest Complexity TreeMachine TreeMachine.Simulation Std.WP
 
 namespace CompilerTests
+
+local instance : FinEnum Scratch := FinEnum.ofEquiv _ (proxy_equiv% Scratch).symm
+local instance (k : ℕ) : FinEnum (Work k) := FinEnum.ofEquiv _ (proxy_equiv% (Work k)).symm
 
 def a : Tree := .pair .nil .nil
 def b : Tree := .pair a .nil
@@ -50,11 +56,13 @@ def once (p : Op 2) : TreeMachine Id 2 Bool where
 -- Check the actual controller, including input consumption and counter restoration.
 def check {k : ℕ} {Q : Type} [FinEnum Q] (M : TreeMachine Id k Q) (i : Fin k) (x : Tree)
     (o : Fin k) (t : Tree) : Bool :=
-  let N := TM.Program.compile (Simulation.Program.program M i o)
-  let xs := TreeMachine.code x
-  let c := N.run (TM.Cfg _ _ _ xs.toArray) xs 4802
-  N.halt c.state && (c.output == (TreeMachine.code t).toArray) &&
-    (c.inputPos.val == xs.length + 1) && (c.workPos (Compiler.counter k) == 0)
+  let N := (StackMachine.Program.compile (Simulation.Program.program M i o)).toTM
+  let xs := (BitList.encodeTree x).map some
+  let c := TMRun.runFrom N (N.initInput (Config := TM.Cfg (Work k) _ _ xs.toArray) xs) 4802
+  N.halt c.state && (c.output == ((BitList.encodeTree t).map some).toArray) &&
+    (c.inputPos.val == xs.length + 1) &&
+    (FinEnum.toList Scratch).all fun j ↦
+      c.workPos (.scratch j) == 0 && (c.workTapes (.scratch j))[(0 : ℤ)] == none
 
 -- Keeping a register copies its original value into the other bank.
 #guard check (once .nop) 0 a 0 a
@@ -111,26 +119,21 @@ def halted : TreeMachine Id 1 Bool where
 example : Fintype (Option Bool) := inferInstance
 example : Finite (Simulation.Program.program (once .nop) 0 0).State := inferInstance
 
--- The process theorem starts at the supplied state and can emit a nonzero register.
+-- The process theorem starts at the supplied state and returns the complete register bank.
 -- Here the controller starts running at false, but the represented source is already halted.
-example (x : Tree) :
+example (x : Tree) (q : ℕ) :
     Std.WP.Triple
-      ((Program.loopOn TM.Program.idle
-        (Simulation.Program.body (once .nop) 1) (true, false)).verify
-        (TM.Program.cfgSemantics (TreeMachine.code x).toArray))
-      (fun c t ↦ c = Simulation.Program.loadedCfg 1 x ∧ 3 * (x.size + 2) + 3 ≤ t)
-      (fun _ c _ ↦ c.output = (TreeMachine.code x).toArray) () := by
+      ((Program.loopOn StackMachine.Program.idle
+        (Simulation.Program.body (once .nop)) (true, false)).verify
+        (StackMachine.Program.semantics (BitList.encodeTree x).toArray))
+      (fun c t ↦ c = Simulation.Program.loadedCfg 1 x ∧ 1 + q ≤ t)
+      (fun b c t ↦ Simulation.Program.Rep
+        (Cfg.mk true (TreeMachine.input 1 x)) b c (x.size + 2) ∧ q ≤ t) () := by
   let r : Cfg 2 Bool := Cfg.mk true (TreeMachine.input 1 x)
   have hr : Simulation.Program.Rep r false (Simulation.Program.loadedCfg 1 x)
       (x.size + 2) := by
-    refine ⟨rfl, rfl, fun _ ↦ [], rfl, ?_⟩
+    refine ⟨rfl, fun _ ↦ [], rfl, ?_⟩
     simp
-  have hh : (once .nop).Halted r := rfl
-  have hn : ∀ j < 0, ¬(once .nop).Halted ((once .nop).runFrom r j) := by
-    intro j hj
-    omega
-  have ha : ((once .nop).runFrom r 0).regs 1 = x := by
-    simp [r,  TreeMachine.input]
   have hm : ∀ j ≤ 0, ((once .nop).runFrom r j).mass ≤ x.size + 2 := by
     intro j hj
     have : j = 0 := by omega
@@ -138,15 +141,16 @@ example (x : Tree) :
     change (∑ i, (TreeMachine.input (1 : Fin 2) x i).size) ≤ _
     rw [sum_size_input]
     omega
-  simpa only [Nat.zero_mul, Nat.zero_add, r] using
-    Simulation.Program.spec_loop (once .nop) r 1
-      (Simulation.Program.loadedCfg 1 x) false x 0 (x.size + 2) hr hh hn ha hm
+  simpa only [Nat.zero_mul, Nat.zero_add, Controller.runFrom_zero, r] using
+    Simulation.Program.spec_loop (once .nop) r
+      (Simulation.Program.loadedCfg 1 x) false 0 (x.size + 2) q hr rfl
+      (by intro j hj; omega) hm
 
--- The public compiler exposes binary I/O and the complete resource theorem.
+-- The public compiler exposes native stack computation and its complete resource theorem.
 example {k : ℕ} [NeZero k] {Q : Type} [FinEnum Q] (M : TreeMachine Id k Q)
     (x a : Tree) (t s : ℕ) (h : M.ComputesInTimeAndSpace x a t s) :
-    (compiler M).ComputesInTimeAndSpace (TreeMachine.code x) (TreeMachine.code a)
-      (Compiler.timeBound k x.size t) (Compiler.spaceBound k x.size t) :=
-  Compiler.computesInTimeAndSpace M h
+    (compiler M).ComputesInTimeAndSpace (BitList.encodeTree x) (BitList.encodeTree a)
+      (Simulation.timeBound k x.size t) (Simulation.spaceBound k x.size t) :=
+  Simulation.computesInTimeAndSpace M h
 
 end CompilerTests

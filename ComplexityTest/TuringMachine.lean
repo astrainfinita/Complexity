@@ -39,10 +39,10 @@ def copyInput : TM Id (Fin 0) Γ Bool where
 #guard (copyInput.runHistory (Cfg (Fin 0) Γ Bool [.one, .zero].toArray) ([.one, .zero] : List Γ) 10).space = 0
 
 -- Outward input moves clamp, including on an empty input.
-#guard (moveInputPos (0 : Fin 5) .neg).val = 0
-#guard (moveInputPos (4 : Fin 5) .pos).val = 4
-#guard (moveInputPos (1 : Fin 2) .pos).val = 1
-#guard (moveInputPos (1 : Fin 2) .neg).val = 0
+#guard (Input.movePos (0 : Fin 5) .neg).val = 0
+#guard (Input.movePos (4 : Fin 5) .pos).val = 4
+#guard (Input.movePos (1 : Fin 2) .pos).val = 1
+#guard (Input.movePos (1 : Fin 2) .neg).val = 0
 
 -- All work tapes write at their old head positions, before their heads move.
 def writeBoth : Action (Fin 2) Γ Bool where
