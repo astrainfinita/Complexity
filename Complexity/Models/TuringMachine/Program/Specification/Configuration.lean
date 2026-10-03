@@ -21,7 +21,7 @@ namespace Complexity.TM.Program
 
 open Std.WP
 
-variable {κ : Type} {Γ α β : Type} [Inhabited Γ] {xs : Array Γ}
+variable {κ : Type} {Γ : Type} [Inhabited Γ] {xs : Array Γ}
 
 /-- Interpret a program on tape configurations, without a visitation ghost. -/
 @[simps eval observe act]
@@ -59,16 +59,6 @@ theorem cfg_spec_read [FinEnum Γ] (i : κ) (xs : Array Γ) (s : Cfg κ Γ Unit 
   simpa [read, eval] using
     Program.spec_perform (Op.read (Γ := Γ) inferInstance i) (cfgSemantics xs) s b h x
 
-/-- A batch observation records its actual values without enumerating possible vectors. -/
-@[spec]
-theorem cfg_spec_observeBits {n : ℕ} (f : (Γ × (κ → Γ)) → Fin n → Bool)
-    (xs : Array Γ) (s : Cfg κ Γ Unit xs) (b : ℕ) (h : 0 < b) (x : Unit) :
-    Triple ((observeBits f).verify (cfgSemantics xs)) (fun t c ↦ t = s ∧ c = b)
-      (fun v t c ↦ v = Vector.ofFn (f (s.inputSymbol, s.workSymbols)) ∧
-        t = s ∧ c = b - 1) x := by
-  simpa [observeBits, eval] using
-    Program.spec_perform (Op.observeBits n f) (cfgSemantics xs) s b h x
-
 /-- A total loop rule on configurations; the dispatcher consumes one time credit. -/
 @[spec]
 theorem cfg_spec_repeatUntil (p : TM.Program κ Γ Bool)
@@ -79,17 +69,5 @@ theorem cfg_spec_repeatUntil (p : TM.Program κ Γ Bool)
       (fun r s b ↦ if r then Q () s b else I s b) ()) :
     Triple ((repeatUntil p).verify (cfgSemantics xs)) (fun s b ↦ I s b) Q () :=
   Program.spec_repeatUntilWith_nop idle p (cfgSemantics xs) I Q () idle_apply hp hb
-
-/-- A finite-value loop requires only the carried value, tapes, and remaining budget. -/
-@[spec]
-theorem cfg_spec_loopOn [FinEnum α] [FinEnum β]
-    (p : α → TM.Program κ Γ (α ⊕ β)) (i : α)
-    (I : Program.Invariant α (Cfg κ Γ Unit xs → ℕ → Prop))
-    (Q : β → Cfg κ Γ Unit xs → ℕ → Prop)
-    (hp : ∀ i s b, I i s b → 0 < b)
-    (hb : ∀ i, Triple ((p i).verify (cfgSemantics xs)) (fun s b ↦ I i s (b + 1))
-      (fun r s b ↦ match r with | .inl j => I j s b | .inr j => Q j s b) ()) :
-    Triple ((Program.loopOn idle p i).verify (cfgSemantics xs)) (I i) Q () :=
-  Program.spec_loopOn_nop idle p i (cfgSemantics xs) I Q idle_apply hp hb
 
 end Complexity.TM.Program

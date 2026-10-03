@@ -7,7 +7,7 @@ module
 
 public import Complexity.Control.Controller
 public import Complexity.Data.IntMemory
-public import Mathlib.Basic.Sign.Defs
+public import Complexity.Models.Input
 
 /-!
 # Configurations and actions of a multi-tape Turing machine
@@ -58,27 +58,6 @@ structure Cfg (κ : Type*) (Γ Q : Type*) [Inhabited Γ] (xs : Array Γ) where
   /-- Output already emitted; the transition function cannot read it. -/
   output : Array Γ
 
-/-- Move an input head, leaving outward moves at a boundary in place. -/
-def moveInputPos {n : ℕ} (p : Fin (n + 2)) : SignType → Fin (n + 2)
-  | .neg => ⟨p.val - 1, by have := p.isLt; omega⟩
-  | .zero => p
-  | .pos => ⟨min (p.val + 1) (n + 1), by omega⟩
-
-@[simp]
-theorem moveInputPos_zero {n : ℕ} (p : Fin (n + 2)) : moveInputPos p 0 = p := rfl
-
-@[simp]
-theorem moveInputPos_left_boundary {n : ℕ} :
-    moveInputPos (0 : Fin (n + 2)) (-1) = 0 := by
-  apply Fin.ext
-  rfl
-
-@[simp]
-theorem moveInputPos_right_boundary {n : ℕ} :
-    moveInputPos (⟨n + 1, by omega⟩ : Fin (n + 2)) 1 = ⟨n + 1, by omega⟩ := by
-  apply Fin.ext
-  simp [moveInputPos]
-
 namespace Cfg
 
 /-- The symbol at the input head, with `default` for either boundary. -/
@@ -106,7 +85,7 @@ end Cfg
 instance : Controller.Apply (Cfg κ Γ Q xs) (Action κ Γ Q) where
   apply a c :=
     { state := a.state
-      inputPos := moveInputPos c.inputPos a.inputMove
+      inputPos := Input.movePos c.inputPos a.inputMove
       workTapes i := match (a.work i).1 with
         | none => c.workTapes i
         | some v => (c.workTapes i).set (c.workPos i) v

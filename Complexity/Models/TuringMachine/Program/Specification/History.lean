@@ -43,19 +43,6 @@ def semantics (xs : Array Γ) :
   simp only [idle_apply]
   exact sup_eq_left.mpr s.head_mem
 
-/-- A head move preserves a footprint whenever its new position remains inside it. -/
-theorem moveAction_visited_le [DecidableEq κ] {xs : Array Γ} (j : κ) (d : SignType)
-    (s : History (Cfg κ Γ Unit xs) (Action κ Γ Unit)) (V : κ → NonemptyInterval ℤ)
-    (hF : s.visited ≤ V)
-    (hj : (apply (moveAction (Γ := Γ) j d) s.last).workPos j ∈ V j) :
-    (apply (moveAction (Γ := Γ) j d) s).visited ≤ V := by
-  apply (s.apply_visited_le_iff _ V).mpr
-  refine ⟨hF, ?_⟩
-  intro i
-  by_cases hi : i = j
-  · subst i; exact hj
-  · simpa [hi] using s.head_mem_of_visited_le hF i
-
 /-- A total loop rule for assertions about tape data and visited intervals. -/
 @[spec]
 theorem spec_repeatUntil {xs : Array Γ} (p : TM.Program κ Γ Bool)

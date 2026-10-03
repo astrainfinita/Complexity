@@ -13,3 +13,5 @@ public import Complexity.Classes.Nondeterministic.Deterministic
 public import Complexity.Classes.TreeFunctions.Composition
 public import Complexity.Classes.Functions.Encoding
 public import Complexity.Classes.TreeSimulation
+public import Complexity.Classes.StackMachine.TuringMachine
+public import Complexity.Classes.TreeTuringSimulation

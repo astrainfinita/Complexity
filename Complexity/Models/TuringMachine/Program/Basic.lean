@@ -118,9 +118,6 @@ section Movement
 
 variable [DecidableEq κ]
 
-theorem move_eq_act (j : κ) (d : SignType) :
-    move (Γ := Γ) j d = act (moveAction j d) := rfl
-
 variable [Inhabited Γ] {xs : Array Γ}
 
 /-- A move is exactly one local head update; tape data and external streams stay fixed. -/
@@ -133,12 +130,6 @@ variable [Inhabited Γ] {xs : Array Γ}
   · funext i
     by_cases h : i = j <;> simp [moveAction, idle, h]
   · rfl
-
-theorem moveAction_setWorkPos (c : Cfg κ Γ Unit xs) (j : κ)
-    (p : ℤ) (d : SignType) :
-    apply (moveAction (Γ := Γ) j d) (c.setWorkPos j p) = c.setWorkPos j
-      (p + d.cast) := by
-  simp
 
 end Movement
 

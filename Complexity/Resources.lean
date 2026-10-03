@@ -13,3 +13,5 @@ public import Complexity.Resources.Nondeterministic
 public import Complexity.Resources.Nondeterministic.Deterministic
 public import Complexity.Resources.TreeMachine
 public import Complexity.Resources.TreeMachine.Composition
+public import Complexity.Resources.StackMachine
+public import Complexity.Resources.StackMachine.TuringMachine

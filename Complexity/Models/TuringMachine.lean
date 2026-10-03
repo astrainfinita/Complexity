@@ -7,6 +7,3 @@ public import Complexity.Models.TuringMachine.Cost
 public import Complexity.Models.TuringMachine.Nondeterministic
 public import Complexity.Models.TuringMachine.Nondeterministic.Deterministic
 public import Complexity.Models.TuringMachine.Program
-public import Complexity.Models.TuringMachine.RedirectInput
-public import Complexity.Models.TuringMachine.RedirectOutput
-public import Complexity.Models.TuringMachine.Tapes

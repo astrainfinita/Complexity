@@ -50,9 +50,13 @@ theorem config_le_configSup {α : Type*} [SemilatticeSup α]
     (nil (Action := Action) c).configSup space = space c := by
   simp [configSup]
 
-@[simp] theorem actionSum_unit (h : History Config Action) :
-    h.actionSum (fun _ _ ↦ 1) = h.length := by
+@[simp] theorem actionSum_const (h : History Config Action) (k : ℕ) :
+    h.actionSum (fun _ _ ↦ k) = h.length * k := by
   simp [actionSum, length]
+
+theorem actionSum_unit (h : History Config Action) :
+    h.actionSum (fun _ _ ↦ 1) = h.length := by
+  simp only [actionSum_const, Nat.mul_one]
 
 theorem actionSum_mono (h : History Config Action) {cost cost' : Action → Config → ℕ}
     (hc : ∀ a c, (a, c) ∈ h.actions.zip h.configs → cost a c ≤ cost' a c) :
