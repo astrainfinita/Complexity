@@ -6,7 +6,7 @@ Authors: Yuyang Zhao
 module
 
 public import Complexity.Models.TreeMachine.Simulation.Program.Compiler
-public import Complexity.Models.TreeMachine.Program.Pair.Configuration
+public import Complexity.Models.TreeMachine.Program.Pair
 public import Complexity.Models.TreeMachine.Program.Project
 public import Complexity.Models.TuringMachine.Program.Word.Clear
 public import Complexity.Control.Program.Bound

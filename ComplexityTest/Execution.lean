@@ -7,7 +7,7 @@ module
 
 import all Init.Data.List.Scan.Basic
 import Complexity.Models.TreeMachine.Deterministic
-import Complexity.Models.TuringMachine.Simulation
+import Complexity.Models.TuringMachine.Deterministic
 
 open Complexity
 
@@ -45,14 +45,6 @@ example {κ Γ Q : Type*} [Inhabited Γ] [Fintype κ]
       (M.runHistory (TM.Cfg κ Γ Q xs.toArray) xs t).space ≤ s := by
   refine Controller.computes_unit_iff.trans ?_
   simp only [TM.rawExecution_hasOutput]
-
--- Block bounds still measure fresh visits and retain ordinary configuration endpoints.
-example {κ Γ Q : Type*} [Inhabited Γ] [Fintype κ] {xs : Array Γ}
-    (M : TM Id κ Γ Q) (c d : TM.Cfg κ Γ Q xs) (t s : ℕ) :
-    M.ReachesInTimeAndSpace c d t s ↔
-      ∃ n ≤ t, M.runFrom c n = d ∧
-        (M.runHistoryFrom c n).space ≤ s :=
-  Iff.rfl
 
 -- Zero action fees require an execution length separate from the time budget.
 private def oneAction : Controller Id Unit Unit Bool where

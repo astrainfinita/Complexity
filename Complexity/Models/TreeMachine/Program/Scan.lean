@@ -7,7 +7,7 @@ module
 
 public import Complexity.Control.Program.Traverse
 public import Complexity.Models.TreeMachine.Encoding
-public import Complexity.Models.TuringMachine.Program.Specification.History
+public import Complexity.Models.TuringMachine.Program.Specification.Configuration
 public import Complexity.Data.IntMemory.List
 
 /-!
@@ -23,7 +23,6 @@ prefixes of the tree code, so the suffix after the scanned tree is completely un
 namespace Complexity.TreeMachine.Program
 
 open TM Std.WP
-open Controller (History)
 
 variable {κ : Type} [DecidableEq κ] {zs : Array (Option Bool)}
 
@@ -182,100 +181,52 @@ theorem scanCfg_zero (u : TM.Cfg κ (Option Bool) Unit zs) (s d c : κ) (copy : 
         · simp [hi, hi', hi'']
   · rfl
 
-private def At (u : TM.Cfg κ (Option Bool) Unit zs) (s d c : κ) (copy : Bool)
-    (a : Tree) (p : ℕ) (ys : List (Option Bool)) (V : κ → NonemptyInterval ℤ) (n : ℕ)
-    (v : History (TM.Cfg κ (Option Bool) Unit zs) (TM.Action κ (Option Bool) Unit)) : Prop :=
-  v.last = scanCfg u s d c copy a p ys n ∧ v.visited ≤ V
-
-private theorem at_token (u : TM.Cfg κ (Option Bool) Unit zs) (s d c : κ)
-    (copy : Bool) (a : Tree) (p : ℕ) (ys : List (Option Bool)) (V : κ → NonemptyInterval ℤ)
-    (hs : s ≠ d) (hc : c ≠ s) (hd : c ≠ d)
-    (hF : ∀ n, n ≤ a.size → ∀ i, (scanCfg u s d c copy a p ys n).workPos i ∈ V i)
-    {n : ℕ} {v : History (TM.Cfg κ (Option Bool) Unit zs) (TM.Action κ (Option Bool) Unit)}
-    (hn : n < a.size)
-    (hv : At u s d c copy a p ys V n v) :
-    At u s d c copy a p ys V (n + 1)
-      (apply
-        (scanToken s d c copy ((BitList.encodeTree a)[n]'(by simpa using hn))) v) := by
-  have he := scanToken_apply u s d c copy a p ys hs hc hd hn
-  rw [← hv.1] at he
-  refine ⟨by simpa only [History.apply_last] using he, ?_⟩
-  apply (v.apply_visited_le_iff _ V).mpr
-  refine ⟨hv.2, ?_⟩
-  simpa only [he] using hF (n + 1) (by omega)
-
 set_option experimental.vcgen true in
 private theorem body_progress (u : TM.Cfg κ (Option Bool) Unit zs) (s d c : κ)
-    (copy : Bool) (a : Tree) (xs ys ws : List (Option Bool)) (V : κ → NonemptyInterval ℤ)
+    (copy : Bool) (a : Tree) (xs ys ws : List (Option Bool))
     (hs : s ≠ d) (hc : c ≠ s) (hd : c ≠ d)
     (hx : u.workTapes s = IntMemory.ofList (xs ++ code a ++ ws))
     (hz : u.workTapes c = IntMemory.ofList [some true])
-    (hF : ∀ n, n ≤ a.size → ∀ i,
-      (scanCfg u s d c copy a xs.length ys n).workPos i ∈ V i)
     {n : ℕ} (hn : n < a.size) (q : ℕ) :
-    Triple ((scanBody s d c copy).verify (TM.Program.semantics zs))
-      (fun v b => At u s d c copy a xs.length ys V n v ∧ b = q + 3)
-      (fun r v b => At u s d c copy a xs.length ys V (n + 1) v ∧
+    Triple ((scanBody s d c copy).verify (TM.Program.cfgSemantics zs))
+      (fun v b => v = scanCfg u s d c copy a xs.length ys n ∧ b = q + 3)
+      (fun r v b => v = scanCfg u s d c copy a xs.length ys (n + 1) ∧
         (r = true ↔ n + 1 = a.size) ∧ b = q) () := by
+  have he := scanCfg_read u s d c copy a xs ys ws hs hx hn
+  have ha := scanToken_apply u s d c copy a xs.length ys hs hc hd hn
+  have hz' := scanCfg_counter u s d c copy a xs.length ys hc hd hz
+    (show n + 1 ≤ a.size by omega)
   unfold scanBody
   vcgen
-  case vc1 =>
-    rename_i v b hv x v₁ b₁ h₁ y v₂ b₂ h₂ z v₃ b₃ h₃
-    obtain ⟨hv,rfl⟩ := hv
-    rcases h₁ with ⟨rfl, rfl, rfl⟩
-    rcases h₂ with ⟨rfl, rfl, rfl⟩
-    have he : decide (v.last.workSymbols s = some true) =
-        ((BitList.encodeTree a)[n]'(by simpa using hn)) := by
-      rw [hv.1,scanCfg_read u s d c copy a xs ys ws hs hx hn]
-      cases ((BitList.encodeTree a)[n]'(by simpa using hn)) <;> rfl
-    simp only [he] at h₃ ⊢
-    have hv' := at_token u s d c copy a xs.length ys V hs hc hd hF hn hv
-    rcases h₃ with ⟨rfl,rfl,rfl⟩
-    refine ⟨by simpa [At] using hv', ?_, by omega⟩
-    simpa [← hv'.1] using
-      scanCfg_counter u s d c copy a xs.length ys hc hd hz (show n + 1 ≤ Tree.size a by omega)
-  all_goals omega
+  all_goals simp_all
 
-/-- A common footprint contains the heads at every prefix boundary. -/
-def ScanFootprint (u : TM.Cfg κ (Option Bool) Unit zs) (s d c : κ) (copy : Bool)
-    (a : Tree) (p : ℕ) (ys : List (Option Bool)) (V : κ → NonemptyInterval ℤ) : Prop :=
-  ∀ n, n ≤ a.size → ∀ i, (scanCfg u s d c copy a p ys n).workPos i ∈ V i
+/-- Scan one tree prefix, retaining the complete final tapes and unused time credits.
 
-/-- The entire final configuration, footprint, and unused credits. -/
-def ScanPost (u : TM.Cfg κ (Option Bool) Unit zs) (s d c : κ) (copy : Bool)
-    (a : Tree) (p : ℕ) (ys : List (Option Bool)) (V : κ → NonemptyInterval ℤ) (q : ℕ)
-    (v : History (TM.Cfg κ (Option Bool) Unit zs) (TM.Action κ (Option Bool) Unit))
-    (b : ℕ) : Prop :=
-  v.last = scanCfg u s d c copy a p ys a.size ∧ v.visited ≤ V ∧ b = q
-
-/-- Scan one tree with four actual transitions per code bit, preserving an arbitrary suffix.
-
-The result retains all unrelated tape data and all previously visited addresses. The caller
-chooses a common footprint, which bounds the destination, source, and unary-counter heads.
-Unused time credits are preserved for subsequent program blocks. -/
+The source prefix, arbitrary suffix, all unrelated storage, and exact unused credits
+are preserved according to `scanCfg`.
+-/
 @[spec]
-theorem spec_scan (u : TM.Cfg κ (Option Bool) Unit zs) (s d c : κ) (copy : Bool)
-    (a : Tree) (xs ys ws : List (Option Bool)) (V : κ → NonemptyInterval ℤ) (q : ℕ)
+theorem spec_scan_cfg (u : TM.Cfg κ (Option Bool) Unit zs) (s d c : κ) (copy : Bool)
+    (a : Tree) (xs ys ws : List (Option Bool)) (q : ℕ)
     (hs : s ≠ d) (hc : c ≠ s) (hd : c ≠ d)
     (hx : u.workTapes s = IntMemory.ofList (xs ++ code a ++ ws))
     (hy : u.workTapes d = IntMemory.ofList ys)
     (hz : u.workTapes c = IntMemory.ofList [some true])
-    (hp : u.workPos s = xs.length) (hi : u.workPos d = ys.length) (hj : u.workPos c = 1)
-    (hF : ScanFootprint u s d c copy a xs.length ys V) :
-    Triple ((scan s d c copy).verify (TM.Program.semantics zs))
-      (fun v b => v.last = u ∧ v.visited ≤ V ∧ b = 4 * a.size + q)
-      (fun _ v b => ScanPost u s d c copy a xs.length ys V q v b) () := by
+    (hp : u.workPos s = xs.length) (hi : u.workPos d = ys.length) (hj : u.workPos c = 1) :
+    Triple ((scan s d c copy).verify (TM.Program.cfgSemantics zs))
+      (fun v b ↦ v = u ∧ b = 4 * a.size + q)
+      (fun _ v b ↦ v = scanCfg u s d c copy a xs.length ys a.size ∧ b = q) () := by
   have hn : a.size - 1 + 1 = a.size := by have := Tree.size_pos a; omega
   have hl := Program.spec_repeatUntilWith_count TM.Program.idle
-    (scanBody s d c copy) (TM.Program.semantics zs)
-    (At u s d c copy a xs.length ys V)
-    (At u s d c copy a xs.length ys V a.size) (a.size - 1) 3 3 q
-    (fun _ _ v hv ↦ by simpa [At] using hv)
+    (scanBody s d c copy) (TM.Program.cfgSemantics zs)
+    (fun n v ↦ v = scanCfg u s d c copy a xs.length ys n)
+    (fun v ↦ v = scanCfg u s d c copy a xs.length ys a.size) (a.size - 1) 3 3 q
+    (fun _ _ v hv ↦ by simpa only [TM.Program.cfgSemantics_act, TM.Program.idle_apply] using hv)
     (fun r hr z ↦ by
       constructor
       rintro v b hv
       apply (Triple.entails_wp_of_post
-        (body_progress u s d c copy a xs ys ws V hs hc hd hx hz hF
+        (body_progress u s d c copy a xs ys ws hs hc hd hx hz
           (show r < a.size by omega) z) ?_) v b ⟨hv.1, by omega⟩
       rintro b v t ⟨hv, hb, ht⟩
       exact ⟨Bool.eq_false_iff.mpr (fun h ↦ by have := hb.mp h; omega), hv, ht⟩)
@@ -283,25 +234,12 @@ theorem spec_scan (u : TM.Cfg κ (Option Bool) Unit zs) (s d c : κ) (copy : Boo
       constructor
       rintro v b hv
       apply (Triple.entails_wp_of_post
-        (body_progress u s d c copy a xs ys ws V hs hc hd hx hz hF
+        (body_progress u s d c copy a xs ys ws hs hc hd hx hz
           (show a.size - 1 < a.size by omega) z) ?_) v b ⟨hv.1, by omega⟩
       rintro b v t ⟨hv, hb, ht⟩
       exact ⟨hb.mpr hn, hn ▸ hv, ht⟩)
-  constructor
-  rintro v b ⟨hv, hR, hb⟩
-  apply (Triple.entails_wp_of_post hl (fun _ w z h ↦
-    ⟨h.1.1, h.1.2, h.2⟩)) v b
-  refine ⟨⟨?_, hR⟩, ?_⟩
-  · simpa only [scanCfg_zero u s d c copy a xs.length ys hy hp hi hj] using hv
-  · omega
-
-/-- A scanner's final footprint bounds all work cells it has visited. -/
-theorem ScanPost.space_le [Fintype κ] {u : TM.Cfg κ (Option Bool) Unit zs} {s d c : κ}
-    {copy : Bool} {a : Tree} {p : ℕ} {ys : List (Option Bool)}
-    {V : κ → NonemptyInterval ℤ} {q b : ℕ}
-    {v : History (TM.Cfg κ (Option Bool) Unit zs) (TM.Action κ (Option Bool) Unit)}
-    (h : ScanPost u s d c copy a p ys V q v b) :
-    v.space ≤ ∑ i, ((V i).snd + 1 - (V i).fst).toNat :=
-  v.space_le_of_visited_le V h.2.1
+  simpa only [scan, TM.Program.repeatUntil, hn,
+    scanCfg_zero u s d c copy a xs.length ys hy hp hi hj,
+    show (3 + 1) * (a.size - 1) + 3 + 1 + q = 4 * a.size + q by omega] using hl
 
 end Complexity.TreeMachine.Program

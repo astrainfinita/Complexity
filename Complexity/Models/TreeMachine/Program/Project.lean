@@ -6,7 +6,7 @@ Authors: Yuyang Zhao
 module
 
 public import Complexity.Models.TuringMachine.Program.Word.Write
-public import Complexity.Models.TreeMachine.Program.Scan.Configuration
+public import Complexity.Models.TreeMachine.Program.Scan
 public import Complexity.Models.TuringMachine.Program.Word.Configuration
 
 /-! # Child projection by composing prefix scanning, copying, and rewinding -/

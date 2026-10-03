@@ -8,7 +8,7 @@ module
 public import Complexity.Models.TuringMachine.Program.Basic
 public import Complexity.Control.Program.Correctness
 public import Complexity.Control.Controller.RunHistory
-public import Complexity.Models.TuringMachine.Simulation
+public import Complexity.Models.TuringMachine.Deterministic
 
 /-!
 # Resource-preserving compilation of finite programs

@@ -6,6 +6,7 @@ Authors: Yuyang Zhao
 module
 
 public import Complexity.Models.TuringMachine.Deterministic
+public import Complexity.Data.Embedding
 public import Complexity.Control.Transition.Simulation
 public import Complexity.Models.TuringMachine.Tapes
 public import Mathlib.Data.Fintype.Sum
@@ -113,39 +114,6 @@ theorem runFrom_cfgAlong (e : (κ ⊕ Unit) ↪ τ)
     (compilerAlong e M).runFrom (cfgAlong e c d) n =
       cfgAlong e (M.runFrom c n) d :=
   Transition.runN_map (fun c ↦ cfgAlong e c d) (fun c ↦ step_cfgAlong e M c d) c n
-
-/-- The original work tapes record the same intervals after embedding. -/
-theorem visited_embed (e : (κ ⊕ Unit) ↪ τ)
-    (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs) (d : Cfg τ Γ Δ xs) (n : ℕ) (j : κ) :
-    ((compilerAlong e M).runHistoryFrom (cfgAlong e c d) n).visited (e (.inl j)) =
-      (M.runHistoryFrom c n).visited j := by
-  apply TM.runHistoryFrom_visited_congr
-  intro m _
-  simp [runFrom_cfgAlong]
-
-/-- The output buffer stays between its starting and ending output lengths. -/
-theorem visited_self_le (e : (κ ⊕ Unit) ↪ τ)
-    (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs) (d : Cfg τ Γ Δ xs) (n : ℕ) :
-    ((compilerAlong e M).runHistoryFrom (cfgAlong e c d) n).visited (e (.inr ())) ≤
-      ⟨(c.output.size, (M.runFrom c n).output.size),
-        Int.ofNat_le.mpr (M.output_size_le_runFrom c n)⟩ := by
-  apply (TM.runHistoryFrom_visited_le_iff _ _ _ _ _).mpr
-  intro m hm
-  simp only [runFrom_cfgAlong, cfgAlong_workPos, Function.Embedding.replace_apply,
-    Sum.elim_inr, NonemptyInterval.mem_mk]
-  exact ⟨by exact_mod_cast M.output_size_le_runFrom c m,
-    by exact_mod_cast M.output_size_runFrom_mono c hm⟩
-
-/-- Heads outside the embedding retain singleton visit intervals. -/
-theorem visited_extra (e : (κ ⊕ Unit) ↪ τ)
-    (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs) (d : Cfg τ Γ Δ xs) (n : ℕ)
-    (j : τ) (hj : j ∉ Set.range e) :
-    ((compilerAlong e M).runHistoryFrom (cfgAlong e c d) n).visited j =
-      NonemptyInterval.pure (d.workPos j) := by
-  apply SetLike.ext
-  intro p
-  simp [Controller.History.mem_visited_iff, Controller.mem_configs_runHistoryFrom,
-    runFrom_cfgAlong, hj, show ∃ m : ℕ, m ≤ n from ⟨0, Nat.zero_le n⟩]
 
 @[simp↓]
 theorem cfg_init (e : (κ ⊕ Unit) ↪ τ) (xs : List Γ) (q : Q) :

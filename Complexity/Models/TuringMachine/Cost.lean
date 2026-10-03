@@ -36,16 +36,6 @@ theorem runHistoryFrom_visited_le_iff (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs)
   simp only [History.visited_apply_le_iff, Controller.mem_configs_runHistoryFrom,
     forall_exists_index, and_imp, forall_apply_eq_imp_iff₂]
 
-/-- Equal head trajectories give equal visited intervals. -/
-theorem runHistoryFrom_visited_congr {κ' Γ' Q' : Type*} [Inhabited Γ'] {ys : Array Γ'}
-    (M : TM Id κ Γ Q) (N : TM Id κ' Γ' Q') (c : Cfg κ Γ Q xs)
-    (d : Cfg κ' Γ' Q' ys) (n : ℕ) (i : κ) (j : κ')
-    (h : ∀ m ≤ n, (M.runFrom c m).workPos i = (N.runFrom d m).workPos j) :
-    (M.runHistoryFrom c n).visited i = (N.runHistoryFrom d n).visited j := by
-  apply eq_of_forall_ge_iff
-  intro v
-  simp +contextual only [runHistoryFrom_visited_le_iff, h]
-
 namespace Cfg
 
 /-- Represent external bits by nonblank symbols on input and output. -/

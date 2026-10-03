@@ -105,12 +105,4 @@ theorem spec_append (c : TM.Cfg κ (Option Bool) Unit xs) (i j : κ)
     rename_i s b hs a t d ht x y e hy
     exact hy
 
-/-- Appending obeys the shared visited-cell bound, independently of execution time. -/
-theorem AppendPost.space_le [Fintype κ] {c : TM.Cfg κ (Option Bool) Unit xs} {i j : κ}
-    {w v : List Bool} {V : κ → NonemptyInterval ℤ} {z b : ℕ}
-    {s : History (TM.Cfg κ (Option Bool) Unit xs) (TM.Action κ (Option Bool) Unit)}
-    (h : AppendPost c i j w v V z s b) :
-    s.space ≤ ∑ l, ((V l).snd + 1 - (V l).fst).toNat :=
-  s.space_le_of_visited_le V h.2.1
-
 end Complexity.TM.Program.Word

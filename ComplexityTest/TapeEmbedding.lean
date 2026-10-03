@@ -90,10 +90,6 @@ def composedEnd := (RedirectOutput.compilerAlong (routed.trans shifted) machine)
 #guard (composedEnd.workTapes 1)[(0 : ℤ)] == some true && composedEnd.workPos 1 == 1
 #guard (composedEnd.workTapes 0)[(5 : ℤ)] == some false && composedEnd.workPos 0 == 5
 
-example (a : Action (Fin 2) Symbol Bool) :
-    (a.liftWorkAlong permuted).liftWorkAlong shifted = a.liftWorkAlong composed :=
-  a.liftWorkAlong_comp permuted shifted
-
 def inputStart := RedirectInput.cfgAlong routed #[true] (caller 5)
   ((machine.initInput (Input := List Symbol) (Config := Cfg (Fin 2) Symbol Bool ([true].map some).toArray) ([true].map some))) false
 

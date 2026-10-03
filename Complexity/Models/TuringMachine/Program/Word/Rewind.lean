@@ -120,37 +120,4 @@ theorem spec_rewind_credit (c : Cfg κ (Option Bool) Unit xs) (j : κ) (bs : Lis
     simp_all only []
     omega
 
-/-- Rewinding from position `h` takes `3 * h + 4` transitions, visiting the left blank. -/
-theorem spec_rewind (c : Cfg κ (Option Bool) Unit xs) (j : κ) (bs : List Bool)
-    (h : ℕ) (V : κ → NonemptyInterval ℤ) (hw : c.workTapes j = tape bs)
-    (hp : c.workPos j = (h : ℤ)) (hlen : h ≤ bs.length)
-    (hleft : (-1 : ℤ) ∈ V j) :
-    Triple ((rewind j).verify (semantics xs))
-      (fun s b ↦ s.last = c ∧ s.visited ≤ V ∧ b = 3 * h + 4)
-      (fun _ s b ↦ s.last = c.setWorkPos j 0 ∧ s.visited ≤ V ∧ b = 0) () := by
-  simpa using spec_rewind_credit c j bs h 0 V hw hp hlen hleft
-
-/-- Rewinding extends the recorded interval only as far as the left blank. -/
-theorem spec_rewind_range
-    (s : History (Cfg κ (Option Bool) Unit xs) (Action κ (Option Bool) Unit)) (j : κ)
-    (bs : List Bool) (h : ℕ) (hw : s.last.workTapes j = tape bs)
-    (hp : s.last.workPos j = (h : ℤ)) (hlen : h ≤ bs.length) :
-    Triple ((rewind j).verify (semantics xs))
-      (fun t b ↦ t = s ∧ b = 3 * h + 4)
-      (fun _ t b ↦ t.last = s.last.setWorkPos j 0 ∧
-        t.visited ≤ Function.update s.visited j (s.visited j ⊔ NonemptyInterval.pure (-1)) ∧
-        b = 0) () := by
-  let V := Function.update s.visited j (s.visited j ⊔ NonemptyInterval.pure (-1))
-  have hleft : (-1 : ℤ) ∈ V j := by
-    simp only [V, Function.update_self]
-    change NonemptyInterval.pure (-1) ≤ s.visited j ⊔ NonemptyInterval.pure (-1)
-    exact le_sup_right
-  have hr := spec_rewind s.last j bs h V hw hp hlen hleft
-  constructor
-  rintro t b ⟨ht, hb⟩
-  subst t b
-  apply hr.le_wp s (3 * h + 4)
-  refine ⟨rfl, ?_, rfl⟩
-  exact le_update_self_iff.mpr le_sup_left
-
 end Complexity.TM.Program.Word

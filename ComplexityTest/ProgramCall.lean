@@ -5,7 +5,7 @@ Authors: Yuyang Zhao
 -/
 module
 
-import Complexity.Models.TuringMachine.Program.Call.Resources
+import Complexity.Models.TuringMachine.Program.Call
 import all Init.Data.List.Scan.Basic
 
 meta import Complexity.Control.Controller.History
@@ -102,20 +102,5 @@ private def historyDemo : History (Cfg (Fin 1) Bool (demo.State ⊕ demo.Exit) #
 #guard historyDemo.space = 8
 #guard historyDemo.last.workPos 0 = 0
 #guard historyDemo.last.output = #[false, true]
-
-theorem demo_visited_le_spec : Triple (demo.verify (Program.semantics #[]))
-    (fun s b ↦ s.last = (rawExecution []).init () ∧
-      s.visited ≤ (fun _ ↦ ⟨(-3, 4), by decide⟩) ∧ b = 4)
-    (fun a s _ ↦ a = true ∧ s.last.output = #[false, true] ∧ s.last.workPos 0 = 0 ∧
-      s.visited ≤ (fun _ ↦ ⟨(-3, 4), by decide⟩)) () := by
-  have hc := Program.spec_call_visited_le machine ((machine.initInput (Input := List Bool) (Config := Cfg (Fin 1) Bool Bool [].toArray) [])) 1 3
-    (fun _ ↦ ⟨(-3, 4), by decide⟩) rfl (by rfl) (by decide)
-  unfold demo
-  vcgen [hc]
-  all_goals simp_all only [machine_run_one]
-  all_goals simp_all [machine, Cfg.mapState,
-    Program.idle, Cfg.workSymbols,
-    Pi.le_def, NonemptyInterval.le_def, Fin.eq_zero]
-  all_goals omega
 
 end ProgramCallTest

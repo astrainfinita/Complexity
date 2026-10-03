@@ -22,16 +22,6 @@ namespace Complexity.Controller.History
 
 variable {κ Γ Q : Type*} [Inhabited Γ] {xs : Array Γ}
 
-/-- Output length cannot decrease along an action history. -/
-theorem output_size_le_last (h : History (TM.Cfg κ Γ Q xs) (TM.Action κ Γ Q)) :
-    h.first.output.size ≤ h.last.output.size := by
-  refine h.actions.foldlRecOn (motive := fun c ↦ h.first.output.size ≤ (TM.Cfg.output c).size)
-    (fun c a ↦ apply a c) le_rfl ?_
-  intro c hc a _
-  apply hc.trans
-  simp only [TM.apply_output]
-  split <;> simp
-
 /-- The interval covered by the work-head positions, including both endpoints. -/
 def visited (h : History (TM.Cfg κ Γ Q xs) (TM.Action κ Γ Q)) :
     κ → NonemptyInterval ℤ :=
@@ -75,26 +65,6 @@ theorem head_mem_of_visited_le (h : History (TM.Cfg κ Γ Q xs) (TM.Action κ Γ
     (h : History (TM.Cfg κ Γ Q xs) (TM.Action κ Γ Q)) (he : h.first = apply a c) :
     (cons c a h he).visited = (fun k ↦ NonemptyInterval.pure (c.workPos k)) ⊔ h.visited :=
   configSup_cons _ _ _ _ _
-
-/-- A visited interval contains exactly the head positions recorded by the history. -/
-theorem mem_visited_iff (h : History (TM.Cfg κ Γ Q xs) (TM.Action κ Γ Q)) (i : κ) (p : ℤ) :
-    p ∈ h.visited i ↔ ∃ c ∈ h.configs, p = c.workPos i := by
-  rcases h with ⟨c, as⟩
-  induction as generalizing c with
-  | nil => simp [visited, configSup, configs, NonemptyInterval.mem_pure]
-  | cons a as ih =>
-    let t : History (TM.Cfg κ Γ Q xs) (TM.Action κ Γ Q) := ⟨apply a c, as⟩
-    have hv : (apply a c).workPos i ∈ t.visited i := t.first_head_mem i
-    have hm := a.workPos_apply_bounds c i
-    change p ∈ (cons c a t rfl).visited i ↔ ∃ d ∈ (cons c a t rfl).configs, p = d.workPos i
-    rw [visited_cons, configs_cons]
-    simp only [List.mem_cons, or_and_right, exists_or, exists_eq_left]
-    rw [← ih (apply a c)]
-    change p ∈ (NonemptyInterval.pure (c.workPos i) ⊔ t.visited i) ↔
-      p = c.workPos i ∨ p ∈ t.visited i
-    simp only [NonemptyInterval.mem_def, NonemptyInterval.fst_sup,
-      NonemptyInterval.snd_sup, NonemptyInterval.pure_fst, NonemptyInterval.pure_snd] at *
-    omega
 
 /-- Joining segments joins their visited intervals, without resetting prior visits. -/
 @[simp] theorem visited_append (p q : History (TM.Cfg κ Γ Q xs) (TM.Action κ Γ Q))
@@ -169,23 +139,6 @@ theorem space_le_length [Fintype κ]
   | cons a as ih =>
     exact (space_cons_le c a ⟨apply a c, as⟩ rfl).trans
       ((Nat.add_le_add_right (ih _) _).trans_eq (Nat.mul_succ _ _).symm)
-
-private theorem interval_size_sup_le {u v : NonemptyInterval ℤ} {p : ℤ}
-    (hu : p ∈ u) (hv : p ∈ v) :
-    ((u ⊔ v).snd + 1 - (u ⊔ v).fst).toNat ≤
-      (u.snd + 1 - u.fst).toNat + (v.snd + 1 - v.fst).toNat := by
-  simp only [NonemptyInterval.mem_def, NonemptyInterval.fst_sup,
-    NonemptyInterval.snd_sup] at *
-  omega
-
-/-- Adjacent segments share a head position, so their combined footprint is subadditive. -/
-theorem space_append_le [Fintype κ]
-    (p q : History (TM.Cfg κ Γ Q xs) (TM.Action κ Γ Q)) (he : p.last = q.first) :
-    (p.append q he).space ≤ p.space + q.space := by
-  simp only [space, visited_append, Pi.sup_apply, ← Finset.sum_add_distrib]
-  apply Finset.sum_le_sum
-  intro k _
-  exact interval_size_sup_le (p.head_mem k) (he.symm ▸ q.first_head_mem k)
 
 /-- Relabel every configuration and action while preserving the recorded tape evolution. -/
 def mapState {Q' : Type*} (f : Q → Q')

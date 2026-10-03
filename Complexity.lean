@@ -63,10 +63,8 @@ public import Complexity.Models.TreeMachine.Embedding
 public import Complexity.Models.TreeMachine.Encoding
 public import Complexity.Models.TreeMachine.Program
 public import Complexity.Models.TreeMachine.Program.Pair
-public import Complexity.Models.TreeMachine.Program.Pair.Configuration
 public import Complexity.Models.TreeMachine.Program.Project
 public import Complexity.Models.TreeMachine.Program.Scan
-public import Complexity.Models.TreeMachine.Program.Scan.Configuration
 public import Complexity.Models.TreeMachine.Simulation
 public import Complexity.Models.TreeMachine.Simulation.BitList
 public import Complexity.Models.TreeMachine.Simulation.BitList.Encoding
@@ -95,7 +93,6 @@ public import Complexity.Models.TuringMachine.Program
 public import Complexity.Models.TuringMachine.Program.Basic
 public import Complexity.Models.TuringMachine.Program.Call
 public import Complexity.Models.TuringMachine.Program.Call.Buffered
-public import Complexity.Models.TuringMachine.Program.Call.Resources
 public import Complexity.Models.TuringMachine.Program.Correctness
 public import Complexity.Models.TuringMachine.Program.Enumeration
 public import Complexity.Models.TuringMachine.Program.Move
@@ -103,7 +100,6 @@ public import Complexity.Models.TuringMachine.Program.Seek
 public import Complexity.Models.TuringMachine.Program.Specification.Basic
 public import Complexity.Models.TuringMachine.Program.Specification.Configuration
 public import Complexity.Models.TuringMachine.Program.Specification.History
-public import Complexity.Models.TuringMachine.Program.Tapes
 public import Complexity.Models.TuringMachine.Program.Word
 public import Complexity.Models.TuringMachine.Program.Word.Append
 public import Complexity.Models.TuringMachine.Program.Word.Basic
@@ -115,7 +111,6 @@ public import Complexity.Models.TuringMachine.Program.Word.Rewind
 public import Complexity.Models.TuringMachine.Program.Word.Write
 public import Complexity.Models.TuringMachine.RedirectInput
 public import Complexity.Models.TuringMachine.RedirectOutput
-public import Complexity.Models.TuringMachine.Simulation
 public import Complexity.Models.TuringMachine.Tapes
 public import Complexity.Resources
 public import Complexity.Resources.Basic

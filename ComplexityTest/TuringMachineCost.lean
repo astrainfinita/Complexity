@@ -5,7 +5,7 @@ Authors: Yuyang Zhao
 -/
 module
 
-import Complexity.Models.TuringMachine.Simulation
+import Complexity.Models.TuringMachine.Deterministic
 import Complexity.Control.Controller.RunHistory
 meta import Complexity.Models.TuringMachine.Deterministic
 meta import Complexity.Models.TuringMachine.Cost

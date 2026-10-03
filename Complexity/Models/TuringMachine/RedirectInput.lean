@@ -5,7 +5,8 @@ Authors: Yuyang Zhao
 -/
 module
 
-public import Complexity.Models.TuringMachine.Simulation
+public import Complexity.Models.TuringMachine.Deterministic
+public import Complexity.Data.Embedding
 public import Complexity.Control.Transition.Simulation
 public import Complexity.Models.TuringMachine.Tapes
 public import Mathlib.Data.Fintype.Sum
@@ -238,29 +239,6 @@ theorem runFrom_cfgAlong (e : (κ ⊕ Unit) ↪ τ)
     (fun c d h ↦ ?_) ⟨l, hl, rfl⟩ n
   rcases h with ⟨l, hl, rfl⟩
   exact step_cfgAlong e M xs s c l hl
-
-/-- Source heads follow the embedding, the input head stays in its bounded buffer,
-and heads outside the embedding retain their caller-supplied positions. -/
-theorem heads_runFrom_cfgAlong (e : (κ ⊕ Unit) ↪ τ)
-    (M : TM Id κ (Option Bool) Q) (xs : Array Bool)
-    {ys : Array (Option Bool)} (s : Cfg τ (Option Bool) Δ ys)
-    (c : Cfg κ (Option Bool) Q (input xs)) (l : Bool) (hl : Boundary c.inputPos l) (n : ℕ) :
-    let d := (compilerAlong e M).runFrom (cfgAlong e xs s c l) n
-    (∀ j : κ, d.workPos (e (.inl j)) = (M.runFrom c n).workPos j) ∧
-      (-1 ≤ d.workPos (e (.inr ())) ∧ d.workPos (e (.inr ())) ≤ xs.size) ∧
-      (∀ j, j ∉ Set.range e → d.workPos j = s.workPos j) := by
-  obtain ⟨l', _, hr⟩ := runFrom_cfgAlong e M xs s c l hl n
-  dsimp only
-  rw [hr]
-  refine ⟨?_, ?_, ?_⟩
-  · intro j
-    simp
-  · have hp : (M.runFrom c n).inputPos.val < xs.size + 2 := by
-      simpa only [size_input] using (M.runFrom c n).inputPos.isLt
-    simp only [cfgAlong_workPos, Function.Embedding.replace_apply, Sum.elim_inr, position]
-    omega
-  · intro j hj
-    simp [hj]
 
 /-- The caller may begin with the input buffer at head zero and the source's initial state. -/
 theorem runFrom_init (e : (κ ⊕ Unit) ↪ τ)

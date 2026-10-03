@@ -21,18 +21,6 @@ namespace Complexity.TM
 
 variable {κ : Type*} {Γ Q : Type*} [Inhabited Γ] {xs : Array Γ}
 
-/-- Execution only appends to the output. -/
-theorem output_size_le_runFrom (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs) (n : ℕ) :
-    c.output.size ≤ (M.runFrom c n).output.size := by
-  simpa using (M.runHistoryFrom c n).output_size_le_last
-
-/-- The output length is monotone along a bounded run. -/
-theorem output_size_runFrom_mono (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs)
-    {s t : ℕ} (h : s ≤ t) : (M.runFrom c s).output.size ≤ (M.runFrom c t).output.size := by
-  obtain ⟨u, rfl⟩ := Nat.exists_eq_add_of_le h
-  rw [Controller.runFrom_add]
-  exact M.output_size_le_runFrom (M.runFrom c s) u
-
 /-- The computation eventually reaches a halting state. -/
 def Terminates (M : TM Id κ Γ Q) (xs : List Γ) : Prop :=
   ∃ t, M.Halted (M.run (Cfg κ Γ Q xs.toArray) xs t)
