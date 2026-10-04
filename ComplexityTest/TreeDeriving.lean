@@ -64,9 +64,9 @@ example {α : Type*} [UniqueEncoding Tree α] (a : Term α) (t : Tree) :
 -- A source program is an ordinary definition; its specification is an ordinary Lean function.
 def swapRoot (x : Value) : Code Value :=
   Term.Code.matchOn x
-    (fun a => pure (Term.Code.atom a))
-    (fun left right => pure (Term.Code.fork right left))
-    (pure Term.Code.empty)
+    Term.Code.atom
+    (fun left right => Term.Code.fork right left)
+    Term.Code.empty
 
 def Term.swapRoot {α : Type*} : Term α → Term α
   | .atom a => .atom a
@@ -100,7 +100,7 @@ example {α : Type*} [UniqueEncoding Tree α] (x : Option α) :
 
 -- List keeps its existing compact format, including for non-Boolean element types.
 def head? (xs : Value) : Code Value :=
-  List.Code.matchOn xs (pure Option.Code.none) (fun a _ => pure (Option.Code.some a))
+  List.Code.matchOn xs Option.Code.none (fun a _ => Option.Code.some a)
 
 example {α : Type*} [UniqueEncoding Tree α] (as : List α) :
     (head? .input).Computes (encode Tree as) (encode Tree as.head?) := by
@@ -114,7 +114,7 @@ example {α : Type*} [UniqueEncoding Tree α] (a : α) :
 example (x : Value) (n : ℕ) : (Box.Code.matchOn x pure).build n = (x, n, []) := rfl
 
 def extendRecord (x : Value) : Code Value :=
-  Record.Code.matchOn x fun a b as => pure (Record.Code.mk a b (List.Code.cons a as))
+  Record.Code.matchOn x fun a b as => do Record.Code.mk a b (← List.Code.cons a as)
 
 example {α : Type*} [UniqueEncoding Tree α] (r : Record α) :
     (extendRecord .input).Computes (encode Tree r)
@@ -123,7 +123,7 @@ example {α : Type*} [UniqueEncoding Tree α] (r : Record α) :
   simp [computes_iff, extendRecord]
 
 example (b : Bool) :
-    (Bool.Code.matchOn .input (pure Bool.Code.true) (pure Bool.Code.false)).Computes
+    (Bool.Code.matchOn .input Bool.Code.true Bool.Code.false).Computes
       (encode Tree b) (encode Tree (!b)) := by
   cases b <;> simp [computes_iff]
 

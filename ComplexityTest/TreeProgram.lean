@@ -7,7 +7,9 @@ module
 
 import Complexity.Models.TreeMachine.Language.Compiler
 import Complexity.Models.TreeMachine.Language.Verification
+import Complexity.Models.TreeMachine.Deterministic
 meta import Complexity.Models.TreeMachine.Language.Compiler
+meta import Complexity.Models.TreeMachine.Cost
 
 open Complexity TreeProgram TreeProgram.Code
 
@@ -17,7 +19,9 @@ namespace Complexity.TreeProgramTest
 def nestedAssignment (xs : Value) : Code Value := do
   let value ← newVar xs
   let old ← read value
-  write value (.pair old.left (.pair old.right old))
+  let left ← old.left
+  let right ← old.right
+  write value (← left.pair (← right.pair old))
   read value
 
 def snapshot (xs : Value) : Code Value := do
@@ -32,7 +36,7 @@ def branchLocals (xs : Value) : Code Value := do
   ifNode xs
     (do let temp ← newVar xs; write result (← read temp))
     (do
-      let temp ← newVar (.pair .nil .nil)
+      let temp ← newVar (← Value.pair .nil .nil)
       let copy ← newVar (← read temp)
       write result (← read copy))
   read result
@@ -48,21 +52,26 @@ def loopSnapshot (xs : Value) : Code Value := do
 
 def choose (xs : Value) : Code Value := do
   let result ← newVar .nil
-  ifNode xs (write result xs.left) (write result (.pair .nil .nil))
+  ifNode xs (do write result (← xs.left)) (do write result (← Value.pair .nil .nil))
   read result
 
 -- Definitions compose through bind, with the same value semantics as other Lean monads.
-def swapChildren (xs : Value) : Code Value := pure (.pair xs.right xs.left)
+def swapChildren (xs : Value) : Code Value := do Value.pair (← xs.right) (← xs.left)
 
 def swapTwice (xs : Value) : Code Value := do
   let swapped ← swapChildren xs
   swapChildren swapped
 
+-- Each call binds its result once, even when the next call uses it twice.
+def swapMany : ℕ → Value → Code Value
+  | 0, x => pure x
+  | n + 1, x => do swapMany n (← swapChildren x)
+
 def reverseBody (rest acc : Var) : Code Unit := do
   let r ← read rest
   let a ← read acc
-  write acc (.pair r.left a)
-  write rest r.right
+  write acc (← Value.pair (← r.left) a)
+  write rest (← r.right)
 
 def reverse (xs : Value) : Code Value := do
   let rest ← newVar xs
@@ -78,18 +87,18 @@ def followRight (xs : Value) : Code Value := do
   let rest ← newVar xs
   whileNode rest do
     let r ← read rest
-    write rest r.right
+    write rest (← r.right)
   read rest
 
 def nestedLoops (xs : Value) : Code Value := do
   let outer ← newVar xs
   whileNode outer do
     let value ← read outer
-    let inner ← newVar value.left
+    let inner ← newVar (← value.left)
     whileNode inner do
       let value ← read inner
-      write inner value.right
-    write outer value.right
+      write inner (← value.right)
+    write outer (← value.right)
   read outer
 
 -- Proofs use source execution rules, independently of allocation to machine registers.
@@ -139,7 +148,7 @@ private theorem reverseBody_total (rest acc : Var) (n : ℕ)
     simp only [he, Tree.size_pair] at hn
     simp only [Var.get] at *
     simp_all [ha.ne, ha.ne.symm, hne'.symm, reverseAux]
-    omega
+    simpa (disch := omega) [hI] using (show Tree.size tail < k by omega)
 
 private theorem reverseLoop_total (rest acc : Var) (n : ℕ)
     (ha : acc.index < n) (hne : rest ≠ acc) (y : Tree) :
@@ -175,12 +184,41 @@ private def finished (p : Code Value) (x y : Tree) (n : ℕ) : Bool :=
 #guard finished (snapshot .input) leafPair leafPair 30
 #guard finished (choose .input) .nil leafPair 30
 #guard finished (choose .input) leafPair .nil 30
-#guard finished (swapTwice .input) leafPair leafPair 21
-#guard !(finished (swapTwice .input) leafPair leafPair 20)
+#guard finished (swapTwice .input) leafPair leafPair 10
+#guard !(finished (swapTwice .input) leafPair leafPair 9)
 #guard finished (reverse .input) .nil .nil 30
 #guard finished (do
   let v ← newVar .input
   whileNode v (write v .nil)
   read v) leafPair .nil 30
+
+#guard finished (swapMany 6 .input) leafPair leafPair 22
+#guard !(finished (swapMany 6 .input) leafPair leafPair 21)
+
+-- A root test neither copies the input nor creates an intermediate pair.
+private def rootInput : TreeMachine.Program 3 Bool :=
+  (Expr.var ()).test (fun _ ↦ (0 : Fin 3)) 1 2 (by decide)
+
+#guard (rootInput.compile.runHistory (TreeMachine.Cfg 3 _) leafPair 1).length == 1
+#guard (rootInput.compile.runHistory (TreeMachine.Cfg 3 _) leafPair 1).actionSum
+  TreeMachine.Action.sizeCost == 1
+#guard (rootInput.compile.runHistory (TreeMachine.Cfg 3 _) leafPair 1).configSup
+  TreeMachine.Cfg.mass == leafPair.size + 2
+
+-- Direct assignment preserves sources until the final write, including aliases.
+private def assign (e : Expr Unit) (hb : 2 + e.slots ≤ 4) : TreeMachine.Program 4 Unit :=
+  e.assign 0 (fun _ ↦ 0) 1 2 hb
+
+private def checkAssign (e : Expr Unit) (hb : 2 + e.slots ≤ 4) (x y : Tree) (n : ℕ) : Bool :=
+  let M := (assign e hb).compile
+  let h := M.runHistory (TreeMachine.Cfg 4 _) x n
+  M.halt h.last.state && h.last.regs 0 == y && h.length == n
+
+#guard checkAssign .nil (by decide) leafPair .nil 1
+#guard checkAssign (.var ()) (by decide) leafPair leafPair 2
+#guard checkAssign (.left (.var ())) (by decide) leafPair .nil 1
+#guard checkAssign (.pair (.var ()) (.var ())) (by decide) leafPair (.pair leafPair leafPair) 1
+#guard checkAssign (.pair (.left (.var ())) (.right (.var ()))) (by decide)
+  (.pair leafPair .nil) (.pair leafPair .nil) 3
 
 end Complexity.TreeProgramTest
