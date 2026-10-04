@@ -23,7 +23,7 @@ example {k : ℕ} {Q : Type*} (M : TreeMachine Id k Q) (c : TreeMachine.Cfg k Q)
 -- Each model's complete interface recovers its existing resource relation.
 example {k : ℕ} [NeZero k] {Q : Type*} (M : TreeMachine Id k Q)
     (a b : Tree) (t s : ℕ) :
-    M.computes (Config := TreeMachine.Cfg k Q)
+    M.ComputesWith (Config := TreeMachine.Cfg k Q)
       (fun h ↦ h.actionSum TreeMachine.Action.sizeCost)
       (fun h ↦ h.configSup TreeMachine.Cfg.mass) a b t s ↔
       M.ComputesInTimeAndSpace a b t s :=
@@ -31,7 +31,7 @@ example {k : ℕ} [NeZero k] {Q : Type*} (M : TreeMachine Id k Q)
 
 example {κ Γ Q : Type*} [Inhabited Γ] [Fintype κ]
     (M : TM Id κ Γ Q) (xs ys : List Γ) (t s : ℕ) :
-    M.computes (Config := TM.Cfg κ Γ Q xs.toArray)
+    M.ComputesWith (Config := TM.Cfg κ Γ Q xs.toArray)
       Controller.History.length Controller.History.space xs ys t s ↔
       M.ComputesInTimeAndSpace xs ys t s :=
   Iff.rfl
@@ -43,7 +43,7 @@ example {κ Γ Q : Type*} [Inhabited Γ] [Fintype κ]
       M.Halted (M.run (TM.Cfg κ Γ Q xs.toArray) xs t) ∧
       (M.run (TM.Cfg κ Γ Q xs.toArray) xs t).output = ys.toArray ∧
       (M.runHistory (TM.Cfg κ Γ Q xs.toArray) xs t).space ≤ s := by
-  refine Controller.computes_unit_iff.trans ?_
+  refine Controller.computesWith_unit_iff.trans ?_
   simp only [TM.rawExecution_hasOutput]
 
 -- Zero action fees require an execution length separate from the time budget.
@@ -65,30 +65,30 @@ private instance : Controller.Execution (Bool × ℕ) Bool
     (Output := ℕ) (input := ()) where
   init q := (q, 0)
   state_init _ := rfl
-  hasOutput cfg n := cfg.2 = n
+  HasOutput cfg n := cfg.2 = n
 
-example : oneAction.computes (Config := Bool × ℕ)
+example : oneAction.ComputesWith (Config := Bool × ℕ)
     (fun _ ↦ 0) (fun h ↦ h.configSup Prod.snd) () 1 0 1 := by
   refine ⟨1, rfl, rfl, ?_, ?_⟩ <;> decide
 
 -- Unit costs permit halted padding, but cannot hide the first active step in a zero budget.
-example : oneAction.computes (Config := Bool × ℕ)
+example : oneAction.ComputesWith (Config := Bool × ℕ)
     Controller.History.length (fun h ↦ h.configSup Prod.snd) () 1 5 1 :=
-  Controller.computes_unit_iff.mpr ⟨rfl, rfl, by decide⟩
+  Controller.computesWith_unit_iff.mpr ⟨rfl, rfl, by decide⟩
 
-example : ¬oneAction.computes (Config := Bool × ℕ)
+example : ¬oneAction.ComputesWith (Config := Bool × ℕ)
     Controller.History.length (fun h ↦ h.configSup Prod.snd) () 1 0 1 := by
   intro h
-  have hh := (Controller.computes_unit_iff.mp h).1
+  have hh := (Controller.computesWith_unit_iff.mp h).1
   contradiction
 
 -- The unit-time equivalence also handles history measurements that decrease.
-example : oneAction.computes (Config := Bool × ℕ)
+example : oneAction.ComputesWith (Config := Bool × ℕ)
     Controller.History.length (fun h ↦ if h.length = 0 then 1 else 0) () 1 5 0 :=
-  Controller.computes_unit_iff.mpr ⟨rfl, rfl, by decide⟩
+  Controller.computesWith_unit_iff.mpr ⟨rfl, rfl, by decide⟩
 
 -- The standard output type is inferred from the execution instance.
-example : Controller.Execution.hasOutput (Config := Bool × ℕ)
+example : Controller.Execution.HasOutput (Config := Bool × ℕ)
     (input := ()) (false, 1) 1 := rfl
 
 -- Configuration capabilities support independent universes and can be supplied separately.

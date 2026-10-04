@@ -20,10 +20,9 @@ private def bit : TM Id (Fin 0) (Option Bool) Bool where
     { inputMove := 0, work := Fin.elim0, output := some a, state := true }
 
 private theorem bit_spec : TM.Computes bit (id : Bool → Bool) (fun _ => 1) (fun _ => 0) := by
-  apply TM.computes_iff.mpr
-  apply Computes.iff_of_uniqueEncoding.mpr
+  apply Encoding.Computes.iff_of_uniqueEncoding.mpr
   intro b
-  apply Controller.computes_unit_iff.mpr
+  apply Controller.computesWith_unit_iff.mpr
   refine ⟨rfl, ?_, ?_⟩
   · change #[((encode (List Bool) b).map some).toArray[0]?.getD none] = _
     simp
@@ -56,7 +55,7 @@ private def tree : TreeMachine Id 1 Unit where
 
 private theorem tree_spec :
     TreeMachine.Computes tree (id : Bool → Bool) (fun _ => 0) id := by
-  apply Computes.iff_of_uniqueEncoding.mpr
+  apply Encoding.Computes.iff_of_uniqueEncoding.mpr
   intro b
   refine ⟨0, rfl, ?_, le_rfl, ?_⟩
   · exact TreeMachine.input_get (0 : Fin 1) _
@@ -78,7 +77,7 @@ example : (fun b : Bool => b = true) ∈ DTISP .sizeCostTree (fun _ => 0) id :=
 -- Tree input storage counts toward space even when no transition is executed.
 example : ¬TreeMachine.Computes tree (id : Bool → Bool) (fun _ => 0) (fun _ => 0) := by
   intro h
-  have hh := (Computes.iff_of_uniqueEncoding.mp h) false
+  have hh := (Encoding.Computes.iff_of_uniqueEncoding.mp h) false
   have hm := hh.mass_le 0
   change (TreeMachine.Cfg.mk () (TreeMachine.input (0 : Fin 1) Tree.nil)).mass ≤ 0 at hm
   simp [ TreeMachine.Cfg.mass] at hm

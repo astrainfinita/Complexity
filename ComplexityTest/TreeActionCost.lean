@@ -19,18 +19,18 @@ def pairOnce : TreeMachine Id 1 Bool where
   transition _ _ := pure <| Action.assign true (.pair 0 0 0)
 
 -- The same program and data incur three size units, or one unit of step time.
-example : Controller.computes (Config := Cfg 1 Bool) pairOnce
+example : Controller.ComputesWith (Config := Cfg 1 Bool) pairOnce
     (fun h ↦ h.actionSum Action.sizeCost) (fun h ↦ h.configSup Cfg.mass)
     Tree.nil (Tree.pair Tree.nil Tree.nil) 3 3 := by
   refine ⟨1, rfl, rfl, ?_, ?_⟩ <;> decide
 
-example : Controller.computes (Config := Cfg 1 Bool) pairOnce
+example : Controller.ComputesWith (Config := Cfg 1 Bool) pairOnce
     Controller.History.length (fun h ↦ h.configSup Cfg.mass)
     Tree.nil (Tree.pair Tree.nil Tree.nil) 1 3 := by
   refine ⟨1, rfl, rfl, ?_, ?_⟩ <;> decide
 
 -- This difference affects bounded computations, not just reported diagnostic totals.
-example : ¬Controller.computes (Config := Cfg 1 Bool) pairOnce
+example : ¬Controller.ComputesWith (Config := Cfg 1 Bool) pairOnce
     (fun h ↦ h.actionSum Action.sizeCost) (fun h ↦ h.configSup Cfg.mass)
     Tree.nil (Tree.pair Tree.nil Tree.nil) 1 3 := by
   intro h
@@ -39,11 +39,11 @@ example : ¬Controller.computes (Config := Cfg 1 Bool) pairOnce
   norm_num [pairOnce, initInput_tree,  Cfg.mass, input, Tree.size] at this
 
 -- The execution also uses the selected state-space measure.
-example : Controller.computes (Config := Cfg 1 Bool) pairOnce
+example : Controller.ComputesWith (Config := Cfg 1 Bool) pairOnce
     Controller.History.length (fun _ ↦ 0) Tree.nil (Tree.pair Tree.nil Tree.nil) 1 0 := by
   refine ⟨1, rfl, rfl, ?_, ?_⟩ <;> decide
 
-example : ¬Controller.computes (Config := Cfg 1 Bool) pairOnce
+example : ¬Controller.ComputesWith (Config := Cfg 1 Bool) pairOnce
     (fun h ↦ h.actionSum Action.sizeCost) (fun h ↦ h.configSup Cfg.mass)
     Tree.nil (Tree.pair Tree.nil Tree.nil) 3 2 := by
   intro h

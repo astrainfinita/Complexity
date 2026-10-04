@@ -16,7 +16,7 @@ local instance : Encoding (Bool × ℕ) Bool where
   exists_code b := ⟨(b, 0), Part.mem_some b⟩
 
 -- The output can choose another code; the budget uses the actual input code.
-example : Computes
+example : Encoding.Computes
     (fun (r q : Bool × ℕ) t s => q = (r.1, r.2 + 1) ∧ t = r.2 ∧ s = 0)
     Prod.snd (id : Bool → Bool) id (fun _ => 0) := by
   intro r a ha
@@ -25,7 +25,7 @@ example : Computes
   exact ⟨(r.1, r.2 + 1), Part.mem_some r.1, rfl, rfl, rfl⟩
 
 -- Handling just one selected code for each value is insufficient.
-example : ¬ Computes
+example : ¬ Encoding.Computes
     (fun (r _ : Bool × ℕ) _ _ => r.2 = 0)
     Prod.snd (id : Bool → Bool) id id := by
   intro h
@@ -41,7 +41,7 @@ local instance : Encoding (Bool × ℕ) {b // p b} where
   exists_code b := ⟨(b.val, 0), b.property, rfl⟩
 
 -- The relation has no runs on invalid inputs. No decision procedure for p is needed.
-example : Computes
+example : Encoding.Computes
     (fun (r q : Bool × ℕ) t s => p r.1 ∧ q.1 = r.1 ∧ t = r.2 ∧ s = 0)
     Prod.snd (Subtype.val : {b // p b} → Bool) id (fun _ => 0) := by
   intro r a ha
