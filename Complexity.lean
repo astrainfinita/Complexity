@@ -43,10 +43,13 @@ public import Complexity.Data.NatMemory
 public import Complexity.Data.Tree.Basic
 public import Complexity.Data.Tree.BitList
 public import Complexity.Data.Tree.Encoding
+public import Complexity.Data.Tree.List
 public import Complexity.Encoding.Basic
 public import Complexity.Encoding.BitList
 public import Complexity.Encoding.Bool
 public import Complexity.Encoding.Composition
+public import Complexity.Encoding.List
+public import Complexity.Encoding.Option
 public import Complexity.Encoding.Polynomial.Basic
 public import Complexity.Encoding.Polynomial.Bool
 public import Complexity.Encoding.Tree

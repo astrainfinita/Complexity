@@ -6,6 +6,7 @@ Authors: Yuyang Zhao
 module
 
 public import Complexity.Data.Tree.Encoding
+public import Complexity.Data.Tree.List
 
 /-! # Lists of bits represented by trees -/
 
@@ -19,9 +20,7 @@ def encodeBool : Bool → Tree
   | true => pair nil nil
 
 /-- A list is a right-associated chain of pairs, terminated by a leaf. -/
-def encodeBitList : List Bool → Tree
-  | [] => nil
-  | b :: bs => pair (encodeBool b) (encodeBitList bs)
+def encodeBitList : List Bool → Tree := encodeList encodeBool
 
 @[simp] theorem encodeBool_false : encodeBool false = nil := rfl
 @[simp] theorem encodeBool_true : encodeBool true = pair nil nil := rfl

@@ -5,7 +5,8 @@ Authors: Yuyang Zhao
 -/
 module
 
-public import Complexity.Encoding.BitList
+public import Complexity.Encoding.Bool
+public import Complexity.Encoding.List
 public import Complexity.Data.Tree.BitList
 
 /-! # Tree and bit string encodings
@@ -41,52 +42,13 @@ theorem decodeTree_eq_some_iff {xs : List Bool} {a : Tree} :
 
 end BitList
 
-namespace Tree
-
-/-- Read a leaf or a pair of leaves as a Boolean; reject other trees. -/
-def decodeBool : Tree → Option Bool
-  | nil => some false
-  | pair nil nil => some true
-  | _ => none
-
-theorem decodeBool_eq_some_iff {a : Tree} {b : Bool} :
-    decodeBool a = some b ↔ encodeBool b = a := by
-  cases b <;> cases a with
-  | nil => simp [decodeBool]
-  | node v a c =>
-      cases v
-      cases a <;> cases c <;> simp [decodeBool]
-
-/-- Read a list tree as a bit string; reject trees outside the image of `encodeBitList`. -/
-def decodeBitList : Tree → Option (List Bool)
-  | nil => some []
-  | pair a b => do
-      let x ← decodeBool a
-      let xs ← decodeBitList b
-      pure (x :: xs)
-
-theorem decodeBitList_eq_some_iff {a : Tree} {xs : List Bool} :
-    decodeBitList a = some xs ↔ encodeBitList xs = a := by
-  induction a generalizing xs with
-  | nil => cases xs <;> simp [decodeBitList]
-  | node v a b ha hb =>
-      cases v
-      cases xs <;> simp [decodeBitList, Option.bind_eq_some_iff, decodeBool_eq_some_iff, hb]
-
-@[simp] theorem decodeBitList_encodeBitList (xs : List Bool) :
-    decodeBitList (encodeBitList xs) = some xs :=
-  decodeBitList_eq_some_iff.mpr rfl
-
-end Tree
-
 /-- The existing prefix code, with exactly one complete tree per string. -/
 instance : UniqueEncoding (List Bool) Tree :=
   UniqueEncoding.ofOption BitList.encodeTree BitList.decodeTree fun _ _ ↦
     BitList.decodeTree_eq_some_iff
 
 /-- The existing right-associated list tree encoding of bit strings. -/
-instance bitListEncoding : UniqueEncoding Tree (List Bool) :=
-  UniqueEncoding.ofOption Tree.encodeBitList Tree.decodeBitList fun _ _ ↦
-    Tree.decodeBitList_eq_some_iff
+@[instance_reducible]
+def bitListEncoding : UniqueEncoding Tree (List Bool) := inferInstance
 
 end Complexity

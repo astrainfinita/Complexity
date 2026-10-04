@@ -5,7 +5,8 @@ Authors: Yuyang Zhao
 -/
 module
 
-public import Complexity.Encoding.Tree
+public import Complexity.Encoding.BitList
+public import Complexity.Data.Tree.BitList
 
 /-! # Boolean encodings
 
@@ -37,6 +38,24 @@ theorem decodeBool_eq_some_iff {xs : List Bool} {b : Bool} :
   decodeBool_eq_some_iff.mpr rfl
 
 end BitList
+
+namespace Tree
+
+/-- Read a leaf or a pair of leaves as a Boolean; reject other trees. -/
+def decodeBool : Tree → Option Bool
+  | nil => some false
+  | pair nil nil => some true
+  | _ => none
+
+theorem decodeBool_eq_some_iff {a : Tree} {b : Bool} :
+    decodeBool a = some b ↔ encodeBool b = a := by
+  cases b <;> cases a with
+  | nil => simp [decodeBool]
+  | node v a c =>
+      cases v
+      cases a <;> cases c <;> simp [decodeBool]
+
+end Tree
 
 /-- A Boolean occupies exactly one bit. -/
 instance : UniqueEncoding (List Bool) Bool :=
