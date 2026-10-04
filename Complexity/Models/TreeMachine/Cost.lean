@@ -63,6 +63,26 @@ theorem Op.sizeCost_rename {l : ℕ} (f : Fin k → Fin l) (ρ : Fin l → Tree)
 /-- The charge for the instruction selected at this configuration. -/
 def Action.sizeCost (a : Action k Q) (c : Cfg k Q) : ℕ := a.op.sizeCost c.regs
 
+/-- The destination is part of the next register bank; `nop` costs one leaf. -/
+theorem Action.sizeCost_le_mass_apply [NeZero k] (a : Action k Q) (c : Cfg k Q) :
+    a.sizeCost c ≤ (apply a c).mass := by
+  unfold sizeCost Op.sizeCost
+  cases hd : a.op.dst with
+  | none =>
+    exact (Tree.size_pos ((apply a c).regs 0)).trans_le ((apply a c).reg_size_le_mass 0)
+  | some i => exact (apply a c).reg_size_le_mass i
+
+theorem length_le_actionSum (h : Controller.History (Cfg k Q) (Action k Q)) :
+    h.length ≤ h.actionSum Action.sizeCost := by
+  rw [← h.actionSum_unit]
+  exact h.actionSum_mono fun a c _ ↦ Nat.succ_le_of_lt (Op.sizeCost_pos a.op c.regs)
+
+/-- Destination-size time is bounded by unit time times peak expanded-tree space. -/
+theorem actionSum_le_length_mul_mass [NeZero k]
+    (h : Controller.History (Cfg k Q) (Action k Q)) :
+    h.actionSum Action.sizeCost ≤ h.length * h.configSup Cfg.mass :=
+  h.actionSum_le_length_mul_configSup _ _ fun a c _ ↦ a.sizeCost_le_mass_apply c
+
 private theorem sum_size_update_le (ρ : Fin k → Tree) (i : Fin k) (a : Tree) :
     (∑ j, (Function.update ρ i a j).size) ≤ (∑ j, (ρ j).size) + a.size := by
   calc

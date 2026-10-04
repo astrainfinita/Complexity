@@ -13,9 +13,9 @@ public import Complexity.Models.TreeMachine.Deterministic
 # Function complexity for tree machines
 
 The input and output use register zero; every other register starts empty.
-Input size is the size of the actual tree representation, including leaves. Time
-uses the machine's cumulative destination-size charge, and space uses its maximum total
-expanded register size. A single finite machine must handle every valid input.
+Input size counts tree nodes, including leaves. Time counts either active transitions
+or cumulative destination sizes; both models use peak expanded register size for space.
+A single finite machine must handle every valid input.
 -/
 
 @[expose] public section
@@ -50,6 +50,15 @@ def _root_.Complexity.TimeSpaceModel.sizeCostTree : TimeSpaceModel Id Tree where
     rintro R ⟨k, hk, Q, hQ, M, rfl⟩ x y t s t' s' h ht hs
     exact h.mono ht hs
 
+/-- Finite tree machines with unit transition time and peak expanded-tree space. -/
+def _root_.Complexity.TimeSpaceModel.tree : TimeSpaceModel Id Tree where
+  inputSize := Tree.size
+  behaviors := {R | ∃ (k : ℕ) (_ : NeZero k) (Q : Type) (_ : Finite Q)
+      (M : TreeMachine Id k Q), R = fun a result => M.ComputesInUnitTimeAndSpace a result.run}
+  budget_mono := by
+    rintro R ⟨k, hk, Q, hQ, M, rfl⟩ x y t s t' s' h ht hs
+    exact h.mono ht hs
+
 /-- Recover the single finite machine realizing the abstract resource behavior. -/
 theorem computableInTimeAndSpace_iff {f : α → β} {t s : ℕ → ℕ} :
     TimeSpaceModel.sizeCostTree.ComputableInTimeAndSpace f t s ↔
@@ -72,5 +81,26 @@ theorem Computes.computableInTimeAndSpace {Q : Type} [Finite Q]
     {M : TreeMachine Id k Q} (h : Computes M f t s) :
     TimeSpaceModel.sizeCostTree.ComputableInTimeAndSpace f t s :=
   computableInTimeAndSpace_iff.mpr ⟨k, inferInstance, Q, inferInstance, M, h⟩
+
+/-- The same machine's unit charges are bounded by its destination-size charges. -/
+theorem computableInTimeAndSpace_toUnitTime
+    (h : TimeSpaceModel.sizeCostTree.ComputableInTimeAndSpace f t s) :
+    TimeSpaceModel.tree.ComputableInTimeAndSpace f t s := by
+  obtain ⟨k, hk, Q, hQ, M, h⟩ := computableInTimeAndSpace_iff.mp h
+  refine ⟨_, ⟨k, hk, Q, hQ, M, rfl⟩, ?_⟩
+  intro r a ha
+  obtain ⟨q, hq, hc⟩ := h r a ha
+  exact ⟨q, hq, hc.toUnitTime⟩
+
+/-- Size charging preserves space and multiplies time by the intermediate space bound.
+A bound on the final output alone is insufficient for this same-machine conversion. -/
+theorem computableInTimeAndSpace_toSizeCost
+    (h : TimeSpaceModel.tree.ComputableInTimeAndSpace f t s) :
+    TimeSpaceModel.sizeCostTree.ComputableInTimeAndSpace f (fun n ↦ t n * s n) s := by
+  obtain ⟨R, ⟨k, hk, Q, hQ, M, rfl⟩, h⟩ := h
+  apply Computes.computableInTimeAndSpace (M := M)
+  intro r a ha
+  obtain ⟨q, hq, hc⟩ := h r a ha
+  exact ⟨q, hq, hc.toSizeCost⟩
 
 end Complexity.TreeMachine

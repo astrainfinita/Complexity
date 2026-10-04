@@ -94,6 +94,18 @@ theorem first_mem_configs (p : History Config Action) : p.first ∈ p.configs :=
 theorem last_mem_configs (p : History Config Action) : p.last ∈ p.configs := by
   simpa only [configs, last, List.getLast_scanl] using List.getLast_mem p.configs_ne_nil
 
+/-- A recorded action's successor is also a configuration of the history. -/
+theorem apply_mem_configs (h : History Config Action) {a : Action} {c : Config}
+    (hc : (a, c) ∈ h.actions.zip h.configs) : apply a c ∈ h.configs := by
+  obtain ⟨i, hi, he⟩ := List.mem_iff_getElem.mp hc
+  simp only [List.length_zip, lt_min_iff] at hi
+  rw [List.getElem_zip] at he
+  cases he
+  have hs : i + 1 < h.configs.length := by simpa [length] using hi.1
+  have he : h.configs[i + 1] = apply h.actions[i] h.configs[i] := List.getElem_succ_scanl hs
+  rw [← he]
+  exact List.getElem_mem _
+
 @[simp] theorem last_nil (c : Config) : (nil (Action := Action) c).last = c := rfl
 
 @[simp] theorem configs_nil (c : Config) :

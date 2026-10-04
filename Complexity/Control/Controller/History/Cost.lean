@@ -63,6 +63,17 @@ theorem actionSum_mono (h : History Config Action) {cost cost' : Action → Conf
     h.actionSum cost ≤ h.actionSum cost' :=
   List.sum_le_sum fun ⟨a, c⟩ hm ↦ hc a c hm
 
+/-- Charges bounded by successor sizes sum to at most length times peak size. -/
+theorem actionSum_le_length_mul_configSup (h : History Config Action)
+    (cost : Action → Config → ℕ) (size : Config → ℕ)
+    (hc : ∀ a c, (a, c) ∈ h.actions.zip h.configs → cost a c ≤ size (apply a c)) :
+    h.actionSum cost ≤ h.length * h.configSup size := by
+  calc
+    _ ≤ h.actionSum (fun _ _ ↦ h.configSup size) :=
+      h.actionSum_mono fun a c ha ↦
+        (hc a c ha).trans (h.config_le_configSup size (h.apply_mem_configs ha))
+    _ = _ := h.actionSum_const _
+
 @[simp] theorem actionSum_cons (c : Config) (a : Action) (h : History Config Action)
     (he : h.first = apply a c) (cost : Action → Config → ℕ) :
     (cons c a h he).actionSum cost = cost a c + h.actionSum cost := by

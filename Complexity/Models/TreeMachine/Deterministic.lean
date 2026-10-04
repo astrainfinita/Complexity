@@ -14,6 +14,7 @@ History length counts active transitions; action sums charge the size written to
 The generic controller space measure records the largest total expanded tree size seen so far.
 All three ignore halted padding.
 The cumulative cost bounds time and, together with initial mass, every intermediate mass.
+It is bounded above by the unit time multiplied by the peak register mass.
 A running `nop` costs one and preserves the register bank.
 -/
 
@@ -28,12 +29,6 @@ theorem mass_input_le [NeZero k] (M : TreeMachine Id k Q) (a : Tree) :
   change (∑ j, (input 0 a j).size) ≤ _
   rw [sum_size_input]
   omega
-
-theorem length_runHistoryFrom_le_actionSum (M : TreeMachine Id k Q) (c : Cfg k Q) (t : ℕ) :
-    (M.runHistoryFrom c t).length ≤ (M.runHistoryFrom c t).actionSum Action.sizeCost := by
-  rw [← (M.runHistoryFrom c t).actionSum_unit]
-  exact (M.runHistoryFrom c t).actionSum_mono
-    fun a c _ ↦ Nat.succ_le_of_lt (Op.sizeCost_pos a.op c.regs)
 
 theorem configSup_mass_le (M : TreeMachine Id k Q) (c : Cfg k Q) (t : ℕ) :
     (M.runHistoryFrom c t).configSup Cfg.mass ≤
@@ -85,7 +80,7 @@ theorem HaltsAt.le_actionSum {M : TreeMachine Id k Q} {a : Tree} {t : ℕ}
     (h : M.HaltsAt a t) :
     t ≤ (M.runHistory (Cfg k Q) a t).actionSum Action.sizeCost := by
   exact (M.length_runHistoryFrom_eq _ _ h.2).symm.trans_le
-    (M.length_runHistoryFrom_le_actionSum _ _)
+    (length_le_actionSum _)
 
 /-- Every finite prefix stays within the given expanded-tree space bound. -/
 def UsesSpace (M : TreeMachine Id k Q) (a : Tree) (s : ℕ) : Prop :=
@@ -98,6 +93,31 @@ def ComputesInTimeAndSpace (M : TreeMachine Id k Q) (a : Tree)
     (b : Tree) (t s : ℕ) : Prop :=
   M.ComputesWith (Config := Cfg k Q)
     (fun h ↦ h.actionSum Action.sizeCost) (fun h ↦ h.configSup Cfg.mass) a b t s
+
+/-- Compute with one unit per active transition and peak expanded-tree space. -/
+def ComputesInUnitTimeAndSpace (M : TreeMachine Id k Q) (a b : Tree) (t s : ℕ) : Prop :=
+  M.ComputesWith (Config := Cfg k Q)
+    Controller.History.length (fun h ↦ h.configSup Cfg.mass) a b t s
+
+/-- Switching to unit charges preserves both advertised bounds on the same run. -/
+theorem ComputesInTimeAndSpace.toUnitTime {M : TreeMachine Id k Q} {a b : Tree}
+    {t s : ℕ} (h : M.ComputesInTimeAndSpace a b t s) :
+    M.ComputesInUnitTimeAndSpace a b t s := by
+  obtain ⟨n, hh, ho, ht, hs⟩ := h
+  exact ⟨n, hh, ho, (length_le_actionSum _).trans ht, hs⟩
+
+/-- A bound on all intermediate register trees permits size charging on the same run. -/
+theorem ComputesInUnitTimeAndSpace.toSizeCost {M : TreeMachine Id k Q} {a b : Tree}
+    {t s : ℕ} (h : M.ComputesInUnitTimeAndSpace a b t s) :
+    M.ComputesInTimeAndSpace a b (t * s) s := by
+  obtain ⟨n, hh, ho, ht, hs⟩ := h
+  exact ⟨n, hh, ho,
+    (actionSum_le_length_mul_mass _).trans (Nat.mul_le_mul ht hs), hs⟩
+
+theorem ComputesInUnitTimeAndSpace.mono {M : TreeMachine Id k Q} {a b : Tree}
+    {t s t' s' : ℕ} (h : M.ComputesInUnitTimeAndSpace a b t s)
+    (ht : t ≤ t') (hs : s ≤ s') : M.ComputesInUnitTimeAndSpace a b t' s' :=
+  Controller.computesWith_mono h ht hs
 
 /-- A halted run's time budget also bounds its peak space by input size and register count. -/
 theorem ComputesInTimeAndSpace.of_run {M : TreeMachine Id k Q} {a b : Tree} {n t s : ℕ}
