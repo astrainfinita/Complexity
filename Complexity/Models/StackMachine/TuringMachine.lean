@@ -197,9 +197,9 @@ theorem ComputesInTimeAndSpace.toTM [Fintype κ] {M : StackMachine Id κ Γ Q}
     {xs ys : List Γ} {t s : ℕ} (h : M.ComputesInTimeAndSpace xs ys t s) :
     M.toTM.ComputesInTimeAndSpace (xs.map some) (ys.map some)
       t (Fintype.card κ * (s + 1)) := by
-  obtain ⟨hh, ho, hs⟩ := Controller.computes_unit_iff.mp h
+  obtain ⟨hh, ho, hs⟩ := Controller.computesWith_unit_iff.mp h
   obtain ⟨cached, hr⟩ := M.run_toTM xs t
-  apply Controller.computes_unit_iff.mpr
+  apply Controller.computesWith_unit_iff.mpr
   refine ⟨?_, ?_, ?_⟩
   · simpa only [hr, Controller.Halted, TM.Cfg.state_def, Cfg.toTM_state_fst,
       toTM_halt, state_def] using hh

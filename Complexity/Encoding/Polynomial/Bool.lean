@@ -50,13 +50,13 @@ private theorem left_mem_fp : (fun a : Tree => a.left) ∈ FP .sizeCostTree := b
   apply FP.of_time_le (t := fun n => n) ?_ 1 1 (by simp)
   refine ⟨fun n => 2 * n + 2,
     Computes.computableInTimeAndSpace (M := convert (.left 0 0)) ?_⟩
-  exact Computes.iff_of_uniqueEncoding.mpr convert_left
+  exact Encoding.Computes.iff_of_uniqueEncoding.mpr convert_left
 
 private theorem pair_mem_fp : (fun a => Tree.pair a Tree.nil) ∈ FP .sizeCostTree := by
   apply FP.of_time_le (t := fun n => n + 2) ?_ 2 1 (by intro n; simp; omega)
   refine ⟨fun n => 2 * n + 4,
     Computes.computableInTimeAndSpace (M := convert (.pair 0 0 1)) ?_⟩
-  exact Computes.iff_of_uniqueEncoding.mpr convert_pair
+  exact Encoding.Computes.iff_of_uniqueEncoding.mpr convert_pair
 
 /-- Singleton bit strings and the leaf/pair encoding of Booleans admit
 polynomial-time conversions in both directions. -/

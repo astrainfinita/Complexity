@@ -47,8 +47,14 @@ def UsesSpace [Fintype κ] (M : TM Id κ Γ Q) (xs : List Γ) (s : ℕ) : Prop :
 /-- Compute with unit action time and visited-cell space on one execution history. -/
 def ComputesInTimeAndSpace [Fintype κ] (M : TM Id κ Γ Q) (xs ys : List Γ)
     (t s : ℕ) : Prop :=
-  M.computes (Config := Cfg κ Γ Q xs.toArray)
+  M.ComputesWith (Config := Cfg κ Γ Q xs.toArray)
     Controller.History.length Controller.History.space xs ys t s
+
+theorem ComputesInTimeAndSpace.mono [Fintype κ] {M : TM Id κ Γ Q}
+    {xs ys : List Γ} {t s t' s' : ℕ}
+    (h : M.ComputesInTimeAndSpace xs ys t s) (ht : t ≤ t') (hs : s ≤ s') :
+    M.ComputesInTimeAndSpace xs ys t' s' :=
+  Controller.computesWith_mono h ht hs
 
 /-- Unit-time computation visits at most one new cell per tape per transition. -/
 theorem ComputesInTimeAndSpace.space_of_time [Fintype κ] {M : TM Id κ Γ Q}
@@ -63,7 +69,7 @@ theorem ComputesInTimeAndSpace.run_spec [Fintype κ] {M : TM Id κ Γ Q}
     {xs ys : List Γ} {t s : ℕ} (h : M.ComputesInTimeAndSpace xs ys t s) :
     M.Halted (M.run (Cfg κ Γ Q xs.toArray) xs t) ∧
       (M.run (Cfg κ Γ Q xs.toArray) xs t).output = ys.toArray := by
-  have ⟨hh, ho, _⟩ := Controller.computes_unit_iff.mp h
+  have ⟨hh, ho, _⟩ := Controller.computesWith_unit_iff.mp h
   simpa only [rawExecution_hasOutput] using And.intro hh ho
 
 theorem ComputesInTimeAndSpace.terminates [Fintype κ] {M : TM Id κ Γ Q}
@@ -75,6 +81,6 @@ theorem ComputesInTimeAndSpace.terminates [Fintype κ] {M : TM Id κ Γ Q}
 theorem ComputesInTimeAndSpace.usesSpace [Fintype κ] {M : TM Id κ Γ Q}
     {xs ys : List Γ} {t s : ℕ}
     (h : M.ComputesInTimeAndSpace xs ys t s) : M.UsesSpace xs s :=
-  fun u ↦ Controller.computes_space_le h (M.runHistoryFrom_space_mono _) u
+  fun u ↦ Controller.computesWith_space_le h (M.runHistoryFrom_space_mono _) u
 
 end Complexity.TM

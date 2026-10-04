@@ -35,7 +35,7 @@ instance execution (xs : List Γ) :
       «stacks» := fun _ ↦ []
       output := #[] }
   state_init _ := rfl
-  hasOutput c ys := c.output = ys.toArray
+  HasOutput c ys := c.output = ys.toArray
 
 end StackMachine
 end Complexity

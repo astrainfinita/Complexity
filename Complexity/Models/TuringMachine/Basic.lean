@@ -47,7 +47,7 @@ instance rawExecution (xs : List Γ) :
       workPos := fun _ ↦ 0
       output := #[] }
   state_init _ := rfl
-  hasOutput cfg ys := cfg.output = ys.toArray
+  HasOutput cfg ys := cfg.output = ys.toArray
 
 @[simp] theorem initInput_raw (M : TM F κ Γ Q) (xs : List Γ) :
     M.initInput (Config := Cfg κ Γ Q xs.toArray) xs =

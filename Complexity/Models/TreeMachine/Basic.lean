@@ -36,7 +36,7 @@ instance [NeZero k] (a : Tree) :
     Controller.Execution (Cfg k Q) Q (Output := Tree) (input := a) where
   init q := ⟨q, input 0 a⟩
   state_init _ := rfl
-  hasOutput cfg b := cfg.regs 0 = b
+  HasOutput cfg b := cfg.regs 0 = b
 
 /-- Standard tree input places the value in register zero and clears all other registers. -/
 @[simp] theorem initInput_tree [NeZero k] (M : TreeMachine F k Q) (a : Tree) :

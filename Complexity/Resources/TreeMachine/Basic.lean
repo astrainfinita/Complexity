@@ -37,7 +37,7 @@ variable [Encoding Tree α] [Encoding Tree β]
 destination-size time and expanded-tree space bounds. -/
 def Computes (M : TreeMachine Id k Q) (f : α → β)
     (t s : ℕ → ℕ) : Prop :=
-  Complexity.Computes (fun a b => M.ComputesInTimeAndSpace a b)
+  Encoding.Computes (fun a b => M.ComputesInTimeAndSpace a b)
     Tree.size f t s
 
 /-- Finite tree machines with input and output register zero. Time sums destination
@@ -48,7 +48,7 @@ def _root_.Complexity.TimeSpaceModel.sizeCostTree : TimeSpaceModel Id Tree where
       (M : TreeMachine Id k Q), R = fun a result => M.ComputesInTimeAndSpace a result.run}
   budget_mono := by
     rintro R ⟨k, hk, Q, hQ, M, rfl⟩ x y t s t' s' h ht hs
-    exact Controller.computes_mono h ht hs
+    exact h.mono ht hs
 
 /-- Recover the single finite machine realizing the abstract resource behavior. -/
 theorem computableInTimeAndSpace_iff {f : α → β} {t s : ℕ → ℕ} :
@@ -66,7 +66,7 @@ variable {f : α → β} {t s t' s' : ℕ → ℕ}
 theorem Computes.mono {M : TreeMachine Id k Q}
     (h : Computes M f t s) (ht : ∀ n, t n ≤ t' n) (hs : ∀ n, s n ≤ s' n) :
     Computes M f t' s' :=
-  Complexity.Computes.mono h (fun h ht hs => Controller.computes_mono h ht hs) ht hs
+  Encoding.Computes.mono h (fun h ht hs ↦ h.mono ht hs) ht hs
 
 theorem Computes.computableInTimeAndSpace {Q : Type} [Finite Q]
     {M : TreeMachine Id k Q} (h : Computes M f t s) :

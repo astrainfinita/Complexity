@@ -10,7 +10,7 @@ public import Complexity.Encoding.Basic
 /-!
 # Resource bounds for functions on encoded values
 
-`Computes run size f t s` lifts a raw computation relation to a function between
+`Encoding.Computes run size f t s` lifts a raw computation relation to a function between
 encoded types. It requires a terminating computation on every valid input code,
 with bounds measured on that actual code. Any valid code for the result is allowed.
 Invalid inputs impose no obligations, and decoding is not an extra machine operation.
@@ -27,12 +27,12 @@ variable {Data α β : Type*}
 
 /-- A raw computation implements a function on every valid input representation,
 within time and space bounds measured on that representation. -/
-def Computes [Encoding Data α] [Encoding Data β]
+def Encoding.Computes [Encoding Data α] [Encoding Data β]
     (run : Data → Data → ℕ → ℕ → Prop) (size : Data → ℕ) (f : α → β)
     (t s : ℕ → ℕ) : Prop :=
   ∀ r a, a ∈ decode α r → ∃ q, f a ∈ decode β q ∧ run r q (t (size r)) (s (size r))
 
-namespace Computes
+namespace Encoding.Computes
 
 variable {run : Data → Data → ℕ → ℕ → Prop} {size : Data → ℕ} {f : α → β}
   {t s t' s' : ℕ → ℕ}
@@ -62,7 +62,7 @@ theorem iff_of_uniqueEncoding [UniqueEncoding Data α] [UniqueEncoding Data β] 
   simp only [iff_of_uniqueOutput, UniqueEncoding.mem_decode_iff]
   exact forall_comm.trans (by simp only [forall_eq'])
 
-end Computes
+end Encoding.Computes
 
 /-- A Boolean-valued function decides a predicate, including rejection of every
 value outside the predicate. -/

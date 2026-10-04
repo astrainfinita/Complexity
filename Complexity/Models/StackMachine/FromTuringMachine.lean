@@ -217,7 +217,7 @@ theorem ComputesInTimeAndSpace.toStack [Fintype κ] {M : TM Id κ (Option Bool) 
     M.toStack.ComputesInTimeAndSpace xs ys t (2 * s) := by
   obtain ⟨hh, ho⟩ := h.run_spec
   have hr := M.run_toStack xs t
-  apply Controller.computes_unit_iff.mpr
+  apply Controller.computesWith_unit_iff.mpr
   refine ⟨?_, ?_, ?_⟩
   · simpa only [Controller.Halted, StackMachine.state_def, toStack_halt, hr.state_eq,
       Cfg.state_def] using hh

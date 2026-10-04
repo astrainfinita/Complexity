@@ -36,22 +36,4 @@ theorem runHistoryFrom_visited_le_iff (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs)
   simp only [History.visited_apply_le_iff, Controller.mem_configs_runHistoryFrom,
     forall_exists_index, and_imp, forall_apply_eq_imp_iff₂]
 
-namespace Cfg
-
-/-- Represent external bits by nonblank symbols on input and output. -/
-@[simps hasOutput]
-instance bitsExecution {κ Q : Type*} (xs : List Bool) :
-    Controller.Execution (Cfg κ (Option Bool) Q (xs.map some).toArray)
-      Q (Output := List Bool) (input := xs) where
-  init q := (rawExecution (xs.map some)).init q
-  state_init _ := rfl
-  hasOutput cfg ys := cfg.output = (ys.map some).toArray
-
-end Cfg
-
-@[simp] theorem initInput_bits {κ Q : Type*} {F : Type _ → Type*}
-    (M : TM F κ (Option Bool) Q) (xs : List Bool) :
-    M.initInput (Config := Cfg κ (Option Bool) Q (xs.map some).toArray) xs =
-      M.initInput (Config := Cfg κ (Option Bool) Q (xs.map some).toArray) (xs.map some) := rfl
-
 end Complexity.TM

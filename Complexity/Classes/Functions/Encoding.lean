@@ -24,9 +24,9 @@ theorem of_encode {Data α β : Type*} [UniqueEncoding Data α] [UniqueEncoding 
   obtain ⟨d, t, ⟨s, R, hR, hm⟩, ht⟩ := mem_iff_exists_ftime.mp hf
   apply mem_iff_exists_ftime.mpr
   refine ⟨d, t, ⟨s, R, hR, ?_⟩, ht⟩
-  apply Computes.iff_of_uniqueEncoding.mpr
+  apply Encoding.Computes.iff_of_uniqueEncoding.mpr
   intro a
-  have hh := Computes.iff_of_uniqueEncoding.mp hm (encode Data a)
+  have hh := Encoding.Computes.iff_of_uniqueEncoding.mp hm (encode Data a)
   simpa only [UniqueEncoding.refl_encode, id_eq, h] using hh
 
 end Complexity.FP

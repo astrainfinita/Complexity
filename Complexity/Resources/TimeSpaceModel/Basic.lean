@@ -40,7 +40,7 @@ variable {Data α β : Type*} [Encoding Data α] [Encoding Data β]
 within both pointwise resource bounds. -/
 def ComputableInTimeAndSpace (model : TimeSpaceModel Id Data) (f : α → β)
     (t s : ℕ → ℕ) : Prop :=
-  ∃ R ∈ model.behaviors, Computes (fun x y => R x (pure y)) model.inputSize f t s
+  ∃ R ∈ model.behaviors, Encoding.Computes (fun x y => R x (pure y)) model.inputSize f t s
 
 /-- Compute a function within a pointwise time bound, with some space bound. -/
 def ComputableInTime (model : TimeSpaceModel Id Data) (f : α → β) (t : ℕ → ℕ) : Prop :=

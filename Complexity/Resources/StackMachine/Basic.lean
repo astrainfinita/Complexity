@@ -25,7 +25,7 @@ variable {α β : Type*} [Encoding (List Bool) α] [Encoding (List Bool) β]
 /-- One stack machine computes the function on every valid bit-string encoding. -/
 def Computes {κ Q : Type*} [Fintype κ] (M : StackMachine Id κ Bool Q)
     (f : α → β) (t s : ℕ → ℕ) : Prop :=
-  Complexity.Computes (fun xs ys ↦ M.ComputesInTimeAndSpace xs ys) List.length f t s
+  Encoding.Computes (fun xs ys ↦ M.ComputesInTimeAndSpace xs ys) List.length f t s
 
 /-- Finite stack machines with transition time and peak work-stack space. -/
 def _root_.Complexity.TimeSpaceModel.stack : TimeSpaceModel Id (List Bool) where
@@ -50,7 +50,7 @@ theorem computableInTimeAndSpace_iff {f : α → β} {t s : ℕ → ℕ} :
 theorem Computes.mono {κ Q : Type*} [Fintype κ] {M : StackMachine Id κ Bool Q}
     {f : α → β} {t s t' s' : ℕ → ℕ} (h : Computes M f t s)
     (ht : ∀ n, t n ≤ t' n) (hs : ∀ n, s n ≤ s' n) : Computes M f t' s' :=
-  Complexity.Computes.mono h (fun h ht hs ↦ h.mono ht hs) ht hs
+  Encoding.Computes.mono h (fun h ht hs ↦ h.mono ht hs) ht hs
 
 theorem Computes.computableInTimeAndSpace {κ Q : Type} [Fintype κ] [Finite Q]
     {M : StackMachine Id κ Bool Q} {f : α → β} {t s : ℕ → ℕ}

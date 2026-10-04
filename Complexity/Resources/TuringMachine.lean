@@ -25,31 +25,13 @@ The time-only and space-only variants omit one bound, but still require terminat
 
 namespace Complexity.TM
 
-theorem ComputesInTimeAndSpace.mono {κ : Type*} [Fintype κ] {Γ Q : Type*} [Inhabited Γ]
-    {M : TM Id κ Γ Q} {xs ys : List Γ} {t s t' s' : ℕ}
-    (h : M.ComputesInTimeAndSpace xs ys t s) (ht : t ≤ t') (hs : s ≤ s') :
-    M.ComputesInTimeAndSpace xs ys t' s' :=
-  Controller.computes_mono h ht hs
-
 variable {α β : Type*} [Encoding (List Bool) α] [Encoding (List Bool) β]
 
 /-- A bit-alphabet machine computes a function on all valid input encodings. -/
 def Computes {κ : Type*} [Fintype κ] {Q : Type*} (M : TM Id κ (Option Bool) Q)
     (f : α → β) (t s : ℕ → ℕ) : Prop :=
-  Complexity.Computes
-    (fun xs ys time space =>
-      M.computes (Output := List Bool)
-        (Config := Cfg κ (Option Bool) Q ((xs.map some).toArray))
-        Controller.History.length Controller.History.space xs ys time space)
+  Encoding.Computes (fun xs ys ↦ M.ComputesInTimeAndSpace (xs.map some) (ys.map some))
     List.length f t s
-
-/-- The common bit-string execution recovers the original encoded machine specification. -/
-theorem computes_iff {κ : Type*} [Fintype κ] {Q : Type*} {M : TM Id κ (Option Bool) Q}
-    {f : α → β} {t s : ℕ → ℕ} :
-    Computes M f t s ↔
-      Complexity.Computes
-        (fun xs ys => M.ComputesInTimeAndSpace (xs.map some) (ys.map some))
-        List.length f t s := Iff.rfl
 
 /-- Finite Turing machines on bit strings, with transition time and visited
 work-cell space. Each behavior is realized by one machine for all inputs. -/
@@ -78,8 +60,7 @@ namespace Computes
 theorem mono {κ : Type*} [Fintype κ] {Q : Type*} {M : TM Id κ (Option Bool) Q}
     {f : α → β} {t s t' s' : ℕ → ℕ} (h : Computes M f t s)
     (ht : ∀ n, t n ≤ t' n) (hs : ∀ n, s n ≤ s' n) : Computes M f t' s' :=
-  Complexity.Computes.mono h
-    (fun h ht hs => Controller.computes_mono (Output := List Bool) h ht hs) ht hs
+  Encoding.Computes.mono h (fun h ht hs ↦ h.mono ht hs) ht hs
 
 theorem computableInTimeAndSpace {κ : Type} [Fintype κ] {Q : Type} [Finite Q]
     {M : TM Id κ (Option Bool) Q} {f : α → β} {t s : ℕ → ℕ}

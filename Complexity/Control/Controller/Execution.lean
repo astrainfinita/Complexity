@@ -30,7 +30,9 @@ class Execution {Input : Type*} (Config : Type*)
   /-- Initialization preserves the supplied control state. -/
   state_init : ∀ q, state (init q) = q
   /-- Interpret a configuration as an output value. -/
-  hasOutput : Config → Output → Prop
+  HasOutput : Config → Output → Prop
+
+initialize_simps_projections Execution (HasOutput → hasOutput)
 
 variable {Input Output Observation Q : Type*} {Action Config : Type u}
     [HasState Config Q]
@@ -160,15 +162,15 @@ theorem configSup_runHistory_le_iff (space : Config → α) (input : Input)
 
 end Resources
 
-/-- One terminating history satisfies both resource budgets. -/
-def computes (M : Controller Id Observation Action Q)
+/-- One terminating history satisfies both budgets under the chosen history measurements. -/
+def ComputesWith (M : Controller Id Observation Action Q)
     (timeCost spaceCost : History Config Action → ℕ)
     (input : Input) (output : Output) (time space : ℕ)
     [exe : Execution Config Q Output input] : Prop :=
   ∃ n,
     let final := M.run Config input n
     let history := M.runHistory Config input n
-    M.Halted final ∧ exe.hasOutput final output ∧
+    M.Halted final ∧ exe.HasOutput final output ∧
       timeCost history ≤ time ∧ spaceCost history ≤ space
 
 variable {M : Controller Id Observation Action Q}
@@ -176,17 +178,17 @@ variable {M : Controller Id Observation Action Q}
   {input : Input} {output : Output} {time space : ℕ}
 
 /-- Enlarging budgets preserves the same execution. -/
-theorem computes_mono [Execution Config Q Output input] {time' space' : ℕ}
-    (h : M.computes timeCost spaceCost input output time space)
+theorem computesWith_mono [Execution Config Q Output input] {time' space' : ℕ}
+    (h : M.ComputesWith timeCost spaceCost input output time space)
     (ht : time ≤ time') (hs : space ≤ space') :
-    M.computes timeCost spaceCost input output time' space' := by
+    M.ComputesWith timeCost spaceCost input output time' space' := by
   obtain ⟨n, hn, ho, htime, hspace⟩ := h
   exact ⟨n, hn, ho, htime.trans ht, hspace.trans hs⟩
 
 /-- An additive action budget bounds every prefix, including halted padding. -/
-theorem computes_actionSum_le [Execution Config Q Output input]
+theorem computesWith_actionSum_le [Execution Config Q Output input]
     {cost : Action → Config → ℕ}
-    (h : M.computes (fun h ↦ h.actionSum cost) spaceCost input output time space) (u : ℕ) :
+    (h : M.ComputesWith (fun h ↦ h.actionSum cost) spaceCost input output time space) (u : ℕ) :
     (M.runHistory Config input u).actionSum cost ≤ time := by
   obtain ⟨n, hn, _, ht, _⟩ := h
   by_cases hu : u ≤ n
@@ -195,8 +197,8 @@ theorem computes_actionSum_le [Execution Config Q Output input]
     exact ht
 
 /-- A prefix-monotone history measurement bounds space throughout a computation. -/
-theorem computes_space_le [Execution Config Q Output input]
-    (h : M.computes timeCost spaceCost input output time space)
+theorem computesWith_space_le [Execution Config Q Output input]
+    (h : M.ComputesWith timeCost spaceCost input output time space)
     (hmono : Monotone fun n ↦ spaceCost (M.runHistory Config input n))
     (u : ℕ) : spaceCost (M.runHistory Config input u) ≤ space := by
   obtain ⟨n, hn, _, _, hs⟩ := h
@@ -206,18 +208,18 @@ theorem computes_space_le [Execution Config Q Output input]
     exact hs
 
 /-- A maximum configuration budget bounds every prefix, including halted padding. -/
-theorem computes_configSup_le [Execution Config Q Output input] {size : Config → ℕ}
-    (h : M.computes timeCost (fun h ↦ h.configSup size) input output time space) (u : ℕ) :
+theorem computesWith_configSup_le [Execution Config Q Output input] {size : Config → ℕ}
+    (h : M.ComputesWith timeCost (fun h ↦ h.configSup size) input output time space) (u : ℕ) :
     (M.runHistory Config input u).configSup size ≤ space :=
-  computes_space_le h (fun _ _ hn ↦ M.configSup_runHistory_mono size input hn) u
+  computesWith_space_le h (fun _ _ hn ↦ M.configSup_runHistory_mono size input hn) u
 
 /-- Counting recorded actions describes the halted run at the advertised time bound. -/
-theorem computes_unit_iff [exe : Execution Config Q Output input] :
-    M.computes History.length spaceCost input output time space ↔
+theorem computesWith_unit_iff [exe : Execution Config Q Output input] :
+    M.ComputesWith History.length spaceCost input output time space ↔
       M.Halted (M.run Config input time) ∧
-      exe.hasOutput (M.run Config input time) output ∧
+      exe.HasOutput (M.run Config input time) output ∧
       spaceCost (M.runHistory Config input time) ≤ space := by
-  unfold computes
+  unfold ComputesWith
   constructor
   · rintro ⟨n, hn, ho, ht, hs⟩
     have he : M.run Config input (M.runHistory Config input n).length =

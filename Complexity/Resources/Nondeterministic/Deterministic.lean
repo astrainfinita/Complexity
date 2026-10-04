@@ -30,7 +30,7 @@ duplicating its transitions, without changing either resource bound. -/
 theorem Computes.decidesInTimeAndSpace {κ : Type*} [Fintype κ] {Q : Type*}
     {M : TM Id κ (Option Bool) Q} (h : Computes M f t s) (hp : Decides f p) :
     NTM.DecidesInTimeAndSpace M.toBinary p t s := by
-  rw [computes_iff, Computes.iff_of_uniqueOutput] at h
+  have h := Encoding.Computes.iff_of_uniqueOutput.mp h
   intro xs a ha
   have hc := h xs a ha
   obtain ⟨hhalt, hout⟩ := hc.run_spec
@@ -52,11 +52,11 @@ theorem decidableInTimeAndSpace_of_computable
 theorem decidableInTime_of_computable (h : TimeSpaceModel.tm.ComputableInTime f t)
     (hp : Decides f p) : TimeSpaceModel.ntm.NDecidableInTime p t := by
   obtain ⟨s, h⟩ := h
-  exact (decidableInTimeAndSpace_of_computable h hp).ndecidableInTime
+  exact (decidableInTimeAndSpace_of_computable h hp).nDecidableInTime
 
 theorem decidableInSpace_of_computable (h : TimeSpaceModel.tm.ComputableInSpace f s)
     (hp : Decides f p) : TimeSpaceModel.ntm.NDecidableInSpace p s := by
   obtain ⟨t, h⟩ := h
-  exact (decidableInTimeAndSpace_of_computable h hp).ndecidableInSpace
+  exact (decidableInTimeAndSpace_of_computable h hp).nDecidableInSpace
 
 end Complexity.TM

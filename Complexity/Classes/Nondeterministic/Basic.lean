@@ -87,11 +87,11 @@ theorem congr (h : p ∈ NTISP model T S) (hp : ∀ a, p a ↔ q a) : q ∈ NTIS
 
 theorem subset_time : NTISP (α := α) model T S ⊆ NTIME model T := by
   rintro p ⟨t, s, h, ht, _⟩
-  exact ⟨t, h.ndecidableInTime, ht⟩
+  exact ⟨t, h.nDecidableInTime, ht⟩
 
 theorem subset_space : NTISP (α := α) model T S ⊆ NSPACE model S := by
   rintro p ⟨t, s, h, _, hs⟩
-  exact ⟨s, h.ndecidableInSpace, hs⟩
+  exact ⟨s, h.nDecidableInSpace, hs⟩
 
 theorem subset_inter : NTISP (α := α) model T S ⊆ NTIME model T ∩ NSPACE model S :=
   fun _ h => ⟨subset_time h, subset_space h⟩

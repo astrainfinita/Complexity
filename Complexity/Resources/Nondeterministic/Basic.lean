@@ -159,7 +159,7 @@ def _root_.Complexity.TimeSpaceModel.ntm : TimeSpaceModel Multiset (List Bool) w
 
 /-- The abstract specification is exactly the original finite-machine decision
 specification, with no branches discarded or extra output codes accepted. -/
-theorem ndecidableInTimeAndSpace_iff :
+theorem nDecidableInTimeAndSpace_iff :
     TimeSpaceModel.ntm.NDecidableInTimeAndSpace p t s ↔
       ∃ (κ : Type) (_ : Fintype κ) (Q : Type) (_ : Finite Q)
         (M : NTM κ (Option Bool) Q), DecidesInTimeAndSpace M p t s := by
@@ -194,44 +194,44 @@ theorem DecidesInSpace.exists_time [Fintype κ] (h : DecidesInSpace M p s) :
   refine ⟨fun n => (List.finite_length_eq Bool n).toFinset.sup f, fun xs a ha => ?_⟩
   exact ⟨(hf xs ha.fst).mono (Finset.le_sup (by simp)), h.2 xs a ha, (h.decides xs a ha).2⟩
 
-theorem ndecidableInTime_iff :
+theorem nDecidableInTime_iff :
     TimeSpaceModel.ntm.NDecidableInTime p t ↔
       ∃ (κ : Type) (_ : Fintype κ) (Q : Type) (_ : Finite Q)
         (M : NTM κ (Option Bool) Q), DecidesInTime M p t := by
   constructor
   · rintro ⟨s, h⟩
-    obtain ⟨κ, hκ, Q, hQ, M, h⟩ := ndecidableInTimeAndSpace_iff.mp h
+    obtain ⟨κ, hκ, Q, hQ, M, h⟩ := nDecidableInTimeAndSpace_iff.mp h
     exact ⟨κ, hκ, Q, hQ, M, h.decidesInTime⟩
   · rintro ⟨κ, hκ, Q, hQ, M, h⟩
     obtain ⟨s, hs⟩ := h.exists_space
-    exact ⟨s, ndecidableInTimeAndSpace_iff.mpr ⟨κ, hκ, Q, hQ, M, hs⟩⟩
+    exact ⟨s, nDecidableInTimeAndSpace_iff.mpr ⟨κ, hκ, Q, hQ, M, hs⟩⟩
 
-theorem ndecidableInSpace_iff :
+theorem nDecidableInSpace_iff :
     TimeSpaceModel.ntm.NDecidableInSpace p s ↔
       ∃ (κ : Type) (_ : Fintype κ) (Q : Type) (_ : Finite Q)
         (M : NTM κ (Option Bool) Q), DecidesInSpace M p s := by
   constructor
   · rintro ⟨t, h⟩
-    obtain ⟨κ, hκ, Q, hQ, M, h⟩ := ndecidableInTimeAndSpace_iff.mp h
+    obtain ⟨κ, hκ, Q, hQ, M, h⟩ := nDecidableInTimeAndSpace_iff.mp h
     exact ⟨κ, hκ, Q, hQ, M, h.decidesInSpace⟩
   · rintro ⟨κ, hκ, Q, hQ, M, h⟩
     obtain ⟨t, ht⟩ := h.exists_time
-    exact ⟨t, ndecidableInTimeAndSpace_iff.mpr ⟨κ, hκ, Q, hQ, M, ht⟩⟩
+    exact ⟨t, nDecidableInTimeAndSpace_iff.mpr ⟨κ, hκ, Q, hQ, M, ht⟩⟩
 
 theorem DecidesInTime.decidableInTime {κ : Type} [Finite κ] {Q : Type} [Finite Q]
     {M : NTM κ (Option Bool) Q} (h : DecidesInTime M p t) :
     TimeSpaceModel.ntm.NDecidableInTime p t := by
   let := Fintype.ofFinite κ
-  exact ndecidableInTime_iff.mpr ⟨κ, inferInstance, Q, inferInstance, M, h⟩
+  exact nDecidableInTime_iff.mpr ⟨κ, inferInstance, Q, inferInstance, M, h⟩
 
 theorem DecidesInSpace.decidableInSpace {κ : Type} [Fintype κ] {Q : Type} [Finite Q]
     {M : NTM κ (Option Bool) Q} (h : DecidesInSpace M p s) :
     TimeSpaceModel.ntm.NDecidableInSpace p s :=
-  ndecidableInSpace_iff.mpr ⟨κ, inferInstance, Q, inferInstance, M, h⟩
+  nDecidableInSpace_iff.mpr ⟨κ, inferInstance, Q, inferInstance, M, h⟩
 
 theorem DecidesInTimeAndSpace.decidableInTimeAndSpace {κ : Type} [Fintype κ]
     {Q : Type} [Finite Q] {M : NTM κ (Option Bool) Q}
     (h : DecidesInTimeAndSpace M p t s) : TimeSpaceModel.ntm.NDecidableInTimeAndSpace p t s :=
-  ndecidableInTimeAndSpace_iff.mpr ⟨κ, inferInstance, Q, inferInstance, M, h⟩
+  nDecidableInTimeAndSpace_iff.mpr ⟨κ, inferInstance, Q, inferInstance, M, h⟩
 
 end Complexity.NTM

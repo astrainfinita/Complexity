@@ -42,7 +42,7 @@ theorem configSup_mass_le {xs : Array Γ} (h : Controller.History (Cfg κ Γ Q x
 
 /-- One terminating history bounds transitions and the peak total work-stack length. -/
 def ComputesInTimeAndSpace (M : StackMachine Id κ Γ Q) (xs ys : List Γ) (t s : ℕ) : Prop :=
-  M.computes (Config := Cfg κ Γ Q xs.toArray)
+  M.ComputesWith (Config := Cfg κ Γ Q xs.toArray)
     Controller.History.length (fun h ↦ h.configSup Cfg.mass) xs ys t s
 
 /-- Initially empty work stacks grow by at most one symbol per stack per transition. -/
@@ -61,7 +61,7 @@ theorem ComputesInTimeAndSpace.run_spec {M : StackMachine Id κ Γ Q}
     {xs ys : List Γ} {t s : ℕ} (h : M.ComputesInTimeAndSpace xs ys t s) :
     M.Halted (M.run (Cfg κ Γ Q xs.toArray) xs t) ∧
       (M.run (Cfg κ Γ Q xs.toArray) xs t).output = ys.toArray := by
-  have ⟨hh, ho, _⟩ := Controller.computes_unit_iff.mp h
+  have ⟨hh, ho, _⟩ := Controller.computesWith_unit_iff.mp h
   exact ⟨hh, ho⟩
 
 theorem ComputesInTimeAndSpace.space_of_time {M : StackMachine Id κ Γ Q}
@@ -72,6 +72,6 @@ theorem ComputesInTimeAndSpace.space_of_time {M : StackMachine Id κ Γ Q}
 theorem ComputesInTimeAndSpace.mono {M : StackMachine Id κ Γ Q}
     {xs ys : List Γ} {t s t' s' : ℕ} (h : M.ComputesInTimeAndSpace xs ys t s)
     (ht : t ≤ t') (hs : s ≤ s') : M.ComputesInTimeAndSpace xs ys t' s' :=
-  Controller.computes_mono h ht hs
+  Controller.computesWith_mono h ht hs
 
 end Complexity.StackMachine

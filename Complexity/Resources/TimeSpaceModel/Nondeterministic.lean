@@ -57,11 +57,11 @@ theorem NDecidableInTimeAndSpace.congr (h : model.NDecidableInTimeAndSpace p t s
     (hp : ∀ a, p a ↔ q a) : model.NDecidableInTimeAndSpace q t s :=
   funext (fun a => propext (hp a)) ▸ h
 
-theorem NDecidableInTimeAndSpace.ndecidableInTime
+theorem NDecidableInTimeAndSpace.nDecidableInTime
     (h : model.NDecidableInTimeAndSpace p t s) : model.NDecidableInTime p t :=
   ⟨s, h⟩
 
-theorem NDecidableInTimeAndSpace.ndecidableInSpace
+theorem NDecidableInTimeAndSpace.nDecidableInSpace
     (h : model.NDecidableInTimeAndSpace p t s) : model.NDecidableInSpace p s :=
   ⟨t, h⟩
 

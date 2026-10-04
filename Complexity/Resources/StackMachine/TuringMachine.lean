@@ -29,7 +29,6 @@ theorem Computes.toTM {κ : Type} [Fintype κ] {Q : Type}
     (h : Computes M f t s) :
     TM.Computes M.toTM f t
       (fun n ↦ Fintype.card κ * (s n + 1)) := by
-  rw [TM.computes_iff]
   intro xs a ha
   obtain ⟨ys, hy, hc⟩ := h xs a ha
   exact ⟨ys, hy, hc.toTM⟩
@@ -51,7 +50,6 @@ theorem Computes.toStack {κ : Type} [Fintype κ] {Q : Type}
     {M : TM Id κ (Option Bool) Q} {f : α → β} {t s : ℕ → ℕ}
     (h : Computes M f t s) :
     StackMachine.Computes M.toStack f t (fun n ↦ 2 * s n) := by
-  rw [computes_iff] at h
   intro xs a ha
   obtain ⟨ys, hy, hc⟩ := h xs a ha
   exact ⟨ys, hy, hc.toStack⟩
