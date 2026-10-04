@@ -66,7 +66,7 @@ def c : Cfg 3 Bool := Cfg.mk grow.q₀ ![b, a, Tree.nil]
 #guard (grow.runHistoryFrom c 20).length = 1
 #guard (grow.runHistoryFrom c 20).configSup Cfg.mass = 13
 
--- Writing an empty leaf costs one even when it replaces a larger tree.
+-- Reading an empty source costs one even when it replaces a larger destination.
 def shrink : TreeMachine Id 3 Bool where
   q₀ := false
   halt := id
@@ -126,8 +126,8 @@ def forkNop : TreeMachine BinaryChoice 1 Bool where
 #guard ((forkNop.runHistoryWith (Cfg 1 Bool) Multiset b 5).map
   (fun h ↦ h.actionSum Action.sizeCost)) = ↑[1, 1]
 
--- Shrinking to a nonempty tree still pays for that entire tree.
-#guard Action.sizeCost (Action.assign true (.left 0 0)) c = 3
+-- A projection pays for the entire source, including the child it discards.
+#guard Action.sizeCost (Action.assign true (.left 0 0)) c = 5
 
 -- Equal endpoints can have different fees: a no-op and writing back the same tree.
 def sameEndpoint : TreeMachine BinaryChoice 3 Bool where

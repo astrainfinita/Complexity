@@ -73,7 +73,7 @@ def wider := dirty.comp (needsClean 4)
   (wider.run (Cfg (max 3 4 + 1) (Comp.State 3 4 (Fin 4) Bool)) a 3) 4).actionSum Action.sizeCost = 4
 #guard
   let h := wider.runHistory (Cfg (max 3 4 + 1) (Comp.State 3 4 (Fin 4) Bool)) a 20
-  (h.actionSum Action.sizeCost, h.length, h.configSup Cfg.mass) = (28, 8, 23)
+  (h.actionSum Action.sizeCost, h.length, h.configSup Cfg.mass) = (32, 8, 23)
 
 -- A smaller destination also clears the old scratch slot it does not itself use.
 def narrower := dirty.comp (needsClean 2)
@@ -87,7 +87,7 @@ def narrower := dirty.comp (needsClean 2)
     (Cfg (max 3 2 + 1) (Comp.State 3 2 (Fin 4) Bool)) a n.val).regs 3 = .nil
 #guard
   let h := narrower.runHistory (Cfg (max 3 2 + 1) (Comp.State 3 2 (Fin 4) Bool)) a 20
-  (h.actionSum Action.sizeCost, h.configSup Cfg.mass) = (27, 22)
+  (h.actionSum Action.sizeCost, h.configSup Cfg.mass) = (31, 22)
 
 -- Initially halted endpoints still perform the bridge, including the K = 1 case.
 #guard (dirty.comp (halted 2)).Halted ((dirty.comp (halted 2)).run
@@ -114,11 +114,11 @@ private theorem dirty_computes : dirty.ComputesInTimeAndSpace a (.pair a a) 21 2
   refine ⟨3, rfl, rfl, ?_, ?_⟩ <;> decide
 
 private theorem needsClean_computes :
-    (needsClean 4).ComputesInTimeAndSpace (.pair a a) a 3 10 := by
+    (needsClean 4).ComputesInTimeAndSpace (.pair a a) a 7 10 := by
   refine ⟨1, rfl, rfl, ?_, ?_⟩ <;> decide
 
 -- The public composition bound agrees with the concrete execution above.
-example : wider.ComputesInTimeAndSpace a a 28 23 :=
+example : wider.ComputesInTimeAndSpace a a 32 23 :=
   comp_computesInTimeAndSpace dirty (needsClean 4) dirty_computes needsClean_computes
 
 end Complexity.TreeCompositionTest

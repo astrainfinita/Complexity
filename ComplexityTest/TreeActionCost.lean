@@ -30,6 +30,19 @@ private theorem pairOnce_unit :
 example : pairOnce.ComputesInTimeAndSpace Tree.nil (Tree.pair Tree.nil Tree.nil) 3 3 :=
   pairOnce_unit.toSizeCost
 
+-- Shrinking pays for the source; the unit-to-size bound uses the peak before the write.
+def rightOnce : TreeMachine Id 1 Bool where
+  q₀ := false
+  halt := id
+  transition _ _ := pure <| Action.assign true (.right 0 0)
+
+example : rightOnce.ComputesInTimeAndSpace
+    (.pair (.pair .nil .nil) .nil) .nil 5 5 := by
+  have h : rightOnce.ComputesInUnitTimeAndSpace
+      (.pair (.pair .nil .nil) .nil) .nil 1 5 := by
+    refine ⟨1, rfl, rfl, ?_, ?_⟩ <;> decide
+  exact h.toSizeCost
+
 -- Padding the requested run does not add to the recorded unit-time cost.
 example : pairOnce.ComputesInUnitTimeAndSpace Tree.nil (Tree.pair Tree.nil Tree.nil) 1 3 := by
   refine ⟨10, rfl, rfl, ?_, ?_⟩ <;> decide

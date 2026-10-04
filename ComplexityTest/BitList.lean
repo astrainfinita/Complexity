@@ -77,7 +77,7 @@ theorem identity_spec (xs : List Bool) :
 -- One fixed finite stack machine computes identity on every raw list, including [] and [false].
 example (xs : List Bool) :
     (compiler identity).ComputesInTimeAndSpace xs xs
-      (timeBound 1 xs.length 0) (spaceBound 1 xs.length 0) :=
+      (timeBound 1 xs.length 0) (Simulation.spaceBound 1 (Tree.encodeBitList xs).size) :=
   computesInTimeAndSpace identity (identity_spec xs)
 
 -- Execute all three stages, including initially halted and nontrivial source runs.

@@ -63,11 +63,24 @@ def check {k : ℕ} {Q : Type} [FinEnum Q] (M : TreeMachine Id k Q) (i : Fin k) 
     (FinEnum.toList Scratch).all fun j ↦
       c.workPos (.scratch j) == 0 && (c.workTapes (.scratch j))[(0 : ℤ)] == none
 
--- Keeping a register copies its original value into the other bank.
+-- Keeping a register performs no data transfer.
 #guard check (once .nop) 0 a 0 a
 #guard check (once .nop) 1 b 1 b
 #guard check (once .nop) 1 b 0 .nil
 #guard check (once .nop) 1 .nil 1 .nil
+
+-- A no-op takes three loop transitions regardless of the untouched input tree's size.
+def checkNopLoop (x : Tree) : Bool :=
+  let p : StackMachine.Program (Work 2) Bool Unit :=
+    Program.loopOn StackMachine.Program.idle (Simulation.Program.body (once .nop)) false
+  let M := p.compile
+  let c := (Simulation.Program.loadedCfg (0 : Fin 2) x).mapState (fun _ ↦ M.q₀)
+  let d := M.runFrom c 3
+  M.halt d.state && !(M.halt (M.runFrom c 2).state) &&
+    d.stacks (.data 0) == BitList.encodeTree x
+
+#guard checkNopLoop .nil
+#guard checkNopLoop (.pair (.pair a b) (.pair b a))
 
 -- Both projections are total at nil and stop at the correct nested-subtree boundary.
 #guard check (once (.left 0 0)) 0 .nil 0 .nil
@@ -95,7 +108,7 @@ def twice : TreeMachine Id 2 (Fin 3) where
 #guard check twice 0 (Tree.pair b a) 0 a
 #guard check twice 0 (Tree.pair b a) 1 .nil
 
--- Reusing both banks must erase stale suffixes, restore the counter, and observe the new roots.
+-- Reusing a destination erases stale suffixes, restores scratch, and observes the new roots.
 def thrice : TreeMachine Id 1 (Fin 4) where
   q₀ := 0
   halt q := q == 3
@@ -118,38 +131,32 @@ def halted : TreeMachine Id 1 Bool where
 example : Fintype (Option Bool) := inferInstance
 example : Finite (Simulation.Program.program (once .nop) 0 0).State := inferInstance
 
--- The process theorem starts at the supplied state and returns the complete register bank.
--- Here the controller starts running at false, but the represented source is already halted.
+-- The process theorem also starts from an arbitrary already-halted source configuration.
 example (x : Tree) (q : ℕ) :
     Std.WP.Triple
       ((Program.loopOn StackMachine.Program.idle
-        (Simulation.Program.body (once .nop)) (true, false)).verify
-        (StackMachine.Program.semantics (BitList.encodeTree x).toArray))
-      (fun c t ↦ c = Simulation.Program.loadedCfg 1 x ∧ 1 + q ≤ t)
-      (fun b c t ↦ Simulation.Program.Rep
-        (Cfg.mk true (TreeMachine.input 1 x)) b c (x.size + 2) ∧ q ≤ t) () := by
-  let r : Cfg 2 Bool := Cfg.mk true (TreeMachine.input 1 x)
-  have hr : Simulation.Program.Rep r false (Simulation.Program.loadedCfg 1 x)
-      (x.size + 2) := by
-    refine ⟨rfl, fun _ ↦ [], rfl, ?_⟩
-    simp
-  have hm : ∀ j ≤ 0, ((once .nop).runFrom r j).mass ≤ x.size + 2 := by
+        (Simulation.Program.body (once .nop)) true).verify
+        (StackMachine.Program.historySemantics (BitList.encodeTree x).toArray))
+      (fun c t ↦ c.last = Simulation.Program.loadedCfg 1 x ∧
+        c.configSup StackMachine.Cfg.mass ≤ Simulation.spaceBound 2 (x.size + 2) ∧
+        3 * (Cfg.mk true (TreeMachine.input (1 : Fin 2) x)).mass + 1 + q ≤ t)
+      (fun _ c t ↦ c.last = Simulation.Program.loadedCfg 1 x ∧
+        c.configSup StackMachine.Cfg.mass ≤ Simulation.spaceBound 2 (x.size + 2) ∧ q ≤ t) () := by
+  have hm : ∀ j ≤ 0, ((once .nop).runFrom (Cfg.mk true (input (1 : Fin 2) x)) j).mass ≤ x.size + 2 := by
     intro j hj
     have : j = 0 := by omega
     subst j
     change (∑ i, (TreeMachine.input (1 : Fin 2) x i).size) ≤ _
     rw [sum_size_input]
     omega
-  simpa only [Nat.zero_mul, Nat.zero_add, Controller.runFrom_zero, r] using
-    Simulation.Program.spec_loop (once .nop) r
-      (Simulation.Program.loadedCfg 1 x) false 0 (x.size + 2) q hr rfl
-      (by intro j hj; omega) hm
+  simpa using Simulation.Program.spec_loop (once .nop) (Cfg.mk true (input (1 : Fin 2) x))
+    (Simulation.Program.loadedCfg 1 x) 0 (x.size + 2) q rfl rfl (by intro j hj; omega) hm
 
 -- The public compiler exposes native stack computation and its complete resource theorem.
 example {k : ℕ} [NeZero k] {Q : Type} [FinEnum Q] (M : TreeMachine Id k Q)
     (x a : Tree) (t s : ℕ) (h : M.ComputesInTimeAndSpace x a t s) :
     (compiler M).ComputesInTimeAndSpace (BitList.encodeTree x) (BitList.encodeTree a)
-      (Simulation.timeBound k x.size t) (Simulation.spaceBound k x.size t) :=
+      (Simulation.timeBound k x.size t) (Simulation.spaceBound k s) :=
   Simulation.computesInTimeAndSpace M h
 
 end CompilerTests
