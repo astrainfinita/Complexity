@@ -130,12 +130,12 @@ def read (v : Var) : Code Value :=
 @[simps! build]
 def write (v : Var) (x : Value) : Code Unit := emit (.assign v.index x.expression)
 
-/-- Select a source block by a value's root. Both blocks are constructed statically. -/
+/-- Select a source block by a value's root. Exclusive branches share local slots. -/
 @[simps build]
 def ifNode (v : Value) (yes no : Code Unit) : Code Unit := ⟨fun n ↦
   let (_, m, cs) := yes.build n
-  let (_, l, ds) := no.build m
-  ((), l, [.branch v.expression (block cs) (block ds)])⟩
+  let (_, l, ds) := no.build n
+  ((), max m l, [.branch v.expression (block cs) (block ds)])⟩
 
 /-- Recheck the mutable variable's root each iteration. The body is constructed only once. -/
 @[simps build]

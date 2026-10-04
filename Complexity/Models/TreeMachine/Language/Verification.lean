@@ -79,9 +79,9 @@ end Exec
 
 @[simp] theorem exec_ifNode_iff (v : Value) (yes no : Code Unit) :
     (ifNode v yes no).Exec n s unitResult m t ↔
-      m = (no.build (yes.build n).2.1).2.1 ∧
+      m = max (yes.build n).2.1 (no.build n).2.1 ∧
       if (v.eval s).root then yes.Exec n s () (yes.build n).2.1 t
-      else no.Exec (yes.build n).2.1 s () m t := by
+      else no.Exec n s () (no.build n).2.1 t := by
   cases he : (v.expression.eval s).root <;> simp [Exec, Prod.ext_iff, Value.eval, he, eq_comm]
 
 namespace Exec
@@ -162,18 +162,16 @@ theorem write (v : Var) (a : Value) (Q : (ℕ → Tree) → Prop) :
 
 theorem ifNode (v : Value) (yes no : Code Unit) (Q : Unit → (ℕ → Tree) → Prop)
     (hy : yes.Total n (fun s ↦ P s ∧ (v.eval s).root = true) Q)
-    (hn : no.Total (yes.build n).2.1 (fun s ↦ P s ∧ (v.eval s).root = false) Q) :
+    (hn : no.Total n (fun s ↦ P s ∧ (v.eval s).root = false) Q) :
     (Code.ifNode v yes no).Total n P Q := by
   intro s hs
   cases he : (v.eval s).root with
   | false =>
     obtain ⟨⟨⟩, m, t, ht, hQ⟩ := hn s ⟨hs, he⟩
-    exact ⟨(), m, t, (exec_ifNode_iff ..).mpr ⟨ht.counter.symm, by simpa [he] using ht⟩, hQ⟩
+    exact ⟨(), _, t, (exec_ifNode_iff ..).mpr ⟨rfl, by simpa [he, ht.counter] using ht⟩, hQ⟩
   | true =>
     obtain ⟨⟨⟩, m, t, ht, hQ⟩ := hy s ⟨hs, he⟩
-    refine ⟨(), (no.build (yes.build n).2.1).2.1, t, ?_, hQ⟩
-    apply (exec_ifNode_iff ..).mpr
-    exact ⟨rfl, by simpa [he, ht.counter] using ht⟩
+    exact ⟨(), _, t, (exec_ifNode_iff ..).mpr ⟨rfl, by simpa [he, ht.counter] using ht⟩, hQ⟩
 
 /-- An invariant and decreasing source measure prove termination of a monadic loop. -/
 theorem whileNode (v : Var) (body : Code Unit) (I : (ℕ → Tree) → Prop)
