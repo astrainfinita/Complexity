@@ -65,24 +65,29 @@ end Exec
 @[simp] theorem exec_newVar_iff (v : Value) (a : Var) :
     (newVar v).Exec n s a m t ↔
       a = ⟨n⟩ ∧ m = n + 1 ∧ t = Function.update s n (v.eval s) := by
-  simp [Exec, Value.eval, eq_comm, and_assoc]
+  simp [Exec, eq_comm, and_assoc]
+
+@[simp] theorem exec_eval_iff (e : Expr ℕ) (a : Value) :
+    (eval e).Exec n s a m t ↔
+      a = .var n ∧ m = n + 1 ∧ t = Function.update s n (e.eval s) := by
+  simp [Exec, eq_comm, and_assoc]
 
 @[simp] theorem exec_read_iff (v : Var) (a : Value) :
     (read v).Exec n s a m t ↔
-      a = ⟨.var n⟩ ∧ m = n + 1 ∧ t = Function.update s n (v.get s) := by
-  simp [Exec, Var.get, eq_comm, and_assoc]
+      a = .var n ∧ m = n + 1 ∧ t = Function.update s n (v.get s) := by
+  simp [read, Var.get]
 
 @[simp] theorem exec_write_iff (v : Var) (a : Value) :
     (write v a).Exec n s unitResult m t ↔
       m = n ∧ t = Function.update s v.index (a.eval s) := by
-  simp [Exec, Value.eval, eq_comm]
+  simp [Exec, eq_comm]
 
 @[simp] theorem exec_ifNode_iff (v : Value) (yes no : Code Unit) :
     (ifNode v yes no).Exec n s unitResult m t ↔
       m = max (yes.build n).2.1 (no.build n).2.1 ∧
       if (v.eval s).root then yes.Exec n s () (yes.build n).2.1 t
       else no.Exec n s () (no.build n).2.1 t := by
-  cases he : (v.expression.eval s).root <;> simp [Exec, Prod.ext_iff, Value.eval, he, eq_comm]
+  cases he : (v.eval s).root <;> simp [Exec, Prod.ext_iff, he, eq_comm]
 
 namespace Exec
 
@@ -115,9 +120,14 @@ def Total (p : Code α) (n : ℕ) (P : (ℕ → Tree) → Prop)
     (newVar v).Total n P Q ↔ ∀ s, P s → Q ⟨n⟩ (Function.update s n (v.eval s)) := by
   simp [Total]
 
+@[simp] theorem total_eval_iff (e : Expr ℕ) (P : (ℕ → Tree) → Prop)
+    (Q : Value → (ℕ → Tree) → Prop) :
+    (eval e).Total n P Q ↔ ∀ s, P s → Q (.var n) (Function.update s n (e.eval s)) := by
+  simp [Total]
+
 @[simp] theorem total_read_iff (v : Var) (P : (ℕ → Tree) → Prop)
     (Q : Value → (ℕ → Tree) → Prop) :
-    (read v).Total n P Q ↔ ∀ s, P s → Q ⟨.var n⟩ (Function.update s n (v.get s)) := by
+    (read v).Total n P Q ↔ ∀ s, P s → Q (.var n) (Function.update s n (v.get s)) := by
   simp [Total]
 
 @[simp] theorem total_write_iff (v : Var) (a : Value) (P : (ℕ → Tree) → Prop)
@@ -153,8 +163,8 @@ theorem newVar (v : Value) (Q : Var → (ℕ → Tree) → Prop) :
   fun s hs ↦ ⟨⟨n⟩, n + 1, _, by simp, hs⟩
 
 theorem read (v : Var) (Q : Value → (ℕ → Tree) → Prop) :
-    (Code.read v).Total n (fun s ↦ Q ⟨.var n⟩ (Function.update s n (v.get s))) Q :=
-  fun s hs ↦ ⟨⟨.var n⟩, n + 1, _, by simp, hs⟩
+    (Code.read v).Total n (fun s ↦ Q (.var n) (Function.update s n (v.get s))) Q :=
+  fun s hs ↦ ⟨.var n, n + 1, _, by simp, hs⟩
 
 theorem write (v : Var) (a : Value) (Q : (ℕ → Tree) → Prop) :
     (Code.write v a).Total n (fun s ↦ Q (Function.update s v.index (a.eval s)))
@@ -195,7 +205,7 @@ end Total
 theorem computes_iff (p : Code Value) (x y : Tree) :
     p.Computes x y ↔ ∃ a m t,
       p.Exec 1 (Function.update (fun _ ↦ Tree.nil) 0 x) a m t ∧ a.eval t = y := by
-  simp [Computes, source, Procedure.Exec, Exec, Value.eval, Prod.ext_iff]
+  simp [Computes, source, Procedure.Exec, Exec, Prod.ext_iff]
 
 /-- A closed source contract suffices to establish the input/output specification. -/
 theorem Total.computes {p : Code Value} {P : (ℕ → Tree) → Prop} {x y : Tree}

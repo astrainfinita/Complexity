@@ -23,20 +23,20 @@ namespace Complexity.TreeProgram
 
 variable {ν : Type} {k : ℕ}
 
-/-- Evaluate a source test in temporary registers before reading its root. -/
+/-- Read the result's root, using existing registers directly for atoms. -/
 def Expr.test (e : Expr ν) (v : ν → Fin k) (z : Fin k) (b : ℕ)
     (hb : b + e.slots ≤ k) : TreeMachine.Program k Bool := do
-  e.compile v z b hb
-  TreeMachine.Program.root ⟨b, by have := e.slots_pos; omega⟩
+  let i ← e.compile v z b hb
+  TreeMachine.Program.root i
 
 theorem Expr.exec_test (e : Expr ν) (v : ν → Fin k) (z : Fin k) (b : ℕ)
     (hb : b + e.slots ≤ k) (hv : ∀ x, (v x).val < b) (hzv : z.val < b)
     (ρ : Fin k → Tree) (hz : ρ z = .nil) :
     ∃ σ, (e.test v z b hb).Exec TreeMachine.Program.semantics ρ (e.steps + 1)
       (e.eval (ρ ∘ v)).root σ ∧ σ ∘ v = ρ ∘ v ∧ σ z = .nil := by
-  obtain ⟨σ, he, hval, hf⟩ := e.exec_compile v z b hb hv hzv ρ hz
+  obtain ⟨σ, i, he, hval, _, hf⟩ := e.exec_compile v z b hb hv hzv ρ hz
   refine ⟨σ, ?_, funext (fun x ↦ hf (v x) (hv x)), (hf z hzv).trans hz⟩
-  have ht := TreeMachine.Program.exec_root ⟨b, by have := e.slots_pos; omega⟩ σ
+  have ht := TreeMachine.Program.exec_root i σ
   rw [hval] at ht
   exact he.bind ht
 
@@ -53,12 +53,7 @@ def Cmd.compile (p : Cmd ν) (v : ν → Fin k) (z : Fin k) (b : ℕ)
     (hb : b + p.slots ≤ k) : TreeMachine.Program k Unit :=
   match p with
   | .skip => pure ()
-  | .assign x e => do
-      e.compile v z b hb
-      TreeMachine.Program.copy z (v x) ⟨b, by
-        have := e.slots_pos
-        change b + e.slots ≤ k at hb
-        omega⟩
+  | .assign x e => e.assign (v x) v z b hb
   | .seq p q => do
       p.compile v z b (by simp only [slots] at hb; omega)
       q.compile v z b (by simp only [slots] at hb; omega)
@@ -83,13 +78,11 @@ theorem Cmd.Exec.compile [DecidableEq ν] {p : Cmd ν} {s t : ν → Tree}
   induction h generalizing ρ with
   | skip s => exact ⟨0, ρ, Program.Exec.pure _ _ _, hρ, hz⟩
   | assign x e s =>
-    obtain ⟨σ, he, hval, hf⟩ := e.exec_compile v z b hb hv hzv ρ hz
-    let d : Fin k := ⟨b, by have := e.slots_pos; change b + e.slots ≤ k at hb; omega⟩
-    refine ⟨e.steps + 2, Function.update σ (v x) (σ d),
-      he.bind (TreeMachine.Program.exec_copy z (v x) d σ), ?_, ?_⟩
-    · rw [Function.update_comp_eq_of_injective σ hi, hval, hρ]
-      rw [show σ ∘ v = s from (funext fun y ↦ hf (v y) (hv y)).trans hρ]
-    · simpa only [Function.update_of_ne (Ne.symm (hvz x))] using (hf z hzv).trans hz
+    obtain ⟨σ, he, hf⟩ := e.exec_assign (v x) v z b hb hv hzv ρ hz
+    refine ⟨e.assignSteps, σ, he, ?_, ?_⟩
+    · rw [← hρ, ← Function.update_comp_eq_of_injective ρ hi]
+      exact funext fun y ↦ hf (v y) (hv y)
+    · simpa [Ne.symm (hvz x), hz] using hf z hzv
   | seq hp hq ihp ihq =>
     obtain ⟨n, σ, hp', hσ, hzσ⟩ := ihp (by simp only [Cmd.slots] at hb; omega) ρ hρ hz
     obtain ⟨m, τ, hq', hτ, hzτ⟩ := ihq (by simp only [Cmd.slots] at hb; omega) σ hσ hzσ
@@ -148,13 +141,6 @@ def register (p : Procedure ν) (x : ν) : Fin p.registers :=
 def empty (p : Procedure ν) : Fin p.registers :=
   ⟨FinEnum.card ν + 1, by simp only [registers]; omega⟩
 
-/-- The first shared temporary register. -/
-def temporary (p : Procedure ν) : Fin p.registers :=
-  ⟨FinEnum.card ν + 2, by
-    have := p.result.slots_pos
-    simp only [registers]
-    omega⟩
-
 private theorem register_injective (p : Procedure ν) : Function.Injective p.register := by
   intro x y h
   exact FinEnum.equiv.injective (Fin.ext (Nat.add_right_cancel (congrArg Fin.val h)))
@@ -176,8 +162,8 @@ private theorem register_ne_empty (p : Procedure ν) (x : ν) : p.register x ≠
 def code (p : Procedure ν) : TreeMachine.Program p.registers Unit := do
   TreeMachine.Program.copy p.empty (p.register p.input) 0
   p.body.compile p.register p.empty (FinEnum.card ν + 2) (by simp [registers])
-  p.result.compile p.register p.empty (FinEnum.card ν + 2) (by simp [registers])
-  TreeMachine.Program.copy p.empty 0 p.temporary
+  let i ← p.result.compile p.register p.empty (FinEnum.card ν + 2) (by simp [registers])
+  TreeMachine.Program.copy p.empty 0 i
 
 /-- A finite tree machine with automatically chosen registers and control states. -/
 def compile (p : Procedure ν) : TreeMachine Id p.registers (p.code.State ⊕ p.code.Exit) :=
@@ -214,10 +200,10 @@ theorem compile_correct {p : Procedure ν} {x y : Tree} (h : p.Exec x y) :
   obtain ⟨n, τ, hb, hτ, hzτ⟩ := hs.compile p.register p.register_injective p.empty
     (FinEnum.card ν + 2) (by simp [registers]) p.register_lt (by simp [empty])
     p.register_ne_empty σ hinit hz
-  obtain ⟨υ, he, hval, _⟩ := p.result.exec_compile p.register p.empty
+  obtain ⟨υ, i, he, hval, _⟩ := p.result.exec_compile p.register p.empty
     (FinEnum.card ν + 2) (by simp [registers]) p.register_lt (by simp [empty]) τ hzτ
-  have hout : υ p.temporary = y := hval.trans ((congrArg p.result.eval hτ).trans hy)
-  have hf := TreeMachine.Program.exec_copy p.empty 0 p.temporary υ
+  have hout : υ i = y := hval.trans ((congrArg p.result.eval hτ).trans hy)
+  have hf := TreeMachine.Program.exec_copy p.empty 0 i υ
   exact ⟨2 + (n + (p.result.steps + 2)), TreeMachine.Program.run_output
     (p := p.code) (hcopy.bind (hb.bind (he.bind hf))) (by simpa using hout)⟩
 

@@ -189,22 +189,21 @@ private def mkInstance (ind : InductiveVal) (enc dec correct : Name) : TermElabM
 private def codeName (ind : InductiveVal) (n : Name) : Name :=
   privateToUserName ind.name ++ `Code ++ n
 
-private def mkConstructor (ind : InductiveVal) (ctor : ConstructorVal) :
-    TermElabM (Array Command) := do
+private def mkConstructor (ind : InductiveVal) (ctor : ConstructorVal) : TermElabM Command := do
   let name := codeName ind ctor.name.getString!.toName
   let args ← (List.range ctor.numFields).toArray.mapM fun _ =>
     return mkIdent (← mkFreshUserName `a)
   let binders ← args.mapM fun a => `(bracketedBinder| ($a : Value))
-  let rhs ← (ctorShape ind ctor).term (args.map (⟨·.raw⟩)) ``Value.nil ``Value.pair
-  let s := mkIdent (← mkFreshUserName `s)
-  let evals ← args.mapM fun a => ``(Value.eval $a $s)
-  let tree ← (ctorShape ind ctor).term evals ``Tree.nil ``Tree.pair
-  let evalName := codeName ind (.mkSimple s!"eval_{ctor.name.getString!}")
-  return #[← `(/-- Build this constructor's tree representation from symbolic field values. -/
-    @[expose] def $(rootIdent name):ident $binders:bracketedBinder* : Value := $rhs),
-    ← `(@[simp] theorem $(rootIdent evalName):ident
-      $binders:bracketedBinder* ($s : ℕ → Tree) :
-        ($(mkIdent name) $args:term*).eval $s = $tree := rfl)]
+  let shape := ctorShape ind ctor
+  let rhs ← match shape with
+    | .nil => ``(pure Value.nil)
+    | .field i => ``(pure $(args[i]!))
+    | .pair _ _ => do
+      let fields ← args.mapM fun a => ``(Value.expression $a)
+      let e ← shape.term fields ``Expr.nil ``Expr.pair
+      ``(Code.eval $e)
+  `(/-- Compute this constructor once from its already evaluated fields. -/
+    @[expose, simp] def $(rootIdent name):ident $binders:bracketedBinder* : Code Value := $rhs)
 
 private def mkEncodeEquation (ind : InductiveVal) (ctor : ConstructorVal) :
     TermElabM Command := do
@@ -220,13 +219,12 @@ private def mkEncodeEquation (ind : InductiveVal) (ctor : ConstructorVal) :
       $header.binders:bracketedBinder* $binders:bracketedBinder* :
     encode Tree (@$(mkCIdent ctor.name) $params:term* $args:term*) = $rhs := rfl)
 
-private def Shape.projections (s : Shape) (v : Term) : TermElabM (List (Nat × Term)) := do
-  match s with
-  | .nil => return []
-  | .field i => return [(i, v)]
+private def Shape.projections : Shape → List (Nat × List Bool)
+  | .nil => []
+  | .field i => [(i, [])]
   | .pair a b =>
-    return (← a.projections (← ``(Value.left $v))) ++
-      (← b.projections (← ``(Value.right $v)))
+      a.projections.map (fun (i, p) => (i, false :: p)) ++
+        b.projections.map (fun (i, p) => (i, true :: p))
 
 private def Shape.sites : Shape → List (List Bool)
   | .field _ => []
@@ -239,9 +237,9 @@ private def Shape.nodeAt : Shape → List Bool → Option Bool
   | .pair a b, right :: rest => (if right then b else a).nodeAt rest
   | _, _ => none
 
-private def project (v : Term) (path : List Bool) : TermElabM Term :=
-  path.foldlM (init := v) fun v right =>
-    if right then ``(Value.right $v) else ``(Value.left $v)
+private def project (v : Term) (path : List Bool) : TermElabM Term := do
+  path.foldlM (init := ← ``(pure $v)) fun p right => do
+    if right then ``($p >>= Value.right) else ``($p >>= Value.left)
 
 /-- Inspect only enough of the layout to distinguish constructors, never encoded field data. -/
 private partial def dispatch (v : Term) (choices : Array (Shape × Term)) : TermElabM Term := do
@@ -252,7 +250,8 @@ private partial def dispatch (v : Term) (choices : Array (Shape × Term)) : Term
     if nodes.all (·.isSome) && nodes.contains (some true) && nodes.contains (some false) then
       let yes := choices.filter fun (s, _) => s.nodeAt path == some true
       let no := choices.filter fun (s, _) => s.nodeAt path == some false
-      return ← ``(Code.ifNode $(← project v path) $(← dispatch v yes) $(← dispatch v no))
+      return ← ``($(← project v path) >>= fun node =>
+        Code.ifNode node $(← dispatch v yes) $(← dispatch v no))
   throwError "constructor layouts cannot be distinguished without inspecting encoded fields"
 
 private def mkCases (ind : InductiveVal) : TermElabM (Array Command) := do
@@ -278,9 +277,11 @@ private def mkCases (ind : InductiveVal) : TermElabM (Array Command) := do
     unitBinders := unitBinders.push (← `(bracketedBinder| ($handler : $unitTy)))
     valueBinders := valueBinders.push (← `(bracketedBinder| ($handler : $valueTy)))
     let shape := ctorShape ind ctor
-    let projections ← shape.projections v
-    let fields := (projections.mergeSort (fun a b => a.1 ≤ b.1)).toArray.map (·.2)
-    choices := choices.push (shape, ← `($handler $fields*))
+    let paths := (shape.projections.mergeSort (fun a b => a.1 ≤ b.1)).toArray.map (·.2)
+    let mut invoke ← `($handler $args:term*)
+    for (arg, path) in (args.zip paths).reverse do
+      invoke ← ``($(← project v path) >>= fun $arg => $invoke)
+    choices := choices.push (shape, invoke)
     let mut branch ← ``(($handler $args:term*) >>= fun a => Code.write $result a)
     for arg in args.reverse do branch ← `(fun $arg => $branch)
     joined := joined.push branch
@@ -288,7 +289,7 @@ private def mkCases (ind : InductiveVal) : TermElabM (Array Command) := do
   let run ← `($(mkIdent casesName) $v $joined:term*)
   let joinedBody ← if ind.ctors.length = 1 then pure body else
     ``(Code.newVar Value.nil >>= fun $result => $run >>= fun _ => Code.read $result)
-  return #[← `(/-- Select a runtime constructor branch, passing its symbolic fields. -/
+  return #[← `(/-- Select a runtime constructor branch, passing its evaluated fields. -/
     @[expose, simp] def $(rootIdent casesName):ident ($v : Value)
       $unitBinders:bracketedBinder* : Code Unit := $body),
     ← `(/-- Select a runtime constructor branch and return its tree value. -/
@@ -301,7 +302,7 @@ private def deriveOperations (name : Name) (equations := true) : CommandElabM Un
     let mut cmds := #[]
     for c in ind.ctors do
       let ctor ← getConstInfoCtor c
-      cmds := cmds ++ (← mkConstructor ind ctor)
+      cmds := cmds.push (← mkConstructor ind ctor)
       if equations then cmds := cmds.push (← mkEncodeEquation ind ctor)
     return cmds ++ (← mkCases ind)
   for cmd in cmds do elabCommand cmd

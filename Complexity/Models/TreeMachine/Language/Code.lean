@@ -11,18 +11,18 @@ public import Mathlib.Control.Basic
 /-! # Tree programs constructed by ordinary Lean definitions
 
 `Code` is a construction monad. Its variables are source locations, not physical registers.
-Reads create snapshots; expressions over snapshots have value semantics. Branch and loop
-combinators construct their bodies once, before machine execution.
+Reads create snapshots, and tree operations bind their computed results to fresh source
+variables. Branch and loop combinators construct their bodies once, before machine execution.
 -/
 
 @[expose] public section
 
 namespace Complexity.TreeProgram
 
-/-- A symbolic tree expression; the construction API uses snapshots to give it value semantics. -/
-structure Value where
-  /-- The source expression denoting this value. -/
-  expression : Expr ℕ
+/-- An immutable source value: the empty tree or an already computed source variable. -/
+inductive Value where
+  | nil
+  | var (index : ℕ)
 
 /-- A mutable source location, allocated independently of the target register layout. -/
 @[ext] structure Var where
@@ -32,33 +32,25 @@ structure Value where
 
 namespace Value
 
-/-- Interpret a symbolic value in a source environment. -/
-def eval (v : Value) (s : ℕ → Tree) : Tree := v.expression.eval s
+/-- The source expression referencing this value, without repeating its computation. -/
+def expression : Value → Expr ℕ
+  | .nil => .nil
+  | .var i => .var i
+
+/-- Interpret a value in a source environment. -/
+def eval : Value → (ℕ → Tree) → Tree
+  | .nil, _ => .nil
+  | .var i, s => s i
 
 /-- The input value, available before any local allocations. -/
-def input : Value := ⟨.var 0⟩
+def input : Value := .var 0
 
-/-- An empty tree expression. -/
-def nil : Value := ⟨.nil⟩
-
-/-- The left subtree of an immutable value. -/
-def left (v : Value) : Value := ⟨.left v.expression⟩
-
-/-- The right subtree of an immutable value. -/
-def right (v : Value) : Value := ⟨.right v.expression⟩
-
-/-- Pair two immutable values. -/
-def pair (a b : Value) : Value := ⟨.pair a.expression b.expression⟩
-
-@[simp] theorem eval_mk (e : Expr ℕ) (s : ℕ → Tree) :
-    (Value.mk e).eval s = e.eval s := rfl
+@[simp] theorem eval_expression (v : Value) (s : ℕ → Tree) :
+    v.expression.eval s = v.eval s := by cases v <;> rfl
 
 @[simp] theorem eval_input (s : ℕ → Tree) : input.eval s = s 0 := rfl
 @[simp] theorem eval_nil (s : ℕ → Tree) : nil.eval s = .nil := rfl
-@[simp] theorem eval_left (v : Value) (s : ℕ → Tree) : v.left.eval s = (v.eval s).left := rfl
-@[simp] theorem eval_right (v : Value) (s : ℕ → Tree) : v.right.eval s = (v.eval s).right := rfl
-@[simp] theorem eval_pair (a b : Value) (s : ℕ → Tree) :
-    (pair a b).eval s = .pair (a.eval s) (b.eval s) := rfl
+@[simp] theorem eval_var (i : ℕ) (s : ℕ → Tree) : (var i).eval s = s i := rfl
 
 end Value
 
@@ -121,10 +113,14 @@ def emit (c : Cmd ℕ) : Code Unit := ⟨fun n ↦ ((), n, [c])⟩
 def newVar (v : Value) : Code Var :=
   ⟨fun n ↦ (⟨n⟩, n + 1, [.assign n v.expression])⟩
 
-/-- Read a mutable location into a fresh immutable snapshot. -/
+/-- Evaluate a source expression once and retain its result as an immutable value. -/
 @[simps build]
-def read (v : Var) : Code Value :=
-  ⟨fun n ↦ (⟨.var n⟩, n + 1, [.assign n (.var v.index)])⟩
+def eval (e : Expr ℕ) : Code Value :=
+  ⟨fun n ↦ (.var n, n + 1, [.assign n e])⟩
+
+/-- Read a mutable location into a fresh immutable snapshot. -/
+@[simps! build]
+def read (v : Var) : Code Value := eval (.var v.index)
 
 /-- Assign a tree value to a mutable source location. -/
 @[simps! build]
@@ -155,5 +151,18 @@ def source (p : Code Value) : Procedure ℕ :=
 def Computes (p : Code Value) (x y : Tree) : Prop := p.source.Exec x y
 
 end Code
+
+namespace Value
+
+/-- Compute the left subtree once. -/
+@[simp] def left (v : Value) : Code Value := Code.eval (.left v.expression)
+
+/-- Compute the right subtree once. -/
+@[simp] def right (v : Value) : Code Value := Code.eval (.right v.expression)
+
+/-- Construct a node once, retaining its result for subsequent uses. -/
+@[simp] def pair (a b : Value) : Code Value := Code.eval (.pair a.expression b.expression)
+
+end Value
 
 end Complexity.TreeProgram
