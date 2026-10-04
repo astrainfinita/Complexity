@@ -61,6 +61,8 @@ example : decode Tree [false, false] = Part.none := rfl
 
 -- A tree in the wrong list format does not denote a bit string.
 example : decode (List Bool)
-    (Tree.pair (Tree.pair Tree.nil (Tree.pair Tree.nil Tree.nil)) Tree.nil) = Part.none := rfl
+    (Tree.pair (Tree.pair Tree.nil (Tree.pair Tree.nil Tree.nil)) Tree.nil) = Part.none := by
+  apply Part.eq_none_iff.mpr
+  rintro (_ | ⟨(_ | _), bs⟩) <;> simp [UniqueEncoding.mem_decode_iff]
 
 end Complexity.EncodingTest
