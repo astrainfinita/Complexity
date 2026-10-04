@@ -175,7 +175,8 @@ private def finished (p : Code Value) (x y : Tree) (n : ℕ) : Bool :=
 #guard finished (snapshot .input) leafPair leafPair 30
 #guard finished (choose .input) .nil leafPair 30
 #guard finished (choose .input) leafPair .nil 30
-#guard finished (swapTwice .input) leafPair leafPair 30
+#guard finished (swapTwice .input) leafPair leafPair 21
+#guard !(finished (swapTwice .input) leafPair leafPair 20)
 #guard finished (reverse .input) .nil .nil 30
 #guard finished (do
   let v ← newVar .input
