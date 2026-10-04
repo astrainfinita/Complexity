@@ -32,10 +32,10 @@ def Expr.test (e : Expr ν) (v : ν → Fin k) (z : Fin k) (b : ℕ)
 theorem Expr.exec_test (e : Expr ν) (v : ν → Fin k) (z : Fin k) (b : ℕ)
     (hb : b + e.slots ≤ k) (hv : ∀ x, (v x).val < b) (hzv : z.val < b)
     (ρ : Fin k → Tree) (hz : ρ z = .nil) :
-    ∃ n σ, (e.test v z b hb).Exec TreeMachine.Program.semantics ρ n
+    ∃ σ, (e.test v z b hb).Exec TreeMachine.Program.semantics ρ (e.steps + 1)
       (e.eval (ρ ∘ v)).root σ ∧ σ ∘ v = ρ ∘ v ∧ σ z = .nil := by
-  obtain ⟨n, σ, he, hval, hf⟩ := e.exec_compile v z b hb hv hzv ρ hz
-  refine ⟨n + 1, σ, ?_, funext (fun x ↦ hf (v x) (hv x)), (hf z hzv).trans hz⟩
+  obtain ⟨σ, he, hval, hf⟩ := e.exec_compile v z b hb hv hzv ρ hz
+  refine ⟨σ, ?_, funext (fun x ↦ hf (v x) (hv x)), (hf z hzv).trans hz⟩
   have ht := TreeMachine.Program.exec_root ⟨b, by have := e.slots_pos; omega⟩ σ
   rw [hval] at ht
   exact he.bind ht
@@ -83,9 +83,9 @@ theorem Cmd.Exec.compile [DecidableEq ν] {p : Cmd ν} {s t : ν → Tree}
   induction h generalizing ρ with
   | skip s => exact ⟨0, ρ, Program.Exec.pure _ _ _, hρ, hz⟩
   | assign x e s =>
-    obtain ⟨n, σ, he, hval, hf⟩ := e.exec_compile v z b hb hv hzv ρ hz
+    obtain ⟨σ, he, hval, hf⟩ := e.exec_compile v z b hb hv hzv ρ hz
     let d : Fin k := ⟨b, by have := e.slots_pos; change b + e.slots ≤ k at hb; omega⟩
-    refine ⟨n + 2, Function.update σ (v x) (σ d),
+    refine ⟨e.steps + 2, Function.update σ (v x) (σ d),
       he.bind (TreeMachine.Program.exec_copy z (v x) d σ), ?_, ?_⟩
     · rw [Function.update_comp_eq_of_injective σ hi, hval, hρ]
       rw [show σ ∘ v = s from (funext fun y ↦ hf (v y) (hv y)).trans hρ]
@@ -95,33 +95,34 @@ theorem Cmd.Exec.compile [DecidableEq ν] {p : Cmd ν} {s t : ν → Tree}
     obtain ⟨m, τ, hq', hτ, hzτ⟩ := ihq (by simp only [Cmd.slots] at hb; omega) σ hσ hzσ
     exact ⟨n + m, τ, hp'.bind hq', hτ, hzτ⟩
   | @branch_true e p q s t he hp ih =>
-    obtain ⟨n, σ, ht, hσ, hzσ⟩ := Expr.exec_test e v z b
+    obtain ⟨σ, ht, hσ, hzσ⟩ := Expr.exec_test e v z b
       (by simp only [Cmd.slots] at hb; omega) hv hzv ρ hz
     obtain ⟨m, τ, hp', hτ, hzτ⟩ := ih (by simp only [Cmd.slots] at hb; omega)
       σ (hσ.trans hρ) hzσ
-    refine ⟨n + m, τ, ht.bind ?_, hτ, hzτ⟩
+    refine ⟨e.steps + 1 + m, τ, ht.bind ?_, hτ, hzτ⟩
     simpa only [hρ, he, Bool.true_eq, ite_true] using hp'
   | @branch_false e p q s t he hq ih =>
-    obtain ⟨n, σ, ht, hσ, hzσ⟩ := Expr.exec_test e v z b
+    obtain ⟨σ, ht, hσ, hzσ⟩ := Expr.exec_test e v z b
       (by simp only [Cmd.slots] at hb; omega) hv hzv ρ hz
     obtain ⟨m, τ, hq', hτ, hzτ⟩ := ih (by simp only [Cmd.slots] at hb; omega)
       σ (hσ.trans hρ) hzσ
-    refine ⟨n + m, τ, ht.bind ?_, hτ, hzτ⟩
+    refine ⟨e.steps + 1 + m, τ, ht.bind ?_, hτ, hzτ⟩
     simpa only [hρ, he, Bool.false_eq_true, ite_false] using hq'
   | @while_false e p s he =>
-    obtain ⟨n, σ, ht, hσ, hzσ⟩ := Expr.exec_test e v z b
+    obtain ⟨σ, ht, hσ, hzσ⟩ := Expr.exec_test e v z b
       (by simp only [Cmd.slots] at hb; omega) hv hzv ρ hz
-    refine ⟨n + 0 + 1, σ, Program.Exec.repeatUntilWith_done TreeMachine.Op.nop _ (ht.bind ?_),
+    refine ⟨e.steps + 1 + 0 + 1, σ,
+      Program.Exec.repeatUntilWith_done TreeMachine.Op.nop _ (ht.bind ?_),
       hσ.trans hρ, hzσ⟩
     simp only [hρ, he, Bool.false_eq_true, ite_false]
     exact (Program.Exec.pure TreeMachine.Program.semantics true σ)
   | @while_true e p s t u he hp hr ihp ihr =>
-    obtain ⟨n, σ, ht, hσ, hzσ⟩ := Expr.exec_test e v z b
+    obtain ⟨σ, ht, hσ, hzσ⟩ := Expr.exec_test e v z b
       (by simp only [Cmd.slots] at hb; omega) hv hzv ρ hz
     obtain ⟨m, τ, hp', hτ, hzτ⟩ := ihp (by simp only [Cmd.slots] at hb; omega)
       σ (hσ.trans hρ) hzσ
     obtain ⟨l, υ, hr', hυ, hzυ⟩ := ihr hb τ hτ hzτ
-    refine ⟨n + (m + 0) + l + 1, υ,
+    refine ⟨e.steps + 1 + (m + 0) + l + 1, υ,
       Program.Exec.repeatUntilWith_next TreeMachine.Op.nop _ (ht.bind ?_) hr', hυ, hzυ⟩
     simp only [hρ, he, ite_true]
     exact hp'.bind (Program.Exec.pure TreeMachine.Program.semantics false τ)
@@ -213,11 +214,11 @@ theorem compile_correct {p : Procedure ν} {x y : Tree} (h : p.Exec x y) :
   obtain ⟨n, τ, hb, hτ, hzτ⟩ := hs.compile p.register p.register_injective p.empty
     (FinEnum.card ν + 2) (by simp [registers]) p.register_lt (by simp [empty])
     p.register_ne_empty σ hinit hz
-  obtain ⟨m, υ, he, hval, _⟩ := p.result.exec_compile p.register p.empty
+  obtain ⟨υ, he, hval, _⟩ := p.result.exec_compile p.register p.empty
     (FinEnum.card ν + 2) (by simp [registers]) p.register_lt (by simp [empty]) τ hzτ
   have hout : υ p.temporary = y := hval.trans ((congrArg p.result.eval hτ).trans hy)
   have hf := TreeMachine.Program.exec_copy p.empty 0 p.temporary υ
-  exact ⟨2 + (n + (m + 2)), TreeMachine.Program.run_output
+  exact ⟨2 + (n + (p.result.steps + 2)), TreeMachine.Program.run_output
     (p := p.code) (hcopy.bind (hb.bind (he.bind hf))) (by simpa using hout)⟩
 
 end Procedure

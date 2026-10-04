@@ -16,6 +16,13 @@ namespace Complexity.TreeProgram.Expr
 
 variable {ν : Type} {k : ℕ}
 
+/-- Exact unit-time cost of the compiled expression, including copies of source variables. -/
+def steps : Expr ν → ℕ
+  | .nil => 1
+  | .var _ => 2
+  | .left e | .right e => e.steps + 1
+  | .pair a b => a.steps + (b.steps + 1)
+
 /-- The number of temporary registers needed to evaluate an expression. -/
 def slots : Expr ν → ℕ
   | .nil | .var _ => 1
@@ -52,40 +59,40 @@ private theorem update_below (ρ : Fin k → Tree) (d i : Fin k) (x : Tree)
   have h : i ≠ d := by intro h; subst i; omega
   simp [h]
 
-/-- Compilation computes the source expression and preserves all earlier registers. -/
+/-- The compiled expression takes the statically computed steps and preserves earlier registers. -/
 theorem exec_compile (e : Expr ν) (v : ν → Fin k) (z : Fin k) (b : ℕ)
     (hb : b + e.slots ≤ k) (hv : ∀ x, (v x).val < b) (hzv : z.val < b)
     (ρ : Fin k → Tree) (hz : ρ z = .nil) :
-    ∃ n σ, (e.compile v z b hb).Exec TreeMachine.Program.semantics ρ n () σ ∧
+    ∃ σ, (e.compile v z b hb).Exec TreeMachine.Program.semantics ρ e.steps () σ ∧
       σ ⟨b, by have := e.slots_pos; omega⟩ = e.eval (ρ ∘ v) ∧
       ∀ i : Fin k, i.val < b → σ i = ρ i := by
   induction e generalizing b ρ with
   | nil =>
       let d : Fin k := ⟨b, by simp only [slots] at hb; omega⟩
-      refine ⟨1, (TreeMachine.Op.left d z).eval ρ,
+      refine ⟨(TreeMachine.Op.left d z).eval ρ,
         TreeMachine.Program.exec_act _ _, ?_, ?_⟩
       · simp [d, hz]
       · intro i hi
         exact update_below ρ d i _ hi
   | var x =>
       let d : Fin k := ⟨b, by simp only [slots] at hb; omega⟩
-      refine ⟨2, Function.update ρ d (ρ (v x)),
+      refine ⟨Function.update ρ d (ρ (v x)),
         TreeMachine.Program.exec_copy _ _ _ _, ?_, ?_⟩
       · simp [d]
       · intro i hi
         exact update_below ρ d i _ hi
   | left e ih =>
-      obtain ⟨n, σ, hrun, hval, hframe⟩ := ih b hb hv hzv ρ hz
+      obtain ⟨σ, hrun, hval, hframe⟩ := ih b hb hv hzv ρ hz
       let d : Fin k := ⟨b, by have := e.slots_pos; change b + e.slots ≤ k at hb; omega⟩
-      refine ⟨n + 1, (TreeMachine.Op.left d d).eval σ,
+      refine ⟨(TreeMachine.Op.left d d).eval σ,
         hrun.bind (TreeMachine.Program.exec_act _ _), ?_, ?_⟩
       · simpa [d] using congrArg BinaryTree.left hval
       · intro i hi
         exact (update_below σ d i _ hi).trans (hframe i hi)
   | right e ih =>
-      obtain ⟨n, σ, hrun, hval, hframe⟩ := ih b hb hv hzv ρ hz
+      obtain ⟨σ, hrun, hval, hframe⟩ := ih b hb hv hzv ρ hz
       let d : Fin k := ⟨b, by have := e.slots_pos; change b + e.slots ≤ k at hb; omega⟩
-      refine ⟨n + 1, (TreeMachine.Op.right d d).eval σ,
+      refine ⟨(TreeMachine.Op.right d d).eval σ,
         hrun.bind (TreeMachine.Program.exec_act _ _), ?_, ?_⟩
       · simpa [d] using congrArg BinaryTree.right hval
       · intro i hi
@@ -95,12 +102,12 @@ theorem exec_compile (e : Expr ν) (v : ν → Fin k) (z : Fin k) (b : ℕ)
       have hc : b + 1 + c.slots ≤ k := by simp only [slots] at hb; omega
       let d : Fin k := ⟨b, by have := a.slots_pos; omega⟩
       let d' : Fin k := ⟨b + 1, by have := c.slots_pos; omega⟩
-      obtain ⟨n, σ, hrun, hval, hframe⟩ := iha b ha hv hzv ρ hz
-      obtain ⟨m, τ, hrun', hval', hframe'⟩ := ihc (b + 1) hc
+      obtain ⟨σ, hrun, hval, hframe⟩ := iha b ha hv hzv ρ hz
+      obtain ⟨τ, hrun', hval', hframe'⟩ := ihc (b + 1) hc
         (fun x ↦ Nat.lt_succ_of_lt (hv x)) (Nat.lt_succ_of_lt hzv) σ
         ((hframe z hzv).trans hz)
       have hvars : σ ∘ v = ρ ∘ v := funext fun x ↦ hframe (v x) (hv x)
-      refine ⟨n + (m + 1), (TreeMachine.Op.pair d d d').eval τ,
+      refine ⟨(TreeMachine.Op.pair d d d').eval τ,
         hrun.bind (hrun'.bind (TreeMachine.Program.exec_act _ _)), ?_, ?_⟩
       · have hd : τ d = a.eval (ρ ∘ v) :=
           (hframe' d (by dsimp [d]; omega)).trans hval
