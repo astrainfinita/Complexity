@@ -35,12 +35,10 @@ private theorem timeBound_polynomial (k : ℕ) (p : Polynomial ℕ) :
     ∃ q : Polynomial ℕ, ∀ n,
       BitList.timeBound k n (p.eval (4 * n + 1)) = q.eval n := by
   let q := p.comp (4 * Polynomial.X + 1)
-  let r : Polynomial ℕ := 4 * Polynomial.X + 1
-  refine ⟨9 * Polynomial.X + 6 +
-    q * (2 + Polynomial.C k * (30 * (r + Polynomial.C k + q + 1))) +
-    (7 * (r + Polynomial.C k + q) + 3), ?_⟩
+  let r : Polynomial ℕ := 4 * Polynomial.X + 1 + Polynomial.C k
+  refine ⟨(9 * Polynomial.X + 6) + (40 * q + 3 * r + 1) + (7 * (r + q) + 2), ?_⟩
   intro n
-  simp [BitList.timeBound, Program.stepTime, q, r]
+  simp [BitList.timeBound, q, r]
 
 /-- For bit-string encodings stored as list trees, the existing tree simulator
 gives polynomial time on the original bit strings, with no compatibility hypothesis. -/
@@ -57,7 +55,7 @@ theorem fp_subset_stack_comp {α β : Type*} [e : Encoding (List Bool) α]
   let : Fintype Q := Fintype.ofFinite Q
   let : FinEnum Q := FinEnum.ofEquiv (Fin (Fintype.card Q)) (Fintype.equivFin Q)
   let t := fun n => BitList.timeBound k n (p.eval (4 * n + 1))
-  let s := fun n => BitList.spaceBound k n (p.eval (4 * n + 1))
+  let s := fun n => spaceBound k (4 * n + 1 + k + p.eval (4 * n + 1))
   have hc : StackMachine.Computes (BitList.compiler M) f t s := by
     intro xs a ha
     obtain ⟨b, hb, hm⟩ := h (Tree.encodeBitList xs) a
@@ -65,7 +63,10 @@ theorem fp_subset_stack_comp {α β : Type*} [e : Encoding (List Bool) α]
     obtain ⟨ys, hy, hd⟩ := (Encoding.mem_comp_iff bitListEncoding.toEncoding d).1 hb
     obtain rfl := (UniqueEncoding.encode_of_mem_decode hy).symm
     have ht := p.monotone_eval_nat (Tree.size_encodeBitList_le xs)
-    exact ⟨ys, hd, BitList.computesInTimeAndSpace M (hm.mono ht le_rfl)⟩
+    have hs := Nat.add_le_add_right (Nat.add_le_add_right (Tree.size_encodeBitList_le xs) k)
+      (p.eval (4 * xs.length + 1))
+    exact ⟨ys, hd, BitList.computesInTimeAndSpace M
+      ((hm.mono ht le_rfl).space_of_time.mono le_rfl hs)⟩
   obtain ⟨q, hq⟩ := timeBound_polynomial k p
   obtain ⟨b, hb⟩ := IsBigO.exists_pow q
   exact FP.ftime_subset b ⟨t, ⟨s, hc.computableInTimeAndSpace⟩,

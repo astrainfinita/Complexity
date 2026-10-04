@@ -6,6 +6,7 @@ Authors: Yuyang Zhao
 module
 
 public import Complexity.Models.TreeMachine.Simulation.Build
+public import Complexity.Models.StackMachine.Deterministic
 
 /-! # One simulated tree-machine transition -/
 
@@ -19,24 +20,21 @@ open StackMachine.Program Work Std.WP
 
 variable {k : ℕ} {Q : Type} {xs : Array Bool}
 
-/-- Simulate one source step, or return the current register bank on halting. -/
-def body (M : TreeMachine Id k Q) (s : Q × Bool) :
-    StackMachine.Program (Work k) Bool ((Q × Bool) ⊕ Bool) := do
-  if M.halt s.1 then
-    pure (.inr s.2)
+/-- Read the roots and update just the selected register. -/
+def body (M : TreeMachine Id k Q) (q : Q) : StackMachine.Program (Work k) Bool (Q ⊕ Unit) := do
+  if M.halt q then pure (.inr ())
   else
-    let v ← roots s.2
-    let a := (M.transition s.1 v).run
-    Program.forFin (build s.2 a)
-    pure (.inl (a.state, !s.2))
+    let v ← roots
+    let a := (M.transition q v).run
+    build a.op
+    pure (.inl a.state)
 
-private theorem spec_roots (c : StackMachine.Cfg (Work k) Bool Unit xs) (b : Bool)
-    (ρ : Fin k → Complexity.Tree) (σ : Fin k → List Bool)
-    (hw : c.stacks = contents b (fun i ↦ BitList.encodeTree (ρ i)) σ) (n : ℕ) (hn : 0 < n) :
-    Triple ((roots b).verify (semantics xs))
+private theorem spec_roots (c : StackMachine.Cfg (Work k) Bool Unit xs)
+    (ρ : Fin k → Complexity.Tree) (hw : c.stacks = contents ρ) (n : ℕ) (hn : 0 < n) :
+    Triple (roots.verify (semantics xs))
       (fun s t ↦ s = c ∧ t = n)
       (fun v s t ↦ v = (fun i ↦ Complexity.Tree.root (ρ i)) ∧ s = c ∧ t = n - 1) () := by
-  have he : (fun i ↦ ((c.stacks (data b i)).head? == some true)) =
+  have he : (fun i ↦ ((c.stacks (data i)).head? == some true)) =
       fun i ↦ Complexity.Tree.root (ρ i) := by
     funext i
     rw [hw, contents_data]
@@ -45,66 +43,44 @@ private theorem spec_roots (c : StackMachine.Cfg (Work k) Bool Unit xs) (b : Boo
   vcgen
   all_goals simp_all
 
-/-- Each register block rebuilds just its destination in the spare bank. -/
-private theorem spec_bank (c : StackMachine.Cfg (Work k) Bool Unit xs) (b : Bool)
-    (a : Action k Q) (ρ : Fin k → Complexity.Tree) (σ : Fin k → List Bool) (B q : ℕ)
-    (hρ : ∀ i, (ρ i).size ≤ B) (hν : ∀ i, (a.op.eval ρ i).size ≤ B)
-    (hσ : ∀ i, (σ i).length ≤ B) :
-    Triple ((Program.forFin (build b a)).verify (semantics xs))
-      (fun s t ↦ s = bank c b ρ σ ∧ k * (30 * (B + 1)) + q ≤ t)
-      (fun _ s t ↦ s = bank c (!b) (a.op.eval ρ)
-        (fun i ↦ BitList.encodeTree (ρ i)) ∧ q ≤ t) () := by
-  have h := Program.spec_forFin (build b a) (semantics xs)
-    (I := fun n s t ↦
-      s = cycle c b ρ (a.op.eval ρ) σ n ∧ (k - n) * (30 * (B + 1)) + q ≤ t) (by
-    intro i
-    have hσ' : ∀ j, (buffer σ (fun j ↦ BitList.encodeTree (a.op.eval ρ j)) i.val j).length ≤ B := by
-      intro j
-      unfold buffer
-      split
-      · simpa only [BitList.length_encodeTree] using hν j
-      · exact hσ j
-    have hs := spec_build (cycle c b ρ (a.op.eval ρ) σ i.val) b a i ρ
-      (buffer σ (fun j ↦ BitList.encodeTree (a.op.eval ρ j)) i.val) B
-      ((k - (i.val + 1)) * (30 * (B + 1)) + q) rfl hρ hσ'
-    rw [cycle_next] at hs
-    constructor
-    rintro s t ⟨hc, ht⟩
-    apply hs.le_wp s t
-    refine ⟨hc, ?_⟩
-    have hk : k - i.val = (k - (i.val + 1)) + 1 := by omega
-    rw [hk, Nat.add_mul] at ht
-    omega)
-  simpa using h
-
 @[spec] theorem spec_body_continue (M : TreeMachine Id k Q)
-    (c : StackMachine.Cfg (Work k) Bool Unit xs) (r : Cfg k Q) (b : Bool)
-    (σ : Fin k → List Bool) (B q : ℕ) (hf : M.halt r.state = false)
-    (hw : c.stacks = contents b (fun i ↦ BitList.encodeTree (r.regs i)) σ)
-    (hρ : ∀ i, (r.regs i).size ≤ B) (hν : ∀ i, ((M.step r).regs i).size ≤ B)
-    (hσ : ∀ i, (σ i).length ≤ B) :
-    Triple ((body M (r.state, b)).verify (semantics xs))
-      (fun s t ↦ s = c ∧ (1 + k * (30 * (B + 1))) + q ≤ t)
-      (fun v s t ↦ v = .inl ((M.step r).state, !b) ∧
-        s = bank c (!b) (M.step r).regs (fun i ↦ BitList.encodeTree (r.regs i)) ∧ q ≤ t) () := by
+    (c : StackMachine.Cfg (Work k) Bool Unit xs) (r : Cfg k Q) (q : ℕ)
+    (hf : M.halt r.state = false) (hw : c.stacks = contents r.regs) :
+    Triple ((body M r.state).verify (semantics xs))
+      (fun s t ↦ s = c ∧
+        39 * ((M.transition r.state (observe r)).run).sizeCost r + 3 * r.mass + q ≤ t)
+      (fun v s t ↦ (v = .inl (M.step r).state ∧ s = bank c (M.step r).regs) ∧
+        3 * (M.step r).mass + q ≤ t) () := by
   have he : (M.step r).regs = ((M.transition r.state (observe r)).run).op.eval r.regs := by
     simp [Controller.step_eq, hf]
   have hs : (M.step r).state = ((M.transition r.state (observe r)).run).state := by
     simp [Controller.step_eq, hf]
-  have hr := spec_roots c b r.regs σ hw
-  have hb (v : Fin k → Bool) (hv : v = observe r) : Triple
-      ((Program.forFin (build b ((M.transition r.state v).run))).verify (semantics xs))
-      (fun s t ↦ s = c ∧ k * (30 * (B + 1)) + q ≤ t)
-      (fun _ s t ↦ s = bank c (!b) (M.step r).regs
-        (fun i ↦ BitList.encodeTree (r.regs i)) ∧ q ≤ t) () := by
+  have hp := ((M.transition r.state (observe r)).run).op.sizeCost_pos r.regs
+  have hr := spec_roots c r.regs hw
+  have hb (v : Fin k → Bool) (hv : v = observe r) :
+      Triple ((build ((M.transition r.state v).run).op).verify (semantics xs))
+        (fun s t ↦ s = c ∧
+          38 * ((M.transition r.state (observe r)).run).sizeCost r + 3 * r.mass + q ≤ t)
+        (fun _ s t ↦ s = bank c (M.step r).regs ∧ 3 * (M.step r).mass + q ≤ t) () := by
     subst v
-    simpa only [bank_self c b r.regs σ hw, ← he] using
-      spec_bank c b ((M.transition r.state (observe r)).run) r.regs σ B q hρ
-        (by simpa only [← he] using hν) hσ
+    simpa only [Cfg.mass, Action.sizeCost, he] using
+      spec_build c ((M.transition r.state (observe r)).run).op r.regs q hw
   unfold body
   simp only [hf, Bool.false_eq_true, ↓reduceIte]
   vcgen [hr, hb]
-  all_goals simp_all only [Sum.inl.injEq, Prod.mk.injEq, and_true, true_and]
+  all_goals simp_all only [Action.sizeCost, Sum.inl.injEq, and_true, true_and]
   all_goals first | rfl | omega
+
+/-- At instruction boundaries, stack storage is exactly the source register mass. -/
+@[simp] theorem mass_bank (c : StackMachine.Cfg (Work k) Bool Unit xs) (ρ : Fin k → Tree) :
+    (bank c ρ).mass = ∑ i, (ρ i).size := by
+  unfold StackMachine.Cfg.mass
+  rw [Fintype.sum_equiv (proxy_equiv% (Work k)).symm _
+    (fun i ↦ Sum.elim (fun i ↦ (ρ i).size) (fun _ ↦ 0) i)]
+  · simp
+  · intro i
+    cases i with
+    | data i => exact BitList.length_encodeTree (ρ i)
+    | scratch i => rfl
 
 end Complexity.TreeMachine.Simulation.Program

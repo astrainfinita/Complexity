@@ -9,173 +9,160 @@ public import Complexity.Models.TreeMachine.Simulation.Init
 public import Complexity.Models.StackMachine.Program.Correctness
 public import Complexity.Models.TreeMachine.Deterministic
 
-/-! # Total specifications for the monadic tree simulator -/
+/-! # Linear time and space simulation through local stack operations -/
 
 @[expose] public section
 
 set_option experimental.vcgen true
 
-namespace Complexity.TreeMachine.Simulation.Program
+namespace Complexity.TreeMachine.Simulation
+
+/-- During each macro, time bounds stack growth from a source-space-bounded endpoint. -/
+def spaceBound (k s : ℕ) : ℕ := (42 * (k + 4) + 1) * s
+
+namespace Program
 
 open StackMachine.Program Work Std.WP
+open Controller (History)
 
-variable {k : ℕ} {Q : Type} [FinEnum Q]
+variable {k : ℕ} [NeZero k] {Q : Type} [FinEnum Q]
 
-/-- Current source registers, bounded old words, and empty output at each loop entry. -/
-def Rep {xs : Array Bool} (r : Cfg k Q) (b : Bool)
-    (c : StackMachine.Cfg (Work k) Bool Unit xs) (B : ℕ) : Prop :=
-  c.output = #[] ∧
-    ∃ σ, c.stacks = contents b (fun i ↦ BitList.encodeTree (r.regs i)) σ ∧
-      ∀ i, (σ i).length ≤ B
+omit [NeZero k] in
+/-- The local macro bound is uniform over all instructions within a source space bound. -/
+theorem macro_space_le {xs : Array Bool} (c : StackMachine.Cfg (Work k) Bool Unit xs)
+    {n s : ℕ} (hm : c.mass ≤ s) (hn : n ≤ 42 * s) :
+    c.mass + Fintype.card (Work k) * n ≤ spaceBound k s := by
+  rw [card_work]
+  calc
+    _ ≤ s + (k + 4) * (42 * s) := Nat.add_le_add hm (Nat.mul_le_mul_left _ hn)
+    _ = _ := by
+      simp [spaceBound, Nat.add_mul, Nat.mul_add, Nat.mul_comm, Nat.mul_left_comm, Nat.add_comm]
 
-/-- One loop entry, root observation, and a uniform allowance for every register block. -/
-def stepTime (k B : ℕ) : ℕ := 2 + k * (30 * (B + 1))
-
-omit [FinEnum Q] in
-private theorem rep_loaded (q : Q) (i : Fin k) (x : Tree) (B : ℕ) :
-    Rep (Cfg.mk q (input i x)) false (loadedCfg i x) B := by
-  refine ⟨rfl, fun _ ↦ [], rfl, ?_⟩
-  simp
-
-/-- Simulate a source run and return its final register bank, preserving unused credits.
-The source and target need not be initial configurations, and the target may have any input. -/
+/-- Simulate a source run, charging creation and amortizing destination erasure.
+Histories retain the peak across macros; no internal macro invariant is required. -/
 theorem spec_loop {xs : Array Bool} (M : TreeMachine Id k Q)
-    (r : Cfg k Q) (c₀ : StackMachine.Cfg (Work k) Bool Unit xs) (b₀ : Bool)
-    (n B q : ℕ) (hr₀ : Rep r b₀ c₀ B)
-    (hh : M.Halted (M.runFrom r n))
-    (hn : ∀ j < n, ¬M.Halted (M.runFrom r j))
-    (hm : ∀ j ≤ n, (M.runFrom r j).mass ≤ B) :
-    Triple ((Program.loopOn StackMachine.Program.idle (body M) (r.state, b₀)).verify
-      (StackMachine.Program.semantics xs))
-      (fun s t ↦ s = c₀ ∧ n * stepTime k B + 1 + q ≤ t)
-      (fun b s t ↦ Rep (M.runFrom r n) b s B ∧ q ≤ t) () := by
-  have hB (j : ℕ) (hj : j ≤ n) (i : Fin k) : ((M.runFrom r j).regs i).size ≤ B :=
-    ((M.runFrom r j).reg_size_le_mass i).trans (hm j hj)
-  let I : (Q × Bool) →
-      StackMachine.Cfg (Work k) Bool Unit xs → ℕ → Prop :=
-    fun v c t ↦ ∃ j ≤ n, v.1 = (M.runFrom r j).state ∧ Rep (M.runFrom r j) v.2 c B ∧
-      (n - j) * stepTime k B + 1 + q ≤ t
+    (r : Cfg k Q) (c₀ : StackMachine.Cfg (Work k) Bool Unit xs) (n s q : ℕ)
+    (hw : c₀.stacks = contents r.regs)
+    (hh : M.Halted (M.runFrom r n)) (hn : ∀ j < n, ¬M.Halted (M.runFrom r j))
+    (hm : ∀ j ≤ n, (M.runFrom r j).mass ≤ s) :
+    Triple ((Program.loopOn idle (body M) r.state).verify (historySemantics xs))
+      (fun h b ↦ h.last = c₀ ∧ h.configSup StackMachine.Cfg.mass ≤ spaceBound k s ∧
+        40 * (M.runHistoryFrom r n).actionSum Action.sizeCost + 3 * r.mass + 1 + q ≤ b)
+      (fun _ h b ↦ h.last = bank c₀ (M.runFrom r n).regs ∧
+        h.configSup StackMachine.Cfg.mass ≤ spaceBound k s ∧ q ≤ b) () := by
+  let W := fun j ↦ (M.runHistoryFrom r j).actionSum Action.sizeCost
+  let I : Q → History (StackMachine.Cfg (Work k) Bool Unit xs)
+      (StackMachine.Action (Work k) Bool Unit) → ℕ → Prop := fun v h b ↦
+    ∃ j ≤ n, v = (M.runFrom r j).state ∧ h.last = bank c₀ (M.runFrom r j).regs ∧
+      h.configSup StackMachine.Cfg.mass ≤ spaceBound k s ∧
+      40 * (W n - W j) + 3 * (M.runFrom r j).mass + 1 + q ≤ b
   constructor
   apply Triple.entails_wp_of_pre
-    (Program.spec_loopOn_nop StackMachine.Program.idle (body M) (r.state, b₀)
-      (StackMachine.Program.semantics xs) I _ StackMachine.Program.idle_apply ?_ ?_)
-  · rintro c t ⟨rfl, ht⟩
-    exact ⟨0, Nat.zero_le _, rfl, hr₀, by simpa using ht⟩
-  · rintro v c t ⟨j, hj, hstate, hr, ht⟩
+    (Program.spec_loopOn_of_invariant idle (body M) r.state (historySemantics xs) I _ ?_ ?_ ?_)
+  · rintro h b ⟨hc, hS, hb⟩
+    refine ⟨0, Nat.zero_le _, rfl, ?_, hS, ?_⟩
+    · simpa only [Controller.runFrom_zero, bank_self c₀ r.regs hw] using hc
+    · simpa [W] using hb
+  · intro v h b hv
+    simpa only [I, historySemantics_act, History.apply_def, History.last_snoc, idle_apply,
+      History.configSup_snoc, sup_eq_left.mpr
+        (h.config_le_configSup StackMachine.Cfg.mass h.last_mem_configs)] using hv
+  · rintro v h b ⟨j, hj, hv, hc, hs, ht⟩
     omega
-  · rintro ⟨state, b⟩
+  · intro v
     constructor
-    rintro c t ⟨j, hj, hstate, ⟨hy, σ, hw, hσ⟩, ht⟩
-    dsimp only at hstate
-    subst state
+    rintro h b ⟨j, hj, rfl, hc, hS, ht⟩
     by_cases hj' : j < n
-    · let z := (n - (j + 1)) * stepTime k B + 1 + q
-      have hb : (1 + k * (30 * (B + 1))) + z ≤ t := by
-        have hn : n - j = (n - (j + 1)) + 1 := by omega
-        rw [hn, Nat.add_mul] at ht
-        dsimp only [stepTime, z] at ht ⊢
-        omega
-      have hf : M.halt (M.runFrom r j).state = false := Bool.eq_false_iff.mpr (hn j hj')
-      have he : M.step (M.runFrom r j) = M.runFrom r (j + 1) :=
-        (M.runFrom_succ' _ j).symm
-      have hs := spec_body_continue M c (M.runFrom r j) b σ B z hf hw
-        (hB j hj'.le)
-        (by rw [he]; exact hB (j + 1) hj') hσ
-      rw [he] at hs
-      apply (Triple.entails_wp_of_post hs ?_) c t ⟨rfl, hb⟩
-      rintro v d z ⟨rfl, rfl, hz⟩
-      refine ⟨j + 1, hj', rfl, ⟨hy, fun l ↦
-        BitList.encodeTree ((M.runFrom r j).regs l), rfl, ?_⟩, hz⟩
-      intro l
-      simpa only [BitList.length_encodeTree] using hB j hj'.le l
+    · have hf : M.halt (M.runFrom r j).state = false := Bool.eq_false_iff.mpr (hn j hj')
+      let a := (M.transition (M.runFrom r j).state (observe (M.runFrom r j))).run
+      have he : M.step (M.runFrom r j) = M.runFrom r (j + 1) := (M.runFrom_succ' _ j).symm
+      have hcost : W (j + 1) = W j + a.sizeCost (M.runFrom r j) := by
+        simp [W, Controller.actionSum_runHistoryFrom_add,
+          Controller.actionSum_runHistoryFrom_one, hf, a]
+      have hle : W (j + 1) ≤ W n := M.actionSum_runHistoryFrom_mono Action.sizeCost r hj'
+      have hnext := hm (j + 1) hj'
+      rw [← he, M.step_of_not_halted _ (hn j hj')] at hnext
+      have ha : a.sizeCost (M.runFrom r j) ≤ s :=
+        (a.sizeCost_le_mass _).trans (sup_le (hm j hj) hnext)
+      have hp : 0 < a.sizeCost (M.runFrom r j) := a.op.sizeCost_pos (M.runFrom r j).regs
+      have hmj := hm j hj
+      dsimp only [a] at hcost ha hp
+      let z := 40 * (W n - W (j + 1)) + 1 + q
+      have hbody := spec_body_continue M (bank c₀ (M.runFrom r j).regs) (M.runFrom r j) 0 hf rfl
+      simp only [Nat.add_zero] at hbody
+      have hs := spec_history hbody
+        (macro_space_le (bank c₀ (M.runFrom r j).regs) (by simpa [Cfg.mass] using hmj) (by omega)) z
+      apply (Triple.entails_wp_of_post hs ?_) h b ⟨hc, hS, by dsimp only [z]; omega⟩
+      rintro _ t b ⟨⟨rfl, hd⟩, hS', hq⟩
+      refine ⟨j + 1, hj', congrArg Cfg.state he, ?_, hS', ?_⟩
+      · simpa only [he, bank_bank] using hd
+      · simpa only [he, z, Nat.add_assoc, Nat.add_left_comm, Nat.add_comm] using hq
     · have hj : j = n := by omega
       subst j
       have hf : M.halt (M.runFrom r n).state = true := hh
       unfold body
       simp only [hf, ↓reduceIte]
       vcgen
-      exact ⟨⟨hy, σ, hw, hσ⟩, by omega⟩
+      exact ⟨hc, hS, by omega⟩
 
-end Complexity.TreeMachine.Simulation.Program
+end Program
 
-namespace Complexity.TreeMachine.Simulation
-
-open TreeMachine.Simulation.Program Work Std.WP
+open StackMachine.Program TreeMachine.Simulation.Program Work Std.WP
+open Controller (History)
 
 variable {k : ℕ} [NeZero k] {Q : Type} [FinEnum Q]
 
-/-- Load a tree, simulate its source run, and serialize the selected output register. -/
+/-- Load a tree, simulate the source, and serialize the selected output register. -/
 def Program.program (M : TreeMachine Id k Q) (i o : Fin k) :
     StackMachine.Program (Work k) Bool Unit := do
   init i
-  let b ← Program.loopOn StackMachine.Program.idle (body M) (M.q₀, false)
-  StackMachine.Program.IO.emitStack (data b o)
+  Program.loopOn idle (body M) M.q₀
+  IO.emitStack (data o)
 
-/-- The native stack program computes the serialized result and preserves unused credits. -/
+/-- Input conversion, amortized source execution, and output serialization. -/
+def timeBound (k N t : ℕ) : ℕ :=
+  (6 * N + 5) + (40 * t + 3 * (N + k) + 1) + (3 * (N + k + t) + 2)
+
+/-- The complete simulator preserves output and an independent source-space bound. -/
 theorem Program.spec_program (M : TreeMachine Id k Q)
-    {x a : Tree} {t s : ℕ} (h : M.ComputesInTimeAndSpace x a t s) (q : ℕ) :
-    Triple ((program M 0 0).verify (StackMachine.Program.semantics
-      (BitList.encodeTree x).toArray))
-      (fun c b ↦ c = (StackMachine.execution (BitList.encodeTree x)).init () ∧
-        (6 * x.size + 5) + t * stepTime k (x.size + k + t) +
-          (3 * (x.size + k + t) + 3) + q ≤ b)
-      (fun _ c b ↦ c.output = (BitList.encodeTree a).toArray ∧ q ≤ b) () := by
-  obtain ⟨n, hn, hh, ha, _, _⟩ := h.exists_haltsAt
-  let B := x.size + k + t
-  have hm (j : ℕ) : (M.run (Cfg k Q) x j).mass ≤ B := h.space_of_time.mass_le j
-  have hi := spec_init (k := k) 0 x (t * stepTime k B + (3 * B + 3) + q)
-  have hl := spec_loop M (M.initInput x) (loadedCfg 0 x) false n B (3 * B + 2 + q)
-    (rep_loaded M.q₀ 0 x B) hh.1 hh.2 (fun j _ ↦ hm j)
+    {x a : Tree} {t s : ℕ} (h : M.ComputesInTimeAndSpace x a t s) :
+    Triple ((program M 0 0).verify (historySemantics (BitList.encodeTree x).toArray))
+      (fun c b ↦ c = History.nil ((StackMachine.execution (BitList.encodeTree x)).init ()) ∧
+        timeBound k x.size t ≤ b)
+      (fun _ c _ ↦ c.last.output = (BitList.encodeTree a).toArray ∧
+        c.configSup StackMachine.Cfg.mass ≤ spaceBound k s) () := by
+  obtain ⟨n, _, hh, ha, ht, _⟩ := h.exists_haltsAt
+  have hx := h.input_size_le_space
+  have hp : 0 < s := x.size_pos.trans_le hx
+  let d := bank (loadedCfg 0 x) (M.run (Cfg k Q) x n).regs
+  have hd : d.mass ≤ s := by simpa [d, Cfg.mass] using h.mass_le n
+  have hi := spec_history (by simpa only [Nat.add_zero] using spec_init (k := k) 0 x 0)
+    (macro_space_le _ (s := s) (by simp [StackMachine.Cfg.mass]) (by omega))
+    (40 * t + 3 * (x.size + k) + 1 + (3 * (x.size + k + t) + 2))
+  have hl := spec_loop M (M.initInput x) (loadedCfg 0 x) n s (3 * a.size + 2) rfl
+    hh.1 hh.2 (fun j _ ↦ h.mass_le j)
   rw [show (M.initInput x : Cfg k Q).state = M.q₀ from
     M.state_initInput (Config := Cfg k Q) x] at hl
-  have he (b : Bool) (c : StackMachine.Cfg (Work k) Bool Unit (BitList.encodeTree x).toArray)
-      (hr : Rep (M.run (Cfg k Q) x n) b c B) :
-      Triple ((StackMachine.Program.IO.emitStack (data b 0)).verify
-        (StackMachine.Program.semantics (BitList.encodeTree x).toArray))
-        (fun d z ↦ d = c ∧ 3 * B + 2 + q ≤ z)
-        (fun _ d z ↦ d.output = (BitList.encodeTree a).toArray ∧ q ≤ z) () := by
-    obtain ⟨hy, σ, hw, _⟩ := hr
-    have ht : c.stacks (data b 0) = BitList.encodeTree a := by
-      rw [hw, contents_data, ha]
-    have hb : a.size ≤ B := by
-      rw [← ha]
-      exact ((M.run (Cfg k Q) x n).reg_size_le_mass 0).trans (hm n)
-    have hs := Program.spec_exact_budget_le
-      (fun z ↦ StackMachine.Program.IO.spec_emitStack c (data b 0) z)
-      (m := 3 * B + 2) (by simp only [ht, BitList.length_encodeTree]; omega) q
-    constructor
-    apply Triple.entails_wp_of_post hs
-    rintro _ d z ⟨rfl, hz⟩
-    exact ⟨by simp [hy, ht], hz⟩
-  have hn' := Nat.mul_le_mul_right (stepTime k B) hn
+  have he := Program.spec_exact_budget_le (fun q ↦ IO.spec_emitStack d (data 0) q)
+    (m := 3 * a.size + 2) (by simp [d, ha]) 0
+  simp only [Nat.add_zero] at he
+  have hs := h.output_size_le_space
+  have ho := spec_history he (macro_space_le d hd (by omega)) 0
+  have hm₀ := M.mass_input_le x
+  have hout := h.output_size_le_mass_add_time
   unfold program
-  vcgen [hi, hl, he]
-  case vc1 =>
-    rename_i c b hc
-    exact ⟨hc.1, by simpa only [B, Nat.add_assoc] using hc.2⟩
-  case vc2 =>
-    rename_i c b hc u d z hd
-    exact ⟨hd.1, by omega⟩
-  all_goals simp_all only [Controller.run]
+  vcgen [hi, hl, ho]
+  all_goals simp_all [d, timeBound, Controller.run, Controller.runHistory, loadedCfg,
+    StackMachine.Cfg.mass] <;> omega
 
-/-- Compile the serialized tree simulator to its native stack controller. -/
+/-- Compile the serialized tree simulator to a native stack controller. -/
 def compiler (M : TreeMachine Id k Q) := StackMachine.Program.compile (program M 0 0)
 
-/-- Initialization, bounded source transitions, and final serialization. -/
-def timeBound (k N W : ℕ) : ℕ :=
-  (6 * N + 5) + W * Program.stepTime k (N + k + W) + (3 * (N + k + W) + 3)
-
-/-- Each stack grows by at most one cell per transition. -/
-def spaceBound (k N W : ℕ) : ℕ := (2 * k + 3) * timeBound k N W
-
-/-- Every bounded tree computation is simulated through ordinary local stack operations. -/
+/-- Both time and space have linear simulation bounds. -/
 theorem computesInTimeAndSpace (M : TreeMachine Id k Q)
     {x a : Tree} {t s : ℕ} (h : M.ComputesInTimeAndSpace x a t s) :
     (compiler M).ComputesInTimeAndSpace (BitList.encodeTree x) (BitList.encodeTree a)
-      (timeBound k x.size t) (spaceBound k x.size t) := by
-  have hs := Program.spec_program M h 0
-  simp only [Nat.add_zero, Nat.zero_le, and_true] at hs
-  simpa only [compiler, timeBound, spaceBound, card_work] using
-    StackMachine.Program.computesInTimeAndSpace (program M 0 0) hs
+      (timeBound k x.size t) (spaceBound k s) :=
+  StackMachine.Program.computesInTimeAndSpace_history (Program.spec_program M h)
 
 end Complexity.TreeMachine.Simulation

@@ -23,13 +23,13 @@ variable {k : ℕ}
 /-- Initialize non-input registers to the one-bit code of `nil`. -/
 def boot (i : Fin k) : StackMachine.Action (Work k) Bool Unit :=
   { idle (κ := Work k) with work := fun j ↦ match j with
-    | .data false l => if l = i then .nop else .push false
+    | .data l => if l = i then .nop else .push false
     | _ => .nop }
 
 /-- Initialize the source bank and load the input tree into register `i`. -/
 def init (i : Fin k) : StackMachine.Program (Work k) Bool Unit := do
   act (boot i)
-  IO.load (data false i) (.scratch .temp)
+  IO.load (data i) (.scratch .temp)
 
 /-- The source bank contains the input and empty trees, with every scratch stack empty. -/
 @[simps -fullyApplied]
@@ -37,16 +37,16 @@ def loadedCfg (i : Fin k) (x : Complexity.Tree) :
     StackMachine.Cfg (Work k) Bool Unit (BitList.encodeTree x).toArray where
   state := ()
   inputPos := Fin.last ((BitList.encodeTree x).toArray.size + 1)
-  «stacks» := contents false (fun j ↦ BitList.encodeTree (input i x j)) (fun _ ↦ [])
+  «stacks» := contents (input i x)
   output := #[]
 
 private theorem loaded_boot (i : Fin k) (x : Complexity.Tree) :
     let c := apply (boot i) ((StackMachine.execution (κ := Work k) (BitList.encodeTree x)).init ())
-    { c.setStack (data false i) (BitList.encodeTree x ++ c.stacks (data false i)) with
+    { c.setStack (data i) (BitList.encodeTree x ++ c.stacks (data i)) with
       inputPos := ⟨(BitList.encodeTree x).length + 1, by simp⟩ } = loadedCfg i x := by
   ext j <;> try rfl
-  rcases j with ⟨b, l⟩ | j
-  · cases b <;> by_cases h : l = i <;>
+  rcases j with l | j
+  · by_cases h : l = i <;>
       simp [boot, idle, contents, h, input, StackMachine.Op.apply]
   · simp [boot, idle, contents, StackMachine.Op.apply]
 
@@ -56,7 +56,7 @@ private theorem loaded_boot (i : Fin k) (x : Complexity.Tree) :
         (6 * x.size + 5) + q ≤ t)
       (fun _ s t ↦ s = loadedCfg i x ∧ q ≤ t) () := by
   let c := apply (boot i) ((StackMachine.execution (κ := Work k) (BitList.encodeTree x)).init ())
-  have h := Program.spec_exact_budget_le (fun z ↦ IO.spec_load c (data false i) (.scratch .temp) z
+  have h := Program.spec_exact_budget_le (fun z ↦ IO.spec_load c (data i) (.scratch .temp) z
     (by simp) (by simp [c, boot, idle, StackMachine.Op.apply])
     (by simp [c, boot, idle])) (m := 6 * x.size + 4) (by simp) q
   simp only [c, loaded_boot] at h

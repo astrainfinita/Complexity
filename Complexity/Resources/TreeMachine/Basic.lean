@@ -14,7 +14,7 @@ public import Complexity.Models.TreeMachine.Deterministic
 
 The input and output use register zero; every other register starts empty.
 Input size counts tree nodes, including leaves. Time counts either active transitions
-or cumulative destination sizes; both models use peak expanded register size for space.
+or cumulative instruction size charges; both models use peak expanded register size for space.
 A single finite machine must handle every valid input.
 -/
 
@@ -34,7 +34,7 @@ theorem ComputesInTimeAndSpace.output_size_le {M : TreeMachine Id k Q}
 variable [Encoding Tree α] [Encoding Tree β]
 
 /-- A tree machine computes a function between encoded types within the given
-destination-size time and expanded-tree space bounds. -/
+size-charged time and expanded-tree space bounds. -/
 def Computes (M : TreeMachine Id k Q) (f : α → β)
     (t s : ℕ → ℕ) : Prop :=
   Encoding.Computes (fun a b => M.ComputesInTimeAndSpace a b)
@@ -82,7 +82,7 @@ theorem Computes.computableInTimeAndSpace {Q : Type} [Finite Q]
     TimeSpaceModel.sizeCostTree.ComputableInTimeAndSpace f t s :=
   computableInTimeAndSpace_iff.mpr ⟨k, inferInstance, Q, inferInstance, M, h⟩
 
-/-- The same machine's unit charges are bounded by its destination-size charges. -/
+/-- The same machine's unit charges are bounded by its size-charged charges. -/
 theorem computableInTimeAndSpace_toUnitTime
     (h : TimeSpaceModel.sizeCostTree.ComputableInTimeAndSpace f t s) :
     TimeSpaceModel.tree.ComputableInTimeAndSpace f t s := by

@@ -10,7 +10,7 @@ public import Complexity.Models.TreeMachine.Cost
 /-!
 # Deterministic tree machines and resource bounds
 
-History length counts active transitions; action sums charge the size written to each destination.
+History length counts active transitions; action sums charge source reads and result construction.
 The generic controller space measure records the largest total expanded tree size seen so far.
 All three ignore halted padding.
 The cumulative cost bounds time and, together with initial mass, every intermediate mass.
@@ -86,9 +86,9 @@ theorem HaltsAt.le_actionSum {M : TreeMachine Id k Q} {a : Tree} {t : ℕ}
 def UsesSpace (M : TreeMachine Id k Q) (a : Tree) (s : ℕ) : Prop :=
   ∀ t, (M.runHistory (Cfg k Q) a t).configSup Cfg.mass ≤ s
 
-/-- Compute a tree in register zero within a cumulative destination-size time budget
+/-- Compute a tree in register zero within a cumulative size-charge time budget
 and a maximum expanded-tree space budget. The transition count is an existential witness,
-since the external time charge depends on the size written to the selected register. -/
+since the external time charge depends on the trees read or constructed. -/
 def ComputesInTimeAndSpace (M : TreeMachine Id k Q) (a : Tree)
     (b : Tree) (t s : ℕ) : Prop :=
   M.ComputesWith (Config := Cfg k Q)
@@ -187,6 +187,13 @@ theorem ComputesInTimeAndSpace.mass_le_mass_add_time
     (M.run (Cfg k Q) a u).mass ≤ (M.initInput (Config := Cfg k Q) a).mass + t :=
   (M.config_le_configSup_runHistory Cfg.mass a (Nat.le_refl u)).trans
     (h.configSup_mass_le_add_time u)
+
+/-- The initial input register is bounded by the explicit space budget. -/
+theorem ComputesInTimeAndSpace.input_size_le_space
+    {M : TreeMachine Id k Q} {a b : Tree} {t s : ℕ}
+    (h : M.ComputesInTimeAndSpace a b t s) : a.size ≤ s := by
+  have hi := (M.initInput (Config := Cfg k Q) a).reg_size_le_mass 0
+  simpa using hi.trans (h.mass_le 0)
 
 /-- The output register is bounded by the explicit space budget. -/
 theorem ComputesInTimeAndSpace.output_size_le_space

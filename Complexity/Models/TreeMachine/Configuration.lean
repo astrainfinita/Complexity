@@ -97,52 +97,6 @@ theorem Op.eval_rename (f : Fin k → Fin l) (hf : Function.Injective f)
   /-- State after applying the action. -/
   state : Q
 
-/-- View the selected update at one register; this does not add independent write choices. -/
-def Action.writeAt (a : Action k Q) (i : Fin k) : Option (Op k) :=
-  match a.op.dst with
-  | none => none
-  | some j => if i = j then some a.op else none
-
-@[simp] theorem Action.writeAt_of_nop (a : Action k Q) (i : Fin k)
-    (h : a.op = .nop) : a.writeAt i = none := by
-  simp [writeAt, h]
-
-theorem Action.writeAt_of_dst (a : Action k Q) {i : Fin k}
-    (h : a.op.dst = some i) (j : Fin k) :
-    a.writeAt j = if j = i then some a.op else none := by
-  simp [writeAt, h]
-
-theorem Action.writeAt_eq_some_iff (a : Action k Q) {i : Fin k} {o : Op k} :
-    a.writeAt i = some o ↔ a.op = o ∧ o.dst = some i := by
-  unfold writeAt
-  cases hd : a.op.dst with
-  | none =>
-      constructor
-      · simp
-      · rintro ⟨ho, hi⟩
-        rw [ho, hi] at hd
-        contradiction
-  | some j =>
-      by_cases hi : i = j
-      · subst i
-        simp only [ite_true, Option.some.injEq]
-        exact ⟨fun h ↦ ⟨h, h ▸ hd⟩, And.left⟩
-      · simp only [hi, ite_false]
-        constructor
-        · simp
-        · rintro ⟨rfl, ho⟩
-          rw [ho] at hd
-          exact (hi (Option.some.inj hd)).elim
-
-theorem Action.writeAt_dst (a : Action k Q) {i : Fin k} {o : Op k}
-    (h : a.writeAt i = some o) : o.dst = some i :=
-  (a.writeAt_eq_some_iff.mp h).2
-
-theorem Action.writeAt_ne_nop (a : Action k Q) (i : Fin k) : a.writeAt i ≠ some .nop := by
-  intro h
-  have := a.writeAt_dst h
-  contradiction
-
 /-- A plain control state and a fixed bank of tree values. -/
 @[ext] structure Cfg (k : ℕ) (Q : Type*) where
   /-- Current control state. -/
@@ -180,24 +134,6 @@ def input (i : Fin k) (a : Tree) : Fin k → Tree :=
     input i a j = Tree.nil := by
   simp [input, h]
 
-theorem Action.regs_apply (a : Action k Q) (c : Cfg k Q) (i : Fin k) :
-    (apply a c).regs i = ((a.writeAt i).map (fun o ↦ o.eval c.regs i)).getD (c.regs i) := by
-  cases h : a.op with
-  | nop => simp [writeAt, h]
-  | left j l | right j l | pair j l m =>
-      by_cases hi : i = j <;> simp [writeAt, h, hi]
-
-@[simp] theorem Action.regs_apply_of_none (a : Action k Q) (c : Cfg k Q)
-    {i : Fin k} (h : a.writeAt i = none) : (apply a c).regs i = c.regs i := by
-  rw [regs_apply, h]
-  rfl
-
-@[simp] theorem Action.regs_apply_of_some (a : Action k Q) (c : Cfg k Q)
-    {i : Fin k} {o : Op k} (h : a.writeAt i = some o) :
-    (apply a c).regs i = o.eval c.regs i := by
-  rw [regs_apply, h]
-  rfl
-
 /-- Executing `nop` changes only the control state. -/
 @[simp] theorem Action.apply_of_nop (a : Action k Q) (c : Cfg k Q)
     (h : a.op = .nop) : apply a c = { c with state := a.state } := by
@@ -232,17 +168,11 @@ theorem Action.regs_apply_of_ne (a : Action k Q) (c : Cfg k Q)
 /-- Change control while keeping every register. -/
 def Action.keep (q : Q) : Action k Q := ⟨.nop, q⟩
 
-@[simp] theorem Action.writeAt_keep (q : Q) (i : Fin k) : (Action.keep q).writeAt i = none := rfl
-
 @[simp] theorem Action.apply_keep (q : Q) (c : Cfg k Q) :
     apply (Action.keep (k := k) q) c = { c with state := q } := rfl
 
 /-- Execute an instruction and enter the given control state. -/
 def Action.assign (q : Q) (o : Op k) : Action k Q := ⟨o, q⟩
-
-@[simp] theorem Action.writeAt_assign (q : Q) (o : Op k) (j : Fin k) :
-    (Action.assign q o).writeAt j =
-      match o.dst with | none => none | some i => if j = i then some o else none := rfl
 
 theorem Action.regs_assign (q : Q) (o : Op k) (c : Cfg k Q) :
     (apply (Action.assign q o) c).regs = o.eval c.regs := rfl

@@ -27,7 +27,7 @@ theorem run_compile {p : TreeMachine.Program k α} {q : p.State ⊕ p.Exit}
   | step q ρ h ih => exact ih
 
 /-- A source execution from standard input yields the same output after the same number
-of transitions. This count is independent of the destination-size cost model. -/
+of transitions. This count is independent of the size-charged cost model. -/
 theorem run_output [NeZero k] {p : TreeMachine.Program k α} {x y : Tree}
     {n : ℕ} {a : α} {ρ : Fin k → Tree}
     (h : p.Exec semantics (input 0 x) n a ρ) (ho : ρ 0 = y) :

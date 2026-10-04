@@ -121,4 +121,27 @@ def copy (source target temp : κ) : StackMachine.Program κ Γ Unit := do
   vcgen [h₁, h₂]
   all_goals simp_all [d, Ne.symm hsp] <;> omega
 
+/-- Move a word in its original order, emptying both the source and temporary stack. -/
+def move (source target temp : κ) : StackMachine.Program κ Γ Unit := do
+  drain source (fun i ↦ i == temp)
+  drain temp (fun i ↦ i == target)
+
+@[spec] theorem spec_move (c : Cfg κ Γ Unit xs) (source target temp : κ) (q : ℕ)
+    (hst : source ≠ target) (hsp : source ≠ temp) (htp : target ≠ temp)
+    (hp : c.stacks temp = []) :
+    Triple ((move source target temp).verify (semantics xs))
+      (fun s b ↦ s = c ∧ b = 6 * (c.stacks source).length + 4 + q)
+      (fun _ s b ↦ s = (c.setStack source []).setStack target
+        (c.stacks source ++ c.stacks target) ∧ b = q) () := by
+  let d := drained c source (fun i ↦ i == temp) (c.stacks source) []
+  have he : drained d temp (fun i ↦ i == target) (d.stacks temp) [] =
+      (c.setStack source []).setStack target (c.stacks source ++ c.stacks target) := by
+    ext i <;> simp [d, Function.update_apply, hp]
+    split_ifs <;> simp_all
+  have h₁ := spec_drain c source (fun i ↦ i == temp) (3 * (c.stacks source).length + 2 + q)
+  have h₂ := spec_drain d temp (fun i ↦ i == target) q
+  unfold move
+  vcgen [h₁, h₂]
+  all_goals simp_all [d, Ne.symm hsp] <;> omega
+
 end Complexity.StackMachine.Program.Word

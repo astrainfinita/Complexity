@@ -31,9 +31,8 @@ private theorem convert_left (a : Tree) :
   refine ComputesInTimeAndSpace.of_run (n := 1) rfl ?_ ?_ (by omega)
   · simp [Controller.run, Controller.runFrom_succ, step_eq, convert,
       initInput_tree, Op.eval]
-  · simpa [Controller.runHistory, Controller.actionSum_runHistoryFrom_one,
-      Action.sizeCost, convert, initInput_tree, Op.sizeCost, Action.assign, Op.dst, Op.eval,
-      input_get] using Tree.size_left_le a
+  · simp [Controller.runHistory, Controller.actionSum_runHistoryFrom_one,
+      Action.sizeCost, convert, initInput_tree, Op.sizeCost, Action.assign, input_get]
 
 private theorem convert_pair (a : Tree) :
     (convert (.pair 0 0 1)).ComputesInTimeAndSpace
@@ -43,7 +42,7 @@ private theorem convert_pair (a : Tree) :
       initInput_tree, Op.eval]
   · simp [Controller.runHistory, Controller.actionSum_runHistoryFrom_one,
       Action.sizeCost, convert, initInput_tree, Op.sizeCost,
-      Action.assign, Op.dst, Op.eval, input_get, input_get_of_ne, Tree.size]
+      Action.assign, input_get, input_get_of_ne, Tree.size]
     omega
 
 private theorem left_mem_fp : (fun a : Tree => a.left) ∈ FP .sizeCostTree := by

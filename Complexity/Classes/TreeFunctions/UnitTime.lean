@@ -22,7 +22,7 @@ theorem ftisp_sizeCost_subset_unitTime (T S : ℕ → ℕ) :
   rintro f ⟨t, s, h, ht, hs⟩
   exact ⟨t, s, computableInTimeAndSpace_toUnitTime h, ht, hs⟩
 
-/-- Charging destination sizes multiplies the unit-time bound by the space bound. -/
+/-- Size charging multiplies the unit-time bound by the space bound. -/
 theorem ftisp_unitTime_subset_sizeCost (T S : ℕ → ℕ) :
     FTISP (α := α) (β := β) .tree T S ⊆ FTISP .sizeCostTree (fun n ↦ T n * S n) S := by
   rintro f ⟨t, s, h, ht, hs⟩
