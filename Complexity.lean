@@ -73,6 +73,7 @@ public import Complexity.Models.TreeMachine.Embedding
 public import Complexity.Models.TreeMachine.Language.Closure
 public import Complexity.Models.TreeMachine.Language.Code
 public import Complexity.Models.TreeMachine.Language.Compiler
+public import Complexity.Models.TreeMachine.Language.Derive
 public import Complexity.Models.TreeMachine.Language.Expression
 public import Complexity.Models.TreeMachine.Language.Semantics
 public import Complexity.Models.TreeMachine.Language.Verification
