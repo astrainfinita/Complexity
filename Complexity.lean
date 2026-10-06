@@ -36,6 +36,7 @@ public import Complexity.Control.Program.Traverse
 public import Complexity.Control.Program.WP
 public import Complexity.Control.Transition.Basic
 public import Complexity.Control.Transition.Simulation
+public import Complexity.Data.BitList.Nat
 public import Complexity.Data.Embedding
 public import Complexity.Data.FinEnum
 public import Complexity.Data.IntMemory.Basic
@@ -50,6 +51,7 @@ public import Complexity.Encoding.BitList
 public import Complexity.Encoding.Bool
 public import Complexity.Encoding.Composition
 public import Complexity.Encoding.List
+public import Complexity.Encoding.Nat
 public import Complexity.Encoding.Option
 public import Complexity.Encoding.Polynomial.Basic
 public import Complexity.Encoding.Polynomial.Bool
@@ -71,15 +73,19 @@ public import Complexity.Models.TreeMachine.Configuration
 public import Complexity.Models.TreeMachine.Cost
 public import Complexity.Models.TreeMachine.Deterministic
 public import Complexity.Models.TreeMachine.Embedding
+public import Complexity.Models.TreeMachine.Language.Bounds
 public import Complexity.Models.TreeMachine.Language.Closure
 public import Complexity.Models.TreeMachine.Language.Code
 public import Complexity.Models.TreeMachine.Language.Compiler
 public import Complexity.Models.TreeMachine.Language.Derive
 public import Complexity.Models.TreeMachine.Language.Expression
+public import Complexity.Models.TreeMachine.Language.List
+public import Complexity.Models.TreeMachine.Language.Nat
 public import Complexity.Models.TreeMachine.Language.Semantics
 public import Complexity.Models.TreeMachine.Language.Verification
 public import Complexity.Models.TreeMachine.Program.Basic
 public import Complexity.Models.TreeMachine.Program.Correctness
+public import Complexity.Models.TreeMachine.Program.Resources
 public import Complexity.Models.TreeMachine.Simulation.Bank
 public import Complexity.Models.TreeMachine.Simulation.Basic
 public import Complexity.Models.TreeMachine.Simulation.BitList.Correctness
@@ -113,4 +119,5 @@ public import Complexity.Resources.TimeSpaceModel.Basic
 public import Complexity.Resources.TimeSpaceModel.Nondeterministic
 public import Complexity.Resources.TreeMachine.Basic
 public import Complexity.Resources.TreeMachine.Composition
+public import Complexity.Resources.TreeMachine.Program
 public import Complexity.Resources.TuringMachine

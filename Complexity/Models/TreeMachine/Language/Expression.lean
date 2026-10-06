@@ -6,7 +6,7 @@ Authors: Yuyang Zhao
 module
 
 public import Complexity.Models.TreeMachine.Language.Semantics
-public import Complexity.Models.TreeMachine.Program.Basic
+public import Complexity.Models.TreeMachine.Program.Resources
 
 /-! # Compiling tree expressions with reusable temporary registers -/
 
@@ -14,13 +14,9 @@ public import Complexity.Models.TreeMachine.Program.Basic
 
 namespace Complexity.TreeProgram.Expr
 
-variable {ν : Type} {k : ℕ}
+open Controller (History)
 
-/-- Exact unit time for obtaining an expression's value; existing values need no copy. -/
-def steps : Expr ν → ℕ
-  | .nil | .var _ => 0
-  | .left e | .right e => e.steps + 1
-  | .pair a b => a.steps + (b.steps + 1)
+variable {ν : Type} {k : ℕ}
 
 /-- Temporary registers for evaluating an expression, excluding its source variables. -/
 def slots : Expr ν → ℕ
@@ -52,44 +48,79 @@ def compile (e : Expr ν) (v : ν → Fin k) (z : Fin k) (b : ℕ)
       TreeMachine.Program.act (.pair d i j)
       pure d
 
-private theorem update_below (ρ : Fin k → Tree) (d i : Fin k) (x : Tree)
-    (hi : i.val < d.val) : Function.update ρ d x i = ρ i := by
-  have h : i ≠ d := by intro h; subst i; omega
-  simp [h]
+/-- Compilation preserves the value and exact time, bounding each register peak by the
+previous peak and the largest source tree encountered during evaluation. -/
+theorem exec_compile_history (e : Expr ν) (v : ν → Fin k) (z : Fin k) (b : ℕ)
+    (hb : b + e.slots ≤ k) (hv : ∀ x, (v x).val < b) (hzv : z.val < b)
+    (s : History (TreeMachine.Cfg k Unit) (TreeMachine.Action k Unit))
+    (hz : s.last.regs z = .nil) :
+    ∃ t i, (e.compile v z b hb).Exec TreeMachine.Program.historySemantics s e.steps i t ∧
+      t.last.regs i = e.eval (s.last.regs ∘ v) ∧ i.val ≤ b ∧
+      (∀ j : Fin k, j.val < b → t.last.regs j = s.last.regs j) ∧
+      ∀ j, t.configSup (fun c ↦ (c.regs j).size) ≤
+        s.configSup (fun c ↦ (c.regs j).size) ⊔ e.maxSize (s.last.regs ∘ v) := by
+  induction e generalizing b s with
+  | nil => exact ⟨s, z, Program.Exec.pure _ _ _, hz, hzv.le, fun _ _ ↦ rfl,
+      fun _ ↦ le_sup_left⟩
+  | var x => exact ⟨s, v x, Program.Exec.pure _ _ _, rfl, (hv x).le, fun _ _ ↦ rfl,
+      fun _ ↦ le_sup_left⟩
+  | left e ih | right e ih =>
+      obtain ⟨t, i, hr, hval, _, hf, hpeak⟩ := ih b
+        (by simp only [slots] at hb; omega) hv hzv s hz
+      let d : Fin k := ⟨b, by simp only [slots] at hb; omega⟩
+      refine ⟨t.snoc (.assign () _), d, hr.bind ((TreeMachine.Program.exec_act_history _ t).bind
+        (f := fun _ ↦ pure d) (Program.Exec.pure _ d _)), ?_, le_rfl, ?_, ?_⟩
+      · simp [d, hval]
+      · intro j hj
+        have hd : j ≠ d := by intro h; subst j; exact (lt_irrefl b) hj
+        simpa [d, hd] using hf j hj
+      · intro j
+        apply (TreeMachine.configSup_reg_size_snoc_le t _ j).trans
+        apply max_le (hpeak j)
+        apply le_sup_of_le_right
+        simpa [TreeMachine.Action.sizeCost, TreeMachine.Op.sizeCost, hval] using
+          e.size_eval_le_maxSize (s.last.regs ∘ v)
+  | pair a c iha ihc =>
+      obtain ⟨t, i, hr, hval, hi, hf, hpeak⟩ := iha b
+        (by simp only [slots] at hb; omega) hv hzv s hz
+      obtain ⟨u, j, hr', hval', _, hf', hpeak'⟩ := ihc (b + 1)
+        (by simp only [slots] at hb; omega)
+        (fun x ↦ Nat.lt_succ_of_lt (hv x)) (Nat.lt_succ_of_lt hzv) t
+        ((hf z hzv).trans hz)
+      have hvars : t.last.regs ∘ v = s.last.regs ∘ v := funext fun x ↦ hf (v x) (hv x)
+      let d : Fin k := ⟨b, by simp only [slots] at hb; omega⟩
+      refine ⟨u.snoc (.assign () (.pair d i j)), d, ?_, ?_, le_rfl, ?_, ?_⟩
+      · exact hr.bind (hr'.bind ((TreeMachine.Program.exec_act_history (.pair d i j) u).bind
+          (f := fun _ ↦ pure d) (Program.Exec.pure _ d _)))
+      · simp [hf' i (by omega), hval, hval', hvars]
+      · intro l hl
+        have hd : l ≠ d := by intro h; subst l; exact (lt_irrefl b) hl
+        simpa [hd] using (hf' l (by omega)).trans (hf l hl)
+      · intro l
+        have hp : u.configSup (fun c ↦ (c.regs l).size) ≤
+            s.configSup (fun c ↦ (c.regs l).size) ⊔ (a.pair c).maxSize (s.last.regs ∘ v) := by
+          have ha := hpeak l
+          have hc := hpeak' l
+          rw [hvars] at hc
+          simp only [maxSize]
+          omega
+        apply (TreeMachine.configSup_reg_size_snoc_le u _ l).trans
+        apply max_le hp
+        apply le_sup_of_le_right
+        simp [TreeMachine.Action.sizeCost, TreeMachine.Op.sizeCost,
+          hf' i (by omega), hval, hval', hvars]
 
-/-- Compilation takes the exact static number of steps and returns a register at or below `b`. -/
+/-- The value-only conclusion follows by forgetting the execution history. -/
 theorem exec_compile (e : Expr ν) (v : ν → Fin k) (z : Fin k) (b : ℕ)
     (hb : b + e.slots ≤ k) (hv : ∀ x, (v x).val < b) (hzv : z.val < b)
     (ρ : Fin k → Tree) (hz : ρ z = .nil) :
     ∃ σ i, (e.compile v z b hb).Exec TreeMachine.Program.semantics ρ e.steps i σ ∧
       σ i = e.eval (ρ ∘ v) ∧ i.val ≤ b ∧
       ∀ j : Fin k, j.val < b → σ j = ρ j := by
-  induction e generalizing b ρ with
-  | nil => exact ⟨ρ, z, Program.Exec.pure _ _ _, hz, hzv.le, fun _ _ ↦ rfl⟩
-  | var x => exact ⟨ρ, v x, Program.Exec.pure _ _ _, rfl, (hv x).le, fun _ _ ↦ rfl⟩
-  | left e ih | right e ih =>
-      obtain ⟨σ, i, hr, hval, _, hf⟩ := ih b (by simp only [slots] at hb; omega) hv hzv ρ hz
-      let d : Fin k := ⟨b, by simp only [slots] at hb; omega⟩
-      refine ⟨_, d, hr.bind ((TreeMachine.Program.exec_act _ σ).bind
-        (f := fun _ ↦ pure d) (Program.Exec.pure _ d _)), ?_, le_rfl, ?_⟩
-      · simp [d, hval]
-      · intro j hj
-        exact (update_below σ d j _ hj).trans (hf j hj)
-  | pair a c iha ihc =>
-      obtain ⟨σ, i, hr, hval, hi, hf⟩ := iha b
-        (by simp only [slots] at hb; omega) hv hzv ρ hz
-      obtain ⟨τ, j, hr', hval', _, hf'⟩ := ihc (b + 1)
-        (by simp only [slots] at hb; omega)
-        (fun x ↦ Nat.lt_succ_of_lt (hv x)) (Nat.lt_succ_of_lt hzv) σ
-        ((hf z hzv).trans hz)
-      have hvars : σ ∘ v = ρ ∘ v := funext fun x ↦ hf (v x) (hv x)
-      let d : Fin k := ⟨b, by simp only [slots] at hb; omega⟩
-      refine ⟨(TreeMachine.Op.pair d i j).eval τ, d, ?_, ?_, le_rfl, ?_⟩
-      · exact hr.bind (hr'.bind
-          ((TreeMachine.Program.exec_act (.pair d i j) τ).mapResult (w := .value) fun _ ↦ d))
-      · simp [hf' i (by omega), hval, hval', hvars]
-      · intro j hj
-        exact (update_below τ d j _ hj).trans ((hf' j (by omega)).trans (hf j hj))
+  obtain ⟨t, i, ht, hval, hi, hf, _⟩ := e.exec_compile_history v z b hb hv hzv
+    (History.nil ⟨(), ρ⟩) hz
+  exact ⟨t.last.regs, i, ht.map (fun h ↦ h.last.regs) (fun _ ↦ rfl)
+    (by intro a h; ext i; simp), hval, hi, hf⟩
 
 /-- Assignments write their final operation directly to the destination.
 Only assigning an existing variable needs the two-instruction copy macro. -/
@@ -109,11 +140,76 @@ def assign (e : Expr ν) (d : Fin k) (v : ν → Fin k) (z : Fin k) (b : ℕ)
       let j ← c.compile v z (b + 1) (by simp only [slots] at hb; omega)
       TreeMachine.Program.act (.pair d i j)
 
-/-- Exact unit time when the expression is assigned to a source variable. -/
-def assignSteps : Expr ν → ℕ
-  | .nil => 1
-  | .var _ => 2
-  | e => e.steps
+/-- Direct assignment preserves other source variables and bounds all intermediate register
+values. The extra two nodes cover the temporary pair in the variable-copy macro. -/
+theorem exec_assign_history (e : Expr ν) (d : Fin k) (v : ν → Fin k) (z : Fin k) (b : ℕ)
+    (hb : b + e.slots ≤ k) (hv : ∀ x, (v x).val < b) (hzv : z.val < b)
+    (s : History (TreeMachine.Cfg k Unit) (TreeMachine.Action k Unit))
+    (hz : s.last.regs z = .nil) :
+    ∃ t, (e.assign d v z b hb).Exec TreeMachine.Program.historySemantics s e.assignSteps () t ∧
+      (∀ i : Fin k, i.val < b →
+        t.last.regs i = Function.update s.last.regs d (e.eval (s.last.regs ∘ v)) i) ∧
+      ∀ i, t.configSup (fun c ↦ (c.regs i).size) ≤
+        s.configSup (fun c ↦ (c.regs i).size) ⊔ (e.maxSize (s.last.regs ∘ v) + 2) := by
+  cases e with
+  | nil =>
+      refine ⟨_, TreeMachine.Program.exec_act_history _ _, ?_, ?_⟩
+      · intro i _
+        simp [hz]
+      · intro i
+        have hi := s.config_le_configSup (fun c ↦ (c.regs i).size) s.last_mem_configs
+        by_cases hd : i = d <;> simp [hd, hz, maxSize] <;> omega
+  | var x =>
+      let u := s.snoc (.assign () (.pair d (v x) z))
+      refine ⟨u.snoc (.assign () (.left d d)),
+        (TreeMachine.Program.exec_act_history (.pair d (v x) z) s).bind
+          (f := fun _ ↦ TreeMachine.Program.act (.left d d))
+          (TreeMachine.Program.exec_act_history (.left d d) u), ?_, ?_⟩
+      · intro i _
+        simp [u]
+      · intro i
+        have hi := s.config_le_configSup (fun c ↦ (c.regs i).size) s.last_mem_configs
+        by_cases hd : i = d <;> simp [u, hd, hz, maxSize, Tree.size_pair] <;> omega
+  | left e | right e =>
+      obtain ⟨t, j, hr, hval, _, hf, hpeak⟩ := e.exec_compile_history v z b
+        (by simp only [slots] at hb; omega) hv hzv s hz
+      refine ⟨_, hr.bind (TreeMachine.Program.exec_act_history _ _), ?_, ?_⟩
+      · intro i hi
+        by_cases h : i = d <;> simp [h, hval, hf i hi]
+      · intro i
+        apply (TreeMachine.configSup_reg_size_snoc_le t _ i).trans
+        apply max_le ((hpeak i).trans (max_le_max_left _ (Nat.le_add_right _ 2)))
+        apply le_sup_of_le_right
+        simpa [TreeMachine.Action.sizeCost, TreeMachine.Op.sizeCost, hval] using
+          (e.size_eval_le_maxSize (s.last.regs ∘ v)).trans (Nat.le_add_right _ 2)
+  | pair a c =>
+      obtain ⟨t, i, hr, hval, hi, hf, hpeak⟩ := a.exec_compile_history v z b
+        (by simp only [slots] at hb; omega) hv hzv s hz
+      obtain ⟨u, j, hr', hval', _, hf', hpeak'⟩ := c.exec_compile_history v z (b + 1)
+        (by simp only [slots] at hb; omega)
+        (fun x ↦ Nat.lt_succ_of_lt (hv x)) (Nat.lt_succ_of_lt hzv) t
+        ((hf z hzv).trans hz)
+      have hvars : t.last.regs ∘ v = s.last.regs ∘ v := funext fun x ↦ hf (v x) (hv x)
+      refine ⟨_, hr.bind (hr'.bind (TreeMachine.Program.exec_act_history _ _)), ?_, ?_⟩
+      · intro l hl
+        by_cases h : l = d
+        · simp [h, hf' i (by omega), hval, hval', hvars]
+        · simp [h, hf' l (by omega), hf l hl]
+      · intro l
+        have hp : u.configSup (fun c ↦ (c.regs l).size) ≤
+            s.configSup (fun c ↦ (c.regs l).size) ⊔
+              ((a.pair c).maxSize (s.last.regs ∘ v) + 2) := by
+          have ha := hpeak l
+          have hc := hpeak' l
+          rw [hvars] at hc
+          simp only [maxSize]
+          omega
+        apply (TreeMachine.configSup_reg_size_snoc_le u _ l).trans
+        apply max_le hp
+        apply le_sup_of_le_right
+        simpa [TreeMachine.Action.sizeCost, TreeMachine.Op.sizeCost,
+          hf' i (by omega), hval, hval', hvars] using
+          (size_eval_le_maxSize (.pair a c) (s.last.regs ∘ v)).trans (Nat.le_add_right _ 2)
 
 /-- Assignment preserves every other source variable, including when a source aliases `d`. -/
 theorem exec_assign (e : Expr ν) (d : Fin k) (v : ν → Fin k) (z : Fin k) (b : ℕ)
@@ -121,30 +217,8 @@ theorem exec_assign (e : Expr ν) (d : Fin k) (v : ν → Fin k) (z : Fin k) (b 
     (ρ : Fin k → Tree) (hz : ρ z = .nil) :
     ∃ σ, (e.assign d v z b hb).Exec TreeMachine.Program.semantics ρ e.assignSteps () σ ∧
       ∀ i : Fin k, i.val < b → σ i = Function.update ρ d (e.eval (ρ ∘ v)) i := by
-  cases e with
-  | nil =>
-      refine ⟨_, TreeMachine.Program.exec_act _ _, ?_⟩
-      intro i _
-      simp [hz]
-  | var x => exact ⟨_, TreeMachine.Program.exec_copy _ _ _ _, fun _ _ ↦ rfl⟩
-  | left e | right e =>
-      obtain ⟨σ, j, hr, hval, _, hf⟩ := e.exec_compile v z b
-        (by simp only [slots] at hb; omega) hv hzv ρ hz
-      refine ⟨_, hr.bind (TreeMachine.Program.exec_act _ _), ?_⟩
-      intro i hi
-      by_cases h : i = d <;> simp [h, hval, hf i hi]
-  | pair a c =>
-      obtain ⟨σ, i, hr, hval, hi, hf⟩ := a.exec_compile v z b
-        (by simp only [slots] at hb; omega) hv hzv ρ hz
-      obtain ⟨τ, j, hr', hval', _, hf'⟩ := c.exec_compile v z (b + 1)
-        (by simp only [slots] at hb; omega)
-        (fun x ↦ Nat.lt_succ_of_lt (hv x)) (Nat.lt_succ_of_lt hzv) σ
-        ((hf z hzv).trans hz)
-      have hvars : σ ∘ v = ρ ∘ v := funext fun x ↦ hf (v x) (hv x)
-      refine ⟨_, hr.bind (hr'.bind (TreeMachine.Program.exec_act _ _)), ?_⟩
-      intro l hl
-      by_cases h : l = d
-      · simp [h, hf' i (by omega), hval, hval', hvars]
-      · simp [h, hf' l (by omega), hf l hl]
+  obtain ⟨t, ht, hf, _⟩ := e.exec_assign_history d v z b hb hv hzv (History.nil ⟨(), ρ⟩) hz
+  exact ⟨t.last.regs, ht.map (fun h ↦ h.last.regs) (fun _ ↦ rfl)
+    (by intro a h; ext i; simp), hf⟩
 
 end Complexity.TreeProgram.Expr

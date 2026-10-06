@@ -42,6 +42,12 @@ theorem Cfg.reg_size_le_mass (c : Cfg k Q) (i : Fin k) : (c.regs i).size ≤ c.m
   Finset.single_le_sum (f := fun j ↦ (c.regs j).size)
     (fun _ _ ↦ Nat.zero_le _) (Finset.mem_univ i)
 
+/-- The peak total size is bounded by the sum of the individual register peaks. -/
+theorem configSup_mass_le_sum (h : Controller.History (Cfg k Q) (Action k Q)) :
+    h.configSup Cfg.mass ≤ ∑ i, h.configSup (fun c ↦ (c.regs i).size) :=
+  (h.configSup_le_iff Cfg.mass _).2 fun _ hc ↦
+    Finset.sum_le_sum fun i _ ↦ h.config_le_configSup (fun c ↦ (c.regs i).size) hc
+
 /-- Projections pay for reading their source; pairing pays for constructing its result. -/
 def Op.sizeCost (o : Op k) (ρ : Fin k → Tree) : ℕ :=
   match o with
@@ -82,6 +88,18 @@ theorem Op.sizeCost_rename {l : ℕ} (f : Fin k → Fin l) (ρ : Fin l → Tree)
 /-- The charge for the instruction selected at this configuration. -/
 def Action.sizeCost (a : Action k Q) (c : Cfg k Q) : ℕ := a.op.sizeCost c.regs
 
+/-- A register's new peak is bounded by its previous peak and the current action's charge. -/
+theorem configSup_reg_size_snoc_le
+    (h : Controller.History (Cfg k Q) (Action k Q)) (a : Action k Q) (i : Fin k) :
+    (h.snoc a).configSup (fun c ↦ (c.regs i).size) ≤
+      h.configSup (fun c ↦ (c.regs i).size) ⊔ a.sizeCost h.last := by
+  rw [Controller.History.configSup_snoc]
+  apply sup_le le_sup_left
+  by_cases hd : a.op.dst = some i
+  · exact (a.op.written_size_le hd).trans le_sup_right
+  · rw [Cfg.apply_regs, a.op.eval_of_dst_ne _ _ hd]
+    exact (h.config_le_configSup (fun c ↦ (c.regs i).size) h.last_mem_configs).trans le_sup_left
+
 /-- Each charge is bounded by the larger of the adjacent register masses. -/
 theorem Action.sizeCost_le_mass [NeZero k] (a : Action k Q) (c : Cfg k Q) :
     a.sizeCost c ≤ c.mass ⊔ (apply a c).mass := by
@@ -119,5 +137,13 @@ theorem Cfg.mass_apply_le (c : Cfg k Q) (a : Action k Q) :
     have hb := a.op.written_size_le (ρ := c.regs) hd
     change (∑ j, (a.op.eval c.regs j).size) ≤ (∑ j, (c.regs j).size) + a.op.sizeCost c.regs
     omega
+
+/-- A control-only transition does not change any peak measurement of the register bank. -/
+@[simp↓] theorem configSup_snoc_keep {β : Type*} [SemilatticeSup β]
+    (h : Controller.History (Cfg k Q) (Action k Q)) (q : Q) (f : (Fin k → Tree) → β) :
+    (h.snoc (.keep q)).configSup (fun c ↦ f c.regs) =
+      h.configSup (fun c ↦ f c.regs) := by
+  simpa only [Controller.History.configSup_snoc, Action.apply_keep, Function.comp_apply]
+    using sup_eq_left.mpr (h.config_le_configSup (fun c ↦ f c.regs) h.last_mem_configs)
 
 end Complexity.TreeMachine

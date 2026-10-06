@@ -14,8 +14,8 @@ public import Mathlib.Logic.Function.Basic
 
 Variables name source values, independently of the registers chosen by compilation.
 Expressions read the old environment before an assignment updates its destination.
-The terminating execution relation is a functional specification; it does not assign
-unit cost to a whole expression or claim a resource bound for the compiled program.
+The same terminating execution records expression costs; functional specifications simply
+forget those measurements. Compilation relates them to unit time and peak tree space.
 -/
 
 @[expose] public section
@@ -56,6 +56,38 @@ def eval : Expr ν → (ν → Tree) → Tree
 @[simp] theorem eval_pair (a b : Expr ν) (s : ν → Tree) :
     (pair a b).eval s = .pair (a.eval s) (b.eval s) := rfl
 
+/-- Largest source tree encountered during expression evaluation, including discarded subtrees. -/
+@[simp] def maxSize : Expr ν → (ν → Tree) → ℕ
+  | .nil, _ => 1
+  | .var x, s => (s x).size
+  | .left e, s | .right e, s => e.maxSize s
+  | .pair a b, s => max (a.maxSize s) (max (b.maxSize s) (Tree.pair (a.eval s) (b.eval s)).size)
+
+/-- The returned tree is one of the values covered by the source bound. -/
+theorem size_eval_le_maxSize (e : Expr ν) (s : ν → Tree) :
+    (e.eval s).size ≤ e.maxSize s := by
+  induction e with
+  | nil | var => exact Nat.le_refl _
+  | left e ih => exact Nat.le_trans (Tree.size_left_le _) ih
+  | right e ih => exact Nat.le_trans (Tree.size_right_le _) ih
+  | pair a b => exact Nat.le_trans (Nat.le_max_right _ _) (Nat.le_max_right _ _)
+
+/-- Exact unit time for obtaining an expression's value; existing values need no copy. -/
+@[simp] def steps : Expr ν → ℕ
+  | .nil | .var _ => 0
+  | .left e | .right e => e.steps + 1
+  | .pair a b => a.steps + (b.steps + 1)
+
+/-- Exact unit time when the expression is assigned to a source variable. -/
+def assignSteps : Expr ν → ℕ
+  | .nil => 1
+  | .var _ => 2
+  | .left e | .right e => e.steps + 1
+  | .pair a b => a.steps + (b.steps + 1)
+
+attribute [simp] assignSteps.eq_1 assignSteps.eq_2 assignSteps.eq_3
+  assignSteps.eq_4 assignSteps.eq_5
+
 end Expr
 
 /-- Assignment, sequencing, and structured control over source variables.
@@ -72,50 +104,108 @@ namespace Cmd
 
 variable {ν : Type} [DecidableEq ν]
 
-/-- A finite execution in source environments, with no reference to machine registers. -/
-inductive Exec : Cmd ν → (ν → Tree) → (ν → Tree) → Prop where
-  | skip (s : ν → Tree) : Exec .skip s s
+/-- A source execution records its exact compiled unit time and the largest evaluated
+subexpression. Initial values and the compiler's copy overhead are added at the boundary. -/
+inductive Run : Cmd ν → (ν → Tree) → ℕ → (ν → Tree) → ℕ → Prop where
+  | skip (s : ν → Tree) : Run .skip s 0 s 0
   | assign (x : ν) (e : Expr ν) (s : ν → Tree) :
-      Exec (.assign x e) s (Function.update s x (e.eval s))
-  | seq {p q : Cmd ν} {s t u : ν → Tree}
-      (hp : Exec p s t) (hq : Exec q t u) : Exec (.seq p q) s u
-  | branch_true {e : Expr ν} {p q : Cmd ν} {s t : ν → Tree}
-      (he : (e.eval s).root = true) (hp : Exec p s t) : Exec (.branch e p q) s t
-  | branch_false {e : Expr ν} {p q : Cmd ν} {s t : ν → Tree}
-      (he : (e.eval s).root = false) (hq : Exec q s t) : Exec (.branch e p q) s t
+      Run (.assign x e) s e.assignSteps (Function.update s x (e.eval s)) (e.maxSize s)
+  | seq {p q : Cmd ν} {s t u : ν → Tree} {n m a b : ℕ}
+      (hp : Run p s n t a) (hq : Run q t m u b) : Run (.seq p q) s (n + m) u (max a b)
+  | branch_true {e : Expr ν} {p q : Cmd ν} {s t : ν → Tree} {n a : ℕ}
+      (he : (e.eval s).root = true) (hp : Run p s n t a) :
+      Run (.branch e p q) s (e.steps + 1 + n) t (max (e.maxSize s) a)
+  | branch_false {e : Expr ν} {p q : Cmd ν} {s t : ν → Tree} {n a : ℕ}
+      (he : (e.eval s).root = false) (hq : Run q s n t a) :
+      Run (.branch e p q) s (e.steps + 1 + n) t (max (e.maxSize s) a)
   | while_false {e : Expr ν} {p : Cmd ν} {s : ν → Tree}
-      (he : (e.eval s).root = false) : Exec (.while e p) s s
-  | while_true {e : Expr ν} {p : Cmd ν} {s t u : ν → Tree}
-      (he : (e.eval s).root = true) (hp : Exec p s t) (hr : Exec (.while e p) t u) :
-      Exec (.while e p) s u
+      (he : (e.eval s).root = false) : Run (.while e p) s (e.steps + 2) s (e.maxSize s)
+  | while_true {e : Expr ν} {p : Cmd ν} {s t u : ν → Tree} {n m a b : ℕ}
+      (he : (e.eval s).root = true) (hp : Run p s n t a) (hr : Run (.while e p) t m u b) :
+      Run (.while e p) s (e.steps + 2 + n + m) u (max (e.maxSize s) (max a b))
+
+/-- Functional execution forgets the resource measurements of the same source run. -/
+def Exec (p : Cmd ν) (s t : ν → Tree) : Prop := ∃ n b, p.Run s n t b
+
+/-- Bounding the initial values and all evaluated expressions bounds the final environment. -/
+theorem Run.size_le {p : Cmd ν} {s t : ν → Tree} {n b space : ℕ}
+    (h : p.Run s n t b) (hs : ∀ i, (s i).size ≤ space) (hb : b ≤ space) :
+    ∀ i, (t i).size ≤ space := by
+  induction h with
+  | skip | while_false => exact hs
+  | assign x e s =>
+    intro i
+    by_cases hi : i = x
+    · simpa [hi] using Nat.le_trans (e.size_eval_le_maxSize s) hb
+    · simpa [Function.update_of_ne hi] using hs i
+  | seq hp hq ihp ihq => exact ihq (ihp hs (by omega)) (by omega)
+  | branch_true he hp ih | branch_false he hp ih => exact ih hs (by omega)
+  | while_true he hp hr ihp ihr => exact ihr (ihp hs (by omega)) (by omega)
+
+namespace Exec
+
+variable {p q : Cmd ν} {e : Expr ν} {s t u : ν → Tree}
+
+theorem skip (s : ν → Tree) : Exec .skip s s := ⟨_, _, .skip s⟩
+
+theorem assign (x : ν) (e : Expr ν) (s : ν → Tree) :
+    Exec (.assign x e) s (Function.update s x (e.eval s)) := ⟨_, _, .assign x e s⟩
+
+theorem seq (hp : p.Exec s t) (hq : q.Exec t u) : (Cmd.seq p q).Exec s u := by
+  obtain ⟨_, _, hp⟩ := hp
+  obtain ⟨_, _, hq⟩ := hq
+  exact ⟨_, _, .seq hp hq⟩
+
+theorem branch_true (he : (e.eval s).root = true) (hp : p.Exec s t) :
+    (Cmd.branch e p q).Exec s t := by
+  obtain ⟨_, _, hp⟩ := hp
+  exact ⟨_, _, .branch_true he hp⟩
+
+theorem branch_false (he : (e.eval s).root = false) (hq : q.Exec s t) :
+    (Cmd.branch e p q).Exec s t := by
+  obtain ⟨_, _, hq⟩ := hq
+  exact ⟨_, _, .branch_false he hq⟩
+
+theorem while_false (he : (e.eval s).root = false) : (Cmd.while e p).Exec s s :=
+  ⟨_, _, .while_false he⟩
+
+theorem while_true (he : (e.eval s).root = true) (hp : p.Exec s t)
+    (hr : (Cmd.while e p).Exec t u) : (Cmd.while e p).Exec s u := by
+  obtain ⟨_, _, hp⟩ := hp
+  obtain ⟨_, _, hr⟩ := hr
+  exact ⟨_, _, .while_true he hp hr⟩
+
+end Exec
 
 @[simp] theorem exec_skip_iff {s t : ν → Tree} : Exec .skip s t ↔ t = s := by
   constructor
-  · intro h; cases h; rfl
+  · rintro ⟨_, _, h⟩; cases h; rfl
   · rintro rfl; exact .skip _
 
 @[simp] theorem exec_assign_iff (x : ν) (e : Expr ν) {s t : ν → Tree} :
     Exec (.assign x e) s t ↔ t = Function.update s x (e.eval s) := by
   constructor
-  · intro h; cases h; rfl
+  · rintro ⟨_, _, h⟩; cases h; rfl
   · rintro rfl; exact .assign x e s
 
 @[simp] theorem exec_seq_iff (p q : Cmd ν) {s t : ν → Tree} :
     Exec (.seq p q) s t ↔ ∃ u, Exec p s u ∧ Exec q u t := by
   constructor
-  · intro h; cases h with | seq hp hq => exact ⟨_, hp, hq⟩
+  · rintro ⟨_, _, h⟩; cases h with | seq hp hq => exact ⟨_, ⟨_, _, hp⟩, ⟨_, _, hq⟩⟩
   · rintro ⟨u, hp, hq⟩; exact .seq hp hq
 
 @[simp] theorem exec_branch_iff (e : Expr ν) (p q : Cmd ν) {s t : ν → Tree} :
     Exec (.branch e p q) s t ↔ if (e.eval s).root then Exec p s t else Exec q s t := by
   cases he : (e.eval s).root <;> simp only [Bool.false_eq_true, ↓reduceIte]
-  · exact ⟨fun h ↦ by cases h <;> simp_all, fun h ↦ .branch_false he h⟩
-  · exact ⟨fun h ↦ by cases h <;> simp_all, fun h ↦ .branch_true he h⟩
+  · exact ⟨fun ⟨_, _, h⟩ ↦ by cases h <;> first | exact ⟨_, _, ‹_›⟩ | simp_all,
+      fun h ↦ .branch_false he h⟩
+  · exact ⟨fun ⟨_, _, h⟩ ↦ by cases h <;> first | exact ⟨_, _, ‹_›⟩ | simp_all,
+      fun h ↦ .branch_true he h⟩
 
 /-- Source execution has a unique final environment whenever it terminates. -/
-theorem Exec.deterministic {p : Cmd ν} {s t u : ν → Tree}
-    (h : p.Exec s t) (h' : p.Exec s u) : t = u := by
-  induction h generalizing u with
+theorem Run.deterministic {p : Cmd ν} {s t u : ν → Tree} {n m a b : ℕ}
+    (h : p.Run s n t a) (h' : p.Run s m u b) : t = u := by
+  induction h generalizing m u b with
   | skip | assign => cases h'; rfl
   | seq hp hq ihp ihq =>
     cases h' with
@@ -136,6 +226,12 @@ theorem Exec.deterministic {p : Cmd ν} {s t u : ν → Tree}
     cases h' with
     | while_false he' => simp_all
     | while_true _ hp' hr' => exact ihr (ihp hp' ▸ hr')
+
+theorem Exec.deterministic {p : Cmd ν} {s t u : ν → Tree}
+    (h : p.Exec s t) (h' : p.Exec s u) : t = u := by
+  obtain ⟨_, _, h⟩ := h
+  obtain ⟨_, _, h'⟩ := h'
+  exact h.deterministic h'
 
 /-- Total correctness expressed entirely in terms of source variables and values. -/
 def Total (p : Cmd ν) (P Q : (ν → Tree) → Prop) : Prop :=
@@ -176,5 +272,13 @@ structure Procedure (ν : Type) where
 /-- Run a source procedure with every local variable initially empty. -/
 def Procedure.Exec {ν : Type} [DecidableEq ν] (p : Procedure ν) (x y : Tree) : Prop :=
   ∃ s, p.body.Exec (Function.update (fun _ ↦ Tree.nil) p.input x) s ∧ p.result.eval s = y
+
+/-- Source budgets include input, evaluated subexpressions and the returned expression.
+Compilation turns the tree-size bound into a register-mass bound with a static factor. -/
+def Procedure.Bounded {ν : Type} [DecidableEq ν] (p : Procedure ν)
+    (x y : Tree) (time space : ℕ) : Prop :=
+  ∃ n s b, p.body.Run (Function.update (fun _ ↦ Tree.nil) p.input x) n s b ∧
+    p.result.eval s = y ∧ 2 + (n + p.result.assignSteps) ≤ time ∧
+    x.size ≤ space ∧ b ≤ space ∧ p.result.maxSize s ≤ space
 
 end Complexity.TreeProgram

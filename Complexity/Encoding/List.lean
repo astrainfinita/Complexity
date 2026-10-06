@@ -41,4 +41,12 @@ instance {α : Type*} [UniqueEncoding Tree α] : UniqueEncoding Tree (List α) :
 @[simp] theorem encode_list_cons {α : Type*} [UniqueEncoding Tree α] (a : α) (as : List α) :
     encode Tree (a :: as) = .pair (encode Tree a) (encode Tree as) := rfl
 
+@[simp] theorem listLength_encode_list {α : Type*} [UniqueEncoding Tree α] (xs : List α) :
+    (encode Tree xs).listLength = xs.length := Tree.listLength_encodeList _ _
+
+@[simp] theorem reverseAppend_encode_list {α : Type*} [UniqueEncoding Tree α]
+    (xs ys : List α) :
+    (encode Tree xs).reverseAppend (encode Tree ys) = encode Tree (xs.reverse ++ ys) :=
+  Tree.reverseAppend_encodeList _ _ _
+
 end Complexity

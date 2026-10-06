@@ -172,6 +172,7 @@ def Action.keep (q : Q) : Action k Q := ⟨.nop, q⟩
     apply (Action.keep (k := k) q) c = { c with state := q } := rfl
 
 /-- Execute an instruction and enter the given control state. -/
+@[simps op]
 def Action.assign (q : Q) (o : Op k) : Action k Q := ⟨o, q⟩
 
 theorem Action.regs_assign (q : Q) (o : Op k) (c : Cfg k Q) :

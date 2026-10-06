@@ -37,6 +37,8 @@ def expression : Value → Expr ℕ
   | .nil => .nil
   | .var i => .var i
 
+attribute [simp] expression.eq_1 expression.eq_2
+
 /-- Interpret a value in a source environment. -/
 def eval : Value → (ℕ → Tree) → Tree
   | .nil, _ => .nil

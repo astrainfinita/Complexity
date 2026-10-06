@@ -45,6 +45,27 @@ def close (e : Expr ℕ) (n : ℕ) (h : e.bound ≤ n) : Expr (Fin n) :=
   | right e ih => exact congrArg BinaryTree.right (ih h)
   | pair a b iha ihb => exact congrArg₂ Tree.pair (iha _) (ihb _)
 
+@[simp] theorem maxSize_close (e : Expr ℕ) (n : ℕ) (h : e.bound ≤ n) (s : ℕ → Tree) :
+    (e.close n h).maxSize (fun i ↦ s i.val) = e.maxSize s := by
+  induction e with
+  | nil | var => rfl
+  | left e ih | right e ih => exact ih h
+  | pair a b iha ihb => simp only [close, maxSize, eval_close, iha, ihb]
+
+@[simp] theorem steps_close (e : Expr ℕ) (n : ℕ) (h : e.bound ≤ n) :
+    (e.close n h).steps = e.steps := by
+  induction e with
+  | nil | var => rfl
+  | left e ih | right e ih => exact congrArg (· + 1) (ih h)
+  | pair a b iha ihb => simp only [close, steps, iha, ihb]
+
+@[simp] theorem assignSteps_close (e : Expr ℕ) (n : ℕ) (h : e.bound ≤ n) :
+    (e.close n h).assignSteps = e.assignSteps := by
+  cases e with
+  | nil | var => rfl
+  | left e | right e => exact congrArg (· + 1) (steps_close e n h)
+  | pair a b => simp only [close, assignSteps, steps_close]
+
 end Expr
 
 namespace Cmd
@@ -72,27 +93,45 @@ def close (p : Cmd ℕ) (n : ℕ) (h : p.bound ≤ n) : Cmd (Fin n) :=
       (p.close n (by simp only [bound] at h; omega))
 
 /-- Execution depends only on the variables occurring in the command. -/
-theorem Exec.restrict {p : Cmd ℕ} {s t : ℕ → Tree} (h : p.Exec s t)
-    (n : ℕ) (hn : p.bound ≤ n) :
-    (p.close n hn).Exec (fun i ↦ s i.val) (fun i ↦ t i.val) := by
+theorem Run.restrict {p : Cmd ℕ} {s t : ℕ → Tree} {time space : ℕ}
+    (h : p.Run s time t space) (n : ℕ) (hn : p.bound ≤ n) :
+    (p.close n hn).Run (fun i ↦ s i.val) time (fun i ↦ t i.val) space := by
   induction h with
   | skip s => exact .skip _
   | assign x e s =>
     rw [Function.update_comp_eq_of_injective' s Fin.val_injective
       ⟨x, by simp only [bound] at hn; omega⟩]
-    rw [← Expr.eval_close e n (by simp only [bound] at hn; omega) s]
-    exact Exec.assign (ν := Fin n) ..
+    have hh := Run.assign (ν := Fin n) ⟨x, by simp only [bound] at hn; omega⟩
+      (e.close n (by simp only [bound] at hn; omega)) (fun i ↦ s i.val)
+    simpa only [close, Expr.assignSteps_close, Expr.maxSize_close, Expr.eval_close] using hh
   | seq hp hq ihp ihq =>
     exact .seq (ihp (by simp only [bound] at hn; omega))
       (ihq (by simp only [bound] at hn; omega))
-  | branch_true he hp ih =>
-    exact .branch_true (by simpa using he) (ih (by simp only [bound] at hn; omega))
-  | branch_false he hq ih =>
-    exact .branch_false (by simpa using he) (ih (by simp only [bound] at hn; omega))
-  | while_false he => exact .while_false (by simpa using he)
+  | @branch_true e p q s t time size he hp ih =>
+    have hh := Run.branch_true (e := e.close n (by simp only [bound] at hn; omega))
+      (q := q.close n (by simp only [bound] at hn; omega))
+      (by simpa using he) (ih (by simp only [bound] at hn; omega))
+    simpa only [close, Expr.steps_close, Expr.maxSize_close] using hh
+  | @branch_false e p q s t time size he hp ih =>
+    have hh := Run.branch_false (e := e.close n (by simp only [bound] at hn; omega))
+      (p := p.close n (by simp only [bound] at hn; omega))
+      (by simpa using he) (ih (by simp only [bound] at hn; omega))
+    simpa only [close, Expr.steps_close, Expr.maxSize_close] using hh
+  | @while_false e p s he =>
+    have hh := Run.while_false (e := e.close n (by simp only [bound] at hn; omega))
+      (p := p.close n (by simp only [bound] at hn; omega))
+      (s := fun i ↦ s i.val) (by simpa using he)
+    simpa only [close, Expr.steps_close, Expr.maxSize_close] using hh
   | while_true he hp hr ihp ihr =>
-    exact .while_true (by simpa using he)
+    have hh := Run.while_true (by simpa using he)
       (ihp (by simp only [bound] at hn; omega)) (ihr hn)
+    simpa only [close, Expr.steps_close, Expr.maxSize_close] using hh
+
+theorem Exec.restrict {p : Cmd ℕ} {s t : ℕ → Tree} (h : p.Exec s t)
+    (n : ℕ) (hn : p.bound ≤ n) :
+    (p.close n hn).Exec (fun i ↦ s i.val) (fun i ↦ t i.val) := by
+  obtain ⟨time, space, h⟩ := h
+  exact ⟨time, space, h.restrict n hn⟩
 
 end Cmd
 
@@ -117,6 +156,18 @@ theorem close_correct {p : Procedure ℕ} {x y : Tree} (h : p.Exec x y) :
       ⟨p.input, show p.input < p.bound by simp only [bound]; omega⟩] at h
     exact h
   · simpa only [close, Expr.eval_close] using hy
+
+theorem close_bounded {p : Procedure ℕ} {x y : Tree} {time space : ℕ}
+    (h : p.Bounded x y time space) : p.close.Bounded x y time space := by
+  obtain ⟨n, s, b, hr, hy, ht, hx, hb, hs⟩ := h
+  refine ⟨n, fun i ↦ s i.val, b, ?_, ?_, ?_, hx, hb, ?_⟩
+  · have h := hr.restrict p.bound (by simp only [bound]; omega)
+    rw [Function.update_comp_eq_of_injective' _ Fin.val_injective
+      ⟨p.input, show p.input < p.bound by simp only [bound]; omega⟩] at h
+    exact h
+  · simpa only [close, Expr.eval_close] using hy
+  · simpa only [close, Expr.assignSteps_close] using ht
+  · simpa only [close, Expr.maxSize_close] using hs
 
 end Procedure
 end Complexity.TreeProgram
