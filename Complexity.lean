@@ -56,6 +56,7 @@ public import Complexity.Encoding.Option
 public import Complexity.Encoding.Polynomial.Basic
 public import Complexity.Encoding.Polynomial.Bool
 public import Complexity.Encoding.Tree
+public import Complexity.ModelTheory.Algebra.BooleanAlgebra.Basic
 public import Complexity.Models.Input
 public import Complexity.Models.StackMachine.Basic
 public import Complexity.Models.StackMachine.Configuration
