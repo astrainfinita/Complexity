@@ -147,16 +147,11 @@ private theorem register_injective (p : Procedure ν) : Function.Injective p.reg
 
 private theorem register_lt (p : Procedure ν) (x : ν) :
     (p.register x).val < FinEnum.card ν + 2 := by
-  have := (FinEnum.equiv x).isLt
-  simp only [register]
+  simp [register]
   omega
 
 private theorem register_ne_empty (p : Procedure ν) (x : ν) : p.register x ≠ p.empty := by
-  intro h
-  have := congrArg Fin.val h
-  have := (FinEnum.equiv x).isLt
-  simp only [register, empty] at *
-  omega
+  simp [register, empty, Fin.ext_iff, (FinEnum.equiv x).isLt.ne]
 
 /-- The generated register program. User specifications should use `Procedure.Exec`. -/
 def code (p : Procedure ν) : TreeMachine.Program p.registers Unit := do
@@ -176,16 +171,8 @@ theorem compile_correct {p : Procedure ν} {x y : Tree} (h : p.Exec x y) :
   obtain ⟨s, hs, hy⟩ := h
   let ρ := TreeMachine.input (0 : Fin p.registers) x
   let σ := Function.update ρ (p.register p.input) x
-  have hzero (a : ν) : p.register a ≠ 0 := by
-    intro h
-    have := congrArg Fin.val h
-    simp only [register, Fin.val_zero] at this
-    omega
-  have hempty : p.empty ≠ 0 := by
-    intro h
-    have := congrArg Fin.val h
-    simp only [empty, Fin.val_zero] at this
-    omega
+  have hzero (a : ν) : p.register a ≠ 0 := by simp [register, Fin.ext_iff]
+  have hempty : p.empty ≠ 0 := by simp [empty, Fin.ext_iff]
   have hinit : σ ∘ p.register = Function.update (fun _ ↦ Tree.nil) p.input x := by
     funext a
     simp only [σ, ρ, Function.comp_apply, Function.update_apply,

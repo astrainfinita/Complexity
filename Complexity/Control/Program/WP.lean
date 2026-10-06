@@ -142,6 +142,7 @@ theorem spec_bind (p : Program O A Op Ret α) (f : α → Program O A Op Ret β)
   convert hq using 1
   omega
 
+set_option experimental.vcgen true in
 /-- Compose two total contracts through the first program's postcondition. -/
 theorem spec_bind_of_spec {p : Program O A Op Ret α} {f : α → Program O A Op Ret β}
     {e : Semantics O A Op Ret S} {P : S → ℕ → Prop}
@@ -149,10 +150,7 @@ theorem spec_bind_of_spec {p : Program O A Op Ret α} {f : α → Program O A Op
     (hp : Triple (p.verify e) P R x)
     (hf : ∀ a, Triple ((f a).verify e) (R a) Q x) :
     Triple ((p >>= f).verify e) P Q x := by
-  constructor
-  intro s b hs
-  apply (spec_bind p f e Q x).le_wp s b
-  exact (Triple.entails_wp_of_post hp (fun a ↦ (hf a).le_wp)) s b hs
+  vcgen [hp, hf]
 
 /-- Relabeling a result preserves the state and all remaining time credits. -/
 theorem spec_mapResult (f : α → β) {p : Program O A Op Ret α}

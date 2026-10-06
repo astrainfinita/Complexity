@@ -47,14 +47,14 @@ def drained (c : Cfg κ Γ Unit xs) (i : κ) (targets : κ → Bool)
 omit [FinEnum Γ] in
 @[simp] theorem drained_start (c : Cfg κ Γ Unit xs) (i : κ) (targets : κ → Bool) :
     drained c i targets [] (c.stacks i) = c := by
-  apply Cfg.ext <;> simp [drained, funext_iff]
+  apply Cfg.ext <;> simp [funext_iff]
 
 omit [FinEnum Γ] in
 private theorem drainAction_drained (c : Cfg κ Γ Unit xs) (i : κ) (targets : κ → Bool)
     (p remaining : List Γ) (a : Γ) :
     apply (drainAction i targets a) (drained c i targets p (a :: remaining)) =
       drained c i targets (p ++ [a]) remaining := by
-  ext j <;> simp [drainAction, drained, idle, List.reverse_append, StackMachine.Op.apply]
+  ext j <;> simp [drainAction, idle, List.reverse_append, StackMachine.Op.apply]
   split_ifs <;> simp_all
 
 /-- Moving a word takes exactly three transitions per symbol and two to stop. -/
@@ -99,7 +99,7 @@ def copy (source target temp : κ) : StackMachine.Program κ Γ Unit := do
       (fun _ s b ↦ s = c.setStack i [] ∧ b = q) () := by
   have he : drained c i (fun _ ↦ false) (c.stacks i) [] =
       c.setStack i [] := by
-    ext j <;> simp [drained, Cfg.setStack, Function.update_apply]
+    ext j <;> simp [Function.update_apply]
   simpa only [clear, he] using spec_drain c i (fun _ ↦ false) q
 
 /-- Copying prepends the source word to the target, restores the source, and empties scratch. -/
