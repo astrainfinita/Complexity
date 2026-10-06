@@ -57,6 +57,12 @@ public import Complexity.Encoding.Polynomial.Basic
 public import Complexity.Encoding.Polynomial.Bool
 public import Complexity.Encoding.Tree
 public import Complexity.ModelTheory.Algebra.BooleanAlgebra.Basic
+public import Complexity.Models.Circuit.Basic
+public import Complexity.Models.Circuit.Compile
+public import Complexity.Models.Circuit.Composition
+public import Complexity.Models.Circuit.Evaluation
+public import Complexity.Models.Circuit.Term
+public import Complexity.Models.Circuit.Unroll
 public import Complexity.Models.Input
 public import Complexity.Models.StackMachine.Basic
 public import Complexity.Models.StackMachine.Configuration
@@ -112,6 +118,8 @@ public import Complexity.Models.TuringMachine.Program.Specification.Basic
 public import Complexity.Models.TuringMachine.Program.Specification.Configuration
 public import Complexity.Models.TuringMachine.Program.Specification.History
 public import Complexity.Resources.Basic
+public import Complexity.Resources.Circuit.Basic
+public import Complexity.Resources.Circuit.Compile
 public import Complexity.Resources.Nondeterministic.Basic
 public import Complexity.Resources.Nondeterministic.Deterministic
 public import Complexity.Resources.StackMachine.Basic

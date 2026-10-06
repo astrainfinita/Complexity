@@ -11,8 +11,7 @@ public import Mathlib.Order.Hom.BoundedLattice
 /-!
 # First-order language of Boolean algebras
 
-This file defines the language of Boolean algebras and the operations on its terms, following
-`Mathlib.ModelTheory.Algebra.Ring.Basic`.
+This file defines the language of Boolean algebras and the operations on its terms.
 
 ## Main definitions
 
@@ -24,19 +23,7 @@ This file defines the language of Boolean algebras and the operations on its ter
 - `FirstOrder.BooleanAlgebra.languageEquivEquivOrderIso`: language isomorphisms between Boolean
   algebras correspond to order isomorphisms.
 
-## Implementation notes
-
-As with the language of rings, compatibility only relates the operations; it does not impose
-the Boolean algebra axioms. Use both `[BooleanAlgebra B]` and `[CompatibleBooleanAlgebra B]` when
-a theorem needs the algebraic laws and a compatible first-order structure.
-
-For an existing Boolean algebra, introduce the interpretation locally with
-`letI := compatibleBooleanAlgebraOfBooleanAlgebra B`. Conversely, the operation abbreviations
-`infOfBooleanAlgebraStructure`, etc. recover operations from a language structure. These
-constructions are not global instances, to avoid competing interpretations on the same type.
-
-This file provides the language and its interpretations. The first-order theory of Boolean
-algebras and extensions such as atomlessness belong in subsequent files.
+Compatibility relates the five operations without asserting the Boolean algebra axioms.
 -/
 
 @[expose] public section
@@ -131,11 +118,8 @@ theorem card_booleanAlgebra : card Language.booleanAlgebra = 5 := by
 
 open Structure
 
-/-- A language structure compatible with the existing Boolean operations on `B`.
-
-This class does not extend the operation classes, so it can be used alongside an existing
-`BooleanAlgebra B` without introducing another set of operations. It does not assert the
-Boolean algebra axioms. -/
+/-- A language structure compatible with the existing Boolean operations on `B`, without
+asserting the Boolean algebra axioms. -/
 class CompatibleBooleanAlgebra (B : Type*) [Min B] [Max B] [Compl B] [Bot B] [Top B]
     extends Language.booleanAlgebra.Structure B where
   /-- The infimum symbol is interpreted as the existing infimum operation. -/
@@ -182,12 +166,7 @@ theorem realize_top (v : α → B) : Term.realize v (⊤ : booleanAlgebra.Term �
 
 end
 
-/-- Interpret the language of Boolean algebras using the operations already on `B`.
-
-Use `letI := compatibleBooleanAlgebraOfBooleanAlgebra B` to equip an existing Boolean algebra
-with a compatible first-order structure. Only the operations are needed for this construction.
-This is a definition rather than a global instance to avoid a loop through the operations
-recovered from a language structure. -/
+/-- Interpret the language of Boolean algebras using the five operations already on `B`. -/
 @[instance_reducible]
 def compatibleBooleanAlgebraOfBooleanAlgebra (B : Type*)
     [Min B] [Max B] [Compl B] [Bot B] [Top B] : CompatibleBooleanAlgebra B :=
@@ -224,34 +203,30 @@ def languageEquivEquivOrderIso {B C : Type*} [BooleanAlgebra B] [BooleanAlgebra 
 
 variable (B : Type*) [Language.booleanAlgebra.Structure B]
 
-/-- Recover an infimum operation from a language structure. Use as a local instance. -/
+/-- Recover an infimum operation from a language structure. -/
 abbrev infOfBooleanAlgebraStructure : Min B :=
   ⟨fun x y => funMap infFunc ![x, y]⟩
 
-/-- Recover a supremum operation from a language structure. Use as a local instance. -/
+/-- Recover a supremum operation from a language structure. -/
 abbrev supOfBooleanAlgebraStructure : Max B :=
   ⟨fun x y => funMap supFunc ![x, y]⟩
 
-/-- Recover a complement operation from a language structure. Use as a local instance. -/
+/-- Recover a complement operation from a language structure. -/
 abbrev complOfBooleanAlgebraStructure : Compl B :=
   ⟨fun x => funMap complFunc ![x]⟩
 
-/-- Recover a bottom element from a language structure. Use as a local instance. -/
+/-- Recover a bottom element from a language structure. -/
 abbrev botOfBooleanAlgebraStructure : Bot B :=
   ⟨funMap botFunc ![]⟩
 
-/-- Recover a top element from a language structure. Use as a local instance. -/
+/-- Recover a top element from a language structure. -/
 abbrev topOfBooleanAlgebraStructure : Top B :=
   ⟨funMap topFunc ![]⟩
 
 attribute [local instance] infOfBooleanAlgebraStructure supOfBooleanAlgebraStructure
   complOfBooleanAlgebraStructure botOfBooleanAlgebraStructure topOfBooleanAlgebraStructure
 
-/-- The operations recovered from a language structure are compatible with that structure.
-
-Use this only after introducing `infOfBooleanAlgebraStructure`, `supOfBooleanAlgebraStructure`,
-`complOfBooleanAlgebraStructure`, `botOfBooleanAlgebraStructure`, and
-`topOfBooleanAlgebraStructure` as local instances. -/
+/-- The operations recovered from a language structure are compatible with that structure. -/
 abbrev compatibleBooleanAlgebraOfBooleanAlgebraStructure : CompatibleBooleanAlgebra B :=
   { funMap_inf := by
       simp only [Fin.forall_fin_succ_pi, Fin.cons_zero, Fin.forall_fin_zero_pi]
