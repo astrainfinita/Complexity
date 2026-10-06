@@ -96,9 +96,6 @@ end Int
 
 section Boolean
 
-local instance : FirstOrder.BooleanAlgebra.CompatibleBooleanAlgebra Bool :=
-  FirstOrder.BooleanAlgebra.compatibleBooleanAlgebraOfBooleanAlgebra Bool
-
 -- The same core supports the Boolean algebra language added in the preceding commit.
 private def andNot : Circuit Language.booleanAlgebra 2 2 :=
   .gate FirstOrder.BooleanAlgebra.infFunc ![0, 1]

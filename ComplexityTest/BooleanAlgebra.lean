@@ -25,8 +25,6 @@ example : Fintype.card booleanAlgebra.Symbols = 5 := rfl
 
 section Bool
 
-local instance : CompatibleBooleanAlgebra Bool := compatibleBooleanAlgebraOfBooleanAlgebra Bool
-
 -- A compound term uses all five symbols and evaluates using the ordinary Boolean operations.
 example (v : Fin 2 → Bool) :
     Term.realize v

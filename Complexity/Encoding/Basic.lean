@@ -82,8 +82,7 @@ def map (d : Encoding R α) (f : α → β) (h : Function.Surjective f) : Encodi
     {r : R} {b : β} : b ∈ (d.map f h).decode r ↔ ∃ a ∈ d.decode r, f a = b :=
   Part.mem_map_iff f
 
-/-- Transport the value type of an encoding along an equivalence. This changes
-the interpretation of codes; it makes no assertion about conversion costs. -/
+/-- Transport the value type of an encoding along an equivalence. -/
 @[instance_reducible]
 def ofEquiv (d : Encoding R α) (e : β ≃ α) : Encoding R β :=
   d.map e.symm e.symm.surjective
@@ -163,12 +162,36 @@ def refl (R : Type*) : UniqueEncoding R R where
   encode := id
   mem_decode_iff := Part.mem_some_iff
 
+/-- Pull a unique encoding back along a function with an exact partial inverse. -/
+@[instance_reducible]
+def ofLeftInjection (c : UniqueEncoding R α) (f : β → α) (g : α → Part β)
+    (h : ∀ a b, b ∈ g a ↔ f b = a) : UniqueEncoding R β where
+  decode r := (c.decode r).bind g
+  encode b := c.encode (f b)
+  mem_decode_iff := by
+    intro b r
+    simp [Part.mem_bind_iff, h, c.mem_decode_iff]
+
+@[simp] theorem ofLeftInjection_encode (c : UniqueEncoding R α) (f : β → α) (g : α → Part β)
+    (h : ∀ a b, b ∈ g a ↔ f b = a) (b : β) :
+    (c.ofLeftInjection f g h).encode b = c.encode (f b) := rfl
+
+/-- Pull a unique encoding back along an injection, choosing its partial inverse classically. -/
+@[instance_reducible]
+noncomputable def ofInjective (c : UniqueEncoding R α) (f : β → α)
+    (hf : Function.Injective f) : UniqueEncoding R β :=
+  c.ofLeftInjection f (fun a => Part.ofOption (Function.partialInv f a)) fun a b => by
+    simpa only [Part.mem_coe, Option.mem_def] using hf.isPartialInv b a
+
+@[simp] theorem ofInjective_encode (c : UniqueEncoding R α) (f : β → α)
+    (hf : Function.Injective f) (b : β) :
+    (c.ofInjective f hf).encode b = c.encode (f b) := rfl
+
 /-- Transport a unique encoding along an equivalence of value types. -/
 @[instance_reducible]
-def ofEquiv (c : UniqueEncoding R α) (e : β ≃ α) : UniqueEncoding R β where
-  toEncoding := c.toEncoding.ofEquiv e
-  encode b := c.encode (e b)
-  mem_decode_iff := Encoding.mem_ofEquiv_iff c.toEncoding e |>.trans c.mem_decode_iff
+def ofEquiv (c : UniqueEncoding R α) (e : β ≃ α) : UniqueEncoding R β :=
+  c.ofLeftInjection e (fun a => Part.some (e.symm a)) fun a b => by
+    simp [Equiv.eq_symm_apply]
 
 @[simp] theorem ofEquiv_encode (c : UniqueEncoding R α) (e : β ≃ α) (b : β) :
     (c.ofEquiv e).encode b = c.encode (e b) := rfl
@@ -182,6 +205,12 @@ def subtype (c : UniqueEncoding R α) (p : α → Prop) : UniqueEncoding R {a //
 
 @[simp] theorem subtype_encode (c : UniqueEncoding R α) (p : α → Prop) (a : {a // p a}) :
     (c.subtype p).encode a = c.encode a.val := rfl
+
+/-- Subtypes inherit the codes of their underlying values. -/
+instance {p : α → Prop} [c : UniqueEncoding R α] : UniqueEncoding R {a // p a} := c.subtype p
+
+@[simp] theorem encode_subtype {p : α → Prop} [UniqueEncoding R α] (a : {a // p a}) :
+    encode R a = encode R a.val := rfl
 
 end UniqueEncoding
 

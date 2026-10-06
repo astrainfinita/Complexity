@@ -37,6 +37,8 @@ public import Complexity.Control.Program.WP
 public import Complexity.Control.Transition.Basic
 public import Complexity.Control.Transition.Simulation
 public import Complexity.Data.BitList.Nat
+public import Complexity.Data.CNF.Basic
+public import Complexity.Data.CNF.TreeEncoding
 public import Complexity.Data.Embedding
 public import Complexity.Data.FinEnum
 public import Complexity.Data.IntMemory.Basic
@@ -50,6 +52,7 @@ public import Complexity.Encoding.Basic
 public import Complexity.Encoding.BitList
 public import Complexity.Encoding.Bool
 public import Complexity.Encoding.Composition
+public import Complexity.Encoding.Fin
 public import Complexity.Encoding.List
 public import Complexity.Encoding.Nat
 public import Complexity.Encoding.Option
@@ -62,6 +65,7 @@ public import Complexity.Models.Circuit.Compile
 public import Complexity.Models.Circuit.Composition
 public import Complexity.Models.Circuit.Evaluation
 public import Complexity.Models.Circuit.Term
+public import Complexity.Models.Circuit.TreeEncoding
 public import Complexity.Models.Circuit.Unroll
 public import Complexity.Models.Input
 public import Complexity.Models.StackMachine.Basic
@@ -117,6 +121,8 @@ public import Complexity.Models.TuringMachine.Program.Enumeration
 public import Complexity.Models.TuringMachine.Program.Specification.Basic
 public import Complexity.Models.TuringMachine.Program.Specification.Configuration
 public import Complexity.Models.TuringMachine.Program.Specification.History
+public import Complexity.Problems.CircuitSAT.Basic
+public import Complexity.Problems.ThreeSAT.Basic
 public import Complexity.Resources.Basic
 public import Complexity.Resources.Circuit.Basic
 public import Complexity.Resources.Circuit.Compile

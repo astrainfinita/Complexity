@@ -15,7 +15,7 @@ public meta import Lean.Meta.Inductive
 
 `@[tree_encoding]` generates a unique tree encoding and source operations for a
 first-order inductive type. Single-constructor types omit the tag; fixed-arity fields
-omit a final list terminator. Indexed, nested and dependent data need separate support.
+omit a final list terminator. Constructor fields supplied by the result indices are erased.
 -/
 
 public meta section
@@ -24,22 +24,72 @@ namespace Complexity.TreeProgram.Deriving
 
 open Lean Parser.Term Meta Elab Deriving Command
 
-/-- Bind the inductive parameters and their encodings in the existing two-parameter class. -/
+private def indexFields (ind : InductiveVal) (ctor : ConstructorVal) : MetaM (Array Nat) :=
+  forallTelescopeReducing ctor.type fun xs result => do
+    let mut fields := #[]
+    for index in result.getAppArgs[ind.numParams...*] do
+      let some i := (xs.extract ind.numParams xs.size).idxOf? index |
+        throwError "Tree encoding requires constructor result indices to be distinct fields"
+      if fields.contains i then
+        throwError "Tree encoding requires constructor result indices to be distinct fields"
+      fields := fields.push i
+    return fields
+
+private def dataFields (ind : InductiveVal) (ctor : ConstructorVal) : MetaM (Array Nat) := do
+  let indices ← indexFields ind ctor
+  return (List.range ctor.numFields).toArray.filter (!indices.contains ·)
+
+private def withInstances {α : Type} (types : List Lean.Expr) (k : TermElabM α) : TermElabM α :=
+  match types with
+  | [] => k
+  | ty :: types => do
+    withLocalDecl (← mkFreshUserName `inst) .instImplicit ty fun _ =>
+      withInstances types k
+
+private def explicitBinders : Lean.Expr → Lean.Expr
+  | .forallE name ty body _ => .forallE name ty (explicitBinders body) .default
+  | .lam name ty body _ => .lam name ty (explicitBinders body) .default
+  | e => e
+
+private def encodingRequirements (ind : InductiveVal) : TermElabM (Array Term) :=
+  forallBoundedTelescope ind.type ind.numParams fun params _ => do
+    let mut requirements := #[]
+    for param in params do
+      try
+        let ty ← mkAppM ``UniqueEncoding #[mkConst ``Tree, param]
+        if ← isTypeCorrect ty then requirements := requirements.push ty
+      catch _ => pure ()
+    for name in ind.ctors do
+      let ctor ← getConstInfoCtor name
+      let data ← dataFields ind ctor
+      let ty ← inferType (mkAppN (mkConst name (ind.levelParams.map Level.param)) params)
+      requirements ← forallTelescopeReducing ty fun xs _ => do
+        let mut requirements := requirements
+        for i in data do
+          let fieldType ← inferType xs[i]!
+          if fieldType.isAppOf ind.name then continue
+          let goal ← mkAppM ``UniqueEncoding #[mkConst ``Tree, fieldType]
+          let found ← withInstances requirements.toList <| synthInstance? goal
+          unless found.isSome do
+            let requirement := explicitBinders (← mkForallFVars (xs.extract 0 i) goal
+              (usedOnly := true))
+            unless params.any (requirement.containsFVar ·.fvarId!) do
+              throwError "Tree encoding needs an instance of {goal}"
+            requirements := requirements.push requirement
+        return requirements
+    requirements.mapM fun ty => do
+      withOptions (·.setBool `pp.funBinderTypes true) do
+        PrettyPrinter.delab (explicitBinders (← mkLambdaFVars params ty))
+
+/-- Bind parameters, indices, and the encodings needed by constructor fields. -/
 private def mkHeader (arity : Nat) (ind : InductiveVal) : TermElabM Header := do
   let argNames ← mkInductArgNames ind
   let targetType ← mkInductiveApp ind argNames
   let mut binders : Array (TSyntax ``bracketedBinder) :=
     (← mkImplicitBinders argNames).map fun b => ⟨b.raw⟩
-  let instances ← forallBoundedTelescope ind.type ind.numParams fun xs _ => do
-    let mut instances := #[]
-    for i in [:xs.size] do
-      try
-        let ty ← mkAppM ``UniqueEncoding #[mkConst ``Tree, xs[i]!]
-        if (← isTypeCorrect ty) then
-          instances := instances.push
-            (← `(bracketedBinder| [UniqueEncoding Tree $(mkIdent argNames[i]!)]))
-      catch _ => pure ()
-    return instances
+  let params := (argNames.extract 0 ind.numParams).map mkIdent
+  let instances ← (← encodingRequirements ind).mapM fun requirement =>
+    `(bracketedBinder| [($requirement $params:term*)])
   binders := binders ++ instances
   let targetNames ← (List.range arity).toArray.mapM fun _ => mkFreshUserName `x
   for name in targetNames do
@@ -61,16 +111,16 @@ private def fields : List Nat → Shape
   | [i] => .field i
   | i :: is => .pair (.field i) (fields is)
 
-private def ctorShape (ind : InductiveVal) (ctor : ConstructorVal) : Shape :=
+private def ctorShape (ind : InductiveVal) (ctor : ConstructorVal) : MetaM Shape := do
   if ind.name == ``List then
-    if ctor.cidx = 0 then .nil else .pair (.field 0) (.field 1)
+    return if ctor.cidx = 0 then .nil else .pair (.field 0) (.field 1)
   else if ind.name == ``Option then
-    if ctor.cidx = 0 then .nil else .pair .nil (.field 0)
+    return if ctor.cidx = 0 then .nil else .pair .nil (.field 0)
   else if ind.name == ``Bool then
-    if ctor.cidx = 0 then .nil else .pair .nil .nil
+    return if ctor.cidx = 0 then .nil else .pair .nil .nil
   else
-    let payload := fields (List.range ctor.numFields)
-    if ind.ctors.length = 1 then payload else .pair (tag ctor.cidx) payload
+    let payload := fields (List.range (← dataFields ind ctor).size)
+    return if ind.ctors.length = 1 then payload else .pair (tag ctor.cidx) payload
 
 private def Shape.term (s : Shape) (args : Array Term) (nil pair : Name) : TermElabM Term :=
   match s with
@@ -94,9 +144,8 @@ private def checkExisting (ind : InductiveVal) : TermElabM Unit := withoutExport
 private def checkType (ind : InductiveVal) : TermElabM Unit := do
   if ind.name == ``Nat then
     throwError "Nat needs its binary encoding, not the default constructor encoding"
-  if ind.numIndices != 0 || ind.isNested || ind.isReflexive || ind.all.length != 1 then
-    throwError "Tree encoding currently supports non-indexed, non-nested, \
-      non-mutual first-order inductive types"
+  if ind.isNested || ind.isReflexive || ind.all.length != 1 then
+    throwError "Tree encoding currently supports non-nested, non-mutual first-order inductive types"
   if ind.isRec && ind.ctors.length = 1 then
     throwError "Tree encoding cannot erase the only constructor tag of a recursive type"
   forallTelescopeReducing ind.type fun _ sort => do
@@ -104,15 +153,13 @@ private def checkType (ind : InductiveVal) : TermElabM Unit := do
       throwError "Tree encoding supports data types, not propositions"
   for c in ind.ctors do
     let ctor ← getConstInfoCtor c
+    let data ← dataFields ind ctor
     forallTelescopeReducing ctor.type fun xs _ => do
-      for i in [:ctor.numFields] do
+      for i in data do
         let ty ← whnf (← inferType xs[ctor.numParams + i]!)
-        if ty.isForall || (← isProp ty) || ty.isSort then
-          throwError "Tree encoding does not support function, proof or type-valued field \
+        if (← isProp ty) || ty.isSort then
+          throwError "Tree encoding does not support proof or type-valued field \
             {xs[ctor.numParams + i]!}"
-        for j in [:i] do
-          if ty.containsFVar xs[ctor.numParams + j]!.fvarId! then
-            throwError "Tree encoding does not yet support dependent constructor fields"
 
 private def mkEncode (ind : InductiveVal) (enc : Name) : TermElabM Command := do
   let header ← mkHeader 1 ind
@@ -120,17 +167,22 @@ private def mkEncode (ind : InductiveVal) (enc : Name) : TermElabM Command := do
   let mut alts := #[]
   for c in ind.ctors do
     let ctor ← getConstInfoCtor c
+    let data ← dataFields ind ctor
     let alt ← forallTelescopeReducing ctor.type fun xs _ => do
       let mut pats : Array Term := Array.replicate ctor.numParams (← `(_))
       let mut args := #[]
       for i in [:ctor.numFields] do
         let a := mkIdent (← mkFreshUserName `a)
         pats := pats.push a
+        unless data.contains i do continue
         let ty ← inferType xs[ctor.numParams + i]!
         args := args.push (← if ty.isAppOf ind.name then `($(mkIdent enc) $a)
           else ``(encode Tree $a))
-      let rhs ← (ctorShape ind ctor).term args ``Tree.nil ``Tree.pair
-      `(matchAltExpr| | @$(mkCIdent c):ident $pats:term* => $rhs)
+      let rhs ← (← ctorShape ind ctor).term args ``Tree.nil ``Tree.pair
+      let indices : Array Term ← (List.range ind.numIndices).toArray.mapM fun _ => `(_)
+      let pattern ← `(@$(mkCIdent c):ident $pats:term*)
+      let patterns := indices.push pattern
+      `(matchAltExpr| | $[$patterns:term],* => $rhs)
     alts := alts.push alt
   let body ← `(match $[$discrs],* with $alts:matchAlt*)
   `(/-- The generated structural encoder; use `encode Tree` and its constructor equations. -/
@@ -138,31 +190,37 @@ private def mkEncode (ind : InductiveVal) (enc : Name) : TermElabM Command := do
 
 private def mkDecode (ind : InductiveVal) (dec : Name) : TermElabM Command := do
   let header ← mkHeader 0 ind
-  let params := header.argNames.map mkIdent
+  let params := (header.argNames.extract 0 ind.numParams).map mkIdent
   let mut alts := #[]
   for c in ind.ctors do
     let ctor ← getConstInfoCtor c
+    let indices ← indexFields ind ctor
     let alt ← forallTelescopeReducing ctor.type fun xs _ => do
       let mut raw := #[]
       let mut values := #[]
+      let mut decoded := #[]
       let mut decoders := #[]
       for i in [:ctor.numFields] do
+        if let some j := indices.idxOf? i then
+          values := values.push (mkIdent header.argNames[ind.numParams + j]!)
+          continue
         let r := mkIdent (← mkFreshUserName `r)
         let a := mkIdent (← mkFreshUserName `a)
         raw := raw.push r
         values := values.push a
+        decoded := decoded.push a
         let ty ← inferType xs[ctor.numParams + i]!
         decoders := decoders.push (← if ty.isAppOf ind.name then `($(mkIdent dec) $r)
           else ``(decode _ $r))
-      let pattern ← (ctorShape ind ctor).term raw ``Tree.nil ``Tree.pair
+      let pattern ← (← ctorShape ind ctor).term raw ``Tree.nil ``Tree.pair
       let mut rhs ← ``(Part.some (@$(mkCIdent c) $params:term* $values:term*))
-      for i in (List.range ctor.numFields).reverse do
-        let a := values[i]!
+      for i in (List.range decoded.size).reverse do
+        let a := decoded[i]!
         rhs ← ``(Part.bind $(decoders[i]!) (fun $a:ident => $rhs))
       `(matchAltExpr| | $pattern => $rhs)
     alts := alts.push alt
   let exhaustive ← match ind.ctors with
-    | [c] => do pure ((← getConstInfoCtor c).numFields == 1)
+    | [c] => do pure ((← dataFields ind (← getConstInfoCtor c)).size == 1)
     | _ => pure false
   unless exhaustive do
     alts := alts.push (← `(matchAltExpr| | _ => Part.none))
@@ -178,7 +236,8 @@ private def mkCorrect (ind : InductiveVal) (enc dec correct : Name) : TermElabM 
       $a ∈ $(mkIdent dec) t ↔ $(mkIdent enc) $a = t := by
     induction $a:ident generalizing t <;> unfold $(mkIdent dec):ident <;> try split
     all_goals simp_all [Part.mem_bind_iff, Part.mem_some_iff,
-      UniqueEncoding.mem_decode_iff, $(mkIdent enc):term, eq_comm])
+      UniqueEncoding.mem_decode_iff, $(mkIdent enc):term, eq_comm]
+    all_goals aesop)
 
 private def mkInstance (ind : InductiveVal) (enc dec correct : Name) : TermElabM Command := do
   let header ← mkHeader 0 ind
@@ -191,10 +250,10 @@ private def codeName (ind : InductiveVal) (n : Name) : Name :=
 
 private def mkConstructor (ind : InductiveVal) (ctor : ConstructorVal) : TermElabM Command := do
   let name := codeName ind ctor.name.getString!.toName
-  let args ← (List.range ctor.numFields).toArray.mapM fun _ =>
+  let args ← (← dataFields ind ctor).mapM fun _ =>
     return mkIdent (← mkFreshUserName `a)
   let binders ← args.mapM fun a => `(bracketedBinder| ($a : Value))
-  let shape := ctorShape ind ctor
+  let shape ← ctorShape ind ctor
   let rhs ← match shape with
     | .nil => ``(pure Value.nil)
     | .field i => ``(pure $(args[i]!))
@@ -208,12 +267,20 @@ private def mkConstructor (ind : InductiveVal) (ctor : ConstructorVal) : TermEla
 private def mkEncodeEquation (ind : InductiveVal) (ctor : ConstructorVal) :
     TermElabM Command := do
   let header ← mkHeader 0 ind
-  let args ← (List.range ctor.numFields).toArray.mapM fun _ =>
-    return mkIdent (← mkFreshUserName `a)
-  let binders ← args.mapM fun a => `(bracketedBinder| ($a : _))
-  let params := header.argNames.map mkIdent
-  let encoded ← args.mapM fun a => ``(encode Tree $a)
-  let rhs ← (ctorShape ind ctor).term encoded ``Tree.nil ``Tree.pair
+  let indices ← indexFields ind ctor
+  let mut args := #[]
+  let mut binders := #[]
+  let mut encoded := #[]
+  for i in [:ctor.numFields] do
+    if let some j := indices.idxOf? i then
+      args := args.push (mkIdent header.argNames[ind.numParams + j]!)
+    else
+      let a := mkIdent (← mkFreshUserName `a)
+      args := args.push a
+      binders := binders.push (← `(bracketedBinder| ($a : _)))
+      encoded := encoded.push (← ``(encode Tree $a))
+  let params := (header.argNames.extract 0 ind.numParams).map mkIdent
+  let rhs ← (← ctorShape ind ctor).term encoded ``Tree.nil ``Tree.pair
   let name := ind.name ++ .mkSimple s!"encode_{ctor.name.getString!}"
   `(@[simp] theorem $(rootIdent name):ident
       $header.binders:bracketedBinder* $binders:bracketedBinder* :
@@ -270,13 +337,13 @@ private def mkCases (ind : InductiveVal) : TermElabM (Array Command) := do
     let mut unitTy ← ``(Code Unit)
     let mut valueTy ← ``(Code Value)
     let mut args : Array Ident := #[]
-    for _ in [:ctor.numFields] do
+    for _ in ← dataFields ind ctor do
       unitTy ← ``(Value → $unitTy)
       valueTy ← ``(Value → $valueTy)
       args := args.push (mkIdent (← mkFreshUserName `a))
     unitBinders := unitBinders.push (← `(bracketedBinder| ($handler : $unitTy)))
     valueBinders := valueBinders.push (← `(bracketedBinder| ($handler : $valueTy)))
-    let shape := ctorShape ind ctor
+    let shape ← ctorShape ind ctor
     let paths := (shape.projections.mergeSort (fun a b => a.1 ≤ b.1)).toArray.map (·.2)
     let mut invoke ← `($handler $args:term*)
     for (arg, path) in (args.zip paths).reverse do
@@ -309,16 +376,19 @@ private def deriveOperations (name : Name) (equations := true) : CommandElabM Un
 
 private def derive (name : Name) : CommandElabM Unit := do
   let ind ← getConstInfoInduct name
-  let cmds ← liftTermElabM do
-    checkType ind
-    checkExisting ind
-    let enc := privateToUserName name ++ `treeEncode
-    let dec := privateToUserName name ++ `treeDecode
-    let correct := privateToUserName name ++ `treeDecode_iff
-    return #[← mkEncode ind enc, ← mkDecode ind dec, ← mkCorrect ind enc dec correct,
-      ← mkInstance ind enc dec correct]
-  for cmd in cmds do elabCommand cmd
-  deriveOperations name
+  withScope (fun sc => { sc with
+      opts := sc.opts.setBool `Elab.async false
+      levelNames := ind.levelParams ++ sc.levelNames.filter (!ind.levelParams.contains ·) }) do
+    let cmds ← liftTermElabM do
+      checkType ind
+      checkExisting ind
+      let enc := privateToUserName name ++ `treeEncode
+      let dec := privateToUserName name ++ `treeDecode
+      let correct := privateToUserName name ++ `treeDecode_iff
+      return #[← mkEncode ind enc, ← mkDecode ind dec, ← mkCorrect ind enc dec correct,
+        ← mkInstance ind enc dec correct]
+    for cmd in cmds do elabCommand cmd
+    deriveOperations name
 
 /-- Generate the tree encoding and constructor operations of a first-order inductive type. -/
 syntax (name := treeEncodingAttr) "tree_encoding" : attr

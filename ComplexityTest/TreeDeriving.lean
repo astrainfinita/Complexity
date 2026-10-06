@@ -130,6 +130,12 @@ example (b : Bool) :
 -- In particular, introducing generic List encoding has not changed the existing bit-list code.
 example (as : List Bool) : encode Tree as = Tree.encodeBitList as := rfl
 
+run_cmd do
+  for name in [``Term.treeEncoding, ``Record.treeEncoding, ``Box.treeEncoding,
+      ``ImplicitField.treeEncoding, ``EmptyData.treeEncoding, ``UnitData.treeEncoding] do
+    if (← Lean.collectAxioms name).contains ``sorryAx then
+      throwError "{name} depends on an unfinished proof"
+
 section Rejection
 
 /-- error: Complexity.TreeDerivingTest.Term already has a tree encoding; deriving would change its representation -/
@@ -151,19 +157,19 @@ attribute [tree_encoding] Redundant
 
 inductive Indexed : Bool → Type where | value : Indexed true
 
-/-- error: Tree encoding currently supports non-indexed, non-nested, non-mutual first-order inductive types -/
+/-- error: Tree encoding requires constructor result indices to be distinct fields -/
 #guard_msgs in
 attribute [tree_encoding] Indexed
 
 inductive Nested where | node (xs : List Nested)
 
-/-- error: Tree encoding currently supports non-indexed, non-nested, non-mutual first-order inductive types -/
+/-- error: Tree encoding currently supports non-nested, non-mutual first-order inductive types -/
 #guard_msgs in
 attribute [tree_encoding] Nested
 
 inductive FunctionField where | mk (f : Bool → Bool)
 
-/-- error: Tree encoding does not support function, proof or type-valued field f -/
+/-- error: Tree encoding needs an instance of UniqueEncoding Tree (Bool → Bool) -/
 #guard_msgs in
 attribute [tree_encoding] FunctionField
 
@@ -171,7 +177,7 @@ structure DependentField where
   b : Bool
   value : if b then Bool else Tree
 
-/-- error: Tree encoding does not yet support dependent constructor fields -/
+/-- error: Tree encoding needs an instance of UniqueEncoding Tree (if b = true then Bool else Tree) -/
 #guard_msgs in
 attribute [tree_encoding] DependentField
 

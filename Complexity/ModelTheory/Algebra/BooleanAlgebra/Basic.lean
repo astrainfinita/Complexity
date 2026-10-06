@@ -183,6 +183,10 @@ def compatibleBooleanAlgebraOfBooleanAlgebra (B : Type*)
     funMap_bot := fun _ => rfl
     funMap_top := fun _ => rfl }
 
+/-- Interpret the Boolean algebra language by the standard operations on `Bool`. -/
+instance : CompatibleBooleanAlgebra Bool :=
+  compatibleBooleanAlgebraOfBooleanAlgebra Bool
+
 /-- Language isomorphisms between Boolean algebras are exactly order isomorphisms. -/
 def languageEquivEquivOrderIso {B C : Type*} [BooleanAlgebra B] [BooleanAlgebra C]
     [CompatibleBooleanAlgebra B] [CompatibleBooleanAlgebra C] :

@@ -6,6 +6,9 @@ Authors: Yuyang Zhao
 module
 
 import Complexity.Encoding.Polynomial.Bool
+import Complexity.Encoding.Fin
+import Complexity.Encoding.Nat
+import Mathlib.Logic.Equiv.Bool
 
 open Complexity
 
@@ -48,6 +51,77 @@ example (n : ℕ) (h : ¬p n) : ¬(decode {n // p n} n).Dom := by
   exact h a.property
 
 end Subtype
+
+section Pullback
+
+@[instance_reducible]
+noncomputable def successor : UniqueEncoding ℕ ℕ :=
+  (UniqueEncoding.refl ℕ).ofInjective Nat.succ Nat.succ_injective
+
+example (n : ℕ) : successor.encode n = n + 1 := rfl
+
+example (n : ℕ) : n ∈ successor.decode (n + 1) := successor.mem_decode_iff.mpr rfl
+
+example : successor.decode 0 = Part.none := by
+  apply Part.eq_none_iff.mpr
+  intro n hn
+  exact Nat.succ_ne_zero n (successor.mem_decode_iff.mp hn)
+
+example {R α β : Type*} (c : UniqueEncoding R α) (e : β ≃ α) :
+    (c.ofEquiv e).toEncoding = (c.ofInjective e e.injective).toEncoding := by
+  apply Encoding.ext
+  intro r
+  apply Part.ext
+  intro b
+  exact (c.ofEquiv e).mem_decode_iff.trans (c.ofInjective e e.injective).mem_decode_iff.symm
+
+@[instance_reducible]
+def negated : UniqueEncoding Bool Bool := (UniqueEncoding.refl Bool).ofEquiv Equiv.boolNot
+
+example : negated.decode false = Part.some true :=
+  Part.eq_some_iff.mpr (negated.mem_decode_iff.mpr rfl)
+
+end Pullback
+
+section FiniteFunctions
+
+example (f : Fin 3 → Fin 2) : encode Tree f = encode Tree (List.ofFn f) := rfl
+
+example (f : Fin 3 → Fin 2) : decode (Fin 3 → Fin 2) (encode Tree f) = Part.some f :=
+  UniqueEncoding.decode_encode f
+
+example : encode Tree (![1, 0, 1] : Fin 3 → Fin 2) = encode Tree ([1, 0, 1] : List ℕ) := rfl
+
+example : encode Tree (Fin.elim0 : Fin 0 → Fin 0) = Tree.nil := rfl
+
+example : List.decodeFinFunction 2 ([false] : List Bool) = none := rfl
+
+example : List.decodeFinFunction 2 ([false, true, false] : List Bool) = none := rfl
+
+example : (List.decodeFinFunction 2 [false, true]).map (fun f => f 1) = some true := rfl
+
+example : decode (Fin 0) (encode Tree (0 : ℕ)) = Part.none := by
+  apply Part.eq_none_iff.mpr
+  intro i
+  exact Fin.elim0 i
+
+example : decode (Fin 2) (encode Tree (2 : ℕ)) = Part.none := by
+  apply Part.eq_none_iff.mpr
+  intro i hi
+  have hcode := UniqueEncoding.mem_decode_iff.mp hi
+  have heq : i.val = 2 := by
+    simpa only [encode_fin, UniqueEncoding.encode_inj] using hcode
+  exact (Nat.ne_of_lt i.isLt) heq
+
+example : decode (Fin 3 → Bool) (encode Tree [false, true]) = Part.none := by
+  apply Part.eq_none_iff.mpr
+  intro f hf
+  have heq : List.ofFn f = [false, true] := by
+    simpa using UniqueEncoding.mem_decode_iff.mp hf
+  have := congrArg List.length heq
+  simp at this
+
+end FiniteFunctions
 
 -- Both instances reuse the exact encoders used by the tree-machine simulation.
 example (xs : List Bool) : encode Tree xs = Tree.encodeBitList xs := rfl
