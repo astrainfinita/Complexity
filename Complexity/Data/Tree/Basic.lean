@@ -30,6 +30,17 @@ namespace Tree
 /-- A binary node with no label. -/
 @[match_pattern] abbrev pair (a b : Tree) : Tree := BinaryTree.node () a b
 
+/-- The left subtree, or a leaf. Simplification preserves projections of unknown trees. -/
+def left : Tree → Tree := BinaryTree.left
+
+/-- The right subtree, or a leaf. -/
+def right : Tree → Tree := BinaryTree.right
+
+@[simp] theorem left_nil : left nil = nil := rfl
+@[simp] theorem left_pair (a b : Tree) : left (pair a b) = a := rfl
+@[simp] theorem right_nil : right nil = nil := rfl
+@[simp] theorem right_pair (a b : Tree) : right (pair a b) = b := rfl
+
 /-- The only observation available to a tree machine's finite control. -/
 def root : Tree → Bool
   | nil => false
@@ -55,10 +66,10 @@ theorem size_pos (a : Tree) : 0 < size a := by
   cases a <;> simp only [size] <;> omega
 
 theorem size_left_le (a : Tree) : size a.left ≤ size a := by
-  cases a <;> simp only [BinaryTree.left, size] <;> omega
+  cases a <;> simp only [left, BinaryTree.left, size] <;> omega
 
 theorem size_right_le (a : Tree) : size a.right ≤ size a := by
-  cases a <;> simp only [BinaryTree.right, size] <;> omega
+  cases a <;> simp only [right, BinaryTree.right, size] <;> omega
 
 end Tree
 

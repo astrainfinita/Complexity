@@ -19,7 +19,7 @@ and work-space bounds before taking asymptotic or polynomial classes.
 
 namespace Complexity.TM
 
-variable {α : Type*} [Encoding (List Bool) α]
+variable {α : Type*} [Encoding (RawWord Bool) α]
 
 theorem dtime_subset_ntime {T : ℕ → ℕ} :
     DTIME .tm (α := α) T ⊆ NTIME .ntm T := by

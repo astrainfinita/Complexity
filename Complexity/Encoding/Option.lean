@@ -5,7 +5,7 @@ Authors: Yuyang Zhao
 -/
 module
 
-public import Complexity.Encoding.Basic
+public import Complexity.Encoding.Prod
 public import Complexity.Data.Tree.Basic
 
 /-! # Compact tree encodings of optional values -/
@@ -40,9 +40,9 @@ instance {α : Type*} [UniqueEncoding Tree α] : UniqueEncoding Tree (Option α)
     fun a t ↦ Tree.mem_decodeOption_iff t a
 
 @[simp] theorem encode_option_none {α : Type*} [UniqueEncoding Tree α] :
-    encode Tree (none : Option α) = .nil := rfl
+    ⌜(none : Option α)⌝ₜ = ⌜()⌝ₜ := rfl
 
 @[simp] theorem encode_option_some {α : Type*} [UniqueEncoding Tree α] (a : α) :
-    encode Tree (some a) = .pair .nil (encode Tree a) := rfl
+    ⌜some a⌝ₜ = ⌜((), a)⌝ₜ := rfl
 
 end Complexity

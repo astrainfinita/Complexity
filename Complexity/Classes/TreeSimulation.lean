@@ -6,21 +6,14 @@ Authors: Yuyang Zhao
 module
 
 public import Complexity.Classes.Functions.Basic
-public import Complexity.Resources.StackMachine.Basic
-public import Complexity.Encoding.Polynomial.Basic
-public import Complexity.Models.TreeMachine.Simulation.BitList.Correctness
+public import Complexity.Resources.TreeMachine.StackMachine
 public import Mathlib.Data.Fintype.EquivFin
 
-/-!
-# Polynomial tree computations on bit-string representations
+/-! # Polynomial tree computations on serialized tree codes
 
-The tree-to-stack compiler removes the list-tree representation at both
-boundaries. Its polynomial time bound transports polynomial-time computations
-from the tree model with the composite bit-list encoding to the native stack
-model on the original bit strings.
-
-For a direct tree encoding, polynomial conversions before and after the tree
-computation give the same inclusion. No converse simulation is assumed.
+The tree-to-stack compiler preserves the chosen tree encodings at both boundaries.
+Code length equals tree size, so its linear resource bounds transport polynomial time
+uniformly, without per-type encoding conversions.
 -/
 
 @[expose] public section
@@ -31,70 +24,21 @@ namespace TreeMachine
 
 open TreeMachine.Simulation
 
-private theorem timeBound_polynomial (k : ℕ) (p : Polynomial ℕ) :
-    ∃ q : Polynomial ℕ, ∀ n,
-      BitList.timeBound k n (p.eval (4 * n + 1)) = q.eval n := by
-  let q := p.comp (4 * Polynomial.X + 1)
-  let r : Polynomial ℕ := 4 * Polynomial.X + 1 + Polynomial.C k
-  refine ⟨(9 * Polynomial.X + 6) + (40 * q + 3 * r + 1) + (7 * (r + q) + 2), ?_⟩
-  intro n
-  simp [BitList.timeBound, q, r]
-
-/-- For bit-string encodings stored as list trees, the existing tree simulator
-gives polynomial time on the original bit strings, with no compatibility hypothesis. -/
-theorem fp_subset_stack_comp {α β : Type*} [e : Encoding (List Bool) α]
-    [d : Encoding (List Bool) β] :
-    @FP Tree α β (bitListEncoding.toEncoding.comp e) (bitListEncoding.toEncoding.comp d)
-      .sizeCostTree ⊆ FP .stack := by
+/-- Default raw codes serialize the chosen tree encodings, so the simulation
+applies uniformly to all represented data types. -/
+theorem fp_subset_stack {α β : Type*} [Encoding Tree α] [Encoding Tree β] :
+    FP (α := α) (β := β) .sizeCostTree ⊆ FP .stack := by
   classical
-  let : Encoding Tree α := bitListEncoding.toEncoding.comp e
-  let : Encoding Tree β := bitListEncoding.toEncoding.comp d
   intro f hf
   obtain ⟨p, s, h⟩ := FP.exists_polynomial_bound hf
   obtain ⟨k, hk, Q, hQ, M, h⟩ := computableInTimeAndSpace_iff.mp h
   let : Fintype Q := Fintype.ofFinite Q
   let : FinEnum Q := FinEnum.ofEquiv (Fin (Fintype.card Q)) (Fintype.equivFin Q)
-  let t := fun n => BitList.timeBound k n (p.eval (4 * n + 1))
-  let s := fun n => spaceBound k (4 * n + 1 + k + p.eval (4 * n + 1))
-  have hc : StackMachine.Computes (BitList.compiler M) f t s := by
-    intro xs a ha
-    obtain ⟨b, hb, hm⟩ := h (Tree.encodeBitList xs) a
-      ((Encoding.mem_comp_encode bitListEncoding e).2 ha)
-    obtain ⟨ys, hy, hd⟩ := (Encoding.mem_comp_iff bitListEncoding.toEncoding d).1 hb
-    obtain rfl := (UniqueEncoding.encode_of_mem_decode hy).symm
-    have ht := p.monotone_eval_nat (Tree.size_encodeBitList_le xs)
-    have hs := Nat.add_le_add_right (Nat.add_le_add_right (Tree.size_encodeBitList_le xs) k)
-      (p.eval (4 * xs.length + 1))
-    exact ⟨ys, hd, BitList.computesInTimeAndSpace M
-      ((hm.mono ht le_rfl).space_of_time.mono le_rfl hs)⟩
-  obtain ⟨q, hq⟩ := timeBound_polynomial k p
+  let q : Polynomial ℕ := 43 * p + 12 * Polynomial.X + Polynomial.C (6 * k + 8)
+  have hq (n : ℕ) : timeBound k n (p.eval n) = q.eval n := by simp [timeBound, q]; omega
   obtain ⟨b, hb⟩ := IsBigO.exists_pow q
-  exact FP.ftime_subset b ⟨t, ⟨s, hc.computableInTimeAndSpace⟩,
-    (IsBigO.of_le fun n => (hq n).le).trans hb⟩
-
-/-- Only the input conversion from bits and the output conversion to bits are
-needed to transport a tree computation to an ordinary bit-string machine. -/
-theorem fp_subset_stack_of_conversions {α β : Type*}
-    [e : Encoding (List Bool) α] [d : Encoding (List Bool) β]
-    [r : Encoding Tree α] [s : Encoding Tree β]
-    (hi : _root_.id ∈ @FP Tree α α (bitListEncoding.toEncoding.comp e) r .sizeCostTree)
-    (ho : _root_.id ∈ @FP Tree β β s (bitListEncoding.toEncoding.comp d) .sizeCostTree) :
-    FP (α := α) (β := β) .sizeCostTree ⊆ FP .stack := by
-  intro f hf
-  have h := @fp_comp α α β (bitListEncoding.toEncoding.comp e) r s _root_.id f hf hi
-  have h' := @fp_comp α β β (bitListEncoding.toEncoding.comp e) s
-    (bitListEncoding.toEncoding.comp d) (f ∘ _root_.id) _root_.id ho h
-  exact fp_subset_stack_comp h'
-
-/-- Polynomial compatibility of the input and output encodings turns every
-polynomial-time tree computation into a polynomial-time stack computation. -/
-theorem fp_subset_stack {α β : Type*}
-    [Encoding (List Bool) α] [Encoding (List Bool) β]
-    [Encoding Tree α] [Encoding Tree β]
-    [Encoding.PolytimeCompatible α] [Encoding.PolytimeCompatible β] :
-    FP (α := α) (β := β) .sizeCostTree ⊆ FP .stack :=
-  fp_subset_stack_of_conversions Encoding.PolytimeCompatible.fromBits
-    Encoding.PolytimeCompatible.toBits
+  exact FP.ftime_subset b ⟨_, ⟨_, h.toStack.computableInTimeAndSpace⟩,
+    (IsBigO.of_le fun n ↦ (hq n).le).trans hb⟩
 
 end TreeMachine
 

@@ -20,7 +20,7 @@ counts its initial cell, while an empty stack contributes zero symbols.
 
 namespace Complexity.StackMachine
 
-variable {α β : Type*} [Encoding (List Bool) α] [Encoding (List Bool) β]
+variable {α β : Type*} [Encoding (RawWord Bool) α] [Encoding (RawWord Bool) β]
 
 /-- Constant-factor simulations identify every asymptotic time class. -/
 theorem ftime_eq_tm (T : ℕ → ℕ) :

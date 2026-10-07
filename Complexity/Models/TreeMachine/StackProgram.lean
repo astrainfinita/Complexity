@@ -244,7 +244,7 @@ theorem projectTime_le (a : Complexity.Tree) (right : Bool) :
   | nil =>
     unfold project
     vcgen
-    all_goals simp_all [BitList.encodeTree, projectTime, BinaryTree.left, BinaryTree.right]
+    all_goals simp_all [BitList.encodeTree, projectTime]
   | node u l r =>
     cases u
     simp only [BitList.encodeTree, List.cons_append, List.append_assoc] at ha
@@ -266,7 +266,7 @@ theorem projectTime_le (a : Complexity.Tree) (right : Bool) :
         (BitList.encodeTree r ++ suffix) (q + 1) hst hts hd hn hs
       unfold project
       vcgen [ht]
-      all_goals simp_all [projectTime, BinaryTree.left, d, Ne.symm hst]
+      all_goals simp_all [projectTime, d, Ne.symm hst]
       all_goals omega
     | true =>
       let e := (d.setStack source (BitList.encodeTree r ++ suffix)).setStack saved
@@ -286,7 +286,7 @@ theorem projectTime_le (a : Complexity.Tree) (right : Bool) :
         split_ifs <;> simp_all
       unfold project
       vcgen [ht₁, ht₂, ht₃]
-      all_goals simp_all [projectTime, BinaryTree.right, f, e, d,
+      all_goals simp_all [projectTime, f, e, d,
         Ne.symm hss, Ne.symm hsc, Ne.symm hsp, Ne.symm hst,
         Ne.symm hts]
       all_goals omega

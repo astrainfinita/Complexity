@@ -6,7 +6,7 @@ Authors: Yuyang Zhao
 module
 
 public import Complexity.Resources.TimeSpaceModel.Basic
-public import Complexity.Encoding.Bool
+public import Complexity.Encoding.RawWord
 public import Complexity.Models.TuringMachine.Deterministic
 
 /-!
@@ -25,21 +25,22 @@ The time-only and space-only variants omit one bound, but still require terminat
 
 namespace Complexity.TM
 
-variable {α β : Type*} [Encoding (List Bool) α] [Encoding (List Bool) β]
+variable {α β : Type*} [Encoding (RawWord Bool) α] [Encoding (RawWord Bool) β]
 
 /-- A bit-alphabet machine computes a function on all valid input encodings. -/
 def Computes {κ : Type*} [Fintype κ] {Q : Type*} (M : TM Id κ (Option Bool) Q)
     (f : α → β) (t s : ℕ → ℕ) : Prop :=
-  Encoding.Computes (fun xs ys ↦ M.ComputesInTimeAndSpace (xs.map some) (ys.map some))
-    List.length f t s
+  Encoding.Computes (fun xs ys ↦ M.ComputesInTimeAndSpace (xs.toList.map some) (ys.toList.map some))
+    RawWord.length f t s
 
 /-- Finite Turing machines on bit strings, with transition time and visited
 work-cell space. Each behavior is realized by one machine for all inputs. -/
-def _root_.Complexity.TimeSpaceModel.tm : TimeSpaceModel Id (List Bool) where
-  inputSize := List.length
+def _root_.Complexity.TimeSpaceModel.tm : TimeSpaceModel Id (RawWord Bool) where
+  inputSize := RawWord.length
   behaviors := {R | ∃ (κ : Type) (_ : Fintype κ) (Q : Type) (_ : Finite Q)
       (M : TM Id κ (Option Bool) Q),
-      R = fun xs result => M.ComputesInTimeAndSpace (xs.map some) (result.run.map some)}
+      R = fun xs result =>
+        M.ComputesInTimeAndSpace (xs.toList.map some) (result.run.toList.map some)}
   budget_mono := by
     rintro R ⟨κ, hκ, Q, hQ, M, rfl⟩ x y t s t' s' h ht hs
     exact h.mono ht hs

@@ -18,8 +18,8 @@ Time bounds cover every branch. Space is read from each branch's execution histo
 and bounds every finite prefix, including nonhalting branches.
 
 `Terminates` requires a finite deadline for all branches on this input. No uniform bound
-across input lengths is part of that property. Decision outputs are exactly one Boolean,
-and acceptance means that some finite branch halts with `true`.
+across input lengths is part of that property. Output interpretations belong to the
+resource interface; the machine itself produces lists of symbols.
 -/
 
 @[expose] public section
@@ -128,33 +128,5 @@ theorem produces_iff_of_usesTime {M : NTM κ Γ Q} {xs ys : List Γ} {t : ℕ}
   · rintro ⟨c, hc, ho⟩
     exact ⟨t, c, hc, h c hc, ho⟩
 
-section Boolean
-
-variable {M : NTM κ (Option Bool) Q} {xs : List (Option Bool)}
-
-/-- Every halted branch returns exactly one Boolean bit, including rejecting branches. -/
-def BooleanOutput (M : NTM κ (Option Bool) Q) (xs : List (Option Bool)) : Prop :=
-  ∀ ys, M.Produces xs ys → ∃ b : Bool, ys = [some b]
-
-/-- An input is accepted when some finite branch halts with the single bit `true`. -/
-def Accepts (M : NTM κ (Option Bool) Q) (xs : List (Option Bool)) : Prop :=
-  M.Produces xs [some true]
-
-theorem accepts_iff_of_usesTime {t : ℕ} (h : M.UsesTime xs t) :
-    M.Accepts xs ↔ ∃ c ∈ M.runWith
-      (TM.Cfg κ (Option Bool) Q xs.toArray) Multiset xs t,
-        c.output = #[some true] :=
-  produces_iff_of_usesTime h
-
-theorem booleanOutput_iff_of_usesTime {t : ℕ} (h : M.UsesTime xs t) :
-    M.BooleanOutput xs ↔ ∀ c ∈ M.runWith
-      (TM.Cfg κ (Option Bool) Q xs.toArray) Multiset xs t,
-        ∃ b : Bool, c.output = #[some b] := by
-  simp only [BooleanOutput, produces_iff_of_usesTime h, ← Array.toList_inj,
-    forall_exists_index, and_imp]
-  rw [forall_comm]
-  simp only [forall_comm (α := List (Option Bool)), forall_eq']
-
-end Boolean
 end NTM
 end Complexity

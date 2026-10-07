@@ -41,8 +41,8 @@ def close (e : Expr ℕ) (n : ℕ) (h : e.bound ≤ n) : Expr (Fin n) :=
     (e.close n h).eval (fun i ↦ s i.val) = e.eval s := by
   induction e with
   | nil | var => rfl
-  | left e ih => exact congrArg BinaryTree.left (ih h)
-  | right e ih => exact congrArg BinaryTree.right (ih h)
+  | left e ih => exact congrArg Tree.left (ih h)
+  | right e ih => exact congrArg Tree.right (ih h)
   | pair a b iha ihb => exact congrArg₂ Tree.pair (iha _) (ihb _)
 
 @[simp] theorem maxSize_close (e : Expr ℕ) (n : ℕ) (h : e.bound ≤ n) (s : ℕ → Tree) :

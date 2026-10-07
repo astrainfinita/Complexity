@@ -6,7 +6,7 @@ Authors: Yuyang Zhao
 module
 
 public import Complexity.Resources.TimeSpaceModel.Basic
-public import Complexity.Encoding.Bool
+public import Complexity.Encoding.RawWord
 public import Complexity.Models.StackMachine.Deterministic
 
 /-!
@@ -20,18 +20,19 @@ number of symbols on the work stacks, excluding the read-only input and append-o
 
 namespace Complexity.StackMachine
 
-variable {α β : Type*} [Encoding (List Bool) α] [Encoding (List Bool) β]
+variable {α β : Type*} [Encoding (RawWord Bool) α] [Encoding (RawWord Bool) β]
 
 /-- One stack machine computes the function on every valid bit-string encoding. -/
 def Computes {κ Q : Type*} [Fintype κ] (M : StackMachine Id κ Bool Q)
     (f : α → β) (t s : ℕ → ℕ) : Prop :=
-  Encoding.Computes (fun xs ys ↦ M.ComputesInTimeAndSpace xs ys) List.length f t s
+  Encoding.Computes (fun xs ys ↦ M.ComputesInTimeAndSpace xs.toList ys.toList) RawWord.length f t s
 
 /-- Finite stack machines with transition time and peak work-stack space. -/
-def _root_.Complexity.TimeSpaceModel.stack : TimeSpaceModel Id (List Bool) where
-  inputSize := List.length
+def _root_.Complexity.TimeSpaceModel.stack : TimeSpaceModel Id (RawWord Bool) where
+  inputSize := RawWord.length
   behaviors := {R | ∃ (κ : Type) (_ : Fintype κ) (Q : Type) (_ : Finite Q)
-      (M : StackMachine Id κ Bool Q), R = fun xs result ↦ M.ComputesInTimeAndSpace xs result.run}
+      (M : StackMachine Id κ Bool Q),
+      R = fun xs result ↦ M.ComputesInTimeAndSpace xs.toList result.run.toList}
   budget_mono := by
     rintro R ⟨κ, hκ, Q, hQ, M, rfl⟩ x y t s t' s' h ht hs
     exact h.mono ht hs

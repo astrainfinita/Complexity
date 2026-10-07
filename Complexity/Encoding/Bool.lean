@@ -5,39 +5,18 @@ Authors: Yuyang Zhao
 -/
 module
 
-public import Complexity.Encoding.BitList
+public import Complexity.Encoding.Prod
 public import Complexity.Data.Tree.BitList
 
 /-! # Boolean encodings
 
-A Boolean result is represented by a singleton bit string, or by the existing
-leaf/pair tree representation. Both interpretations reject all other codes.
+Booleans keep the existing leaf/pair tree representation. Raw bit encodings
+are obtained by serializing the tree, just as for other structured values.
 -/
 
 @[expose] public section
 
 namespace Complexity
-
-namespace BitList
-
-/-- Encode a Boolean as a singleton bit string. -/
-def encodeBool (b : Bool) : List Bool := [b]
-
-/-- Decode a Boolean from a singleton bit string, rejecting all other strings. -/
-def decodeBool : List Bool → Option Bool
-  | [b] => some b
-  | _ => none
-
-theorem decodeBool_eq_some_iff {xs : List Bool} {b : Bool} :
-    decodeBool xs = some b ↔ encodeBool b = xs := by
-  cases xs with
-  | nil => simp [decodeBool, encodeBool]
-  | cons a xs => cases xs <;> simp [decodeBool, encodeBool, eq_comm]
-
-@[simp] theorem decodeBool_encodeBool (b : Bool) : decodeBool (encodeBool b) = some b :=
-  decodeBool_eq_some_iff.mpr rfl
-
-end BitList
 
 namespace Tree
 
@@ -57,25 +36,19 @@ theorem decodeBool_eq_some_iff {a : Tree} {b : Bool} :
 
 end Tree
 
-/-- A Boolean occupies exactly one bit. -/
-instance : UniqueEncoding (List Bool) Bool :=
-  UniqueEncoding.ofOption BitList.encodeBool BitList.decodeBool fun _ _ =>
-    BitList.decodeBool_eq_some_iff
-
 /-- A Boolean occupies a leaf or a pair of leaves. -/
 instance : UniqueEncoding Tree Bool :=
   UniqueEncoding.ofOption Tree.encodeBool Tree.decodeBool fun _ _ => Tree.decodeBool_eq_some_iff
 
-@[simp] theorem encode_bool_bits (b : Bool) : encode (List Bool) b = [b] := rfl
+theorem encode_bool_tree (b : Bool) : ⌜b⌝ₜ = Tree.encodeBool b := rfl
 
-@[simp] theorem encode_bool_tree (b : Bool) : encode Tree b = Tree.encodeBool b := rfl
+@[simp] theorem encode_bool_false : ⌜false⌝ₜ = ⌜()⌝ₜ := rfl
+@[simp] theorem encode_bool_true : ⌜true⌝ₜ = ⌜((), ())⌝ₜ := rfl
 
-@[simp] theorem mem_decode_bool_bits {b : Bool} {xs : List Bool} :
-    b ∈ decode Bool xs ↔ xs = [b] :=
-  UniqueEncoding.mem_decode_iff.trans eq_comm
+@[simp] theorem root_encode_bool (b : Bool) : ⌜b⌝ₜ.root = b := by
+  cases b <;> rfl
 
-@[simp] theorem mem_decode_bool_tree {b : Bool} {a : Tree} :
-    b ∈ decode Bool a ↔ Tree.encodeBool b = a :=
-  UniqueEncoding.mem_decode_iff
+@[simp] theorem size_encode_bool (b : Bool) : ⌜b⌝ₜ.size = if b then 3 else 1 := by
+  cases b <;> rfl
 
 end Complexity

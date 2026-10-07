@@ -8,7 +8,6 @@ module
 public import Complexity.Resources.Nondeterministic.Basic
 public import Complexity.Resources.TuringMachine
 public import Complexity.Models.TuringMachine.Nondeterministic.Deterministic
-public import Complexity.Encoding.Bool
 
 /-!
 # Deterministic decision specifications as nondeterministic specifications
@@ -22,7 +21,7 @@ space. Both specifications cover every valid input encoding.
 
 namespace Complexity.TM
 
-variable {α : Type*} [Encoding (List Bool) α]
+variable {α : Type*} [Encoding (RawWord Bool) α]
 variable {f : α → Bool} {p : α → Prop} {t s : ℕ → ℕ}
 
 /-- A deterministic Boolean computation decides the same predicate after
@@ -41,7 +40,9 @@ theorem Computes.decidesInTimeAndSpace {κ : Type*} [Fintype κ] {Q : Type*}
     obtain rfl := (M.mem_runWith_toBinary_iff _ _ _).1 hc'
     exact ⟨f a, hout⟩
   · rw [NTM.accepts_iff_of_usesTime ht]
-    simpa [hout] using hp a
+    simpa only [Controller.mem_runWith_toBinary_iff, exists_eq_left, hout, Array.mk.injEq,
+      List.map_inj_right (fun _ _ ↦ Option.some.inj), RawWord.toList_inj,
+      UniqueEncoding.encode_inj] using hp a
 
 theorem decidableInTimeAndSpace_of_computable
     (h : TimeSpaceModel.tm.ComputableInTimeAndSpace f t s) (hp : Decides f p) :

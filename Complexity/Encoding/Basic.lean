@@ -130,7 +130,7 @@ section
 
 variable [UniqueEncoding R α]
 
-@[simp] theorem decode_encode (a : α) : decode α (encode R a) = Part.some a :=
+@[simp↓] theorem decode_encode (a : α) : decode α (encode R a) = Part.some a :=
   Part.eq_some_iff.2 (mem_decode_iff.2 rfl)
 
 theorem encode_of_mem_decode {a : α} {r : R} (h : a ∈ decode α r) : encode R a = r :=
@@ -145,7 +145,7 @@ theorem encode_injective : Function.Injective (encode R (α := α)) := by
   have := congrArg (decode α) h
   simpa using this
 
-@[simp] theorem encode_inj {a b : α} : encode R a = encode R b ↔ a = b :=
+@[simp↓] theorem encode_inj {a b : α} : encode R a = encode R b ↔ a = b :=
   encode_injective.eq_iff
 
 /-- Valid codes are precisely the image of the encoder. -/

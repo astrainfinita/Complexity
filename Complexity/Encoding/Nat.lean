@@ -35,21 +35,17 @@ end Complexity.BitList
 
 namespace Complexity
 
-/-- Canonical binary natural numbers, with no high zero padding. -/
-instance : UniqueEncoding (List Bool) ℕ :=
-  UniqueEncoding.ofOption Nat.bits BitList.decodeNat fun n xs ↦ BitList.decodeNat_eq_some_iff xs n
-
 /-- Binary digits reuse the ordinary Boolean-list tree representation. -/
 instance : UniqueEncoding Tree ℕ :=
-  (inferInstance : UniqueEncoding Tree (List Bool)).comp inferInstance
+  (inferInstance : UniqueEncoding Tree (List Bool)).ofLeftInjection
+    Nat.bits (fun xs ↦ Part.ofOption (BitList.decodeNat xs)) fun xs n ↦ by
+      simpa only [Part.mem_coe, Option.mem_def] using BitList.decodeNat_eq_some_iff xs n
 
-@[simp] theorem encode_nat_bits (n : ℕ) : encode (List Bool) n = n.bits := rfl
-
-@[simp] theorem encode_nat_tree (n : ℕ) : encode Tree n = encode Tree n.bits := rfl
+@[simp] theorem encode_nat_tree (n : ℕ) : ⌜n⌝ₜ = ⌜n.bits⌝ₜ := rfl
 
 /-- Binary increment grows the encoded tree by at most one digit. -/
 theorem size_encode_increment_le (xs : List Bool) :
-    (encode Tree (BitList.increment xs)).size ≤ (encode Tree xs).size + 4 := by
+    ⌜BitList.increment xs⌝ₜ.size ≤ ⌜xs⌝ₜ.size + 4 := by
   induction xs with
   | nil => simp
   | cons b xs ih => cases b <;> simp_all <;> omega

@@ -7,12 +7,12 @@ module
 
 public import Complexity.Encoding.Bool
 public import Complexity.Encoding.List
-public import Complexity.Data.Tree.BitList
+public import Complexity.Data.Tree.Encoding
 
 /-! # Tree and bit string encodings
 
-The existing tree prefix code is accepted only when it consumes the whole string.
-In the other direction, a bit string is represented by its existing list tree.
+The complete tree parser accepts the existing prefix code only when it consumes
+the whole string. The encoding boundary is provided by `Encoding.RawWord`.
 -/
 
 @[expose] public section
@@ -22,7 +22,7 @@ namespace Complexity
 /-- Raw trees use the identity encoding. -/
 instance : UniqueEncoding Tree Tree := UniqueEncoding.refl Tree
 
-@[simp] theorem Tree.encode_self (a : Tree) : encode Tree a = a := rfl
+@[simp] theorem Tree.encode_self (a : Tree) : ⌜a⌝ₜ = a := rfl
 
 @[simp] theorem Tree.decode_self (a : Tree) : decode Tree a = Part.some a := rfl
 
@@ -41,14 +41,5 @@ theorem decodeTree_eq_some_iff {xs : List Bool} {a : Tree} :
   decodeTree_eq_some_iff.mpr rfl
 
 end BitList
-
-/-- The existing prefix code, with exactly one complete tree per string. -/
-instance : UniqueEncoding (List Bool) Tree :=
-  UniqueEncoding.ofOption BitList.encodeTree BitList.decodeTree fun _ _ ↦
-    BitList.decodeTree_eq_some_iff
-
-/-- The existing right-associated list tree encoding of bit strings. -/
-@[instance_reducible]
-def bitListEncoding : UniqueEncoding Tree (List Bool) := inferInstance
 
 end Complexity

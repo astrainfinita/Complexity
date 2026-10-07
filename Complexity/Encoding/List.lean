@@ -5,7 +5,7 @@ Authors: Yuyang Zhao
 -/
 module
 
-public import Complexity.Encoding.Basic
+public import Complexity.Encoding.Prod
 public import Complexity.Data.Tree.List
 
 /-! # Tree encodings of lists -/
@@ -36,17 +36,23 @@ instance {α : Type*} [UniqueEncoding Tree α] : UniqueEncoding Tree (List α) :
     fun as t ↦ Tree.mem_decodeList_iff t as
 
 @[simp] theorem encode_list_nil {α : Type*} [UniqueEncoding Tree α] :
-    encode Tree ([] : List α) = .nil := rfl
+    ⌜([] : List α)⌝ₜ = ⌜()⌝ₜ := rfl
 
 @[simp] theorem encode_list_cons {α : Type*} [UniqueEncoding Tree α] (a : α) (as : List α) :
-    encode Tree (a :: as) = .pair (encode Tree a) (encode Tree as) := rfl
+    ⌜a :: as⌝ₜ = ⌜(a, as)⌝ₜ := rfl
 
-@[simp] theorem listLength_encode_list {α : Type*} [UniqueEncoding Tree α] (xs : List α) :
-    (encode Tree xs).listLength = xs.length := Tree.listLength_encodeList _ _
+@[simp] theorem listLength_encode_unit : ⌜()⌝ₜ.listLength = 0 := rfl
 
-@[simp] theorem reverseAppend_encode_list {α : Type*} [UniqueEncoding Tree α]
+@[simp] theorem listLength_encode_prod {α β : Type*}
+    [UniqueEncoding Tree α] [UniqueEncoding Tree β] (a : α) (b : β) :
+    ⌜(a, b)⌝ₜ.listLength = ⌜b⌝ₜ.listLength + 1 := rfl
+
+@[simp↓] theorem listLength_encode_list {α : Type*} [UniqueEncoding Tree α] (xs : List α) :
+    ⌜xs⌝ₜ.listLength = xs.length := Tree.listLength_encodeList _ _
+
+@[simp↓] theorem reverseAppend_encode_list {α : Type*} [UniqueEncoding Tree α]
     (xs ys : List α) :
-    (encode Tree xs).reverseAppend (encode Tree ys) = encode Tree (xs.reverse ++ ys) :=
+    ⌜xs⌝ₜ.reverseAppend ⌜ys⌝ₜ = ⌜xs.reverse ++ ys⌝ₜ :=
   Tree.reverseAppend_encodeList _ _ _
 
 end Complexity

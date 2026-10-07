@@ -270,7 +270,7 @@ private def mkEncodeEquation (ind : InductiveVal) (ctor : ConstructorVal) :
   let indices ← indexFields ind ctor
   let mut args := #[]
   let mut binders := #[]
-  let mut encoded := #[]
+  let mut fields := #[]
   for i in [:ctor.numFields] do
     if let some j := indices.idxOf? i then
       args := args.push (mkIdent header.argNames[ind.numParams + j]!)
@@ -278,13 +278,14 @@ private def mkEncodeEquation (ind : InductiveVal) (ctor : ConstructorVal) :
       let a := mkIdent (← mkFreshUserName `a)
       args := args.push a
       binders := binders.push (← `(bracketedBinder| ($a : _)))
-      encoded := encoded.push (← ``(encode Tree $a))
+      fields := fields.push a
   let params := (header.argNames.extract 0 ind.numParams).map mkIdent
-  let rhs ← (← ctorShape ind ctor).term encoded ``Tree.nil ``Tree.pair
+  let value ← (← ctorShape ind ctor).term fields ``Unit.unit ``Prod.mk
+  let rhs ← ``(⌜$value⌝ₜ)
   let name := ind.name ++ .mkSimple s!"encode_{ctor.name.getString!}"
   `(@[simp] theorem $(rootIdent name):ident
       $header.binders:bracketedBinder* $binders:bracketedBinder* :
-    encode Tree (@$(mkCIdent ctor.name) $params:term* $args:term*) = $rhs := rfl)
+    ⌜@$(mkCIdent ctor.name) $params:term* $args:term*⌝ₜ = $rhs := rfl)
 
 private def Shape.projections : Shape → List (Nat × List Bool)
   | .nil => []

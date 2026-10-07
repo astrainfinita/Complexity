@@ -5,7 +5,6 @@ Authors: Yuyang Zhao
 -/
 module
 
-public import Complexity.Data.Tree.Encoding
 public import Complexity.Data.Tree.List
 
 /-! # Lists of bits represented by trees -/

@@ -18,7 +18,7 @@ public import Mathlib.Basic.Finite.Prod
 
 namespace Complexity
 
-variable {α β : Type*} [Encoding (List Bool) α] [Encoding (List Bool) β]
+variable {α β : Type*} [Encoding (RawWord Bool) α] [Encoding (RawWord Bool) β]
 
 namespace StackMachine
 

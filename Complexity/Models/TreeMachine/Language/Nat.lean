@@ -16,6 +16,8 @@ open Complexity TreeProgram TreeProgram.Code
 
 namespace Nat.Code
 
+attribute [local simp] encode_prod encode_unit
+
 /-- Move one low `true` bit into the zero prefix and refresh the carry test. -/
 @[simps! build_snd_fst]
 def succStep (rest zeros test : Var) : TreeProgram.Code Unit := do
