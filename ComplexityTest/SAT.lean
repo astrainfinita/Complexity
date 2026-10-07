@@ -6,7 +6,7 @@ Authors: Yuyang Zhao
 module
 
 import Complexity.Problems.CircuitSAT.Basic
-import Complexity.Problems.ThreeSAT.Basic
+import Complexity.Problems.KSAT.Basic
 import Complexity.Data.CNF.TreeEncoding
 import Complexity.Encoding.Nat
 
@@ -42,31 +42,32 @@ end Circuits
 
 open CNF
 
-def sample : ThreeCNF ℕ := ⟨[[.pos 0, .neg 1], [.neg 0]], by decide⟩
+def sample : KCNF 3 ℕ := ⟨[[.pos 0, .neg 1], [.neg 0]], by decide⟩
 
-example : ThreeSAT sample := ⟨fun _ => false, rfl⟩
+example : KSAT 3 sample := ⟨fun _ => false, rfl⟩
 
-example : ThreeSAT ⟨[], by simp⟩ := by simp
+example (k : ℕ) : KSAT k ⟨[], by simp⟩ := by simp
 
-example : ¬ ThreeSAT ⟨[[]], by decide⟩ := ThreeSAT.not_of_nil_mem (by simp)
+example (k : ℕ) : ¬ KSAT k ⟨[[]], by simp⟩ := KSAT.not_of_nil_mem (by simp)
 
-example : ¬ ThreeSAT ⟨[[.pos 0], [.neg 0]], by decide⟩ := by
+example : ¬ KSAT 1 ⟨[[.pos 0], [.neg 0]], by decide⟩ := by
   rintro ⟨x, h⟩
   cases hx : x 0 <;> simp [CNF.eval, hx] at h
 
-example : ThreeSAT ⟨[[.pos 1000000]], by decide⟩ := ⟨fun _ => true, rfl⟩
+example : KSAT 4 ⟨[[.pos 1000000, .neg 0, .neg 1, .neg 2]], by decide⟩ :=
+  ⟨fun _ => true, rfl⟩
 
 example : UniqueEncoding Tree (CNF ℕ) := inferInstance
 
 example (f : CNF ℕ) : decode (CNF ℕ) (encode Tree f) = Part.some f :=
   UniqueEncoding.decode_encode f
 
-example (f : ThreeCNF ℕ) : encode Tree f = encode Tree f.val := rfl
+example (k : ℕ) (f : KCNF k ℕ) : encode Tree f = encode Tree f.val := rfl
 
-example (f : ThreeCNF ℕ) : decode (ThreeCNF ℕ) (encode Tree f) = Part.some f :=
+example (k : ℕ) (f : KCNF k ℕ) : decode (KCNF k ℕ) (encode Tree f) = Part.some f :=
   UniqueEncoding.decode_encode f
 
-example : decode (ThreeCNF ℕ)
+example : decode (KCNF 3 ℕ)
     (encode Tree ([[.pos 0, .pos 0, .pos 0, .pos 0]] : CNF ℕ)) = Part.none := by
   apply Part.eq_none_iff.mpr
   intro f hf
