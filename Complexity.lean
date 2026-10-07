@@ -118,7 +118,7 @@ public import Complexity.Models.TuringMachine.Program.Specification.Basic
 public import Complexity.Models.TuringMachine.Program.Specification.Configuration
 public import Complexity.Models.TuringMachine.Program.Specification.History
 public import Complexity.Problems.CircuitSAT.Basic
-public import Complexity.Problems.ThreeSAT.Basic
+public import Complexity.Problems.KSAT.Basic
 public import Complexity.Resources.Basic
 public import Complexity.Resources.Circuit.Basic
 public import Complexity.Resources.Circuit.Compile
