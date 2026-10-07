@@ -12,25 +12,22 @@ open Complexity
 
 namespace Complexity.ClassesTest
 
--- A fixed one-step finite machine copies its input bit to the Boolean output.
+-- A finite machine copies the complete structured Boolean code.
 private def bit : TM Id (Fin 0) (Option Bool) Bool where
   q₀ := false
   halt := id
   transition := fun _ (a, _) ↦ pure <|
-    { inputMove := 0, work := Fin.elim0, output := some a, state := true }
+    { inputMove := 1, work := Fin.elim0, output := a.map some, state := a.isNone }
 
-private theorem bit_spec : TM.Computes bit (id : Bool → Bool) (fun _ => 1) (fun _ => 0) := by
+private theorem bit_spec : TM.Computes bit (id : Bool → Bool) (fun _ => 4) (fun _ => 0) := by
   apply Encoding.Computes.iff_of_uniqueEncoding.mpr
   intro b
-  apply Controller.computesWith_unit_iff.mpr
-  refine ⟨rfl, ?_, ?_⟩
-  · change #[((encode (List Bool) b).map some).toArray[0]?.getD none] = _
-    simp
-  · simp [Controller.History.space]
+  cases b <;> apply Controller.computesWith_unit_iff.mpr <;>
+    exact ⟨rfl, rfl, by simp [Controller.History.space]⟩
 
 private theorem bit_fp : (id : Bool → Bool) ∈ FP .tm :=
   FP.of_time_le bit_spec.computableInTimeAndSpace.computableInTime
-    1 0 (by intro n; simp)
+    4 0 (by intro n; simp)
 
 -- The same function covers both acceptance and rejection, with no work tapes.
 example : (fun b : Bool => b = true) ∈ P .tm := by
@@ -43,7 +40,7 @@ example : TM.Computes bit (id : Bool → Bool) (fun _ => 5) (fun _ => 0) :=
   bit_spec.mono (fun _ => by decide) (fun _ => le_rfl)
 
 -- The exact proof supplies a single machine for both asymptotic bounds.
-example : (fun b : Bool => b = true) ∈ DTISP .tm (fun _ => 1) (fun _ => 0) :=
+example : (fun b : Bool => b = true) ∈ DTISP .tm (fun _ => 4) (fun _ => 0) :=
   DTISP.of_decides bit_spec.computableInTimeAndSpace.mem_ftisp
     (fun _ => Iff.rfl)
 

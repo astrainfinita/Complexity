@@ -5,10 +5,11 @@ Authors: Yuyang Zhao
 -/
 module
 
-import Complexity.Encoding.Polynomial.Bool
+import Complexity.Encoding.RawWord
 import Complexity.Encoding.Fin
 import Complexity.Encoding.Nat
 import Mathlib.Logic.Equiv.Bool
+import Mathlib.Data.Fin.VecNotation
 
 open Complexity
 
@@ -124,19 +125,52 @@ example : decode (Fin 3 → Bool) (encode Tree [false, true]) = Part.none := by
 end FiniteFunctions
 
 -- Both instances reuse the exact encoders used by the tree-machine simulation.
-example (xs : List Bool) : encode Tree xs = Tree.encodeBitList xs := rfl
-example (a : Tree) : encode (List Bool) a = BitList.encodeTree a := rfl
+example (xs : List Bool) : ⌜xs⌝ₜ = Tree.encodeBitList xs := rfl
+example (a : Tree) : ⌜a⌝₂.toList = BitList.encodeTree a := rfl
 
-example : encode (List Bool) (encode Tree [false, true]) =
+example : ⌜[false, true]⌝₂.toList =
     [true, false, true, true, false, false, false] := rfl
 
+-- A trailing false remains distinct from the empty list under the structured code.
+example : ⌜([] : List Bool)⌝₂ ≠ ⌜[false]⌝₂ := by simp
+
 -- Tree parsing rejects surplus input instead of accepting extra representations.
-example : decode Tree [false, false] = Part.none := rfl
+example : decode Tree (RawWord.ofList [false, false]) = Part.none := by
+  change (Part.none : Part Tree).bind Part.some = Part.none
+  simp
 
 -- A tree in the wrong list format does not denote a bit string.
 example : decode (List Bool)
     (Tree.pair (Tree.pair Tree.nil (Tree.pair Tree.nil Tree.nil)) Tree.nil) = Part.none := by
   apply Part.eq_none_iff.mpr
   rintro (_ | ⟨(_ | _), bs⟩) <;> simp [UniqueEncoding.mem_decode_iff]
+
+-- Raw words mark the external code carrier; structured lists have a different code.
+example {Γ : Type*} (xs : List Γ) : encode (RawWord Γ) (RawWord.ofList xs) =
+    RawWord.ofList xs := rfl
+
+example : ⌜([] : List Bool)⌝₂ ≠ RawWord.ofList [] := by decide
+
+example : True := by
+  fail_if_success have := (inferInstance : Encoding Tree (RawWord Bool))
+  fail_if_success have := (inferInstance : Encoding (List Bool) (List Bool))
+  trivial
+
+-- Lifting works for nonunique interpretations and stays coherent for Fin and subtypes.
+example {α : Type*} [e : Encoding Tree α] {a : α} {t : Tree} (h : a ∈ decode α t) :
+    a ∈ decode α (RawWord.treeEncoding.encode t) :=
+  (Encoding.mem_comp_encode RawWord.treeEncoding e).mpr h
+
+example (i : Fin 3) : ⌜i⌝₂.toList = BitList.encodeTree ⌜i⌝ₜ := rfl
+example (x : {n : ℕ // n > 0}) : ⌜x⌝₂.toList = BitList.encodeTree ⌜x⌝ₜ := rfl
+example (f : Fin 3 → Bool) : ⌜f⌝₂.toList = BitList.encodeTree ⌜f⌝ₜ := rfl
+example (n : ℕ) : ⌜n⌝₂ = ⌜n.bits⌝₂ := rfl
+
+-- Cancel decoding before simplifying the composed encoder.
+example {α : Type*} [UniqueEncoding Tree α] (a : α) : (decode α ⌜a⌝₂).Dom := by simp
+
+-- Structural simp stops at Unit and products; projections still simplify.
+example (a : Bool) (as : List Bool) : ⌜a :: as⌝ₜ = ⌜(a, as)⌝ₜ := by simp
+example (a : Bool) (as : List Bool) : ⌜a :: as⌝ₜ.right = ⌜as⌝ₜ := by simp
 
 end Complexity.EncodingTest

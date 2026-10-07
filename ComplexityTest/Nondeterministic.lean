@@ -8,6 +8,7 @@ module
 import all Init.Data.List.Scan.Basic
 import Complexity.Classes.Nondeterministic.Basic
 import Complexity.Resources.Nondeterministic.Basic
+import Mathlib.Logic.Equiv.Bool
 import Complexity.Models.TuringMachine.Nondeterministic.Deterministic
 meta import Complexity.Models.TuringMachine.Nondeterministic.Basic
 meta import Complexity.Models.TuringMachine.Basic
@@ -24,8 +25,13 @@ open Controller (History)
 
 namespace NondeterministicTest
 
-private def fixedOutputs (ys : Multiset (List Bool)) : TimeSpaceModel Multiset (List Bool) where
-  inputSize := List.length
+-- A local encoding override does not change the concrete acceptance convention.
+example {κ Q : Type*} (M : NTM κ (Option Bool) Q) (xs : RawWord Bool) :
+    letI := (inferInstance : UniqueEncoding (RawWord Bool) Bool).ofEquiv Equiv.boolNot
+    M.Accepts xs ↔ M.Produces (xs.toList.map some) [some true, some false, some false] := Iff.rfl
+
+private def fixedOutputs (ys : Multiset (RawWord Bool)) : TimeSpaceModel Multiset (RawWord Bool) where
+  inputSize := RawWord.length
   behaviors := {fun _ zs _ _ => zs = ys}
   budget_mono := by
     rintro R rfl x zs t s t' s' h _ _
@@ -39,68 +45,79 @@ example : (fixedOutputs 0).NDecidableInTimeAndSpace
 example : ¬(fixedOutputs 0).NDecidableInTimeAndSpace
     (fun _ : List Bool => True) (fun _ => 0) (fun _ => 0) := by
   rintro ⟨R, rfl, h⟩
-  obtain ⟨ys, rfl, _, h⟩ := h [] [] (Part.mem_some [])
+  obtain ⟨ys, rfl, _, h⟩ := h (⌜([] : List Bool)⌝₂) [] (UniqueEncoding.mem_decode_iff.mpr rfl)
   simp at h
 
 -- Even alongside a valid accepting result, a malformed branch invalidates the decision.
-example : ¬(fixedOutputs {[], [true]}).NDecidableInTimeAndSpace
+example : ¬(fixedOutputs {RawWord.ofList [], ⌜true⌝₂}).NDecidableInTimeAndSpace
     (fun _ : List Bool => True) (fun _ => 0) (fun _ => 0) := by
   rintro ⟨R, rfl, h⟩
-  obtain ⟨ys, rfl, hb, _⟩ := h [] [] (Part.mem_some [])
-  obtain ⟨b, hb⟩ := Part.dom_iff_mem.mp (hb [] (by simp))
-  simp at hb
+  obtain ⟨ys, rfl, hb, _⟩ := h (⌜([] : List Bool)⌝₂) [] (UniqueEncoding.mem_decode_iff.mpr rfl)
+  obtain ⟨b, hb⟩ := Part.dom_iff_mem.mp (hb (RawWord.ofList []) (by simp))
+  have he := UniqueEncoding.mem_decode_iff.mp hb
+  cases b <;> cases he
 
-def answer (b : Bool) : TM.Action (Fin 0) (Option Bool) Bool where
+def answer {Q : Type} (b : Bool) (q : Q) : TM.Action (Fin 0) (Option Bool) Q where
   inputMove := 0
   work := Fin.elim0
   output := some (some b)
-  state := true
+  state := q
 
--- One branch rejects, the other accepts: acceptance must be existential.
-def guess : NTM (Fin 0) (Option Bool) Bool where
-  q₀ := false
-  halt := id
-  transition _ _ i := answer (i == 1)
+-- One branch rejects immediately; the other finishes the three-bit code for true.
+def guess : NTM (Fin 0) (Option Bool) (Fin 4) where
+  q₀ := 0
+  halt q := q == 3
+  transition q _ i :=
+    if q = 0 then if i = 0 then answer false 3 else answer true 1
+    else answer false (if q = 1 then 2 else 3)
 
-private theorem guess_run_one (xs : List (Option Bool)) :
-    guess.runWith (TM.Cfg (Fin 0) (Option Bool) Bool xs.toArray)
-      Multiset xs 1 =
-      ↑[apply (answer false)
-          (guess.initInput (Config := TM.Cfg (Fin 0) (Option Bool) Bool xs.toArray) xs),
-        apply (answer true)
-          (guess.initInput (Config := TM.Cfg (Fin 0) (Option Bool) Bool xs.toArray) xs)] := rfl
+private theorem guess_results (xs : List (Option Bool)) :
+    (guess.runWith (TM.Cfg (Fin 0) (Option Bool) (Fin 4) xs.toArray) Multiset xs 3).map
+      (fun c => (c.state, c.output)) =
+      ↑([(3, #[some false]), (3, #[some true, some false, some false]),
+        (3, #[some true, some false, some false]), (3, #[some true, some false, some false]),
+        (3, #[some true, some false, some false])] : List (Fin 4 × Array (Option Bool))) := rfl
 
-private theorem guess_time (xs : List (Option Bool)) : guess.UsesTime xs 1 := by
+private theorem guess_time (xs : List (Option Bool)) : guess.UsesTime xs 3 := by
   intro c hc
-  rw [guess_run_one] at hc
-  simp only [Multiset.mem_coe, List.mem_cons, List.not_mem_nil, or_false] at hc
-  rcases hc with rfl | rfl <;> rfl
+  have hm := Multiset.mem_map_of_mem (fun c => (c.state, c.output)) hc
+  rw [guess_results] at hm
+  simp only [Multiset.mem_coe, List.mem_cons, List.not_mem_nil, or_false, or_self,
+    Prod.mk.injEq] at hm
+  rcases hm with ⟨h, _⟩ | ⟨h, _⟩ <;> change (c.state == 3) = true <;> simp [h]
 
-private theorem guess_boolean (xs : List (Option Bool)) : guess.BooleanOutput xs := by
-  rw [NTM.booleanOutput_iff_of_usesTime (guess_time xs)]
+private theorem guess_boolean (xs : RawWord Bool) : guess.BooleanOutput xs := by
+  rw [NTM.booleanOutput_iff_of_usesTime (guess_time _)]
   intro c hc
-  rw [guess_run_one] at hc
-  simp only [Multiset.mem_coe, List.mem_cons, List.not_mem_nil, or_false] at hc
-  rcases hc with rfl | rfl
-  · exact ⟨false, rfl⟩
-  · exact ⟨true, rfl⟩
+  have hm := Multiset.mem_map_of_mem (fun c => (c.state, c.output)) hc
+  rw [guess_results] at hm
+  simp only [Multiset.mem_coe, List.mem_cons, List.not_mem_nil, or_false, or_self,
+    Prod.mk.injEq] at hm
+  rcases hm with ⟨_, h⟩ | ⟨_, h⟩
+  · exact ⟨false, h⟩
+  · exact ⟨true, h⟩
 
-private theorem guess_accepts (xs : List (Option Bool)) : guess.Accepts xs := by
-  rw [NTM.accepts_iff_of_usesTime (guess_time xs), guess_run_one]
-  exact ⟨_, Multiset.mem_cons_of_mem (Multiset.mem_singleton_self _), rfl⟩
+private theorem guess_accepts (xs : RawWord Bool) : guess.Accepts xs := by
+  rw [NTM.accepts_iff_of_usesTime (guess_time _)]
+  have hm : (3, #[some true, some false, some false]) ∈
+      (guess.runWith (TM.Cfg (Fin 0) (Option Bool) (Fin 4) (xs.toList.map some).toArray)
+        Multiset (xs.toList.map some) 3).map
+        (fun c => (c.state, c.output)) := by rw [guess_results]; simp
+  obtain ⟨c, hc, h⟩ := Multiset.mem_map.mp hm
+  exact ⟨c, hc, congrArg Prod.snd h⟩
 
 theorem guess_spec : guess.DecidesInTimeAndSpace (fun _ : List Bool => True)
-    (fun _ => 1) (fun _ => 0) := by
+    (fun _ => 3) (fun _ => 0) := by
   intro xs _ _
   refine ⟨guess_time _, ?_, guess_boolean _, iff_true_intro (guess_accepts _)⟩
   intro n c _
   simp [History.space]
 
-example : (fun _ : List Bool => True) ∈ NTISP .ntm (fun _ => 1) (fun _ => 0) :=
+example : (fun _ : List Bool => True) ∈ NTISP .ntm (fun _ => 3) (fun _ => 0) :=
   guess_spec.decidableInTimeAndSpace.mem_ntisp
 
 example : (fun _ : List Bool => True) ∈ NP .ntm := by
-  apply NP.of_time_le guess_spec.decidesInTime.decidableInTime 1 0
+  apply NP.of_time_le guess_spec.decidesInTime.decidableInTime 3 0
   simp
 
 -- A space-only machine proof supplies its implicit time bound through the model bridge.
@@ -156,25 +173,29 @@ def rejoinHeads : NTM Unit Bool (Fin 4) where
   (fun c => ((c.visited ()).fst, (c.visited ()).snd)) = ↑([(-1, 0), (-1, 0), (0, 1), (0, 1)] : List (ℤ × ℤ))
 
 -- An early accepting branch does not excuse another branch missing the time bound.
-def mixed : NTM (Fin 0) (Option Bool) Bool where
-  q₀ := false
-  halt := id
-  transition _ _ i := if i = 0 then ⟨0, Fin.elim0, none, false⟩ else answer true
+def mixed : NTM (Fin 0) (Option Bool) (Fin 4) where
+  q₀ := 0
+  halt q := q == 3
+  transition q o i := if q = 0 ∧ i = 0 then ⟨0, Fin.elim0, none, 0⟩
+    else guess.transition q o i
 
-example : mixed.Accepts [] :=
-  ⟨1, apply (answer true)
-    (mixed.initInput (Config := TM.Cfg (Fin 0) (Option Bool) Bool #[]) ([] : List (Option Bool))),
-    Multiset.mem_cons_of_mem (Multiset.mem_singleton_self _), rfl, rfl⟩
+example : mixed.Accepts (.ofList []) := by
+  have hm : (3, #[some true, some false, some false]) ∈
+      (mixed.runWith (TM.Cfg (Fin 0) (Option Bool) (Fin 4) #[])
+        Multiset ([] : List (Option Bool)) 3).map (fun c => (c.state, c.output)) := by decide
+  obtain ⟨c, hc, h⟩ := Multiset.mem_map.mp hm
+  refine ⟨3, c, hc, ?_, congrArg Prod.snd h⟩
+  change (c.state == 3) = true
+  simp [show c.state = 3 from congrArg Prod.fst h]
 
-example : ¬mixed.UsesTime [] 1 := by
+example : ¬mixed.UsesTime [] 3 := by
   intro h
-  have hc : apply
-      (⟨0, Fin.elim0, none, false⟩ : TM.Action (Fin 0) (Option Bool) Bool)
-      (mixed.initInput (Config := TM.Cfg (Fin 0) (Option Bool) Bool #[]) ([] : List (Option Bool))) ∈
-      mixed.runWith _ Multiset ([] : List (Option Bool)) 1 := by
-    change _ ∈ (_ ::ₘ _ ::ₘ (0 : Multiset (TM.Cfg (Fin 0) (Option Bool) Bool #[])))
-    exact Multiset.mem_cons_self _ _
-  exact Bool.false_ne_true (h _ hc)
+  have hm : 0 ∈ (mixed.runWith (TM.Cfg (Fin 0) (Option Bool) (Fin 4) #[])
+      Multiset ([] : List (Option Bool)) 3).map (·.state) := by decide
+  obtain ⟨c, hc, he⟩ := Multiset.mem_map.mp hm
+  have hh := h c hc
+  change (c.state == 3) = true at hh
+  simp [he] at hh
 
 -- Space alone is meaningful for divergence, but an NSPACE decider must terminate.
 def forever : TM Id (Fin 0) (Option Bool) Unit where
@@ -193,15 +214,15 @@ private theorem forever_diverges (xs : List (Option Bool)) : ¬NTM.Terminates fo
 
 example : ¬NTM.DecidesInSpace forever.toBinary (fun _ : List Bool => False) (fun _ => 0) := by
   intro h
-  exact forever_diverges _ (h.decides [] [] (Part.mem_some [])).1
+  exact forever_diverges _ (h.decides (⌜([] : List Bool)⌝₂) [] (UniqueEncoding.mem_decode_iff.mpr rfl)).1
 
 -- A malformed terminal output cannot silently count as rejection.
 def malformed : TM Id (Fin 0) (Option Bool) Bool where
   q₀ := false
   halt := id
-  transition _ _ := pure <| { answer false with output := none }
+  transition _ _ := pure <| { answer false true with output := none }
 
-example : ¬NTM.BooleanOutput malformed.toBinary [] := by
+example : ¬NTM.BooleanOutput malformed.toBinary (.ofList []) := by
   have ht : NTM.UsesTime malformed.toBinary [] 1 :=
     (malformed.usesTime_toBinary_iff _ _).2 rfl
   rw [NTM.booleanOutput_iff_of_usesTime ht]
@@ -210,8 +231,6 @@ example : ¬NTM.BooleanOutput malformed.toBinary [] := by
       malformed.toBinary.runWith _ Multiset ([] : List (Option Bool)) 1 := by
     simp only [Controller.mem_runWith_toBinary_iff]
   obtain ⟨b, hb⟩ := h _ hc
-  change #[] = #[some b] at hb
-  have := congrArg Array.size hb
-  simp at this
+  cases b <;> cases congrArg Array.size hb
 
 end NondeterministicTest

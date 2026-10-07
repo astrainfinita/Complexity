@@ -6,15 +6,15 @@ Authors: Yuyang Zhao
 module
 
 import Complexity.Classes.TreeTuringSimulation
-import Complexity.Encoding.Polynomial.Bool
+import Complexity.Classes.TreeFunctions.Composition
+import Complexity.Encoding.Fin
+import Complexity.Encoding.Nat
 
 open Complexity
 
 namespace TreeSimulationTest
 
--- Bool's direct tree code differs from its singleton-list tree code.
-example : Encoding.PolytimeCompatible Bool := inferInstance
-
+-- The default simulation needs no per-type encoding compatibility.
 example (f : Bool → Bool) (h : f ∈ FP .sizeCostTree) :
     f ∈ FP .stack := TreeMachine.fp_subset_stack h
 
@@ -24,23 +24,18 @@ example (f : Bool → Bool) (h : f ∈ FP .sizeCostTree) : f ∈ FP .tm :=
 example : (id : Bool → Bool) ∈ FP .tm :=
   TreeMachine.fp_subset_tm TreeMachine.fp_id
 
--- All bit strings denote the same value: conversion must not assume unique codes.
-@[instance_reducible] private def redundant : Encoding (List Bool) Unit where
-  decode _ := Part.some ()
-  exists_code _ := ⟨[], Part.mem_some ()⟩
+example (f : Fin 3 → Fin 2) (h : f ∈ FP .sizeCostTree) : f ∈ FP .tm :=
+  TreeMachine.fp_subset_tm h
 
-local instance : Encoding (List Bool) Unit := redundant
-local instance : Encoding Tree Unit := bitListEncoding.toEncoding.comp redundant
+-- Nonunique tree interpretations lift without an additional raw encoding instance.
+inductive Redundant where | value
 
-example (xs : List Bool) : () ∈ decode Unit (Tree.encodeBitList xs) :=
-  (Encoding.mem_comp_encode bitListEncoding redundant).2 (Part.mem_some ())
+instance : Encoding Tree Redundant where
+  decode _ := pure .value
+  exists_code a := by cases a; exact ⟨.nil, Part.mem_some _⟩
 
-example : Encoding.PolytimeCompatible Unit := by
-  fail_if_success exact inferInstance
-  exact Encoding.PolytimeCompatible.ofComp redundant
-
-example : (id : Unit → Unit) ∈ FP .tm := by
-  let : Encoding.PolytimeCompatible Unit := Encoding.PolytimeCompatible.ofComp redundant
-  exact TreeMachine.fp_subset_tm TreeMachine.fp_id
+example (h : (id : Redundant → Redundant) ∈ FP .sizeCostTree) :
+    (id : Redundant → Redundant) ∈ FP .stack :=
+  TreeMachine.fp_subset_stack h
 
 end TreeSimulationTest

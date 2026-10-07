@@ -41,8 +41,12 @@ inductive UnitData where
 
 -- Existing field encodings compose, without extra delimiters on a fixed-arity payload.
 example {α : Type*} [UniqueEncoding Tree α] (a : α) (b : Option Bool) (as : List α) :
-    encode Tree (Record.mk a b as) =
-      .pair (encode Tree a) (.pair (encode Tree b) (encode Tree as)) := by simp
+    ⌜Record.mk a b as⌝ₜ = ⌜(a, b, as)⌝ₜ := by simp
+
+-- Cancel equal encodings before decomposing just one of their constructors.
+example {α : Type*} [UniqueEncoding Tree α] (r : Record α)
+    (a : α) (b : Option Bool) (as : List α) :
+    (⌜r⌝ₜ = ⌜Record.mk a b as⌝ₜ) ↔ r = Record.mk a b as := by simp
 
 example {α : Type*} [UniqueEncoding Tree α] (a : α) :
     encode Tree (Box.mk a) = encode Tree a := by simp
