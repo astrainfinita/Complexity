@@ -13,18 +13,44 @@ open Complexity TreeProgram Complexity.TreeProgram.Source
 namespace ComplexityTest.SourceTranslation.FiniteTables
 
 example : ∃ b, Realizes (fun n : ℕ => List.ofFn (fun i : Fin n => i.val + 1)) b :=
-  ⟨_, by source_fun_prop⟩
+  ⟨_, by source_fun_prop using tabulate⟩
 
--- Reading a stored tuple stays a projection; generation is only a fallback.
+-- Ordinary rule matching handles index aliases, including inside an ofFn callback.
+private abbrev Index (n : ℕ) := Fin n
+
+example : ∃ b, Realizes (fun n : ℕ => List.ofFn (fun i : Index n => i.val + 1)) b :=
+  ⟨_, by source_fun_prop using tabulate⟩
+
+example : True := by
+  fail_if_success
+    have : ∃ b, Realizes (fun n : ℕ => List.ofFn (fun i : Fin n => i.val + 1)) b :=
+      ⟨_, by source_fun_prop⟩
+  trivial
+
+-- Reading a stored tuple stays automatic; the selected scope does not rebuild stored fields.
 example {α : Type*} [UniqueEncoding Tree α] :
     ∃ b, Realizes (fun x : Σ n, Fin n → α => List.ofFn x.2) b ∧
       ∀ x, b.time x = 1 := by
   refine ⟨_, by source_fun_prop, ?_⟩
   simp
 
+example {α : Type*} [UniqueEncoding Tree α] :
+    ∃ b, Realizes (fun x : Σ n, Fin n → α => List.ofFn x.2) b ∧
+      ∀ x, b.time x = 1 := by
+  refine ⟨_, by source_fun_prop using tabulate, ?_⟩
+  simp
+
+-- Explicit table generation still has to meet its fixed resource request.
+example : True := by
+  fail_if_success
+    have : Realizes (fun n : ℕ => List.ofFn (fun i : Fin n => i.val + 1))
+        ⟨fun _ => 1, fun _ => 1⟩ := by
+      source_fun_prop using tabulate
+  trivial
+
 def identityWires (n : ℕ) : Σ n, Fin n → Fin n := ⟨n, id⟩
 
-example : ∃ b, Realizes identityWires b := ⟨_, by source_fun_prop⟩
+example : ∃ b, Realizes identityWires b := ⟨_, by source_fun_prop using tabulate⟩
 
 def appendEntry (x : Σ n, (Fin n → ℕ) × ℕ) : Σ n, Fin n → ℕ :=
   ⟨x.1 + 1, Fin.snoc x.2.1 x.2.2⟩
@@ -68,9 +94,32 @@ example {α : Type*} [UniqueEncoding Tree α] :
   simp
   omega
 
+-- Selecting the enumeration scope must preserve the polymorphic append implementation.
+example {α : Type*} [UniqueEncoding Tree α] :
+    ∃ b, Realizes (fun x : Σ n, Σ m, (Fin n → α) × (Fin m → α) =>
+      ⌜Fin.append x.2.2.1 x.2.2.2⌝ₜ) b ∧
+      ∀ x, b.time x = 26 * x.1 + 22 := by
+  refine ⟨_, by source_fun_prop using tabulate, ?_⟩
+  simp
+  omega
+
+example {α : Type*} [UniqueEncoding Tree α] :
+    ∃ b, Realizes (fun x : Σ n, (Fin n → α) × α =>
+      ⌜Fin.snoc x.2.1 x.2.2⌝ₜ) b ∧ ∀ x, b.time x = 26 * x.1 + 22 := by
+  refine ⟨_, by source_fun_prop, ?_⟩
+  simp
+  omega
+
+example {α : Type*} [UniqueEncoding Tree α] :
+    ∃ b, Realizes (fun x : Σ n, (Fin n → α) × α =>
+      ⌜Fin.snoc x.2.1 x.2.2⌝ₜ) b ∧ ∀ x, b.time x = 26 * x.1 + 22 := by
+  refine ⟨_, by source_fun_prop using tabulate, ?_⟩
+  simp
+  omega
+
 def successorWires (n : ℕ) : Σ n, Fin n → Fin (n + 1) := ⟨n, Fin.castSucc⟩
 
-example : ∃ b, Realizes successorWires b := ⟨_, by source_fun_prop⟩
+example : ∃ b, Realizes successorWires b := ⟨_, by source_fun_prop using tabulate⟩
 
 -- A change of index bound keeps the stored table; it is not pointwise table generation.
 example : ∃ b, Realizes (fun x : Σ n, Σ k, Fin n → Fin k =>
@@ -80,9 +129,16 @@ example : ∃ b, Realizes (fun x : Σ n, Σ k, Fin n → Fin k =>
 
 def identityCircuit (n : ℕ) : Σ n, Circuit .booleanAlgebra n n := ⟨n, .id _ n⟩
 
-example : ∃ b, Realizes identityCircuit b := ⟨_, by source_fun_prop⟩
+example : ∃ b, Realizes identityCircuit b := ⟨_, by source_fun_prop using tabulate⟩
 
 def positions {α : Type*} (xs : List α) : List ℕ := List.ofFn (fun i : Fin xs.length => i.val)
+
+-- Choose enumeration for this function once. Callers, including nested calls, need no permission.
+@[local source using tabulate] theorem positions_source {α : Type*} :
+    positions (α := α) = (fun xs => List.ofFn (fun i : Fin xs.length => i.val)) := rfl
+
+example : ∃ b, Realizes (fun xs : List Bool => (positions xs).reverse) b :=
+  ⟨_, by source_fun_prop⟩
 
 theorem positions_model {α : Type*} [UniqueEncoding Tree α] :
     ∃ k, TimeSpaceModel.tree.ComputableInTimeAndSpace (positions (α := α))
@@ -115,7 +171,7 @@ def complementLayer (xs : List Unit) : List (Σ n, Circuit .booleanAlgebra n 1) 
 theorem complementLayer_model :
     ∃ k, TimeSpaceModel.tree.ComputableInTimeAndSpace complementLayer
       (fun n => 100000 * (n + 1) ^ 2) (fun n => k * (10000 * (n + 1) ^ 2)) := by
-  model_fun_prop
+  model_fun_prop using tabulate
   all_goals
     rename_i xs
     have hl := length_le_codeSize xs
@@ -146,7 +202,7 @@ theorem complementLayer_model :
 def composeWires (x : Σ n, Σ k, Σ m, (Fin n → Fin k) × (Fin k → Fin m)) :
     Σ n, Σ m, Fin n → Fin m := ⟨x.1, x.2.2.1, x.2.2.2.2 ∘ x.2.2.2.1⟩
 
-example : ∃ b, Realizes composeWires b := ⟨_, by source_fun_prop⟩
+example : ∃ b, Realizes composeWires b := ⟨_, by source_fun_prop using tabulate⟩
 
 attribute [local fun_prop] Realizes.finComp in
 theorem composeWires_model :
@@ -181,7 +237,7 @@ example (f : ℕ → ℕ → Bool) (b : ℕ → Bounds ℕ)
     (_hf : ∀ n, Realizes (f n) (b n)) : True := by
   fail_if_success
     have : ∃ c, Realizes (fun n => List.ofFn (fun i : Fin n => f n i.val)) c :=
-      ⟨_, by source_fun_prop⟩
+      ⟨_, by source_fun_prop using tabulate⟩
   trivial
 
 end ComplexityTest.SourceTranslation.FiniteTables

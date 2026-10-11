@@ -285,7 +285,7 @@ example : ∃ b, Realizes (fun xs : List Bool => let _ys := recursive xs; xs) b 
   refine ⟨_, by source_fun_prop, ?_⟩
   simp
 
-/-- error: source translation: `ComplexityTest.SourceTranslation.SpecComparison.recursive` needs a registered implementation (for example, from `Realizes.loop` or `Recursion`) -/
+/-- error: source translation: `ComplexityTest.SourceTranslation.SpecComparison.recursive` needs a registered implementation (choose replacement source with `via`, or register a function equality with `[source]`) -/
 #guard_msgs in
 example : Realizes recursive identityBounds := by
   source_fun_prop

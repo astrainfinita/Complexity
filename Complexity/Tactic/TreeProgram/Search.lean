@@ -34,7 +34,7 @@ def unsupported {m : Type → Type} {α : Type} [Monad m] [MonadError m]
 
 def recursionMessage (name : Name) : MessageData :=
   m!"source translation: `{privateToUserName name}` needs a registered implementation \
-    (for example, from `Realizes.loop` or `Recursion`)"
+    (choose replacement source with `via`, or register a function equality with `[source]`)"
 
 /-- Which part of a candidate could not be certified. -/
 inductive FailureStage where

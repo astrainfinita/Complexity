@@ -187,18 +187,20 @@ theorem tseitinLoop_step (x : (Σ n, Circuit .booleanAlgebra n 1) × CNF ℕ) :
     refine ⟨by dsimp only; omega, by dsimp only; omega, ?_⟩
     simpa only [hfalse, Bool.false_eq_true, ↓reduceIte] using (tseitinLoop_step y).symm.trans hi.2
 
+@[local source] theorem tseitin_source :
+    (fun input : Σ n, Circuit .booleanAlgebra n 1 => input.2.tseitin) =
+      (fun input => tseitinLoop input []) := (funext tseitinLoop_nil).symm
+
 @[local fun_prop] theorem tseitin_realizes :
     Realizes (fun input : Σ n, Circuit .booleanAlgebra n 1 => input.2.tseitin)
       ⟨fun x => 20000 * ⌜x⌝ₜ.size ^ 2, fun x => 2000 * ⌜x⌝ₜ.size ^ 2⟩ := by
-  apply Realizes.of_encode (g := fun input => tseitinLoop input [])
-  · intro input; simp only [tseitinLoop_nil]
-  · refine Realizes.mono (by source_fun_prop) ?_
-    intro input
-    have hn := Tree.size_pos ⌜input⌝ₜ
-    simp only [compBounds_time, pairBounds_time, identityBounds_time, zero_add, size_encode_prod,
-      encode_list_nil, size_encode_unit, compBounds_peak, pairBounds_peak, identityBounds_peak,
-      le_add_iff_nonneg_left, zero_le, sup_of_le_right, sup_le_iff, Order.add_one_le_iff]
-    (repeat' apply And.intro) <;> nlinarith
+  refine Realizes.mono (by source_fun_prop) ?_
+  intro input
+  have hn := Tree.size_pos ⌜input⌝ₜ
+  simp only [compBounds_time, pairBounds_time, identityBounds_time, zero_add, size_encode_prod,
+    encode_list_nil, size_encode_unit, compBounds_peak, pairBounds_peak, identityBounds_peak,
+    le_add_iff_nonneg_left, zero_le, sup_of_le_right, sup_le_iff, Order.add_one_le_iff]
+  (repeat' apply And.intro) <;> nlinarith
 
 theorem _root_.Complexity.Circuit.tseitin_model :
     ∃ k, TimeSpaceModel.tree.ComputableInTimeAndSpace

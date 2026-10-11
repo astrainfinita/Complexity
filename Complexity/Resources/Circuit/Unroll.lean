@@ -71,7 +71,7 @@ theorem iterate_unrollStep (n : ℕ) (step : Circuit .booleanAlgebra (n + 1) n) 
   | zero => rfl
   | succ t ih => rw [Function.iterate_succ_apply', ih]; rfl
 
-noncomputable def unrollStepImpl : Implementation unrollStep := by source_fun_prop
+noncomputable def unrollStepImpl : Implementation unrollStep := by source_fun_prop using tabulate
 
 @[simps] def unrollStepBounds : Bounds UnrollState :=
   let N (x : UnrollState) := 2 * x.1 + x.2.1 + x.2.2.1.size + x.2.2.2.size + 2
@@ -226,7 +226,7 @@ def unrollInitial (x : UnrollInput) : ℕ × UnrollState :=
   let N (x : UnrollInput) := 2 * x.1 + x.2.2 + (x.2.2 + 1) * x.2.1.size + 2
   ⟨fun x => 1000000 * N x ^ 2, fun x => 1000000 * N x ^ 2⟩
 theorem unrollInitial_realizes : Realizes unrollInitial unrollInitialBounds := by
-  refine Realizes.mono (by source_fun_prop) ?_
+  refine Realizes.mono (by source_fun_prop using tabulate) ?_
   rintro ⟨n, step, t⟩
   simp only [unrollInitialBounds, tabulateBounds,
     compBounds, pairBounds, identityBounds, Sigma.encode_mk, size_encode_prod,

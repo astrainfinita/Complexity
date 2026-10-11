@@ -160,7 +160,7 @@ private def uncertified : List Bool → List Bool
 
 -- An encoded result still reports the source operation, not the implementation of its encoder.
 /--
-error: source translation: `ComplexityTest.SourceTranslation.Search.uncertified` needs a registered implementation (for example, from `Realizes.loop` or `Recursion`)
+error: source translation: `ComplexityTest.SourceTranslation.Search.uncertified` needs a registered implementation (choose replacement source with `via`, or register a function equality with `[source]`)
 source path: fun xs => encode Complexity.Tree (uncertified xs) → fun xs => uncertified xs
 -/
 #guard_msgs in
@@ -275,6 +275,19 @@ example : ∃ b, Realizes stored b ∧ ∀ x, b.time x = 11 := by
   refine ⟨_, by source_fun_prop, ?_⟩
   intro x
   rfl
+
+section
+private theorem higherPriority : Realizes stored (storedBounds 7) := storedSpec 7 (by decide)
+
+open Lean Meta Mathlib.Meta.FunProp in
+run_elab addTheorem ``higherPriority .local 20
+
+-- Priority orders ordinary candidates across the compatibility boundary too.
+example : ∃ b, Realizes stored b ∧ ∀ x, b.time x = 7 := by
+  refine ⟨_, by source_fun_prop, ?_⟩
+  intro x
+  rfl
+end
 
 attribute [local source_fallback] implementation
 

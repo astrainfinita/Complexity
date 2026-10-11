@@ -6,6 +6,7 @@ Authors: Yuyang Zhao
 module
 
 public import Complexity.Tactic.TreeProgram.Rules
+public import Complexity.Tactic.TreeProgram.Recursion
 public meta import Complexity.Tactic.TreeProgram.Search
 public meta import Complexity.Tactic.TreeProgram.Environment
 public import Complexity.Models.TreeMachine.Language.Derive
@@ -213,8 +214,10 @@ elab (name := sourceDependentTactic) "source_dependent" : tactic => sourceDepend
 
 /-- Certify source branches with previously registered function implementations. -/
 syntax (name := sourceCalls) "source_calls" : tactic
-/-- Compose source-function specifications and synthesize their resource budget. -/
-syntax (name := sourceFunProp) "source_fun_prop" : tactic
+/-- Compose source-function specifications and synthesize their resource budget.
+`using ns` activates the namespace's scoped rules for this translation and its callbacks. -/
+syntax (name := sourceFunProp) "source_fun_prop" (" using " ident)?
+  (" via " term)? : tactic
 
 namespace FiniteCases
 open Lean Meta Elab Tactic
@@ -252,7 +255,7 @@ private def branchFunction (outer : LocalContext) (body : Lean.Expr) :
 -- Known roots select branches; all remaining subtrees are arbitrary encoded data.
 private partial def inputLayout (e : Lean.Expr) (path : List Bool := []) :
     List (List Bool × Bool) × List (Lean.Expr × List Bool) :=
-  if e.isConstOf ``Tree.nil then ([(path, false)], [])
+  if e.isConstOf ``Tree.nil || e.isAppOfArity ``BinaryTree.nil 1 then ([(path, false)], [])
   else if e.isAppOfArity ``Tree.pair 2 then
     let (ls, lf) := inputLayout e.getAppArgs[0]! (path ++ [false])
     let (rs, rf) := inputLayout e.getAppArgs[1]! (path ++ [true])
@@ -261,7 +264,7 @@ private partial def inputLayout (e : Lean.Expr) (path : List Bool := []) :
 
 private partial def outputExpr (e : Lean.Expr) (fields : List (Lean.Expr × List Bool)) :
     MetaM (TreeProgram.Expr Unit) := do
-  if e.isConstOf ``Tree.nil then return .nil
+  if e.isConstOf ``Tree.nil || e.isAppOfArity ``BinaryTree.nil 1 then return .nil
   if e.isAppOfArity ``Tree.pair 2 then
     return .pair (← outputExpr e.getAppArgs[0]! fields) (← outputExpr e.getAppArgs[1]! fields)
   for (field, path) in fields do
@@ -513,7 +516,7 @@ private def sourceCases : TacticM Unit := withMainContext do
   evalTactic (← `(tactic| intro v n hv; exact ⟨Nat.le_succ _, le_rfl⟩))
   setGoals (cases.toList.map (·.goal))
   evalTactic (← `(tactic| all_goals
-    (simp +contextual (disch := omega) [Code.Bounded, Code.block, *] <;> omega)))
+    (simp +contextual (disch := omega) [Code.Bounded, Code.block, sourcePair, *] <;> omega)))
   finish
   if fixedBudget then
     let proof ← instantiateMVars (mkMVar goal)
@@ -577,6 +580,54 @@ private def simplifyBudget (inputType outputType inputInst outputInst f : Lean.E
   setGoals g
   evalTactic (← `(tactic| all_goals (simp_all [sourcePair] <;> (repeat' apply And.intro) <;>
     try omega)))
+
+/-- `sourceCalls` builds a pair of costs by finite case elimination. Its recursor minors
+ignore induction hypotheses; recursive mathematical bounds are not such a case tree. -/
+private def isBudgetCase (info : RecursorVal) (args : Array Lean.Expr) : Bool := Id.run do
+  if args.size ≤ info.getMajorIdx || info.numMotives != 1 then return false
+  let result := args[info.numParams]!.getLambdaBody.getForallBody
+  unless result.isAppOfArity ``Prod 2 &&
+      result.getAppArgs.all (·.isConstOf ``Nat) do return false
+  for rule in info.rules do
+    -- The kernel reduction rule identifies the minor for this constructor.
+    let .bvar index := rule.rhs.getLambdaBody.getAppFn | return false
+    let position := rule.rhs.getNumHeadLambdas - index - 1
+    let mut type := info.type
+    for _ in [:position] do type := type.bindingBody!
+    let mut minor := args[position]!
+    for field in [:type.bindingDomain!.getNumHeadForalls] do
+      let .lam _ _ body _ := minor.consumeMData | return false
+      if field ≥ rule.nfields && body.hasLooseBVar 0 then return false
+      minor := body
+  return args[info.getMajorIdx]!.hasFVar
+
+private def budgetCase? (goal : MVarId) : MetaM (Option FVarId) := goal.withContext do
+  let env ← getEnv
+  let application := (← instantiateMVars (← goal.getType)).findExt? fun e =>
+      match e.getAppFn.constName?.bind env.find? with
+      | some (.recInfo info) => if isBudgetCase info e.getAppArgs then .found else .done
+      | _ => .visit
+  let some application := application | return none
+  let discriminators ← caseDiscriminators application true
+  for discriminator in discriminators do
+    if let some major ← projectionBase discriminator then return some major
+  return none
+
+/-- Reduce finite case eliminations of cost pairs before showing resource conditions.
+Recursive mathematical bounds remain ordinary user obligations. -/
+private partial def simplifyBudgetCases (goal : MVarId) : TacticM (List MVarId) := do
+  let (_, goal) ← goal.intros
+  setGoals [goal]
+  evalTactic (← `(tactic| try simp_all [source_bounds, sourcePair]))
+  let mut result := []
+  for goal in ← getGoals do
+    if ← closeImpossibleCase goal then continue
+    if let some major ← budgetCase? goal then
+      for branch in ← goal.cases major do
+        result := result ++ (← simplifyBudgetCases branch.mvarId)
+    else
+      result := result ++ [goal]
+  return result
 
 private structure Call where
   argument : TreeProgram.Expr Unit
@@ -803,21 +854,31 @@ private def normalizeSourceBounds (implementation : Lean.Expr) : MetaM (Lean.Exp
   let (result, _) ← simp bounds ctx
   return (result.expr, ← result.getProof)
 
+open Lean Meta in
+private def normalizedRealizes (target implementation : Lean.Expr) : MetaM (Option Lean.Expr) := do
+  let (bounds, equality) ← normalizeSourceBounds implementation
+  unless ← isDefEq target.getAppArgs[5]! bounds do return none
+  -- At the compatibility boundary, reuse an existential proof instead of choosing a
+  -- program and immediately hiding it again. Keep the normalized requested budget.
+  if implementation.isAppOfArity ``Realizes.implementation 7 then
+    let proof := implementation.getAppArgs[6]!
+    if ← isDefEq (← inferType proof) target then return some proof
+  let proof ← mkAppM ``Implementation.realizes #[implementation]
+  let property ← withLocalDeclD `b (← mkAppM ``Bounds #[target.getAppArgs[0]!]) fun b =>
+    mkLambdaFVars #[b] (target.setArg 5 b)
+  let proof ← mkEqMP (← mkCongrArg property equality) proof
+  unless ← isDefEq (← inferType proof) target do return none
+  return some proof
+
 open Lean Meta Elab Tactic in
 private def sourceCallsWith (query : Lean.Expr → MetaM (Option Lean.Expr)) : TacticM Unit :=
   FiniteCases.sourceCalls fun f => do
     let target ← mkAppM ``Implementation #[f]
-    if let some implementation ← query target then
-      let implementation ← instantiateMVars implementation
-      let (_, equality) ← normalizeSourceBounds implementation
-      return (implementation, equality)
-    let bounds ← mkFreshExprMVar (← mkAppM ``Bounds #[target.getAppArgs[0]!])
-    let legacy ← mkAppOptM ``Realizes ((target.getAppArgs.map some).push (some bounds))
-    let some proof ← query legacy |
+    let some implementation ← query target |
       Search.unsupported m!"source calls: no implementation for branch {f}"
-    let args := ((← instantiateMVars legacy).getAppArgs.map some).push (some proof)
-    return (← mkAppOptM ``Realizes.implementation args,
-      ← mkAppOptM ``Realizes.bounds_implementation args)
+    let implementation ← instantiateMVars implementation
+    let (_, equality) ← normalizeSourceBounds implementation
+    return (implementation, equality)
 
 open Lean Meta Mathlib.Meta.FunProp in
 private def sourceQuery (search : Lean.Expr → FunPropM (Option Result))
@@ -863,21 +924,26 @@ private structure SourceRuleCandidates where
   rules : Array FunctionTheorem
 
 open Lean Meta Mathlib.Meta.FunProp in
-private def legacySourceCandidates (target : Lean.Expr) (data : FunctionData) :
+private def compatibleSourceCandidates (target : Lean.Expr) (data : FunctionData) :
     FunPropM (Option SourceRuleCandidates) := do
-  unless target.isAppOfArity ``Implementation 5 do return none
-  let bounds ← mkFreshExprMVar (← mkAppM ``Bounds #[target.getAppArgs[0]!])
-  let target ← mkAppOptM ``Realizes ((target.getAppArgs.map some).push (some bounds))
+  let target ← if target.isAppOfArity ``Implementation 5 then do
+      let bounds ← mkFreshExprMVar (← mkAppM ``Bounds #[target.getAppArgs[0]!])
+      mkAppOptM ``Realizes ((target.getAppArgs.map some).push (some bounds))
+    else if target.isAppOfArity ``Realizes 6 then
+      mkAppOptM ``Implementation (target.getAppArgs.extract 0 5 |>.map some)
+    else return none
   let some (decl, _) ← getFunProp? target | return none
   return some ⟨target, decl, ← Search.functionTheorems decl data⟩
 
 open Lean Meta Mathlib.Meta.FunProp in
 private def adaptSourceCertificate (target certificate : Lean.Expr) (result : Result) :
-    MetaM Result := do
-  unless target.isAppOfArity ``Implementation 5 && certificate.isAppOfArity ``Realizes 6 do
-    return result
-  let args := ((← instantiateMVars certificate).getAppArgs.map some).push (some result.proof)
-  return ⟨← mkAppOptM ``Realizes.implementation args⟩
+    MetaM (Option Result) := do
+  if target.isAppOfArity ``Implementation 5 && certificate.isAppOfArity ``Realizes 6 then
+    let args := ((← instantiateMVars certificate).getAppArgs.map some).push (some result.proof)
+    return some ⟨← mkAppOptM ``Realizes.implementation args⟩
+  if target.isAppOfArity ``Realizes 6 && certificate.isAppOfArity ``Implementation 5 then
+    return (← normalizedRealizes target (← instantiateMVars result.proof)).map (⟨·⟩)
+  return some result
 
 open Lean Meta in
 private def typedSourceImplementation (target implementation : Lean.Expr) : MetaM Lean.Expr := do
@@ -896,6 +962,17 @@ private partial def sourceSearch (session : Search.Session) (nested : Bool)
     (ancestors : Array Lean.Expr) (goal : Lean.Expr) : FunPropM (Option Result) := do
   let unfolded := session.unfolded
   let goal ← instantiateMVars goal
+  -- Public inferred requests use one implementation query. Legacy rule premises still
+  -- compose in their own interface, adapting indexed candidates at the boundary below.
+  -- A fixed budget can require the existing branchwise verification after adaptation fails.
+  if !nested && goal.isAppOfArity ``Realizes 6 then
+    let inferred := goal.getAppArgs[5]!.isMVar
+    if let some result ← Search.attempt unfolded do
+        let target ← mkAppOptM ``Implementation (goal.getAppArgs.extract 0 5 |>.map some)
+        let some result ← sourceSearch session nested ancestors target | return none
+        let some proof ← normalizedRealizes goal (← instantiateMVars result.proof) | return none
+        return some ⟨proof⟩ then return some result
+    if inferred then return none
   session.step
   trace[Meta.Tactic.fun_prop] "source step {← session.steps.get}: {goal}"
   if let some result ← localSourceCertificate unfolded goal then return some result
@@ -914,7 +991,7 @@ private partial def sourceSearch (session : Search.Session) (nested : Bool)
   let context ← read
   -- A branch has a different local context: only fuel, path and diagnostics cross this boundary.
   let query := sourceQuery search context
-  let structureWith (allowCalls : Bool) : FunPropM (Option Result) := Search.attempt unfolded do
+  let structural : FunPropM (Option Result) := Search.attempt unfolded do
     -- A speculative lambda rule may leave an unencodable function-valued result.
     -- Such a premise cannot be compiled structurally, but another candidate may apply.
     for encoder in goal.getAppArgs.extract 2 4 do
@@ -928,15 +1005,11 @@ private partial def sourceSearch (session : Search.Session) (nested : Bool)
         Search.unsupported "source translation: dependent result has no implementation"
       goal.assign proof
       replaceMainGoal []
-    let actions := if allowCalls then
-      [FiniteCases.sourceCases, sourceDependent *> solve, sourceCallsWith query]
-      else [FiniteCases.sourceCases]
-    for action in actions do
+    for action in [FiniteCases.sourceCases, sourceDependent *> solve, sourceCallsWith query] do
       if let some proof ← session.discharge ancestors action goal then
         unless nested do unfolded.modify fun (names, _) => (names, true)
         return some ⟨proof⟩
     return none
-  let structural := structureWith true
   let finish (result : Option Result) : FunPropM (Option Result) := do
     if let some r := result then
       let proof ← typedSourceImplementation (← instantiateMVars goal) (← instantiateMVars r.proof)
@@ -955,6 +1028,8 @@ private partial def sourceSearch (session : Search.Session) (nested : Bool)
       return some ⟨← mkLambdaFVars (generalizeNondepLet := false) xs proof⟩)
   | _ => pure ()
   let some (decl, f) ← getFunProp? goal | return ← finish none
+  -- Certify a specified source; a speculative rule must not invent missing callbacks.
+  if f.hasExprMVar then return ← finish none
   -- Encoding an unsupported source call is not an instruction to translate its encoder.
   let encodedCall ← lambdaTelescope f fun _ body => do
     unless body.isAppOfArity ``UniqueEncoding.encode 4 do return none
@@ -981,26 +1056,27 @@ private partial def sourceSearch (session : Search.Session) (nested : Bool)
       if d.isConstantFun then
         if let some r ← Search.lambdaRules unfolded search decl .const target then return some r
       let candidates : SourceRuleCandidates := ⟨target, decl, ← Search.functionTheorems decl d⟩
+      let compatible ← compatibleSourceCandidates target d
+      let candidates := #[candidates] ++ compatible.toArray
+      let ordered := (candidates.flatMap fun c => c.rules.map (c, ·)).toList.mergeSort
+        (fun a b => match a.2.thmOrigin, b.2.thmOrigin with
+          | .fvar _, .decl _ => true
+          | .decl _, .fvar _ => false
+          | _, _ => a.2.priority ≥ b.2.priority)
       let env ← getEnv
-      let rules (candidate : SourceRuleCandidates) (fallback : Bool) :
-          FunPropM (Option Result) := Search.attempt unfolded do
-        let some result ← Search.functionRules unfolded search candidate.decl
-          candidate.target d (candidate.rules.filter
-            (fun rule => Search.isFallback env rule == fallback)) | return none
-        return some (← adaptSourceCertificate target candidate.target result)
+      let rules (fallback : Bool) : FunPropM (Option Result) := do
+        for (candidate, rule) in ordered do
+          if Search.isFallback env rule != fallback then continue
+          if let some result ← Search.attempt unfolded do
+              let some result ← Search.functionRules unfolded search candidate.decl
+                candidate.target d #[rule] | return none
+              return ← adaptSourceCertificate target candidate.target result then
+            return some result
+        return none
       -- This driver owns every stage; queries and certificate adapters do not schedule work.
-      if let some r ← rules candidates false then return some r
-      -- Query existential specifications only when a direct implementation did not apply.
-      let legacy ← legacySourceCandidates target d
-      if let some c := legacy then
-        if let some r ← rules c false then return some r
-        if c.rules.any (Search.isFallback env) then
-          -- Reuse a stored field before adapting a table operation or reconstruction.
-          -- Recursive structural calls here could reconstruct that same table prematurely.
-          if let some r ← structureWith false then return some r
-          if let some r ← rules c true then return some r
+      if let some r ← rules false then return some r
       if let some name := encodedCall then
-        if let some r ← rules candidates true then return some r
+        if let some r ← rules true then return some r
         session.reject ancestors (Search.recursionMessage name) .specification (some name)
         return none
       -- Root constructors use their encoding equations; nested structural helpers remain atomic.
@@ -1008,11 +1084,17 @@ private partial def sourceSearch (session : Search.Session) (nested : Bool)
         if !nested && (← getConstInfo name).isCtor then
           if let some r ← Search.transitionRules unfolded search target then return some r
       -- A nonmatching candidate must not block structural field extraction.
-      if nested || !candidates.rules.isEmpty then
+      if nested || candidates.any (fun c => !c.rules.isEmpty) then
         if let some r ← structural then return some r
       -- Subcall specifications need structural decomposition before their fallback rules:
       -- otherwise lookup of a composite table can recursively request rebuilding that table.
-      if let some r ← rules candidates true then return some r
+      if let some r ← rules true then return some r
+      -- An encoder describes representation; unfolding it does not select an algorithm.
+      if d.fn.isConstOf ``UniqueEncoding.encode then
+        session.reject ancestors m!"source translation: no implementation for the encoded result; \
+          select a rule scope with `using`, or register a function equality with `[source]`"
+          .specification
+        return none
       let decomposition ← d.decomposition
       if let .failed := decomposition then
         if ← d.args.anyM fun arg => do
@@ -1043,10 +1125,12 @@ private partial def sourceSearch (session : Search.Session) (nested : Bool)
   return ← finish (← structural)
 
 open Lean Meta Elab Tactic Mathlib.Meta.FunProp in
-private def withSourceSpecs {α : Type} (action : TacticM α) : TacticM α := do
+private def withSourceSpecs {α : Type} (scope : Option Ident) (action : TacticM α) : TacticM α := do
   pushScope
   try
     activateScoped `Complexity.TreeProgram.Source
+    if let some scope := scope then
+      for ns in ← resolveNamespace scope do activateScoped ns
     action
   finally
     popScope
@@ -1058,49 +1142,189 @@ private def sourceContext : MetaM Mathlib.Meta.FunProp.Context := do
   return { disch := tacticToDischarge tactic, config }
 
 open Lean Meta Elab Tactic Mathlib.Meta.FunProp in
-private def proveSource : TacticM (Array Ident × Bool) := withSourceSpecs <| withMainContext do
+private def proveSource (scope : Option Ident := none) (replacement : Option Term := none) :
+    TacticM (Array Ident × Bool × Lean.Expr × List MVarId) :=
+    withSourceSpecs scope <| withMainContext do
   let goal ← getMainGoal
   let saved ← saveState
   let session ← Search.Session.create
   let unfolded := session.unfolded
   let context ← sourceContext
   try
-    let target ← instantiateMVars (← goal.getType)
-    let search : FunPropM (Option Result) := do
-      -- Inferred budgets come from the chosen certified implementation. Fixed-budget
-      -- specifications still use the same rules' existential compatibility interface.
-      if target.isAppOfArity ``Realizes 6 && target.getAppArgs[5]!.isMVar then
-        let certified ← mkAppOptM ``Implementation (target.getAppArgs.extract 0 5 |>.map some)
-        if let some result ← Search.attempt unfolded do
-            let some result ← sourceSearch session false #[] certified | return none
-            let implementation ← instantiateMVars result.proof
-            let (bounds, equality) ← normalizeSourceBounds implementation
-            unless ← isDefEq target.getAppArgs[5]! bounds do return none
-            let proof ← mkAppM ``Implementation.realizes #[implementation]
-            let property ← withLocalDeclD `b (← mkAppM ``Bounds #[target.getAppArgs[0]!])
-                fun b => do
-                  mkLambdaFVars #[b] (← mkAppOptM ``Realizes
-                    ((target.getAppArgs.extract 0 5 |>.map some).push (some b)))
-            let proof ← mkEqMP (← mkCongrArg property equality) proof
-            unless ← isDefEq (← inferType proof) target do return none
-            return some ⟨proof⟩ then return some result
-      sourceSearch session false #[] target
-    let some proof ← sourceQuery (fun _ => search) context target | session.report
+    let original ← instantiateMVars (← goal.getType)
+    let (target, equality) ← match replacement with
+      | none => pure (original, none)
+      | some replacement =>
+        let f := original.getAppArgs[4]!
+        let g ← elabTermEnsuringType replacement (← inferType f)
+        Term.synthesizeSyntheticMVarsNoPostponing
+        let g ← instantiateMVars g
+        if g.hasExprMVar then
+          throwError "provide a concrete source function after `via`"
+        let h ← mkFreshExprSyntheticOpaqueMVar (← mkEq f g) (tag := `source_eq)
+        pure (original.setArg 4 g, some h)
+    let some result ← sourceQuery (sourceSearch session false #[]) context target | session.report
+    let proof ← match equality with
+      | none => pure result
+      | some h =>
+        let f := original.getAppArgs[4]!
+        let property ← withLocalDeclD `f (← inferType f) fun f =>
+          mkLambdaFVars #[f] (original.setArg 4 f)
+        mkEqMP (← mkCongrArg property (← mkEqSymm h)) result
     goal.assign proof
     replaceMainGoal []
     let (names, structural) ← unfolded.get
-    return (names.map mkIdent, structural)
+    return (names.map mkIdent, structural, target.getAppArgs[4]!, equality.toList.map (·.mvarId!))
   catch ex =>
     saved.restore
     throw ex
 
+/-- A recursion method supplies ordinary callbacks and mathematical resource allowances. -/
+declare_syntax_cat sourceRecursion
+syntax "recursion" " (" &"test" " := " term ")" " (" &"next" " := " term ")"
+  " (" &"finish" " := " term ")" " (" &"resume" " := " term ")"
+  " (" &"time" " := " term ")" " (" &"space" " := " term ")" : sourceRecursion
+
+open Lean Meta Elab Tactic Mathlib.Meta.FunProp in
+private def proveRecursion (method : TSyntax `sourceRecursion) (scope : Option Ident := none) :
+    TacticM (Array Ident × Bool × Lean.Expr × List MVarId) :=
+    withSourceSpecs scope <| withMainContext do
+  let `(sourceRecursion| recursion (test := $test) (next := $next)
+      (finish := $finish) (resume := $resume)
+      (time := $time) (space := $space)) := method | throwUnsupportedSyntax
+  let goal ← getMainGoal
+  let rest := (← getGoals).drop 1
+  let (args, _) ← sourceGoalArgs goal
+  let source := args[4]!
+  let allowanceType ← mkArrow args[0]! (mkConst ``Nat)
+  let time ← elabTermEnsuringType time allowanceType
+  let space ← elabTermEnsuringType space allowanceType
+  Term.synthesizeSyntheticMVarsNoPostponing
+  if (← instantiateMVars time).hasExprMVar || (← instantiateMVars space).hasExprMVar then
+    throwError "source recursion: provide concrete `time` and `space` allowance functions"
+  let bounds ← mkAppM ``Bounds.mk #[time, space]
+  -- An encoded dependent result still describes an ordinary dependent source function.
+  let f ← lambdaTelescope source fun xs body => do
+    if body.isAppOfArity ``UniqueEncoding.encode 4 then
+      mkLambdaFVars xs body.appArg!
+    else pure source
+  let constructor ← mkConstWithFreshMVarLevels ``Recursion.mk
+  let (fields, _, resultType) ← forallMetaTelescope (← inferType constructor)
+  unless ← isDefEq resultType (← mkAppM ``Recursion #[f]) do
+    throwError "source recursion: could not determine the source function type"
+  let r := mkAppN constructor fields
+  for (index, value) in #[(3, test), (4, next), (5, finish), (6, resume)] do
+    let value ← elabTermEnsuringType value (← inferType fields[index]!)
+    fields[index]!.mvarId!.assign value
+  Term.synthesizeSyntheticMVarsNoPostponing
+  fields[9]!.mvarId!.assign space
+  let mut obligations := []
+  for (index, tag) in #[(7, `finish_eq), (8, `resume_eq)] do
+    let h ← mkFreshExprSyntheticOpaqueMVar (← instantiateMVars (← inferType fields[index]!))
+      (tag := tag)
+    fields[index]!.mvarId!.assign h
+    obligations := obligations ++ [h.mvarId!]
+  let r ← instantiateMVars r
+  let session ← Search.Session.create
+  let context ← sourceContext
+  let certify (name : Name) (callback : Lean.Expr) : TacticM Lean.Expr := do
+    if callback.hasExprMVar then
+      throwError "source recursion: provide a concrete `{name}` callback"
+    session.failure.set none
+    let target ← mkAppM ``Implementation #[callback]
+    let some proof ← sourceQuery (sourceSearch session false #[]) context target |
+      try session.report catch ex => throwError "source recursion `{name}`: {ex.toMessageData}"
+    let proof ← instantiateMVars proof
+    if proof.hasExprMVar || proof.hasSorry then
+      throwError "source recursion: the `{name}` callback has unfinished obligations"
+    trace[source.translation] "source recursion: translating {name} complete"
+    let (_, equality) ← normalizeSourceBounds proof
+    trace[source.translation] "source recursion: certified {name}"
+    let program ← mkAppM ``Implementation.program #[proof]
+    let property ← withLocalDeclD `b (← mkAppM ``Bounds #[target.getAppArgs[0]!]) fun b => do
+      mkLambdaFVars #[b] (← mkAppM ``Implements #[program, callback, b])
+    return ← mkEqMP (← mkCongrArg property equality)
+      (← mkAppM ``Implementation.implements #[proof])
+  let hc ← certify `test (← instantiateMVars fields[3]!)
+  let hs ← certify `next (← instantiateMVars fields[4]!)
+  let encodeResult (callback : Lean.Expr) : MetaM Lean.Expr := do
+    forallTelescope (← inferType callback) fun xs _ => do
+      let result ← mkAppM ``encode #[mkConst ``Tree, mkAppN callback xs]
+      mkLambdaFVars xs result
+  let hd ← certify `finish (← encodeResult (← instantiateMVars fields[5]!))
+  let resume ← instantiateMVars fields[6]!
+  let returnType ← forallTelescope (← inferType resume) fun xs _ => do
+    mkAppM ``Sigma #[← mkLambdaFVars #[xs[0]!] (← inferType xs[1]!)]
+  let resume ← withLocalDeclD `x returnType fun x => do
+    let call := mkAppN resume #[← mkAppM ``Sigma.fst #[x], ← mkAppM ``Sigma.snd #[x]]
+    mkLambdaFVars #[x] (← mkAppM ``encode #[mkConst ``Tree, call])
+  let hr ← certify `resume resume
+  let mut proof ← mkAppM ``Recursion.implements #[r, hc, hs, hd, hr, bounds]
+  for tag in #[`input_size, `check_space, `stop_bounds, `step_bounds] do
+    let type ← whnf (← inferType proof)
+    -- Reduce record projections before creating obligations: their types must not retain
+    -- the not-yet-proved termination field of the recursion record.
+    let type ← Meta.transform (← instantiateMVars type.bindingDomain!) (pre := fun e => do
+      if (e.find? (· == fields[10]!)).isNone then return .done e
+      return .continue (← withReducible (whnf e)))
+    let h ← mkFreshExprSyntheticOpaqueMVar type (tag := tag)
+    proof := mkApp proof h
+    obligations := obligations ++ [h.mvarId!]
+    if tag == `step_bounds then
+      let decreases ← forallTelescope (← instantiateMVars (← inferType fields[10]!)) fun xs _ => do
+        let credit := mkProj ``And 0 (mkProj ``And 1 (mkProj ``And 1 (mkAppN h xs)))
+        let lower := mkApp space (mkApp fields[4]! xs[0]!)
+        let size ← mkAppM ``Tree.size #[← mkAppM ``encode #[mkConst ``Tree, xs[0]!]]
+        let lt ← mkAppM ``Nat.lt_succ_of_le #[← mkAppM ``Nat.le_add_right #[lower, size]]
+        mkLambdaFVars xs (← mkAppM ``Nat.lt_of_lt_of_le #[lt, credit])
+      unless ← fields[10]!.mvarId!.checkedAssign (← instantiateMVars decreases) do
+        throwError "source recursion: could not derive termination from the space allowance"
+  let actual := (← inferType proof).getAppArgs
+  let implementation ← mkAppM ``Implementation.ofImplements #[actual[4]!, actual[6]!, proof]
+  let equality ← withLocalDeclD `x args[0]! fun x => do
+    let lhs ← mkAppM ``encode #[mkConst ``Tree, mkApp source x]
+    let rhs ← mkAppM ``encode #[mkConst ``Tree, mkApp actual[5]! x]
+    let proof ← typedSourceProof (← mkEq lhs rhs) (← mkEqRefl lhs)
+    mkLambdaFVars #[x] proof
+  let result ← mkAppOptM ``Implementation.ofEncode #[some args[0]!, some args[1]!, none,
+    some args[2]!, some args[3]!, none, some source, some actual[5]!,
+    some equality, some implementation]
+  let target ← instantiateMVars (← goal.getType)
+  let result ← if target.isAppOf ``Realizes then do
+      let some realized ← normalizedRealizes target result |
+        throwError "source recursion: the selected implementation does not match \
+          the requested bound"
+      pure realized
+    else pure result
+  unless ← isDefEq (← inferType result) target do
+    throwError "source recursion: the selected implementation does not match the requested bound"
+  goal.assign result
+  trace[source.translation] "source recursion: program combined"
+  setGoals obligations
+  let (names, _) ← session.unfolded.get
+  let names := names.map mkIdent
+  let lemmas ← names.mapM fun n => `(Lean.Parser.Tactic.simpLemma| $n:term)
+  evalTactic (← `(tactic| all_goals simp [$lemmas,*, source_bounds, FiniteCases.sourcePair]))
+  trace[source.translation] "source recursion: conditions simplified"
+  let mut remaining := []
+  for goal in ← getGoals do
+    let tag ← goal.getTag
+    if #[`input_size, `check_space, `stop_bounds, `step_bounds].any (·.isPrefixOf tag) then
+      remaining := remaining ++ (← FiniteCases.simplifyBudgetCases goal)
+    else remaining := remaining ++ [goal]
+  setGoals rest
+  trace[source.translation] "source recursion: budget cases simplified"
+  return (names, false, source, remaining)
+
 open Lean Elab Tactic in
 elab_rules : tactic
-  | `(tactic| source_fun_prop) => discard proveSource
+  | `(tactic| source_fun_prop $[using $scope:ident]? $[via $replacement]?) => do
+    let (_, _, _, obligations) ← proveSource scope replacement
+    setGoals (obligations ++ (← getGoals))
 
 open Lean Meta Elab Tactic in
 elab_rules : tactic
-  | `(tactic| source_calls) => withSourceSpecs <| withMainContext do
+  | `(tactic| source_calls) => withSourceSpecs none <| withMainContext do
     let session ← Search.Session.create
     let goal ← getMainGoal
     let target ← goal.getType
@@ -1109,14 +1333,18 @@ elab_rules : tactic
     goal.assign proof
     replaceMainGoal []
 
-open Lean Elab Tactic in
+open Lean Meta Elab Tactic in
 /-- Translate a source function and reduce its model time-space bound to arithmetic goals. -/
-elab (name := modelFunProp) "model_fun_prop" : tactic => do
+private def modelFunPropCore
+    (translate : TacticM (Array Ident × Bool × Lean.Expr × List Lean.MVarId)) :
+    TacticM Unit := do
+  let originalGoals ← getGoals
+  setGoals (originalGoals.take 1)
   evalTactic (← `(tactic| apply Realizes.computableInTimeAndSpace))
   let args ← withMainContext do pure (← (← getMainGoal).getType).getAppArgs
-  let (names, structural) ← proveSource
+  let (names, structural, source, obligations) ← translate
   if structural then
-    FiniteCases.simplifyBudget args[0]! args[1]! args[2]! args[3]! args[4]!
+    FiniteCases.simplifyBudget args[0]! args[1]! args[2]! args[3]! source
   else
     let lemmas ← names.mapM fun n => `(Lean.Parser.Tactic.simpLemma| $n:term)
     evalTactic (← `(tactic|
@@ -1126,9 +1354,98 @@ elab (name := modelFunProp) "model_fun_prop" : tactic => do
          | solve | dsimp only [$lemmas,*]; (repeat' apply And.intro) <;> omega
          | (simp_all [$lemmas,*] <;> (repeat' apply And.intro) <;>
              try (solve | (try simp_all [Complexity.Tree, Unit]) <;> omega)))))
+  -- A saved source equality can carry structural budgets from its right-hand function.
+  let goals ← getGoals
+  setGoals (← goals.flatMapM fun goal => do
+    if (← FiniteCases.budgetCase? goal).isNone then return [goal]
+    FiniteCases.simplifyBudgetCases goal)
   evalTactic (← `(tactic|
     all_goals try grind only [length_le_codeSize, usr size_encode_list_append,
       usr size_encode_reverse, size_encode_prod, Tree.size_pos, Nat.max_def]))
+  setGoals (obligations ++ (← getGoals) ++ originalGoals.drop 1)
+
+open Lean Elab Tactic in
+private def modelFunProp
+    (translate : TacticM (Array Ident × Bool × Lean.Expr × List Lean.MVarId)) :
+    TacticM Unit := do
+  let saved ← saveState
+  try modelFunPropCore translate
+  catch ex => saved.restore; throw ex
+
+syntax "model_fun_prop" (" using " ident)? (" via " term)? : tactic
+
+open Lean Elab Tactic in
+elab_rules : tactic
+  | `(tactic| model_fun_prop $[using $scope:ident]? $[via $replacement]?) =>
+    modelFunProp (proveSource scope replacement)
+
+syntax "model_fun_prop" " using " sourceRecursion (" using " ident)? : tactic
+
+open Lean Elab Tactic in
+elab_rules : tactic
+  | `(tactic| model_fun_prop using $method:sourceRecursion $[using $scope:ident]?) =>
+    modelFunProp (proveRecursion method scope)
+
+open Lean Meta in
+private def withSourceEncodings (parameters : List Lean.Expr) (action : MetaM Unit) :
+    MetaM Unit := do
+  match parameters with
+  | [] => action
+  | parameter :: rest =>
+    if (← inferType parameter).isSort && !(← isProp parameter) then
+      let type ← mkAppM ``UniqueEncoding #[mkConst ``Tree, parameter]
+      if (← synthInstance? type).isNone then
+        withLocalDecl `sourceEncoding .instImplicit type fun _ =>
+          withSourceEncodings rest action
+      else withSourceEncodings rest action
+    else withSourceEncodings rest action
+
+/-- Certify the right-hand implementation of an ordinary function equality once, for reuse.
+The left-hand function uses the right-hand implementation. The generated certificate is
+internal; local and scoped registrations use `fun_prop`, and `using ns` selects scoped rules. -/
+syntax (name := sourceAttribute) "source" (" using " ident)? : attr
+
+open Lean Meta Elab Tactic Mathlib.Meta.FunProp in
+initialize registerBuiltinAttribute {
+  name := `sourceAttribute
+  descr := "certify and reuse the implementation on the right of a source-function equality"
+  applicationTime := .afterCompilation
+  add := fun name stx kind => MetaM.run' do
+    let saved ← getEnv
+    try
+      let `(attr| source $[using $scope:ident]?) := stx | throwUnsupportedSyntax
+      let info ← getConstInfo name
+      let equality := mkConst name (info.levelParams.map mkLevelParam)
+      forallTelescope info.type fun parameters type =>
+        withSourceEncodings parameters.toList do
+          for parameter in parameters do
+            let parameterDecl ← parameter.fvarId!.getDecl
+            if !parameterDecl.binderInfo.isInstImplicit && (← isProp parameterDecl.type) then
+              throwError "`source` needs an unconditional function equality; \
+                use a local `via` proof for a replacement depending on a hypothesis"
+          let some (_, f, g) := type.eq? |
+            throwError "`source` expects an equality between ordinary source functions"
+          unless (← whnf (← inferType f)).isForall do
+            throwError "`source` expects a function equality; use `funext` for pointwise equations"
+          let target ← mkAppM ``Implementation #[g]
+          let goal ← mkFreshExprSyntheticOpaqueMVar target
+          let action : TermElabM Unit := do
+            discard <| Tactic.run goal.mvarId! do
+              discard <| proveSource scope
+          discard <| action.run {} {}
+          let proof ← instantiateMVars goal
+          if proof.hasExprMVar || proof.hasSorry then
+            throwError "the selected source implementation has unfinished obligations"
+          let result ← mkAppM ``Implementation.congr
+            #[proof, ← mkEqSymm (mkAppN equality parameters)]
+          let certificate ← mkAuxDefinition (← mkFreshUserName (name ++ `sourceImplementation))
+            (← inferType result) result (compile := false)
+          setReducibilityStatus certificate.getAppFn.constName! .reducible
+          addTheorem certificate.getAppFn.constName! kind 1001
+    catch ex =>
+      setEnv saved
+      throw ex
+}
 
 
 end Complexity.TreeProgram.Source

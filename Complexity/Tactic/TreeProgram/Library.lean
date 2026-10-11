@@ -337,25 +337,42 @@ private theorem enumerate_realizes {ρ : Type*} [UniqueEncoding Tree ρ]
         ((List.finRange (n e)).foldr (fun i s => max (c.peak ⟨e, i⟩) s) 0)))⟩
 
 /-- Construct a represented tuple using one callback program for every environment and index. -/
-theorem Realizes.finFunction {ρ : Type*} {β : ρ → Type*}
+@[source_bounds↓] noncomputable def Implementation.finFunction {ρ : Type*} {β : ρ → Type*}
     [UniqueEncoding Tree ρ] [∀ e, UniqueEncoding Tree (β e)]
-    {n : ρ → ℕ} {f : (e : ρ) → Fin (n e) → β e} {b : Bounds ρ}
-    {c : Bounds (Σ e, Fin (n e))}
-    (hn : Realizes n b) (hf : Realizes (fun p : Σ e, Fin (n e) => ⌜f p.1 p.2⌝ₜ) c) :
-    Realizes (fun e => ⌜f e⌝ₜ) (tabulateBounds n f b c) := by
-  have he (e : ρ) := (encode_fin_function_codes (f e)).symm
-  have hmap := (enumerate_realizes hn).mapDependentWith (f := fun e i => ⌜f e i⌝ₜ) hf
-  simp only [← List.ofFn_eq_map] at hmap
-  apply (Realizes.of_encode (g := fun e => List.ofFn (fun i => ⌜f e i⌝ₜ))
-    (fun e => (Tree.encode_self _).trans (he e)) hmap).mono
-  intro e
-  have he' := he e
-  rw [List.ofFn_eq_map] at he'
-  simp only [tabulateBounds, mapDependentWithBounds, compBounds, mapDependentBounds,
-    List.length_finRange, Sigma.encode_mk, encode_prod, encode_finRange, ← he']
-  constructor
-  · omega
-  · exact le_rfl
+    {n : ρ → ℕ} {f : (e : ρ) → Fin (n e) → β e}
+    (hn : Implementation n) (hf : Implementation (fun p : Σ e, Fin (n e) => ⌜f p.1 p.2⌝ₜ)) :
+    Implementation (fun e => ⌜f e⌝ₜ) :=
+  Realizes.implementation (b := tabulateBounds n f hn.bounds hf.bounds) <| by
+    let hn := hn.realizes
+    let hf := hf.realizes
+    have he (e : ρ) := (encode_fin_function_codes (f e)).symm
+    have hmap := (enumerate_realizes hn).mapDependentWith (f := fun e i => ⌜f e i⌝ₜ) hf
+    simp only [← List.ofFn_eq_map] at hmap
+    apply (Realizes.of_encode (g := fun e => List.ofFn (fun i => ⌜f e i⌝ₜ))
+      (fun e => (Tree.encode_self _).trans (he e)) hmap).mono
+    intro e
+    have he' := he e
+    rw [List.ofFn_eq_map] at he'
+    simp only [tabulateBounds, mapDependentWithBounds, compBounds, mapDependentBounds,
+      List.length_finRange, Sigma.encode_mk, encode_prod, encode_finRange, ← he']
+    constructor
+    · omega
+    · exact le_rfl
+
+end Complexity.TreeProgram.Source
+
+namespace tabulate
+
+-- Enumeration is an optional library rule, after stored-field extraction and lookup.
+attribute [scoped source_fallback] Complexity.TreeProgram.Source.Implementation.finFunction
+
+open Lean Meta Mathlib.Meta.FunProp in
+run_elab do
+  addTheorem ``Complexity.TreeProgram.Source.Implementation.finFunction .scoped 50
+
+end tabulate
+
+namespace Complexity.TreeProgram.Source
 
 /-- Evaluate the index and table once, then reuse the represented-list lookup. -/
 @[simps] def finApplyBounds {ρ : Type*} {β : ρ → Type*}
@@ -366,92 +383,102 @@ theorem Realizes.finFunction {ρ : Type*} {β : ρ → Type*}
   ⟨fun x => bi.time x + bf.time x + 4000 * size x ^ 2 + 5,
     fun x => max ⌜x⌝ₜ.size (max (max (bi.peak x) (bf.peak x)) (100 * size x + 100))⟩
 
-theorem Realizes.finApplyEncoded {ρ : Type*} {β : ρ → Type*}
+@[source_bounds↓] noncomputable def Implementation.finApplyEncoded {ρ : Type*} {β : ρ → Type*}
     [UniqueEncoding Tree ρ] [∀ e, UniqueEncoding Tree (β e)]
     {n : ρ → ℕ} {f : (e : ρ) → Fin (n e) → β e} {i : (e : ρ) → Fin (n e)}
-    {bf bi : Bounds ρ}
-    (hf : Realizes (fun e => ⌜f e⌝ₜ) bf) (hi : Realizes (fun e => (i e).val) bi) :
-    Realizes (fun e => ⌜f e (i e)⌝ₜ) (finApplyBounds f i bf bi) := by
-  have he (e : ρ) := encode_fin_function_codes (f e)
-  have ht : Realizes (fun e => List.ofFn (fun i => ⌜f e i⌝ₜ)) bf :=
-    .of_encode (fun e => (he e).trans (Tree.encode_self _).symm) hf
-  apply (Realizes.of_some (g := fun e =>
-    (List.ofFn (fun i => ⌜f e i⌝ₜ))[(i e).val]?) (by intro e; simp)
-      ((hi.pair ht).comp getElem?_realizes)).mono
-  intro e
-  simp only [finApplyBounds, compBounds, pairBounds, lookupBounds, size_encode_prod, he]
-  constructor <;> omega
+    (hf : Implementation (fun e => ⌜f e⌝ₜ)) (hi : Implementation (fun e => (i e).val)) :
+    Implementation (fun e => ⌜f e (i e)⌝ₜ) :=
+  Realizes.implementation (b := finApplyBounds f i hf.bounds hi.bounds) <| by
+    let bf := hf.bounds
+    let hf := hf.realizes
+    let hi := hi.realizes
+    have he (e : ρ) := encode_fin_function_codes (f e)
+    have ht : Realizes (fun e => List.ofFn (fun i => ⌜f e i⌝ₜ)) bf :=
+      .of_encode (fun e => (he e).trans (Tree.encode_self _).symm) hf
+    apply (Realizes.of_some (g := fun e =>
+      (List.ofFn (fun i => ⌜f e i⌝ₜ))[(i e).val]?) (by intro e; simp)
+        ((hi.pair ht).comp getElem?_realizes)).mono
+    intro e
+    simp only [finApplyBounds, compBounds, pairBounds, lookupBounds, size_encode_prod, he, bf]
+    constructor <;> omega
 
-theorem Realizes.finValApply {ρ : Type*} [UniqueEncoding Tree ρ]
+@[source_bounds↓] noncomputable def Implementation.finValApply {ρ : Type*} [UniqueEncoding Tree ρ]
     {n k : ρ → ℕ} {f : (e : ρ) → Fin (n e) → Fin (k e)} {i : (e : ρ) → Fin (n e)}
-    {bf bi : Bounds ρ}
-    (hf : Realizes (fun e => ⌜f e⌝ₜ) bf) (hi : Realizes (fun e => (i e).val) bi) :
-    Realizes (fun e => (f e (i e)).val) (finApplyBounds f i bf bi) :=
-  .of_encode (fun _ => (encode_fin _).symm.trans (Tree.encode_self _).symm)
-    (Realizes.finApplyEncoded hf hi)
+    (hf : Implementation (fun e => ⌜f e⌝ₜ)) (hi : Implementation (fun e => (i e).val)) :
+    Implementation (fun e => (f e (i e)).val) :=
+  .ofEncode (fun _ => (encode_fin _).symm.trans (Tree.encode_self _).symm)
+    (Implementation.finApplyEncoded hf hi)
 
 /-- Extend a represented table by appending one element, without re-enumerating its indices. -/
-theorem Realizes.finSnoc {ρ : Type*} {α : ρ → Type*}
+@[source_bounds↓] noncomputable def Implementation.finSnoc {ρ : Type*} {α : ρ → Type*}
     [UniqueEncoding Tree ρ] [∀ e, UniqueEncoding Tree (α e)]
-    {n : ρ → ℕ} {f : (e : ρ) → Fin (n e) → α e} {a : (e : ρ) → α e} {b c : Bounds ρ}
-    (hf : Realizes (fun e => ⌜f e⌝ₜ) b) (ha : Realizes (fun e => ⌜a e⌝ₜ) c) :
-    Realizes (fun e => ⌜Fin.snoc (α := fun _ => α e) (f e) (a e)⌝ₜ)
-      ⟨fun e => b.time e + c.time e + 26 * n e + 18,
-       fun e => max (b.peak e) (max (c.peak e) (⌜f e⌝ₜ.size + ⌜a e⌝ₜ.size + 2))⟩ := by
-  have hview : Realizes (fun e => List.ofFn (fun i => ⌜f e i⌝ₜ)) b :=
-    .of_encode (fun e => (encode_fin_function_codes _).trans (Tree.encode_self _).symm) hf
-  have hs : Realizes (fun t : Tree => [t])
-      ⟨fun _ => 2, fun t => t.size + 2⟩ := by source_fun_prop
-  have hsingle := ha.comp hs
-  apply (Realizes.of_encode (g := fun e => List.ofFn (fun i => ⌜f e i⌝ₜ) ++ [⌜a e⌝ₜ])
-    ?_ (hview.append hsingle)).mono
-  · intro e
-    simp only [appendBounds, compBounds, encode_fin_function_codes, List.length_ofFn]
-    simp
-    omega
-  · intro e
-    rw [Tree.encode_self, encode_fin_snoc]
-    simpa only [List.map_append, List.map_cons, List.map_nil, List.map_ofFn,
-      Function.comp_def] using
-      (encode_list_map_of_encode (encode Tree) (fun _ => Tree.encode_self _)
-        (List.ofFn (f e) ++ [a e])).symm
+    {n : ρ → ℕ} {f : (e : ρ) → Fin (n e) → α e} {a : (e : ρ) → α e}
+    (hf : Implementation (fun e => ⌜f e⌝ₜ)) (ha : Implementation (fun e => ⌜a e⌝ₜ)) :
+    Implementation (fun e => ⌜Fin.snoc (α := fun _ => α e) (f e) (a e)⌝ₜ) :=
+  Realizes.implementation (b :=
+    ⟨fun e => hf.bounds.time e + ha.bounds.time e + 26 * n e + 18,
+     fun e => max (hf.bounds.peak e)
+       (max (ha.bounds.peak e) (⌜f e⌝ₜ.size + ⌜a e⌝ₜ.size + 2))⟩) <| by
+    let b := hf.bounds
+    let hf := hf.realizes
+    let ha := ha.realizes
+    have hview : Realizes (fun e => List.ofFn (fun i => ⌜f e i⌝ₜ)) b :=
+      .of_encode (fun e => (encode_fin_function_codes _).trans (Tree.encode_self _).symm) hf
+    have hs : Realizes (fun t : Tree => [t])
+        ⟨fun _ => 2, fun t => t.size + 2⟩ := by source_fun_prop
+    have hsingle := ha.comp hs
+    apply (Realizes.of_encode (g := fun e => List.ofFn (fun i => ⌜f e i⌝ₜ) ++ [⌜a e⌝ₜ])
+      ?_ (hview.append hsingle)).mono
+    · intro e
+      simp only [appendBounds, compBounds, encode_fin_function_codes, List.length_ofFn, b]
+      simp
+      omega
+    · intro e
+      rw [Tree.encode_self, encode_fin_snoc]
+      simpa only [List.map_append, List.map_cons, List.map_nil, List.map_ofFn,
+        Function.comp_def] using
+        (encode_list_map_of_encode (encode Tree) (fun _ => Tree.encode_self _)
+          (List.ofFn (f e) ++ [a e])).symm
 
 /-- Concatenate represented tables using the existing list append implementation. -/
-theorem Realizes.finAppend {ρ : Type*} {α : ρ → Type*}
+@[source_bounds↓] noncomputable def Implementation.finAppend {ρ : Type*} {α : ρ → Type*}
     [UniqueEncoding Tree ρ] [∀ e, UniqueEncoding Tree (α e)]
     {n m : ρ → ℕ} {f : (e : ρ) → Fin (n e) → α e}
-    {g : (e : ρ) → Fin (m e) → α e} {b c : Bounds ρ}
-    (hf : Realizes (fun e => ⌜f e⌝ₜ) b) (hg : Realizes (fun e => ⌜g e⌝ₜ) c) :
-    Realizes (fun e => ⌜Fin.append (f e) (g e)⌝ₜ)
-      ⟨fun e => b.time e + c.time e + 26 * n e + 16,
-       fun e => max (b.peak e) (max (c.peak e) (⌜f e⌝ₜ.size + ⌜g e⌝ₜ.size))⟩ := by
-  have hf' : Realizes (fun e => List.ofFn (fun i => ⌜f e i⌝ₜ)) b :=
-    .of_encode (fun e => (encode_fin_function_codes _).trans (Tree.encode_self _).symm) hf
-  have hg' : Realizes (fun e => List.ofFn (fun i => ⌜g e i⌝ₜ)) c :=
-    .of_encode (fun e => (encode_fin_function_codes _).trans (Tree.encode_self _).symm) hg
-  apply (Realizes.of_encode
-    (g := fun e => List.ofFn (fun i => ⌜f e i⌝ₜ) ++ List.ofFn (fun i => ⌜g e i⌝ₜ))
-    ?_ (hf'.append hg')).mono
-  · intro e
-    simp only [appendBounds, encode_fin_function_codes, List.length_ofFn]
-    exact ⟨by omega, le_rfl⟩
-  · intro e
-    rw [Tree.encode_self, encode_fin_function, List.ofFn_fin_append]
-    simpa only [List.map_append, List.map_ofFn, Function.comp_def] using
-      (encode_list_map_of_encode (encode Tree) (fun _ => Tree.encode_self _)
-        (List.ofFn (f e) ++ List.ofFn (g e))).symm
+    {g : (e : ρ) → Fin (m e) → α e}
+    (hf : Implementation (fun e => ⌜f e⌝ₜ)) (hg : Implementation (fun e => ⌜g e⌝ₜ)) :
+    Implementation (fun e => ⌜Fin.append (f e) (g e)⌝ₜ) :=
+  Realizes.implementation (b :=
+    ⟨fun e => hf.bounds.time e + hg.bounds.time e + 26 * n e + 16,
+     fun e => max (hf.bounds.peak e) (max (hg.bounds.peak e) (⌜f e⌝ₜ.size + ⌜g e⌝ₜ.size))⟩) <| by
+    let b := hf.bounds
+    let c := hg.bounds
+    let hf := hf.realizes
+    let hg := hg.realizes
+    have hf' : Realizes (fun e => List.ofFn (fun i => ⌜f e i⌝ₜ)) b :=
+      .of_encode (fun e => (encode_fin_function_codes _).trans (Tree.encode_self _).symm) hf
+    have hg' : Realizes (fun e => List.ofFn (fun i => ⌜g e i⌝ₜ)) c :=
+      .of_encode (fun e => (encode_fin_function_codes _).trans (Tree.encode_self _).symm) hg
+    apply (Realizes.of_encode
+      (g := fun e => List.ofFn (fun i => ⌜f e i⌝ₜ) ++ List.ofFn (fun i => ⌜g e i⌝ₜ))
+      ?_ (hf'.append hg')).mono
+    · intro e
+      simp only [appendBounds, encode_fin_function_codes, List.length_ofFn, b, c]
+      exact ⟨by omega, le_rfl⟩
+    · intro e
+      rw [Tree.encode_self, encode_fin_function, List.ofFn_fin_append]
+      simpa only [List.map_append, List.map_ofFn, Function.comp_def] using
+        (encode_list_map_of_encode (encode Tree) (fun _ => Tree.encode_self _)
+          (List.ofFn (f e) ++ List.ofFn (g e))).symm
 
--- Reuse stored representations before table operations, then fall back to enumeration.
-attribute [scoped source_fallback] Realizes.finSnoc Realizes.finAppend
-  Realizes.finApplyEncoded Realizes.finValApply Realizes.finFunction
+-- Known operations reuse their certificates before unfolding. General lookup remains a
+-- fallback after stored-field extraction; new tables still require explicit guidance.
+attribute [scoped fun_prop] Implementation.finSnoc Implementation.finAppend
+attribute [scoped source_fallback] Implementation.finApplyEncoded Implementation.finValApply
 
 open Lean Meta Mathlib.Meta.FunProp in
 run_elab do
-  addTheorem ``Realizes.finSnoc .scoped 900
-  addTheorem ``Realizes.finAppend .scoped 900
-  addTheorem ``Realizes.finApplyEncoded .scoped 100
-  addTheorem ``Realizes.finValApply .scoped 100
-  addTheorem ``Realizes.finFunction .scoped 100
+  addTheorem ``Implementation.finApplyEncoded .scoped 100
+  addTheorem ``Implementation.finValApply .scoped 100
 
 /-- A stored table composition is cubic in time and quadratic in intermediate-tree size. -/
 private theorem finComp_realizes :
@@ -459,7 +486,7 @@ private theorem finComp_realizes :
       ⌜x.2.2.2.2 ∘ x.2.2.2.1⌝ₜ)
       ⟨fun x => 500000 * (⌜x⌝ₜ.size + 1) ^ 3,
        fun x => 500000 * (⌜x⌝ₜ.size + 1) ^ 2⟩ := by
-  refine Realizes.mono (by source_fun_prop) ?_
+  refine Realizes.mono (by source_fun_prop using tabulate) ?_
   intro input
   constructor
   all_goals

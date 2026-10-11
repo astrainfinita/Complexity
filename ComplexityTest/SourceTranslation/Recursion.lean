@@ -4,76 +4,130 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Yuyang Zhao
 -/
 import Complexity.Tactic.TreeProgram.Library
-import Complexity.Tactic.TreeProgram.Recursion
 
-open Complexity TreeProgram Complexity.TreeProgram.Source
+open Complexity
 
 namespace ComplexityTest.SourceTranslation.Recursion
 
-private def continues (xs : List Bool) := !xs.isEmpty
+open Lean Meta Elab Tactic in
+elab (name := guardPublicGoals) "guard_public_goals" : tactic => do
+  for goal in ← getGoals do
+    goal.withContext do
+      let type ← instantiateMVars (← goal.getType)
+      let displayed := (← ppExpr type).pretty
+      if (displayed.splitOn "TreeProgram.Source").length > 1 then
+        throwError "recursion exposed an internal certificate or budget in a user goal"
 
-private def invert : List Bool → List Bool
+#allow_unused_tactic! guardPublicGoals
+
+def invert : List Bool → List Bool
   | [] => []
   | x :: xs => (!x) :: invert xs
 
-private def invertRecursion : Source.Recursion invert where
-  test := continues
-  next := List.tail
-  finish _ := []
-  resume x result :=
-    match h : x.1 with
-    | [] => False.elim (by simpa [continues, h] using x.2)
-    | a :: _ => (!a) :: result
-  finish_eq := by
-    rintro ⟨xs, h⟩
-    cases xs <;> dsimp [continues] at h ⊢ <;> first | contradiction | rfl
-  resume_eq := by
-    rintro ⟨xs, h⟩
-    cases xs <;> dsimp [continues] at h ⊢ <;> first | contradiction | rfl
-  measure := List.length
-  decreases := by intro xs h; cases xs <;> simp_all [continues]
+def invertResume (x : {xs : List Bool // (!xs.isEmpty) = true}) (result : List Bool) :=
+  match h : x.val with
+  | [] => False.elim (by simpa [h] using x.property)
+  | a :: _ => (!a) :: result
 
-private noncomputable def checkImpl : Implementation invertRecursion.test := by source_fun_prop
-private def nextImpl : Implementation invertRecursion.next := by source_fun_prop
-private noncomputable def finishImpl : Implementation (fun x => ⌜invertRecursion.finish x⌝ₜ) := by
-  source_fun_prop
-private noncomputable def resumeImpl : Implementation
-    (fun x : invertRecursion.Return => ⌜invertRecursion.resume x.1 x.2⌝ₜ) := by source_fun_prop
+theorem size_invert (xs : List Bool) : ⌜invert xs⌝ₜ.size ≤ 2 * ⌜xs⌝ₜ.size := by
+  induction xs with
+  | nil => simp [invert]
+  | cons a xs ih => cases a <;> simp [invert] at * <;> omega
 
-private noncomputable def invertImpl :=
-  invertRecursion.implementation checkImpl nextImpl finishImpl resumeImpl
+theorem invert_model : ∃ k, TimeSpaceModel.tree.ComputableInTimeAndSpace invert
+    (fun n => 1000 * n + 1000) (fun n => k * (1000 * (n + 1)^2)) := by
+  model_fun_prop using recursion
+    (test := fun xs : List Bool => !xs.isEmpty)
+    (next := List.tail)
+    (finish := fun _ => [])
+    (resume := invertResume)
+    (time := fun xs => 100 * xs.length + 100)
+    (space := fun xs => 100 * (⌜xs⌝ₜ.size + 1)^2)
+  guard_public_goals
+  case finish_eq => rfl
+  case resume_eq =>
+    intro xs h
+    cases xs with
+    | nil => exact (h rfl).elim
+    | cons a xs => rfl
+  case input_size => nlinarith
+  case check_space =>
+    rename_i xs
+    have hp : 0 < (⌜xs⌝ₜ.size + 1)^2 := by positivity
+    split_ifs <;> (repeat' apply And.intro) <;> nlinarith
+  case step_bounds.cons =>
+    rename_i a xs h
+    have hs := size_invert xs
+    cases a <;> simp_all <;> (repeat' apply And.intro) <;> nlinarith
 
-example : Realizes (fun xs => ⌜invert xs⌝ₜ)
-    (invertRecursion.bounds checkImpl.bounds nextImpl.bounds finishImpl.bounds resumeImpl.bounds) :=
-  invertImpl.realizes
+def endPosition (xs : List Bool) : Fin (xs.length + 1) := Fin.last xs.length
 
-private def endPosition (xs : List Bool) : Fin (xs.length + 1) := Fin.last xs.length
+def positionResume : (x : {xs : List Bool // (!xs.isEmpty) = true}) →
+    Fin (x.val.tail.length + 1) → Fin (x.val.length + 1)
+  | ⟨[], h⟩, _ => False.elim (by simp at h)
+  | ⟨_ :: _, _⟩, result => result.succ
 
--- The recursive return inhabits a different Fin type; no runtime index check is added.
-private def positionRecursion : Source.Recursion endPosition where
-  test := continues
-  next := List.tail
-  finish _ := 0
-  resume
-    | ⟨[], h⟩, _ => False.elim (by simp [continues] at h)
-    | ⟨_ :: _, _⟩, result => result.succ
-  finish_eq := by
-    rintro ⟨xs, h⟩
-    cases xs <;> dsimp [continues] at h ⊢ <;> first | contradiction | rfl
-  resume_eq := by
-    rintro ⟨xs, h⟩
-    cases xs <;> dsimp [continues] at h ⊢ <;> first | contradiction | rfl
-  measure := List.length
-  decreases := by intro xs h; cases xs <;> simp_all [continues]
+-- The dependent result uses the existing public encoding view at the model boundary.
+-- Its callbacks still return ordinary Fin values; their encoding is automatic.
+theorem endPosition_model : ∃ k, TimeSpaceModel.tree.ComputableInTimeAndSpace
+    (fun xs => ⌜endPosition xs⌝ₜ)
+    (fun n => 100000 * (n + 1)^2) (fun n => k * (100000 * (n + 1)^2)) := by
+  model_fun_prop using recursion
+    (test := fun xs : List Bool => !xs.isEmpty)
+    (next := List.tail)
+    (finish := fun _ => 0)
+    (resume := positionResume)
+    (time := fun xs => 10000 * (xs.length + 1)^2)
+    (space := fun xs => 10000 * (⌜xs⌝ₜ.size + 1)^2)
+  guard_public_goals
+  case finish_eq => rintro a rfl; rfl
+  case resume_eq =>
+    intro xs h
+    cases xs with
+    | nil => exact (h rfl).elim
+    | cons a xs => rfl
+  case input_size => nlinarith
+  case check_space =>
+    rename_i xs
+    have hp : 0 < (⌜xs⌝ₜ.size + 1)^2 := by positivity
+    split_ifs <;> (repeat' apply And.intro) <;> nlinarith
+  case step_bounds.cons =>
+    rename_i a xs h
+    have hn := size_encode_nat_le xs.length
+    have hb : xs.length.bits.length ≤ ⌜xs.length⌝ₜ.size := by
+      simp only [encode_nat_tree, size_encode_list]; omega
+    have hl : xs.length ≤ ⌜xs⌝ₜ.size := by simp only [size_encode_list]; omega
+    cases a <;> simp_all [endPosition] <;> (repeat' apply And.intro) <;> nlinarith
+  case hb.left =>
+    rename_i xs
+    have hl : xs.length ≤ ⌜xs⌝ₜ.size := by simp only [size_encode_list]; omega
+    nlinarith
 
-private noncomputable def positionFinish : Implementation
-    (fun x => ⌜positionRecursion.finish x⌝ₜ) := by source_fun_prop
-private noncomputable def positionResume : Implementation
-    (fun x : positionRecursion.Return => ⌜positionRecursion.resume x.1 x.2⌝ₜ) := by source_fun_prop
+-- An impossible credit cannot silently select the already supported identity implementation.
+example : True := by
+  fail_if_success
+    have : ∃ k, TimeSpaceModel.tree.ComputableInTimeAndSpace (id : List Bool → List Bool)
+        (fun _ => 4) (fun n => k * (n + 3)) := by
+      model_fun_prop using recursion
+        (test := fun _ => false)
+        (next := id)
+        (finish := fun x => x.val)
+        (resume := fun x _ => x.val)
+        (time := fun _ => 0)
+        (space := fun _ => 0)
+  trivial
 
-private noncomputable def positionImpl : Implementation (fun xs => ⌜endPosition xs⌝ₜ) :=
-  positionRecursion.implementation checkImpl nextImpl positionFinish positionResume
-
-example : Realizes (fun xs => ⌜endPosition xs⌝ₜ) positionImpl.bounds := positionImpl.realizes
+-- An uncertified selected callback fails immediately and restores the original model goal.
+example : ∃ k, TimeSpaceModel.tree.ComputableInTimeAndSpace (id : List Bool → List Bool)
+    (fun _ => 4) (fun n => k * (n + 3)) := by
+  fail_if_success
+    model_fun_prop using recursion
+      (test := fun xs => !xs.isEmpty)
+      (next := invert)
+      (finish := fun x => x.val)
+      (resume := fun x _ => x.val)
+      (time := fun _ => 100)
+      (space := fun _ => 100)
+  model_fun_prop
 
 end ComplexityTest.SourceTranslation.Recursion

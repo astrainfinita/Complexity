@@ -104,7 +104,7 @@ theorem relabelNext_realizes : Realizes relabelNextFn
   simp only [← encode_fin_function, encode_fin_castSucc, encode_list_cons, encode_list_nil,
     size_encode_prod, size_encode_unit, encode_fin, Fin.val_last] at ha
   cases c <;> dsimp only <;>
-    simp only [compBounds, pairBounds, Realizes.bounds_implementation, Sigma.encode_mk,
+    simp only [compBounds, pairBounds, Sigma.encode_mk,
       size_encode_prod, Tree.encode_self, Circuit.liftInputs, encode_fin_snoc,
       encode_fin_castSucc, Circuit.encode_outputs, Circuit.encode_gate, size_encode_unit,
       encode_fin, Fin.val_last, encode_nat_tree, max_le_iff] at * <;>
@@ -391,13 +391,16 @@ theorem compResume_realizes : Realizes (fun x : compRecursion.Return => ⌜compR
     change _ ≤ 1000 ∧ _ ≤ 1000 *
       (1 + ⌜(n, m, k, Circuit.gate op args next, d)⌝ₜ.size + ⌜result⌝ₜ.size + 1)
     dsimp +instances only [id, compRecursion, compNextFn, Recursion.Return, compTest, compFn]
-    simp only [pairBounds, Sigma.encode_mk, size_encode_prod,
-      Circuit.encode_gate, size_encode_unit, Tree.encode_self, identityBounds]
-    dsimp +instances only [id, compRecursion, compNextFn, Recursion.Return, compTest, compFn]
+    simp only [Sigma.encode_mk, size_encode_prod,
+      Circuit.encode_gate, size_encode_unit, Tree.encode_self]
     erw [Sigma.encode_mk, size_encode_prod, UniqueEncoding.encode_subtype]
     simp +instances only [Sigma.encode_mk, size_encode_prod,
       Circuit.encode_gate, size_encode_unit, max_le_iff]
-    repeat' erw [size_encode_prod]
+    repeat' first
+      | erw [Circuit.encode_gate]
+      | erw [Sigma.encode_mk]
+      | erw [size_encode_prod]
+      | rw [size_encode_unit]
     (repeat' apply And.intro) <;> omega
 
 theorem compFinish_realizes : Realizes (fun x => ⌜compFinishFn x⌝ₜ) compFinishBounds := by
@@ -628,7 +631,7 @@ theorem keepNext_realizes : Realizes keepNextFn
 theorem keepFinish_realizes : Realizes (fun x => ⌜keepFinishFn x⌝ₜ)
     ⟨fun x => 1000000 * (x.1.1 + x.1.2.1 + 1) ^ 2,
      fun x => 1000000 * (x.1.1 + x.1.2.1 + 1) ^ 2⟩ := by
-  refine Realizes.mono (by source_fun_prop) ?_
+  refine Realizes.mono (by source_fun_prop using tabulate) ?_
   rintro ⟨⟨n, m, c⟩, h⟩
   cases c with
   | outputs select =>
@@ -676,7 +679,8 @@ noncomputable def keepNext : Implementation keepNextFn := keepNext_realizes.impl
 noncomputable def keepFinish : Implementation (fun x => ⌜keepFinishFn x⌝ₜ) :=
   keepFinish_realizes.implementation
 noncomputable def keepResume : Implementation
-    (fun x : keepRecursion.Return => ⌜keepResumeFn x.1 x.2⌝ₜ) := by source_fun_prop
+    (fun x : keepRecursion.Return => ⌜keepResumeFn x.1 x.2⌝ₜ) := by
+  source_fun_prop using tabulate
 
 theorem keepResume_realizes :
     Realizes (fun x : keepRecursion.Return => ⌜keepResumeFn x.1 x.2⌝ₜ) keepResumeBounds := by
