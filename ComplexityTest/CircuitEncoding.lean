@@ -6,6 +6,7 @@ Authors: Yuyang Zhao
 module
 
 import Complexity.Models.Circuit.TreeEncoding
+import Complexity.ModelTheory.Algebra.BooleanAlgebra.TreeEncoding
 
 open Complexity TreeProgram TreeProgram.Code FirstOrder
 
@@ -46,6 +47,29 @@ example (op : L.Functions k) (args : Fin k → Fin n) (next : Circuit L (n + 1) 
   simp [computes_iff]
 
 end Generic
+
+section Boolean
+
+example : UniqueEncoding Tree (Σ n, Circuit .booleanAlgebra n 1) := inferInstance
+
+example (n : ℕ) (c : Circuit .booleanAlgebra n 1) :
+    encode Tree (⟨n, c⟩ : Σ n, Circuit .booleanAlgebra n 1) = encode Tree (n, c) := by simp
+
+example (p : Σ n, Circuit .booleanAlgebra n 1) :
+    decode (Σ n, Circuit .booleanAlgebra n 1) (encode Tree p) = Part.some p :=
+  UniqueEncoding.decode_encode p
+
+def rebuildInput (x : Value) : Code Value :=
+  Sigma.Code.matchOn x fun n c => do
+    let c ← Circuit.Code.matchOn c Circuit.Code.outputs Circuit.Code.gate
+    Sigma.Code.mk n c
+
+example (p : Σ n, Circuit .booleanAlgebra n 1) :
+    (rebuildInput .input).Computes (encode Tree p) (encode Tree p) := by
+  rcases p with ⟨n, c⟩
+  cases c <;> simp [computes_iff, rebuildInput]
+
+end Boolean
 
 abbrev language : Language where
   Functions k := Fin (k + 1)

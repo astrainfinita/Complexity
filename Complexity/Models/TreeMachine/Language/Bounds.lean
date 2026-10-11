@@ -45,6 +45,39 @@ variable {ν : Type} [DecidableEq ν] {p q : Cmd ν} {s t : ν → Tree} {n b : 
 def Bounded (p : Cmd ν) (s : ν → Tree) (time space : ℕ) (Q : (ν → Tree) → Prop) : Prop :=
   ∃ n t b, p.Run s n t b ∧ n ≤ time ∧ b ≤ space ∧ Q t
 
+@[simp] theorem bounded_assign_iff (x : ν) (e : Expr ν) (Q : (ν → Tree) → Prop)
+    (time space : ℕ) :
+    (assign x e).Bounded s time space Q ↔
+      e.assignSteps ≤ time ∧ e.maxSize s ≤ space ∧ Q (Function.update s x (e.eval s)) := by
+  simp [Bounded]
+
+@[simp] theorem bounded_seq_skip_iff (Q : (ν → Tree) → Prop) (time space : ℕ) :
+    (seq p skip).Bounded s time space Q ↔ p.Bounded s time space Q := by
+  simp [Bounded]
+
+/-- A branch spends the test budget, then executes only the selected arm. -/
+@[simp] theorem bounded_branch_iff (e : Expr ν) (Q : (ν → Tree) → Prop) (time space : ℕ) :
+    (branch e p q).Bounded s time space Q ↔
+      e.steps + 1 ≤ time ∧ e.maxSize s ≤ space ∧
+      (if (e.eval s).root then p else q).Bounded s (time - (e.steps + 1)) space Q := by
+  constructor
+  · rintro ⟨n, t, b, hr, hn, hb, hQ⟩
+    cases hr with
+    | branch_true he hp =>
+      refine ⟨by omega, by omega, ?_⟩
+      simp only [he, ↓reduceIte]
+      exact ⟨_, _, _, hp, by omega, by omega, hQ⟩
+    | branch_false he hq =>
+      refine ⟨by omega, by omega, ?_⟩
+      simp only [he, Bool.false_eq_true, ↓reduceIte]
+      exact ⟨_, _, _, hq, by omega, by omega, hQ⟩
+  · rintro ⟨ht, hs, n, t, b, hr, hn, hb, hQ⟩
+    cases he : (e.eval s).root with
+    | true => exact ⟨_, _, _, .branch_true he (by simpa [he] using hr), by omega,
+        Nat.max_le.mpr ⟨hs, hb⟩, hQ⟩
+    | false => exact ⟨_, _, _, .branch_false he (by simpa [he] using hr), by omega,
+        Nat.max_le.mpr ⟨hs, hb⟩, hQ⟩
+
 /-- An assignment spends its exact local budget before the rest of the source block. -/
 theorem bounded_assign_seq_iff (x : ν) (e : Expr ν) (Q : (ν → Tree) → Prop)
     (time space : ℕ) :
@@ -80,6 +113,27 @@ theorem seq {a b : ℕ} (hp : p.Bounded s a space Q)
   obtain ⟨m, u, d, hq, hm, hd, hR⟩ := hq t hQ
   exact ⟨n + m, u, max c d, .seq hp hq, Nat.add_le_add hn hm, Nat.max_le.mpr ⟨hc, hd⟩, hR⟩
 
+/-- A loop spends a remaining budget. Each successful iteration pays for its test,
+body and back edge; the final failed test is included in the invariant. -/
+theorem loop_budget (e : Expr ν) (I : (ν → Tree) → ℕ → Prop) (budget : ℕ)
+    (hs : I s budget) (he : ∀ s k, I s k → e.maxSize s ≤ space)
+    (stop : ∀ s k, I s k → (e.eval s).root = false → e.steps + 2 ≤ k)
+    (body : ∀ s k, I s k → (e.eval s).root = true →
+      ∃ bodyTime, p.Bounded s bodyTime space (fun t =>
+        ∃ remaining, I t remaining ∧ bodyTime + e.steps + 2 + remaining ≤ k)) :
+    (Cmd.while e p).Bounded s budget space
+      (fun t => (∃ remaining, I t remaining) ∧ (e.eval t).root = false) := by
+  induction budget using Nat.strong_induction_on generalizing s with
+  | h budget ih =>
+    cases hr : (e.eval s).root with
+    | false => exact ⟨_, s, _, .while_false hr, stop s budget hs hr,
+        he s budget hs, ⟨budget, hs⟩, hr⟩
+    | true =>
+      obtain ⟨bodyTime, a, t, c, hb, ha, hc, remaining, ht, hbudget⟩ := body s budget hs hr
+      obtain ⟨b, u, d, hu, hb', hd, hQ⟩ := ih remaining (by omega) ht
+      exact ⟨_, u, _, .while_true hr hb hu, by omega,
+        Nat.max_le.mpr ⟨he s budget hs, Nat.max_le.mpr ⟨hc, hd⟩⟩, hQ⟩
+
 /-- A decreasing measure gives a loop bound from a uniform per-iteration budget.
 The final failed test is included, and space does not accumulate across iterations. -/
 theorem loop (e : Expr ν) (I : (ν → Tree) → Prop) (measure : (ν → Tree) → ℕ)
@@ -88,19 +142,21 @@ theorem loop (e : Expr ν) (I : (ν → Tree) → Prop) (measure : (ν → Tree)
       p.Bounded s bodyTime space (fun t ↦ I t ∧ measure t < measure s)) :
     (Cmd.while e p).Bounded s ((bodyTime + e.steps + 2) * measure s + (e.steps + 2)) space
       (fun t ↦ I t ∧ (e.eval t).root = false) := by
-  generalize hn : measure s = n
-  induction n using Nat.strong_induction_on generalizing s with
-  | h n ih =>
-    cases hr : (e.eval s).root with
-    | false => exact ⟨_, s, _, .while_false hr, Nat.le_add_left _ _, he s hs, hs, hr⟩
-    | true =>
-      obtain ⟨a, t, c, hb, ha, hc, ht, hm⟩ := body s hs hr
-      obtain ⟨b, u, d, hu, hb', hd, hQ⟩ := ih (measure t) (by omega) ht rfl
-      refine ⟨_, u, _, .while_true hr hb hu, ?_,
-        Nat.max_le.mpr ⟨he s hs, Nat.max_le.mpr ⟨hc, hd⟩⟩, hQ⟩
-      have := Nat.mul_le_mul_left (bodyTime + e.steps + 2) (show measure t + 1 ≤ n by omega)
-      rw [Nat.mul_add, Nat.mul_one] at this
-      omega
+  let budget t := (bodyTime + e.steps + 2) * measure t + (e.steps + 2)
+  apply (loop_budget e (fun t k => I t ∧ budget t ≤ k) (budget s)
+    ⟨hs, le_rfl⟩ (fun t k ht => he t ht.1) ?_ ?_).mono le_rfl le_rfl
+  · rintro t ⟨⟨k, hi, _⟩, hr⟩; exact ⟨hi, hr⟩
+  · intro t k ht _
+    exact (Nat.le_add_left _ _).trans ht.2
+  · intro t k ht hr
+    refine ⟨bodyTime, (body t ht.1 hr).mono le_rfl le_rfl ?_⟩
+    rintro u ⟨hu, hm⟩
+    refine ⟨budget u, ⟨hu, le_rfl⟩, ?_⟩
+    have hmul := Nat.mul_le_mul_left (bodyTime + e.steps + 2)
+      (show measure u + 1 ≤ measure t by omega)
+    dsimp [budget] at ht ⊢
+    rw [Nat.mul_add, Nat.mul_one] at hmul
+    omega
 
 end Bounded
 end Cmd
@@ -155,12 +211,12 @@ private theorem run_block_append {cs ds : List (Cmd ℕ)} {s t u : ℕ → Tree}
 @[simp] theorem bounded_eval_iff (e : Expr ℕ) (Q : Value → (ℕ → Tree) → Prop) :
     (eval e).Bounded n s time space Q ↔ e.assignSteps ≤ time ∧ e.maxSize s ≤ space ∧
       Q (.var n) (Function.update s n (e.eval s)) := by
-  simp [Bounded, Cmd.Bounded, block]
+  simp [Bounded, block]
 
 @[simp] theorem bounded_newVar_iff (v : Value) (Q : Var → (ℕ → Tree) → Prop) :
     (newVar v).Bounded n s time space Q ↔ v.expression.assignSteps ≤ time ∧
       (v.eval s).size ≤ space ∧ Q ⟨n⟩ (Function.update s n (v.eval s)) := by
-  simp [Bounded, Cmd.Bounded, block]
+  simp [Bounded, block]
 
 @[simp] theorem bounded_read_iff (v : Var) (Q : Value → (ℕ → Tree) → Prop) :
     (read v).Bounded n s time space Q ↔ 2 ≤ time ∧ (v.get s).size ≤ space ∧
@@ -170,7 +226,7 @@ private theorem run_block_append {cs ds : List (Cmd ℕ)} {s t u : ℕ → Tree}
 @[simp] theorem bounded_write_iff (v : Var) (a : Value) (Q : Unit → (ℕ → Tree) → Prop) :
     (write v a).Bounded n s time space Q ↔ a.expression.assignSteps ≤ time ∧
       (a.eval s).size ≤ space ∧ Q () (Function.update s v.index (a.eval s)) := by
-  simp [Bounded, Cmd.Bounded, block]
+  simp [Bounded, block]
 
 @[simp↓] theorem bounded_eval_bind_iff (e : Expr ℕ) (f : Value → Code α)
     (Q : α → (ℕ → Tree) → Prop) :
@@ -226,6 +282,14 @@ private theorem run_block_append {cs ds : List (Cmd ℕ)} {s t u : ℕ → Tree}
   simp only [Bounded, build_bind, write_build, List.singleton_append, block,
     Cmd.bounded_assign_seq_iff, Value.maxSize_expression, Value.eval_expression]
 
+@[simp] theorem bounded_branch_iff (e : Expr ℕ) (yes no : Code Value)
+    (Q : Value → (ℕ → Tree) → Prop) :
+    (branch e yes no).Bounded n s time space Q ↔
+      e.steps + 1 ≤ time ∧ e.maxSize s ≤ space ∧
+      ((if (e.eval s).root then yes else no) >>= fun a ↦ write ⟨n⟩ a).Bounded
+        (n + 1) s (time - (e.steps + 1)) space (fun _ ↦ Q (.var n)) := by
+  cases h : (e.eval s).root <;> simp [Bounded, block, h]
+
 namespace Bounded
 
 variable {p : Code α} {f : α → Code β} {Q R : α → (ℕ → Tree) → Prop}
@@ -233,6 +297,23 @@ variable {p : Code α} {f : α → Code β} {Q R : α → (ℕ → Tree) → Pro
 theorem mono (h : p.Bounded n s time space Q) {time' space' : ℕ}
     (ht : time ≤ time') (hs : space ≤ space') (hQ : ∀ a t, Q a t → R a t) :
     p.Bounded n s time' space' R := Cmd.Bounded.mono h ht hs (hQ _)
+
+/-- The returned source value is fixed when the code is built. -/
+theorem with_result (h : p.Bounded n s time space Q) :
+    p.Bounded n s time space (fun a t => a = (p.build n).1 ∧ Q a t) :=
+  Cmd.Bounded.mono h le_rfl le_rfl (fun _ h => ⟨rfl, h⟩)
+
+/-- A returned value is bounded by the initial values and the intermediate-tree budget. -/
+theorem with_size_le {p : Code Value} {Q : Value → (ℕ → Tree) → Prop}
+    (h : p.Bounded n s time space Q) {bound : ℕ}
+    (hs : ∀ j, (s j).size ≤ bound) (hb : space ≤ bound) :
+    p.Bounded n s time space (fun v t => Q v t ∧ (v.eval t).size ≤ bound) := by
+  obtain ⟨i, t, c, hr, hi, hc, hQ⟩ := h
+  refine ⟨i, t, c, hr, hi, hc, hQ, ?_⟩
+  have ht := hr.size_le hs (hc.trans hb)
+  cases (p.build n).1 with
+  | nil => exact (Tree.size_pos (s 0)).trans_le (hs 0)
+  | var j => exact ht j
 
 theorem exec (h : p.Bounded n s time space Q) :
     ∃ a m t, p.Exec n s a m t ∧ Q a t := by
@@ -253,23 +334,47 @@ theorem ifNode (v : Value) (yes no : Code Unit) (Q : Unit → (ℕ → Tree) →
     (hy : (v.eval s).root = true → yes.Bounded n s time space Q)
     (hn : (v.eval s).root = false → no.Bounded n s time space Q) :
     (Code.ifNode v yes no).Bounded n s (1 + time) space Q := by
+  simp only [Bounded, ifNode_build, block, Cmd.bounded_seq_skip_iff,
+    Cmd.bounded_branch_iff, Value.steps_expression, Value.maxSize_expression,
+    Value.eval_expression, Nat.zero_add, Nat.add_sub_cancel_left]
+  refine ⟨by omega, hv, ?_⟩
   cases he : (v.eval s).root with
-  | false =>
-    obtain ⟨i, t, b, hr, hi, hb, hQ⟩ := hn he
-    refine ⟨1 + i, t, max (v.eval s).size b, ?_, Nat.add_le_add_left hi 1,
-      Nat.max_le.mpr ⟨hv, hb⟩, hQ⟩
-    simpa only [ifNode_build, block, Cmd.run_seq_skip_iff, Value.steps_expression,
-      Value.eval_expression, Value.maxSize_expression, Nat.zero_add] using
-      Cmd.Run.branch_false (e := v.expression) (p := block (yes.build n).2.2)
-        (by simpa using he) hr
-  | true =>
-    obtain ⟨i, t, b, hr, hi, hb, hQ⟩ := hy he
-    refine ⟨1 + i, t, max (v.eval s).size b, ?_, Nat.add_le_add_left hi 1,
-      Nat.max_le.mpr ⟨hv, hb⟩, hQ⟩
-    simpa only [ifNode_build, block, Cmd.run_seq_skip_iff, Value.steps_expression,
-      Value.eval_expression, Value.maxSize_expression, Nat.zero_add] using
-      Cmd.Run.branch_true (e := v.expression) (q := block (no.build n).2.2)
-        (by simpa using he) hr
+  | false => simpa [he, Bounded] using hn he
+  | true => simpa [he, Bounded] using hy he
+
+/-- A returned branch pays for its test and for saving the selected result. -/
+theorem branch (e : Expr ℕ) (yes no : Code Value) (Q : Value → (ℕ → Tree) → Prop)
+    (he : e.maxSize s ≤ space)
+    (hy : (e.eval s).root = true → yes.Bounded (n + 1) s time space
+      (fun v t ↦ (v.eval t).size ≤ space ∧ Q (.var n) (Function.update t n (v.eval t))))
+    (hn : (e.eval s).root = false → no.Bounded (n + 1) s time space
+      (fun v t ↦ (v.eval t).size ≤ space ∧ Q (.var n) (Function.update t n (v.eval t)))) :
+    (Code.branch e yes no).Bounded n s (e.steps + 1 + (time + 2)) space Q := by
+  rw [bounded_branch_iff]
+  refine ⟨by omega, he, ?_⟩
+  simp only [Nat.add_sub_cancel_left]
+  have h : (if (e.eval s).root then yes else no).Bounded (n + 1) s time space
+      (fun v t ↦ (v.eval t).size ≤ space ∧ Q (.var n) (Function.update t n (v.eval t))) := by
+    cases hr : (e.eval s).root
+    · simpa only [hr, Bool.false_eq_true, ↓reduceIte] using hn hr
+    · simpa only [hr, ↓reduceIte] using hy hr
+  apply h.bind
+  intro v t ⟨hs, hq⟩
+  exact bounded_write_iff .. |>.mpr ⟨v.assignSteps_le, hs, hq⟩
+
+/-- A source loop may spend a different body budget on each iteration. -/
+theorem whileNode_budget (v : Var) (body : Code Unit) (I : (ℕ → Tree) → ℕ → Prop)
+    (budget : ℕ) (hs : I s budget)
+    (hv : ∀ s k, I s k → (v.get s).size ≤ space)
+    (stop : ∀ s k, I s k → (v.get s).root = false → 2 ≤ k)
+    (hb : ∀ s k, I s k → (v.get s).root = true →
+      ∃ bodyTime, body.Bounded n s bodyTime space (fun _ t =>
+        ∃ remaining, I t remaining ∧ bodyTime + 2 + remaining ≤ k)) :
+    (Code.whileNode v body).Bounded n s budget space
+      (fun _ t => (∃ remaining, I t remaining) ∧ (v.get t).root = false) := by
+  obtain ⟨i, t, b, hr, hi, hb, hQ⟩ := Cmd.Bounded.loop_budget (.var v.index) I budget
+    hs hv stop hb
+  exact ⟨i, t, b, by simpa [Code.block] using hr, hi, hb, hQ⟩
 
 /-- Bound a source loop using an invariant and a strictly decreasing iteration count. -/
 theorem whileNode (v : Var) (body : Code Unit) (I : (ℕ → Tree) → Prop)

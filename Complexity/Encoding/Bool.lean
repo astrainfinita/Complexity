@@ -51,4 +51,7 @@ theorem encode_bool_tree (b : Bool) : ⌜b⌝ₜ = Tree.encodeBool b := rfl
 @[simp] theorem size_encode_bool (b : Bool) : ⌜b⌝ₜ.size = if b then 3 else 1 := by
   cases b <;> rfl
 
+theorem size_encode_bool_le (b : Bool) : ⌜b⌝ₜ.size ≤ 3 := by
+  cases b <;> simp
+
 end Complexity

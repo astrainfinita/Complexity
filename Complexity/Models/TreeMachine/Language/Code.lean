@@ -135,6 +135,14 @@ def ifNode (v : Value) (yes no : Code Unit) : Code Unit := ⟨fun n ↦
   let (_, l, ds) := no.build n
   ((), max m l, [.branch v.expression (block cs) (block ds)])⟩
 
+/-- Select a runtime branch and return its tree value. Exclusive branches share local slots;
+    the returned value has its own location, independently of either branch's result. -/
+@[simps build]
+def branch (e : Expr ℕ) (yes no : Code Value) : Code Value := ⟨fun n ↦
+  let (_, m, cs) := (yes >>= fun a ↦ write ⟨n⟩ a).build (n + 1)
+  let (_, l, ds) := (no >>= fun a ↦ write ⟨n⟩ a).build (n + 1)
+  (.var n, max m l, [.branch e (block cs) (block ds)])⟩
+
 /-- Recheck the mutable variable's root each iteration. The body is constructed only once. -/
 @[simps build]
 def whileNode (v : Var) (body : Code Unit) : Code Unit := ⟨fun n ↦

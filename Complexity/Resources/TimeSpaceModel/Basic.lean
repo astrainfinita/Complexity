@@ -79,4 +79,14 @@ theorem ComputableInSpace.mono (h : model.ComputableInSpace f s)
 
 end TimeSpaceModel
 
+/-- Changing output values without changing their codes retains one behavior and both budgets. -/
+theorem TimeSpaceModel.ComputableInTimeAndSpace.of_encode {Data α β γ : Type*}
+    [Encoding Data α] [UniqueEncoding Data β] [UniqueEncoding Data γ]
+    {model : TimeSpaceModel Id Data} {f : α → β} {g : α → γ} {t s : ℕ → ℕ}
+    (hg : model.ComputableInTimeAndSpace g t s)
+    (hfg : ∀ x, encode Data (f x) = encode Data (g x)) :
+    model.ComputableInTimeAndSpace f t s := by
+  obtain ⟨R, hR, h⟩ := hg
+  exact ⟨R, hR, h.of_encode hfg⟩
+
 end Complexity

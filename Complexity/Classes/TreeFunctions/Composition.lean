@@ -5,7 +5,7 @@ Authors: Yuyang Zhao
 -/
 module
 
-public import Complexity.Classes.Functions.Basic
+public import Complexity.Classes.Reductions.Basic
 public import Complexity.Resources.TreeMachine.Composition
 public import Mathlib.Basic.Finite.Sum
 public import Mathlib.Data.Fintype.Fin
@@ -52,3 +52,20 @@ theorem fp_id : (id : α → α) ∈ FP .sizeCostTree := by
   · simp [TreeMachine.Cfg.mass]
 
 end Complexity.TreeMachine
+
+namespace Complexity.PolytimeManyOneReducible
+
+variable {α β γ : Type*} [Encoding Tree α] [Encoding Tree β] [Encoding Tree γ]
+
+theorem refl (p : α → Prop) : PolytimeManyOneReducible .sizeCostTree p p :=
+  ⟨id, TreeMachine.fp_id, fun _ => Iff.rfl⟩
+
+theorem trans {p : α → Prop} {q : β → Prop} {r : γ → Prop}
+    (hpq : PolytimeManyOneReducible .sizeCostTree p q)
+    (hqr : PolytimeManyOneReducible .sizeCostTree q r) :
+    PolytimeManyOneReducible .sizeCostTree p r := by
+  obtain ⟨f, hf, hp⟩ := hpq
+  obtain ⟨g, hg, hq⟩ := hqr
+  exact ⟨g ∘ f, TreeMachine.fp_comp hg hf, fun x => (hp x).trans (hq (f x))⟩
+
+end Complexity.PolytimeManyOneReducible

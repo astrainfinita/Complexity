@@ -7,6 +7,8 @@ module
 
 public import Complexity.Encoding.Prod
 public import Complexity.Data.Tree.List
+public import Mathlib.Algebra.Order.BigOperators.Group.List
+public import Mathlib.Algebra.Order.Group.Nat
 
 /-! # Tree encodings of lists -/
 
@@ -40,6 +42,44 @@ instance {α : Type*} [UniqueEncoding Tree α] : UniqueEncoding Tree (List α) :
 
 @[simp] theorem encode_list_cons {α : Type*} [UniqueEncoding Tree α] (a : α) (as : List α) :
     ⌜a :: as⌝ₜ = ⌜(a, as)⌝ₜ := rfl
+
+/-- Pointwise representation changes preserve the representation of a list. -/
+theorem encode_list_map_of_encode {α β : Type*}
+    [UniqueEncoding Tree α] [UniqueEncoding Tree β] (f : α → β)
+    (h : ∀ x, ⌜f x⌝ₜ = ⌜x⌝ₜ) (xs : List α) : ⌜xs.map f⌝ₜ = ⌜xs⌝ₜ := by
+  induction xs with
+  | nil => simp
+  | cons x xs ih => simp [encode_prod, h, ih]
+
+/-- A list stores its elements together with one node per cons and a final leaf. -/
+theorem size_encode_list {α : Type*} [UniqueEncoding Tree α] (xs : List α) :
+    ⌜xs⌝ₜ.size = (xs.map fun x => ⌜x⌝ₜ.size).sum + xs.length + 1 := by
+  induction xs with
+  | nil => simp
+  | cons x xs ih => simp only [encode_list_cons, size_encode_prod, List.map_cons,
+      List.sum_cons, List.length_cons, ih]; omega
+
+theorem size_encode_list_le {α : Type*} [UniqueEncoding Tree α] (xs : List α)
+    (bound : ℕ) (h : ∀ x ∈ xs, ⌜x⌝ₜ.size ≤ bound) :
+    ⌜xs⌝ₜ.size ≤ xs.length * (bound + 1) + 1 := by
+  have hs := List.sum_le_sum h
+  simp only [List.map_const', List.sum_replicate, Nat.nsmul_eq_mul] at hs
+  rw [size_encode_list]
+  simp only [Nat.mul_add, Nat.mul_one]
+  omega
+
+/-- Concatenation replaces the first list's final leaf with the second list. -/
+theorem size_encode_list_append {α : Type*} [UniqueEncoding Tree α] (xs ys : List α) :
+    ⌜xs ++ ys⌝ₜ.size + 1 = ⌜xs⌝ₜ.size + ⌜ys⌝ₜ.size := by
+  simp only [size_encode_list, List.map_append, List.sum_append, List.length_append]
+  omega
+
+theorem size_encode_le_list_of_mem {α : Type*} [UniqueEncoding Tree α]
+    {x : α} {xs : List α} (hx : x ∈ xs) : ⌜x⌝ₜ.size ≤ ⌜xs⌝ₜ.size := by
+  have h := List.le_sum_of_mem (List.mem_map.mpr ⟨x, hx, rfl⟩ :
+    ⌜x⌝ₜ.size ∈ xs.map (fun a => ⌜a⌝ₜ.size))
+  rw [size_encode_list]
+  omega
 
 @[simp] theorem listLength_encode_unit : ⌜()⌝ₜ.listLength = 0 := rfl
 

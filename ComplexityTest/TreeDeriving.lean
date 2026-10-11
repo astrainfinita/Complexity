@@ -43,6 +43,17 @@ inductive UnitData where
 example {α : Type*} [UniqueEncoding Tree α] (a : α) (b : Option Bool) (as : List α) :
     ⌜Record.mk a b as⌝ₜ = ⌜(a, b, as)⌝ₜ := by simp
 
+-- Check the generated statements themselves, without reducing their encoding instances.
+open Lean Meta in
+run_cmd Lean.Elab.Command.liftTermElabM do
+  for name in [``Term.encode_atom, ``Term.encode_fork, ``Term.encode_empty,
+      ``Record.encode_mk, ``Box.encode_mk, ``ImplicitField.encode_value, ``UnitData.encode_unit] do
+    forallTelescope (← getConstInfo name).type fun _ type => do
+      let some (_, lhs, rhs) := type.eq? | throwError "{name} is not an encoding equation"
+      unless lhs.isAppOfArity ``UniqueEncoding.encode 4 &&
+          rhs.isAppOfArity ``UniqueEncoding.encode 4 do
+        throwError "{name} must relate structured encodings"
+
 -- Cancel equal encodings before decomposing just one of their constructors.
 example {α : Type*} [UniqueEncoding Tree α] (r : Record α)
     (a : α) (b : Option Bool) (as : List α) :
@@ -142,11 +153,11 @@ run_cmd do
 
 section Rejection
 
-/-- error: Complexity.TreeDerivingTest.Term already has a tree encoding; deriving would change its representation -/
+/-- error: This type family already has a tree encoding; deriving would change its representation -/
 #guard_msgs in
 attribute [tree_encoding] Term
 
-/-- error: List already has a tree encoding; deriving would change its representation -/
+/-- error: This type family already has a tree encoding; deriving would change its representation -/
 #guard_msgs in
 attribute [tree_encoding] List
 
@@ -155,15 +166,21 @@ instance : Encoding Tree Redundant where
   decode _ := pure .value
   exists_code a := by cases a; exact ⟨.nil, Part.mem_some _⟩
 
-/-- error: Complexity.TreeDerivingTest.Redundant already has a tree encoding; deriving would change its representation -/
+/-- error: This type family already has a tree encoding; deriving would change its representation -/
 #guard_msgs in
 attribute [tree_encoding] Redundant
 
-inductive Indexed : Bool → Type where | value : Indexed true
+inductive ComputedIndex : ℕ → Type where | value (n : ℕ) : ComputedIndex (n + 1)
 
-/-- error: Tree encoding requires constructor result indices to be distinct fields -/
+/-- error: Tree encoding requires constructor result indices to be distinct fields or closed patterns -/
 #guard_msgs in
-attribute [tree_encoding] Indexed
+attribute [tree_encoding] ComputedIndex
+
+inductive RepeatedIndex : ℕ → ℕ → Type where | value (n : ℕ) : RepeatedIndex n n
+
+/-- error: Tree encoding requires constructor result indices to be distinct fields or closed patterns -/
+#guard_msgs in
+attribute [tree_encoding] RepeatedIndex
 
 inductive Nested where | node (xs : List Nested)
 

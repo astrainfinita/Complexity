@@ -5,10 +5,10 @@ Authors: Yuyang Zhao
 -/
 module
 
-import Complexity.Problems.CircuitSAT.Basic
-import Complexity.Problems.KSAT.Basic
-import Complexity.Data.CNF.TreeEncoding
-import Complexity.Encoding.Nat
+import Complexity.Problems.CircuitSAT.KSAT
+import Complexity.Resources.Circuit.Tseitin
+import Complexity.Encoding.RawWord
+meta import Complexity.Models.Circuit.Tseitin
 
 namespace Complexity.SATTest
 
@@ -23,9 +23,44 @@ example : ¬ CircuitSAT ⟨0, Circuit.ofGate botFunc Fin.elim0⟩ := by simp
 def contradiction : Circuit Language.booleanAlgebra 1 1 :=
   .gate complFunc ![0] (.gate infFunc ![0, 1] (.outputs fun _ => 2))
 
-example : ¬ CircuitSAT ⟨1, contradiction⟩ := by
+theorem not_contradiction : ¬ CircuitSAT ⟨1, contradiction⟩ := by
   rintro ⟨x, h⟩
   simp [contradiction, Function.comp_def, Fin.snoc] at h
+
+example : ¬ KSAT 3 ⟨contradiction.tseitin, contradiction.tseitin_width⟩ := by
+  simpa only [← CircuitSAT.iff_ksat] using not_contradiction
+
+#guard contradiction.tseitin.length == 6
+
+example : KSAT 3
+    ⟨(Circuit.ofGate topFunc (Fin.elim0 : Fin 0 → Fin 0)).tseitin,
+      Circuit.tseitin_width _⟩ := by
+  rw [← CircuitSAT.iff_ksat]
+  simp
+
+example : ¬ KSAT 3
+    ⟨(Circuit.ofGate botFunc (Fin.elim0 : Fin 0 → Fin 0)).tseitin,
+      Circuit.tseitin_width _⟩ := by
+  rw [← CircuitSAT.iff_ksat]
+  simp
+
+/-- Sharing an input wire does not introduce an independent Boolean choice. -/
+example (b : Bool) :
+    (∃ a : ℕ → Bool, a 0 = b ∧
+      (Circuit.ofGate infFunc ![0, 0] : Circuit _ 1 1).tseitin.eval a = true) ↔ b = true := by
+  simpa using ((Circuit.ofGate infFunc ![0, 0] : Circuit _ 1 1).eval_eq_true_iff_tseitin
+    (fun _ => b)).symm
+
+/-- Unused inputs need neither fresh clauses nor a densely allocated variable table. -/
+example : (Circuit.outputs (fun _ => (1000000 : Fin 1000001)) :
+    Circuit .booleanAlgebra 1000001 1).tseitin = [ [CNF.Literal.pos 1000000] ] := by
+  simp
+
+/-- The bound applies directly to the serialized input and the width-certified output. -/
+example (p : Σ n, Circuit .booleanAlgebra n 1) :
+    ⌜(⟨p.2.tseitin, p.2.tseitin_width⟩ : KCNF 3 ℕ)⌝₂.length ≤ 8 * ⌜p⌝₂.length ^ 2 := by
+  rcases p with ⟨n, c⟩
+  simpa using c.size_encode_tseitin_le
 
 section FixedInterpretation
 
@@ -35,6 +70,12 @@ local instance : Language.booleanAlgebra.Structure Bool where
 example : (Circuit.ofGate topFunc (Fin.elim0 : Fin 0 → Fin 0)).eval Fin.elim0 0 = false := rfl
 
 example : CircuitSAT ⟨0, Circuit.ofGate topFunc Fin.elim0⟩ := by simp
+
+example : KSAT 3
+    ⟨(Circuit.ofGate topFunc (Fin.elim0 : Fin 0 → Fin 0)).tseitin,
+      Circuit.tseitin_width _⟩ := by
+  rw [← CircuitSAT.iff_ksat]
+  simp
 
 end FixedInterpretation
 

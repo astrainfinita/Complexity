@@ -89,6 +89,13 @@ end Exec
       else no.Exec n s () (no.build n).2.1 t := by
   cases he : (v.eval s).root <;> simp [Exec, Prod.ext_iff, he, eq_comm]
 
+@[simp] theorem exec_branch_iff (e : Expr ℕ) (yes no : Code Value) (a : Value) :
+    (branch e yes no).Exec n s a m t ↔
+      a = .var n ∧ m = max (yes.build (n + 1)).2.1 (no.build (n + 1)).2.1 ∧
+      let p := if (e.eval s).root then yes else no
+      (p >>= fun v ↦ write ⟨n⟩ v).Exec (n + 1) s () (p.build (n + 1)).2.1 t := by
+  cases h : (e.eval s).root <;> simp [Exec, Prod.ext_iff, h, eq_comm, and_assoc]
+
 namespace Exec
 
 theorem whileNode_false (v : Var) (body : Code Unit) (h : (v.get s).root = false) :

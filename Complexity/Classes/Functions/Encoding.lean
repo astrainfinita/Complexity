@@ -11,7 +11,18 @@ public import Complexity.Classes.Functions.Basic
 
 @[expose] public section
 
-namespace Complexity.FP
+namespace Complexity
+
+/-- Equal output codes preserve simultaneous asymptotic bounds in the same model. -/
+theorem FTISP.of_encode {Data α β γ : Type*} [Encoding Data α]
+    [UniqueEncoding Data β] [UniqueEncoding Data γ]
+    {model : TimeSpaceModel Id Data} {f : α → β} {g : α → γ} {T S : ℕ → ℕ}
+    (hg : g ∈ FTISP model T S)
+    (hfg : ∀ x, encode Data (f x) = encode Data (g x)) : f ∈ FTISP model T S := by
+  obtain ⟨t, s, h, ht, hs⟩ := hg
+  exact ⟨t, s, h.of_encode hfg, ht, hs⟩
+
+namespace FP
 
 attribute [local instance] UniqueEncoding.refl
 
@@ -29,4 +40,6 @@ theorem of_encode {Data α β : Type*} [UniqueEncoding Data α] [UniqueEncoding 
   have hh := Encoding.Computes.iff_of_uniqueEncoding.mp hm (encode Data a)
   simpa only [UniqueEncoding.refl_encode, id_eq, h] using hh
 
-end Complexity.FP
+end FP
+
+end Complexity

@@ -62,6 +62,13 @@ theorem iff_of_uniqueEncoding [UniqueEncoding Data α] [UniqueEncoding Data β] 
   simp only [iff_of_uniqueOutput, UniqueEncoding.mem_decode_iff]
   exact forall_comm.trans (by simp only [forall_eq'])
 
+/-- Changing the output interpretation preserves the same raw computation and budgets. -/
+theorem of_encode {γ : Type*} [Encoding Data α]
+    [UniqueEncoding Data β] [UniqueEncoding Data γ] {g : α → γ}
+    (hg : Computes run size g t s) (hfg : ∀ x, encode Data (f x) = encode Data (g x)) :
+    Computes run size f t s := by
+  simpa only [iff_of_uniqueOutput, hfg] using hg
+
 end Encoding.Computes
 
 /-- A Boolean-valued function decides a predicate, including rejection of every

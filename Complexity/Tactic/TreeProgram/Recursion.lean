@@ -1,0 +1,393 @@
+/-
+Copyright (c) 2026 Yuyang Zhao. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+Authors: Yuyang Zhao
+-/
+module
+
+public import Complexity.Tactic.TreeProgram.Rules
+
+/-! # Certified recursion with one recursive call per branch
+
+The return type may depend on the input. Proof-constrained callbacks operate only on their
+reachable inputs; the compiled program stores source arguments on a stack and erases the proofs.
+-/
+
+@[expose] public section
+
+namespace Complexity.TreeProgram.Source
+
+/-- A source recursion equation, including the work performed after the recursive return. -/
+structure Recursion {α : Type*} {β : α → Type*} (f : (x : α) → β x) where
+  test : α → Bool
+  next : α → α
+  finish : (x : {x // test x = false}) → β x.val
+  resume : (x : {x // test x = true}) → β (next x.val) → β x.val
+  finish_eq : ∀ x, finish x = f x.val
+  resume_eq : ∀ x, resume x (f (next x.val)) = f x.val
+  measure : α → ℕ
+  decreases : ∀ x, test x = true → measure (next x) < measure x
+
+namespace Recursion
+
+variable {α : Type*} {β : α → Type*} {f : (x : α) → β x}
+  [UniqueEncoding Tree α] [∀ x, UniqueEncoding Tree (β x)] (r : Recursion f)
+
+/-- One program serves every runtime index, including dependent recursive return values. -/
+abbrev Return := (x : {x // r.test x = true}) × β (r.next x.val)
+
+private inductive Path (r : Recursion f) : α → α → List α → Prop where
+  | nil (x) : Path r x x []
+  | cons {x y stack} : Path r x y stack → r.test y = true →
+      Path r x (r.next y) (y :: stack)
+
+private def pending (br : Bounds r.Return) (x : α) : ℕ :=
+  if h : r.test x = true then br.time ⟨⟨x, h⟩, f (r.next x)⟩ + 8 else 0
+
+omit [∀ x, UniqueEncoding Tree (β x)] in
+private theorem path_bounds {b : Bounds α} {br : Bounds r.Return}
+    (ht : ∀ x, r.test x = true → b.time (r.next x) + r.pending br x ≤ b.time x)
+    (hs : ∀ x, r.test x = true → b.peak (r.next x) + ⌜x⌝ₜ.size + 1 ≤ b.peak x)
+    {x y stack} (h : Path r x y stack) :
+    b.time y + (stack.map (r.pending br)).sum ≤ b.time x ∧
+      b.peak y + ⌜stack⌝ₜ.size ≤ b.peak x + 1 := by
+  induction h with
+  | nil => simp
+  | @cons y stack h hy ih =>
+    have := ht y hy
+    have := hs y hy
+    simp only [List.map_cons, List.sum_cons, encode_list_cons, size_encode_prod]
+    constructor <;> omega
+
+/-- The three reserved registers hold the argument, saved callers, and test/result respectively. -/
+def code (test next finish resume : Value → Code Value) (v : Value) : Code Value :=
+  ⟨fun n =>
+    let check := callInto (test (.var n)) (n + 3) (n + 2)
+    let advance := callInto (next (.var n)) (n + 3) n
+    let base := callInto (finish (.var n)) (n + 3) (n + 2)
+    let join := callInto (resume (.var n)) (n + 3) (n + 2)
+    (.var (n + 2), max ((test (.var n)).build (n + 3)).2.1
+      (max ((next (.var n)).build (n + 3)).2.1
+        (max ((finish (.var n)).build (n + 3)).2.1 ((resume (.var n)).build (n + 3)).2.1)),
+      [.assign n v.expression, .assign (n + 1) .nil, check,
+       .while (.var (n + 2))
+         (.seq (.assign (n + 1) (.pair (.var n) (.var (n + 1)))) (.seq advance check)),
+       base,
+       .while (.var (n + 1))
+         (.seq (.assign n (.pair (.left (.var (n + 1))) (.var (n + 2))))
+           (.seq join (.assign (n + 1) (.right (.var (n + 1))))))])⟩
+
+/-- Certify the stack implementation using source recursion equations and local resource credit.
+Saved arguments are charged to the peak allowance; time pays for each actual callback separately. -/
+theorem implements {pc ps pd pr : Value → Code Value}
+    {bc bs : Bounds α} {bd : Bounds {x // r.test x = false}} {br : Bounds r.Return}
+    (hc : Implements pc r.test bc) (hs : Implements ps r.next bs)
+    (hd : Implements pd (fun x => ⌜r.finish x⌝ₜ) bd)
+    (hr : Implements pr (fun x : r.Return => ⌜r.resume x.1 x.2⌝ₜ) br)
+    (b : Bounds α) (hsize : ∀ x, ⌜x⌝ₜ.size ≤ b.peak x)
+    (hcheck : ∀ x, bc.peak x ≤ b.peak x)
+    (hstop : ∀ x (h : r.test x = false),
+      bd.time ⟨x, h⟩ + 2 ≤ b.time x ∧ bd.peak ⟨x, h⟩ ≤ b.peak x)
+    (hstep : ∀ x (h : r.test x = true),
+      bs.peak x ≤ b.peak x ∧ br.peak ⟨⟨x, h⟩, f (r.next x)⟩ ≤ b.peak x ∧
+      b.peak (r.next x) + ⌜x⌝ₜ.size + 1 ≤ b.peak x ∧
+      bs.time x + bc.time (r.next x) + br.time ⟨⟨x, h⟩, f (r.next x)⟩ + 16 +
+        b.time (r.next x) ≤ b.time x) :
+    Implements (code pc ps pd pr) (fun x => ⌜f x⌝ₜ)
+      ⟨fun x => bc.time x + 3 * b.time x + 10, fun x => b.peak x + 1⟩ := by
+  have output (x : α) : ⌜f x⌝ₜ.size ≤ b.peak x := by
+    induction h : b.peak x using Nat.strong_induction_on generalizing x with
+    | h k ih =>
+      cases ht : r.test x with
+      | false =>
+        have := hd.size_le ⟨x, ht⟩
+        simpa only [Tree.encode_self, r.finish_eq, h] using
+          this.trans (max_le (hsize x) (hstop x ht).2)
+      | true =>
+        have next := ih (b.peak (r.next x)) (by have := (hstep x ht).2.2.1; omega)
+          (r.next x) rfl
+        have := hr.size_le ⟨⟨x, ht⟩, f (r.next x)⟩
+        simp only [Tree.encode_self, r.resume_eq, Sigma.encode_mk, size_encode_prod,
+          UniqueEncoding.encode_subtype] at this
+        have := (hstep x ht).2.1
+        have := (hstep x ht).2.2.1
+        omega
+  have path {x y stack} (hp : Path r x y stack) :=
+    r.path_bounds (b := b) (br := br)
+      (fun a ha => by simp only [pending, ha, ↓reduceDIte]; have := (hstep a ha).2.2.2; omega)
+      (fun a ha => (hstep a ha).2.2.1) hp
+  constructor
+  · intro v n hv
+    have := (hc.1 (.var n) (n + 3) (by change n + 1 ≤ n + 3; omega)).1
+    dsimp only [code, Value.expression, Expr.bound]
+    constructor <;> omega
+  · intro v n s x hv hx
+    let J (t : ℕ → Tree) (k : ℕ) := ∃ y stack,
+      Path r x y stack ∧ t n = ⌜y⌝ₜ ∧ t (n + 1) = ⌜stack⌝ₜ ∧
+      t (n + 2) = ⌜r.test y⌝ₜ ∧ k = b.time y ∧ ∀ j < n, t j = s j
+    let K (t : ℕ → Tree) (k : ℕ) := ∃ y stack,
+      Path r x y stack ∧ t (n + 1) = ⌜stack⌝ₜ ∧ t (n + 2) = ⌜f y⌝ₜ ∧
+      k = (stack.map (r.pending br)).sum + 2 ∧ ∀ j < n, t j = s j
+    have check (t : ℕ → Tree) (y : α) (stack : List α) (hp : Path r x y stack)
+        (hy : t n = ⌜y⌝ₜ) :=
+      callInto_bounded hc (.var n) (n + 3) (n + 2) t y (space := b.peak x + 1)
+        (by change n + 1 ≤ n + 3; omega) hy le_rfl
+        ((hcheck y).trans (by have := (path hp).2; omega))
+        ((hsize y).trans (by have := (path hp).2; omega))
+    have descend (t : ℕ → Tree) (k : ℕ) (hj : J t k) :
+        (Cmd.while (.var (n + 2))
+          (.seq (.assign (n + 1) (.pair (.var n) (.var (n + 1))))
+            (.seq (callInto (ps (.var n)) (n + 3) n)
+              (callInto (pc (.var n)) (n + 3) (n + 2))))).Bounded t k (b.peak x + 1)
+          (fun u => (∃ k, J u k) ∧ (u (n + 2)).root = false) := by
+      apply Cmd.Bounded.loop_budget (.var (n + 2)) J k hj
+      · rintro u k ⟨y, stack, hp, hy, hstack, ht, _, _⟩
+        have hb := (hc.size_le y).trans (max_le (hsize y) (hcheck y))
+        have := (path hp).2
+        simp only [Expr.maxSize, ht]
+        omega
+      · rintro u k ⟨y, stack, hp, hy, hstack, ht, rfl, _⟩ h
+        have := (hstop y (by simpa [ht] using h)).1
+        simpa only [Expr.steps] using (by omega : 2 ≤ b.time y)
+      · rintro u k ⟨y, stack, hp, hy, hstack, ht, rfl, hf⟩ h
+        have ht : r.test y = true := by simpa [ht] using h
+        have hp' := Path.cons hp ht
+        have hb := (path hp).2
+        have hb' := (path hp').2
+        simp only [encode_list_cons, size_encode_prod] at hb'
+        have hy' := hsize y
+        have hn := (hstep y ht).2.2.1
+        refine ⟨1 + ((bs.time y + 2) + (bc.time (r.next y) + 2)), ?_⟩
+        refine Cmd.Bounded.seq (Q := fun w =>
+          w = Function.update u (n + 1) ⌜y :: stack⌝ₜ) ?_ ?_
+        · simp only [Cmd.bounded_assign_iff, Expr.assignSteps, Expr.steps, Expr.maxSize,
+            Expr.eval, hy, hstack, encode_list_cons, encode_prod, Tree.size_pair]
+          refine ⟨by rfl, ?_, trivial⟩
+          exact max_le (by omega) (max_le (by omega) (by omega))
+        rintro w rfl
+        apply Cmd.Bounded.seq (callInto_bounded hs (.var n) (n + 3) n _ y
+          (by change n + 1 ≤ n + 3; omega) (by simp [hy]) le_rfl
+          ((hstep y ht).1.trans (by omega)) (by omega))
+        rintro w ⟨hw, hwf⟩
+        apply (check w (r.next y) (y :: stack) hp' hw).mono le_rfl le_rfl
+        rintro z ⟨hz, hzf⟩
+        refine ⟨b.time (r.next y), ⟨r.next y, y :: stack, hp', ?_, ?_, hz, rfl, ?_⟩, ?_⟩
+        · exact (hzf n (by omega) (by omega)).trans hw
+        · simpa using (hzf (n + 1) (by omega) (by omega)).trans
+            (hwf (n + 1) (by omega) (by omega))
+        · intro j hj
+          exact (hzf j (by omega) (by omega)).trans ((hwf j (by omega) (by omega)).trans
+            (by simpa [show j ≠ n + 1 by omega] using hf j hj))
+        · have := (hstep y ht).2.2.2
+          simp only [Expr.steps]
+          omega
+    have ascend (t : ℕ → Tree) (k : ℕ) (hk : K t k) :
+        (Cmd.while (.var (n + 1))
+          (.seq (.assign n (.pair (.left (.var (n + 1))) (.var (n + 2))))
+            (.seq (callInto (pr (.var n)) (n + 3) (n + 2))
+              (.assign (n + 1) (.right (.var (n + 1))))))).Bounded t k (b.peak x + 1)
+          (fun u => (∃ k, K u k) ∧ (u (n + 1)).root = false) := by
+      apply Cmd.Bounded.loop_budget (.var (n + 1)) K k hk
+      · rintro u k ⟨y, stack, hp, hstack, ht, _, _⟩
+        have := (path hp).2
+        simp only [Expr.maxSize, hstack]
+        omega
+      · rintro u k ⟨y, stack, hp, hstack, ht, rfl, _⟩ _
+        simp only [Expr.steps]
+        omega
+      · rintro u k ⟨y, stack, hp, hstack, ht, rfl, hf⟩ h
+        cases hp with
+        | nil => simp [hstack] at h
+        | @cons parent rest hp hz =>
+          have hb := (path hp).2
+          have hb' := (path (Path.cons hp hz)).2
+          simp only [encode_list_cons, size_encode_prod] at hb'
+          have ho := output (r.next parent)
+          have hs := (hstep parent hz).2.2.1
+          let arg : r.Return := ⟨⟨parent, hz⟩, f (r.next parent)⟩
+          have ha : ⌜arg⌝ₜ.size ≤ b.peak x + 1 := by
+            simp only [arg, Sigma.encode_mk, size_encode_prod, UniqueEncoding.encode_subtype]
+            omega
+          refine ⟨2 + ((br.time arg + 2) + 1), ?_⟩
+          refine Cmd.Bounded.seq (Q := fun w => w = Function.update u n ⌜arg⌝ₜ) ?_ ?_
+          · simp only [Cmd.bounded_assign_iff, Expr.assignSteps, Expr.steps, Expr.maxSize,
+              Expr.eval, hstack, ht, encode_list_cons, encode_prod, Tree.left_pair,
+              Tree.size_pair, arg, Sigma.encode_mk, UniqueEncoding.encode_subtype]
+            refine ⟨by rfl, ?_, trivial⟩
+            exact max_le (by omega) (max_le (by omega) (by omega))
+          rintro w rfl
+          apply Cmd.Bounded.seq (callInto_bounded hr (.var n) (n + 3) (n + 2) _ arg
+            (by change n + 1 ≤ n + 3; omega) (by simp) le_rfl
+            ((hstep parent hz).2.1.trans (by omega)) ha)
+          rintro w ⟨hw, hwf⟩
+          have hws : w (n + 1) = ⌜parent :: rest⌝ₜ := by
+            simpa [hstack] using hwf (n + 1) (by omega) (by omega)
+          simp only [Cmd.bounded_assign_iff, Expr.assignSteps, Expr.steps, Expr.maxSize,
+            Expr.eval, hws, encode_list_cons, encode_prod, Tree.right_pair, Tree.size_pair]
+          refine ⟨by rfl, by omega, (rest.map (r.pending br)).sum + 2,
+            ⟨parent, rest, hp, by simp, ?_, rfl, ?_⟩, ?_⟩
+          · simpa [arg, r.resume_eq] using hw
+          · intro j hj
+            simpa [show j ≠ n + 1 by omega, show j ≠ n by omega] using
+              (hwf j (by omega) (by omega)).trans (by
+                simpa [show j ≠ n by omega] using hf j hj)
+          · simp only [List.map_cons, List.sum_cons, pending, hz, ↓reduceDIte, arg]
+            omega
+    change (Code.block _).Bounded _ _ _ _
+    simp only [code, Code.block]
+    apply Cmd.Bounded.mono
+      (time := 2 + (1 + ((bc.time x + 2) + (b.time x + (b.time x + (b.time x + 2)))))) ?_
+      (by omega) le_rfl (fun _ h => h)
+    refine Cmd.Bounded.seq (Q := fun t => t = Function.update s n ⌜x⌝ₜ) ?_ ?_
+    · simp only [Cmd.bounded_assign_iff, Value.maxSize_expression, Value.eval_expression, hx]
+      exact ⟨v.assignSteps_le, (hsize x).trans (by omega), trivial⟩
+    rintro t rfl
+    apply Cmd.Bounded.seq (Q := fun t => t = Function.update (Function.update s n ⌜x⌝ₜ)
+      (n + 1) ⌜([] : List α)⌝ₜ) (by simp [encode_unit])
+    rintro t rfl
+    apply Cmd.Bounded.seq (check _ x [] (.nil x) (by simp))
+    rintro t ⟨ht, hf⟩
+    have hj : J t (b.time x) := ⟨x, [], .nil x, by simpa using hf n (by omega) (by omega),
+      by simpa using hf (n + 1) (by omega) (by omega), ht, rfl,
+      fun j hj => by
+        simpa [show j ≠ n by omega, show j ≠ n + 1 by omega] using
+          hf j (by omega) (by omega)⟩
+    apply Cmd.Bounded.seq (descend t _ hj)
+    rintro u ⟨⟨_, y, stack, hp, hy, hstack, hflag, _, hf⟩, hfalse⟩
+    have hyfalse : r.test y = false := by simpa [hflag] using hfalse
+    have ht := (path hp).1
+    have hb := (path hp).2
+    apply Cmd.Bounded.seq ((callInto_bounded hd (.var n) (n + 3) (n + 2) u ⟨y, hyfalse⟩
+      (by change n + 1 ≤ n + 3; omega) (by simpa using hy) le_rfl
+      ((hstop y hyfalse).2.trans (by omega)) ((hsize y).trans (by omega))).mono
+        (by have := (hstop y hyfalse).1; omega) le_rfl (fun _ h => h))
+    rintro w ⟨hw, hwf⟩
+    rw [Cmd.bounded_seq_skip_iff]
+    have hk : K w ((stack.map (r.pending br)).sum + 2) := ⟨y, stack, hp,
+      (hwf (n + 1) (by omega) (by omega)).trans hstack,
+      by simpa [r.finish_eq] using hw, rfl,
+      fun j hj => (hwf j (by omega) (by omega)).trans (hf j hj)⟩
+    apply (ascend w _ hk).mono (by omega) le_rfl
+    rintro z ⟨⟨_, y, stack, hp, hstack, hr, _, hf⟩, hfalse⟩
+    cases hp with
+    | nil => exact ⟨by simpa using hr, hf⟩
+    | cons hp h => simp [hstack] at hfalse
+
+/-- Sum the calls along the actual recursion, retaining space for all saved source arguments. -/
+def cost (bc bs : Bounds α) (bd : Bounds {x // r.test x = false}) (br : Bounds r.Return)
+    (x : α) : Cost :=
+  if h : r.test x = true then
+    let tail := cost bc bs bd br (r.next x)
+    let arg : r.Return := ⟨⟨x, h⟩, f (r.next x)⟩
+    ⟨bs.time x + bc.time (r.next x) + br.time arg + 16 + tail.time,
+      max ⌜x⌝ₜ.size (max (bc.peak x) (max (bs.peak x)
+        (max (br.peak arg) (tail.peak + ⌜x⌝ₜ.size + 1))))⟩
+  else
+    let arg : {x // r.test x = false} := ⟨x, by simpa using h⟩
+    ⟨bd.time arg + 2, max ⌜x⌝ₜ.size (max (bc.peak x) (bd.peak arg))⟩
+termination_by r.measure x
+decreasing_by exact r.decreases x h
+
+omit [∀ x, UniqueEncoding Tree (β x)] in
+theorem cost_stop (bc bs : Bounds α) (bd : Bounds {x // r.test x = false})
+    (br : Bounds r.Return) (x : α) (h : r.test x = false) :
+    r.cost bc bs bd br x =
+      ⟨bd.time ⟨x, h⟩ + 2, max ⌜x⌝ₜ.size (max (bc.peak x) (bd.peak ⟨x, h⟩))⟩ := by
+  rw [cost]
+  simp only [h, Bool.false_eq_true, ↓reduceDIte]
+
+omit [∀ x, UniqueEncoding Tree (β x)] in
+theorem cost_step (bc bs : Bounds α) (bd : Bounds {x // r.test x = false})
+    (br : Bounds r.Return) (x : α) (h : r.test x = true) :
+    r.cost bc bs bd br x =
+      ⟨bs.time x + bc.time (r.next x) + br.time ⟨⟨x, h⟩, f (r.next x)⟩ + 16 +
+          (r.cost bc bs bd br (r.next x)).time,
+        max ⌜x⌝ₜ.size (max (bc.peak x) (max (bs.peak x)
+          (max (br.peak ⟨⟨x, h⟩, f (r.next x)⟩)
+            ((r.cost bc bs bd br (r.next x)).peak + ⌜x⌝ₜ.size + 1))))⟩ := by
+  rw [cost]
+  simp only [h, ↓reduceDIte]
+
+omit [∀ x, UniqueEncoding Tree (β x)] in
+/-- Bound a recursive evaluation using a source invariant and uniform local allowances.
+The final term explicitly pays for every saved caller in the stack. -/
+theorem cost_le_of_invariant
+    (bc bs : Bounds α) (bd : Bounds {x // r.test x = false}) (br : Bounds r.Return)
+    (I : α → Prop) (size time peak : ℕ)
+    (hsize : ∀ x, I x → ⌜x⌝ₜ.size ≤ size)
+    (hcheck : ∀ x, I x → bc.peak x ≤ peak)
+    (hstop : ∀ x (h : r.test x = false), I x →
+      bd.time ⟨x, h⟩ + 2 ≤ time ∧ bd.peak ⟨x, h⟩ ≤ peak)
+    (hstep : ∀ x (h : r.test x = true), I x →
+      I (r.next x) ∧ bs.peak x ≤ peak ∧
+      br.peak ⟨⟨x, h⟩, f (r.next x)⟩ ≤ peak ∧
+      bs.time x + bc.time (r.next x) + br.time ⟨⟨x, h⟩, f (r.next x)⟩ + 16 ≤ time)
+    (x : α) (hx : I x) :
+    (r.cost bc bs bd br x).time ≤ (r.measure x + 1) * time ∧
+      (r.cost bc bs bd br x).peak ≤ peak + (r.measure x + 1) * (size + 1) := by
+  induction hm : r.measure x using Nat.strong_induction_on generalizing x with
+  | h n ih =>
+    cases ht : r.test x with
+    | false =>
+      have := hstop x ht hx
+      have := hcheck x hx
+      have := hsize x hx
+      rw [r.cost_stop _ _ _ _ x ht]
+      dsimp only
+      constructor
+      · nlinarith
+      · simp only [max_le_iff]
+        (repeat' apply And.intro) <;> nlinarith
+    | true =>
+      obtain ⟨hi, hs, hr, htime⟩ := hstep x ht hx
+      have hm' := r.decreases x ht
+      have hc := ih (r.measure (r.next x)) (by omega) (r.next x) hi rfl
+      have := hcheck x hx
+      have := hsize x hx
+      rw [r.cost_step _ _ _ _ x ht]
+      dsimp only
+      constructor
+      · nlinarith [hc.1]
+      · simp only [max_le_iff]
+        (repeat' apply And.intro) <;> nlinarith [hc.2]
+
+@[simps] def bounds (bc bs : Bounds α) (bd : Bounds {x // r.test x = false})
+    (br : Bounds r.Return) : Bounds α :=
+  ⟨fun x => bc.time x + 3 * (r.cost bc bs bd br x).time + 10,
+    fun x => (r.cost bc bs bd br x).peak + 1⟩
+
+/-- Callback certificates and the source recursion equation determine one certified program. -/
+def implementation (hc : Implementation r.test) (hs : Implementation r.next)
+    (hd : Implementation (fun x => ⌜r.finish x⌝ₜ))
+    (hr : Implementation (fun x : r.Return => ⌜r.resume x.1 x.2⌝ₜ)) :
+    Implementation (fun x => ⌜f x⌝ₜ) := by
+  refine .ofImplements (code hc.program hs.program hd.program hr.program)
+    (r.bounds hc.bounds hs.bounds hd.bounds hr.bounds) ?_
+  apply r.implements hc.implements hs.implements hd.implements hr.implements
+    ⟨fun x => (r.cost hc.bounds hs.bounds hd.bounds hr.bounds x).time,
+      fun x => (r.cost hc.bounds hs.bounds hd.bounds hr.bounds x).peak⟩
+  · intro x
+    cases h : r.test x <;>
+      simp only [cost_stop, cost_step, h, le_sup_left]
+  · intro x
+    cases h : r.test x <;>
+      simp only [cost_stop, cost_step, h] <;> omega
+  · intro x h
+    simp only [cost_stop, h]
+    exact ⟨le_rfl, (Nat.le_max_right _ _).trans (Nat.le_max_right _ _)⟩
+  · intro x h
+    simp only [cost_step, h]
+    exact ⟨(Nat.le_max_left _ _).trans ((Nat.le_max_right _ _).trans (Nat.le_max_right _ _)),
+      (Nat.le_max_left _ _).trans ((Nat.le_max_right _ _).trans
+        ((Nat.le_max_right _ _).trans (Nat.le_max_right _ _))),
+      (Nat.le_max_right _ _).trans ((Nat.le_max_right _ _).trans
+        ((Nat.le_max_right _ _).trans (Nat.le_max_right _ _))), le_rfl⟩
+
+@[simp, source_bounds↓] theorem bounds_implementation
+    (hc : Implementation r.test) (hs : Implementation r.next)
+    (hd : Implementation (fun x => ⌜r.finish x⌝ₜ))
+    (hr : Implementation (fun x : r.Return => ⌜r.resume x.1 x.2⌝ₜ)) :
+    (r.implementation hc hs hd hr).bounds = r.bounds hc.bounds hs.bounds hd.bounds hr.bounds := rfl
+
+end Recursion
+end Complexity.TreeProgram.Source
