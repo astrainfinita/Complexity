@@ -133,24 +133,25 @@ example : True := by
     have : Realizes optionalReverse ⟨fun _ => 0, fun _ => 0⟩ := by source_fun_prop
   trivial
 
-namespace FixedCallFallback
+namespace SelectedCallBudget
 
 def relaxedBounds : Bounds (Option (List Bool)) :=
   ⟨fun x => optionalReverseImpl.bounds.time x + 1, optionalReverseImpl.bounds.peak⟩
 
-@[scoped fun_prop, scoped source_fallback]
-theorem relaxed : Realizes optionalReverse relaxedBounds :=
-  optionalReverseImpl.realizes.mono (fun _ => ⟨Nat.le_add_right _ _, le_rfl⟩)
+-- Prove another allowance for the already selected program, without restarting translation.
+def relaxedImplementation : Implementation optionalReverse :=
+  optionalReverseImpl.rebudget relaxedBounds (fun _ => ⟨Nat.le_add_right _ _, le_rfl⟩)
 
--- A different fixed budget rejects this structural candidate without blocking later rules.
-example : True := by
-  fail_if_success have : Realizes optionalReverse relaxedBounds := by source_calls
-  trivial
+example : relaxedImplementation.program = optionalReverseImpl.program := rfl
 
+example : Realizes optionalReverse relaxedBounds := relaxedImplementation.realizes
+
+-- The caller may supply that budget proof without changing the selected program.
 example : Realizes optionalReverse relaxedBounds := by
-  source_fun_prop using FixedCallFallback
+  let selected := relaxedImplementation
+  source_fun_prop
 
-end FixedCallFallback
+end SelectedCallBudget
 
 def singletonIndexed (x : Σ n, List (Fin n)) : Σ n, List (List (Fin n)) := ⟨x.1, [x.2]⟩
 
@@ -168,8 +169,10 @@ def mixedCalls (x : Bool × List Bool) : List Bool :=
   if x.1 then x.2.reverse else legacy x.2
 
 -- Only the opaque compatibility leaf requires choosing an existential witness.
-noncomputable def mixedCallsImpl (b : Bounds (List Bool)) (_h : Realizes legacy b) :
-    Implementation mixedCalls := by source_calls
+noncomputable def mixedCallsImpl (b : Bounds (List Bool)) (h : Realizes legacy b) :
+    Implementation mixedCalls := by
+  let legacyImplementation := h.implementation
+  source_calls
 
 def conditionalReverse : Implementation
     (fun x : Bool × List Bool => if x.1 then x.2.reverse else x.2) := by source_fun_prop

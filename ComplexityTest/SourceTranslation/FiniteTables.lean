@@ -85,6 +85,40 @@ def shiftWire (x : ℕ × (Σ n, Fin n)) := (Fin.natAdd x.1 x.2.2).val
 
 example : ∃ b, Realizes shiftWire b := ⟨_, by source_fun_prop⟩
 
+section FinAppendImplementation
+
+variable {ρ : Type*} {α : ρ → Type*}
+  [UniqueEncoding Tree ρ] [∀ e, UniqueEncoding Tree (α e)]
+  {n m : ρ → ℕ} {f : (e : ρ) → Fin (n e) → α e} {g : (e : ρ) → Fin (m e) → α e}
+  (hf : Implementation (fun e => ⌜f e⌝ₜ)) (hg : Implementation (fun e => ⌜g e⌝ₜ))
+
+-- Both precise budgets and the actual supplied programs survive dependent table concatenation.
+example : (hf.finAppend hg).bounds =
+    ⟨fun e => hf.bounds.time e + hg.bounds.time e + 26 * n e + 16,
+     fun e => max (hf.bounds.peak e) (max (hg.bounds.peak e) (⌜f e⌝ₜ.size + ⌜g e⌝ₜ.size))⟩ := rfl
+
+example : (hf.finAppend hg).program = (fun v => do
+    let a ← hf.program v
+    let b ← hg.program v
+    List.Code.append a b) := rfl
+
+-- Native fun_prop and fixed-budget source translation both use the registered constructor.
+example : Nonempty (Implementation (fun e => ⌜Fin.append (f e) (g e)⌝ₜ)) := ⟨by fun_prop⟩
+
+example : Realizes (fun e => ⌜Fin.append (f e) (g e)⌝ₜ)
+    ⟨fun e => hf.bounds.time e + hg.bounds.time e + 26 * n e + 16,
+     fun e => max (hf.bounds.peak e) (max (hg.bounds.peak e) (⌜f e⌝ₜ.size + ⌜g e⌝ₜ.size))⟩ := by
+  source_fun_prop
+
+include hf hg in
+example : True := by
+  fail_if_success
+    have : Realizes (fun e => ⌜Fin.append (f e) (g e)⌝ₜ) ⟨fun _ => 0, fun _ => 0⟩ := by
+      source_fun_prop
+  trivial
+
+end FinAppendImplementation
+
 -- Only the first table is traversed; a stored second table is not regenerated.
 example {α : Type*} [UniqueEncoding Tree α] :
     ∃ b, Realizes (fun x : Σ n, Σ m, (Fin n → α) × (Fin m → α) =>
@@ -204,7 +238,7 @@ def composeWires (x : Σ n, Σ k, Σ m, (Fin n → Fin k) × (Fin k → Fin m)) 
 
 example : ∃ b, Realizes composeWires b := ⟨_, by source_fun_prop using tabulate⟩
 
-attribute [local fun_prop] Realizes.finComp in
+attribute [local fun_prop] Implementation.finComp in
 theorem composeWires_model :
     ∃ k, TimeSpaceModel.tree.ComputableInTimeAndSpace composeWires
       (fun n => 1000000 * (n + 1) ^ 3) (fun n => k * (1000000 * (n + 1) ^ 2)) := by
@@ -233,8 +267,7 @@ theorem composeWires_ftisp :
 
 -- A represented table and a single callback implement one algorithm for every runtime index.
 -- Pointwise existence must not be mistaken for such a callback.
-example (f : ℕ → ℕ → Bool) (b : ℕ → Bounds ℕ)
-    (_hf : ∀ n, Realizes (f n) (b n)) : True := by
+example (f : ℕ → ℕ → Bool) (_hf : ∀ n, Implementation (f n)) : True := by
   fail_if_success
     have : ∃ c, Realizes (fun n => List.ofFn (fun i : Fin n => f n i.val)) c :=
       ⟨_, by source_fun_prop using tabulate⟩

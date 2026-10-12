@@ -8,6 +8,11 @@ import Complexity.Tactic.TreeProgram.Library
 open Complexity TreeProgram Complexity.TreeProgram.Source
 namespace ComplexityTest.SourceTranslation.Iteration
 
+-- The loop's program is executable data, without choosing an existential witness.
+/-- info: 41 -/
+#guard_msgs in
+#eval (Implementation.boolNot.iterate.program Value.input).build 1 |>.2.1
+
 def repeatReverse (x : ℕ × List Bool) := List.reverse^[x.1] x.2
 example : ∃ b, Realizes repeatReverse b := ⟨_, by source_fun_prop⟩
 
@@ -15,20 +20,24 @@ def repeatAnd (x : List Unit × Bool × Bool) :=
   (fun a => x.2.1 && a)^[x.1.length] x.2.2
 example : ∃ b, Realizes repeatAnd b := ⟨_, by source_fun_prop⟩
 
--- The requested bound constrains the callback before a certificate is selected.
-theorem fixedBudget (f : Bool → Bool) (b₁ b₂ : Bounds Bool)
-    (h₁ : Realizes f b₁) (_h₂ : Realizes f b₂) :
-    Realizes (fun x : ℕ × Bool => f^[x.1] x.2) (iterateBounds f b₁) := by
+-- The legacy conclusion remains a thin proof-composition interface.
+theorem fixedBudget (f : Bool → Bool) (b : Bounds Bool) (hf : Realizes f b) :
+    Realizes (fun x : ℕ × Bool => f^[x.1] x.2) (iterateBounds f b) := hf.iterate
+
+-- Translation uses the selected callback, including for a fixed budget request.
+example (f : Bool → Bool) (hf : Implementation f) :
+    let selected : Implementation (fun x : ℕ × Bool => f^[x.1] x.2) := by source_fun_prop
+    selected.program = hf.iterate.program := rfl
+
+example (f : Bool → Bool) (hf : Implementation f) :
+    Realizes (fun x : ℕ × Bool => f^[x.1] x.2) (iterateBounds f hf.bounds) := by
   source_fun_prop
 
-theorem fixedBudgetReordered (f : Bool → Bool) (b₁ b₂ : Bounds Bool)
-    (_h₂ : Realizes f b₂) (h₁ : Realizes f b₁) :
-    Realizes (fun x : ℕ × Bool => f^[x.1] x.2) (iterateBounds f b₁) := by
-  source_fun_prop
-
-example (f : Bool → Bool) (b : Bounds Bool) (hf : Realizes f b) :
-    Realizes (fun x : ℕ × Bool => f^[x.1] x.2) (iterateBounds f b) := by
-  source_fun_prop
+example (f : Bool → Bool) (_hf : Implementation f) : True := by
+  fail_if_success
+    have : Realizes (fun x : ℕ × Bool => f^[x.1] x.2) ⟨fun _ => 0, fun _ => 0⟩ := by
+      source_fun_prop
+  trivial
 
 -- Native fun_prop has no source-driver certificate adapter; its existing rules still work.
 example (f : Bool → Bool) (b : Bounds Bool) (hf : Realizes f b) :
@@ -44,43 +53,30 @@ section Captured
 variable (f : Bool → Bool → Bool) (count : Bool → ℕ) (initial : Bool → Bool)
   (bi₁ bi₂ : Bounds Bool) (bs₁ bs₂ : Bounds (Bool × Bool))
 
-example (hi : Realizes (fun e => (count e, (e, initial e))) bi₁)
-    (hs : Realizes (fun x : Bool × Bool => f x.1 x.2) bs₁) :
-    ∃ b, Realizes (fun e => (f e)^[count e] (initial e)) b := ⟨_, by source_fun_prop⟩
-
--- Initial-state and step certificates can each have several budgets, in either order.
 theorem capturedFixedBudget
-    (hi₁ : Realizes (fun e => (count e, (e, initial e))) bi₁)
-    (_hi₂ : Realizes (fun e => (count e, (e, initial e))) bi₂)
-    (hs₁ : Realizes (fun x : Bool × Bool => f x.1 x.2) bs₁)
-    (_hs₂ : Realizes (fun x : Bool × Bool => f x.1 x.2) bs₂) :
+    (hi : Realizes (fun e => (count e, (e, initial e))) bi₁)
+    (hs : Realizes (fun x : Bool × Bool => f x.1 x.2) bs₁) :
     Realizes (fun e => (f e)^[count e] (initial e))
-      (iterateWithBounds f count initial bi₁ bs₁) := by source_fun_prop
+      (iterateWithBounds f count initial bi₁ bs₁) := hi.iterateWith hs
 
-example
-    (hi₁ : Realizes (fun e => (count e, (e, initial e))) bi₁)
-    (_hi₂ : Realizes (fun e => (count e, (e, initial e))) bi₂)
-    (_hs₂ : Realizes (fun x : Bool × Bool => f x.1 x.2) bs₂)
-    (hs₁ : Realizes (fun x : Bool × Bool => f x.1 x.2) bs₁) :
+example (hi : Implementation (fun e => (count e, (e, initial e))))
+    (hs : Implementation (fun x : Bool × Bool => f x.1 x.2)) :
+    let selected : Implementation (fun e => (f e)^[count e] (initial e)) := by source_fun_prop
+    selected.program = (hi.iterateWith hs).program := rfl
+
+example (hi : Implementation (fun e => (count e, (e, initial e))))
+    (hs : Implementation (fun x : Bool × Bool => f x.1 x.2)) :
     Realizes (fun e => (f e)^[count e] (initial e))
-      (iterateWithBounds f count initial bi₁ bs₁) := by source_fun_prop
+      (iterateWithBounds f count initial hi.bounds hs.bounds) := by source_fun_prop
 
-example
-    (_hi₂ : Realizes (fun e => (count e, (e, initial e))) bi₂)
-    (hi₁ : Realizes (fun e => (count e, (e, initial e))) bi₁)
-    (hs₁ : Realizes (fun x : Bool × Bool => f x.1 x.2) bs₁)
-    (_hs₂ : Realizes (fun x : Bool × Bool => f x.1 x.2) bs₂) :
-    Realizes (fun e => (f e)^[count e] (initial e))
-      (iterateWithBounds f count initial bi₁ bs₁) := by source_fun_prop
+example (_hi : Implementation (fun e => (count e, (e, initial e))))
+    (_hs : Implementation (fun x : Bool × Bool => f x.1 x.2)) : True := by
+  fail_if_success
+    have : Realizes (fun e => (f e)^[count e] (initial e))
+        ⟨fun _ => 0, fun _ => 0⟩ := by source_fun_prop
+  trivial
 
-theorem capturedFixedBudgetReordered
-    (_hi₂ : Realizes (fun e => (count e, (e, initial e))) bi₂)
-    (hi₁ : Realizes (fun e => (count e, (e, initial e))) bi₁)
-    (_hs₂ : Realizes (fun x : Bool × Bool => f x.1 x.2) bs₂)
-    (hs₁ : Realizes (fun x : Bool × Bool => f x.1 x.2) bs₁) :
-    Realizes (fun e => (f e)^[count e] (initial e))
-      (iterateWithBounds f count initial bi₁ bs₁) := by source_fun_prop
-
+-- Native fun_prop still propagates fixed budgets to its existential callback rules.
 example
     (hi₁ : Realizes (fun e => (count e, (e, initial e))) bi₁)
     (_hi₂ : Realizes (fun e => (count e, (e, initial e))) bi₂)
@@ -91,20 +87,27 @@ example
 
 end Captured
 
--- Per-environment witnesses cannot stand in for one callback accepting every environment.
+-- Native existential search also requires one callback accepting every environment.
 example (f : Bool → Bool → Bool)
     (_h : ∀ e, ∃ b, Realizes (f e) b) : True := by
   fail_if_success
     have : ∃ b, Realizes (fun x : ℕ × Bool × Bool => (f x.2.1)^[x.1] x.2.2) b :=
-      ⟨_, by source_fun_prop⟩
+      ⟨_, by fun_prop⟩
   trivial
 
-theorem perStepBounds (f : Bool → Bool) (b : Bounds Bool) (hf : Realizes f b) :
+-- Even concrete programs for each separate environment are not a uniform callback.
+example (f : Bool → Bool → Bool) (_h : ∀ e, Implementation (f e)) : True := by
+  fail_if_success
+    have : Implementation (fun x : ℕ × Bool × Bool => (f x.2.1)^[x.1] x.2.2) := by
+      source_fun_prop
+  trivial
+
+theorem perStepBounds (f : Bool → Bool) (hf : Implementation f) :
     ∃ c, Realizes (fun x : ℕ × Bool => f^[x.1] x.2) c ∧
-      ∀ a, c.time (2, a) = b.time a + b.time (f a) + 2057 ∧
+      ∀ a, c.time (2, a) = hf.bounds.time a + hf.bounds.time (f a) + 2057 ∧
         c.peak (2, a) = max (20 * ⌜((2 : ℕ), a)⌝ₜ.size + 100)
-          (max (2 * b.peak a) (max (20 * ⌜((1 : ℕ), f a)⌝ₜ.size + 100)
-            (max (2 * b.peak (f a)) (2 * ⌜((0 : ℕ), f (f a))⌝ₜ.size + 10)))) := by
+          (max (2 * hf.bounds.peak a) (max (20 * ⌜((1 : ℕ), f a)⌝ₜ.size + 100)
+            (max (2 * hf.bounds.peak (f a)) (2 * ⌜((0 : ℕ), f (f a))⌝ₜ.size + 10)))) := by
   refine ⟨_, by source_fun_prop, ?_⟩
   intro a
   constructor

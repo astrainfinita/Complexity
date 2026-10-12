@@ -15,7 +15,11 @@ open ComplexityTest.SourceTranslation.SpecComparison
 
 namespace ComplexityTest.SourceTranslation.Examples
 
-attribute [local fun_prop] duplicate_realizes gateClauses_realizes
+attribute [local fun_prop] duplicate_realizes gateClauses_realizes gateClausesImplementation
+
+@[local fun_prop, source_bounds↓] private noncomputable def duplicateImplementation
+    {α : Type*} [UniqueEncoding Tree α] : Implementation (duplicate : List α → List α) :=
+  duplicate_realizes.implementation
 
 private theorem size_encode_map_le {α β : Type*}
     [UniqueEncoding Tree α] [UniqueEncoding Tree β] (f : α → β) (xs : List α)
@@ -121,7 +125,9 @@ example (_f : ℕ → Bool) : True := by
 example {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
     {n : α → ℕ} {f : (x : α) → Fin (n x) → β} {b : Bounds α}
     (hf : Realizes (fun x => ⌜f x⌝ₜ) b) :
-    ∃ c, Realizes (fun x => List.ofFn (f x)) c := ⟨_, by source_fun_prop⟩
+    ∃ c, Realizes (fun x => List.ofFn (f x)) c := by
+  let callback := hf.implementation
+  exact ⟨_, by source_fun_prop⟩
 
 -- The output index is computed at runtime; the continuation remains typed in the source.
 example : ∃ b, Realizes (fun input : Σ n, Circuit .booleanAlgebra (n + 1) 1 =>
@@ -169,7 +175,9 @@ example {α : Type*} [UniqueEncoding Tree α] :
 example {α : Type*} [UniqueEncoding Tree α]
     {f : List α → List α} {b : Bounds (List α)} (hf : Realizes f b) :
     ∃ c, Realizes (fun input : Option (List α) =>
-      match input with | none => [] | some xs => f xs) c := ⟨_, by source_fun_prop⟩
+      match input with | none => [] | some xs => f xs) c := by
+  let callback := hf.implementation
+  exact ⟨_, by source_fun_prop⟩
 
 example (_f : List Bool → List Bool) : True := by
   fail_if_success have : ∃ b, Realizes (fun input : Option (List Bool) =>
@@ -276,6 +284,7 @@ example : ∃ k, TimeSpaceModel.tree.ComputableInTimeAndSpace
 example (b : Bounds (List Bool)) (hf : Realizes helper b) :
     ∃ c, Realizes (fun xs => (helper xs).reverse) c ∧
       ∀ xs, c.time xs = b.time xs + (13 * (helper xs).length + 8) := by
+  let callback := hf.implementation
   refine ⟨_, by source_fun_prop, ?_⟩
   simp
 
@@ -347,8 +356,9 @@ example (b : Bounds (List Bool)) :
     Realizes f b → ∃ c, Realizes (fun xs => (f xs).reverse) c ∧
       ∀ xs, c.time xs = b.time xs + (13 * (f xs).length + 8) := by
   intro f hf
+  let callback := hf.implementation
   refine ⟨_, by source_fun_prop, ?_⟩
-  simp
+  simp [f]
 
 theorem branch_model : ∃ k, TimeSpaceModel.tree.ComputableInTimeAndSpace branch
     (fun n => 13 * n + 20) (fun n => k * (n + 4)) := by
@@ -367,6 +377,9 @@ example {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
     (hc : Realizes c bc) (ht : Realizes f bt) (hf : Realizes g bf) :
     ∃ b, Realizes (fun x => if c x then f x else g x) b ∧
       ∀ x, b.time x = bc.time x + (if c x then bt.time x else bf.time x) + 3 := by
+  let test := hc.implementation
+  let yes := ht.implementation
+  let no := hf.implementation
   refine ⟨_, by source_fun_prop, ?_⟩
   simp
 
@@ -550,7 +563,9 @@ theorem mapGateClauses_model {α : Type*} [UniqueEncoding Tree α] :
 
 example {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
     {f : α → β} {b : Bounds α} (hf : Realizes f b) :
-    ∃ c, Realizes (List.map f) c := ⟨_, by source_fun_prop⟩
+    ∃ c, Realizes (List.map f) c := by
+  let callback := hf.implementation
+  exact ⟨_, by source_fun_prop⟩
 
 example {α : Type*} [UniqueEncoding Tree α] :
     ∃ b, Realizes (List.map (List.map (List.reverse : List α → List α))) b :=
@@ -599,7 +614,9 @@ example : ∃ b, Realizes (fun xs : List Bool =>
 
 example {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
     (f : β → α → β) (b : Bounds (β × α)) (hf : Realizes (Function.uncurry f) b) :
-    ∃ c, Realizes (fun x : β × List α => x.2.foldl f x.1) c := ⟨_, by source_fun_prop⟩
+    ∃ c, Realizes (fun x : β × List α => x.2.foldl f x.1) c := by
+  let callback := hf.implementation
+  exact ⟨_, by source_fun_prop⟩
 
 example (_f : Bool → Bool → Bool) : True := by
   fail_if_success have : ∃ b, Realizes (fun xs : List Bool => xs.foldl _f false) b :=
@@ -610,14 +627,17 @@ example {ρ α β : Type*}
     [UniqueEncoding Tree ρ] [UniqueEncoding Tree α] [UniqueEncoding Tree β]
     {f : ρ → α → β} {b : Bounds (ρ × α)}
     (hf : Realizes (fun x : ρ × α => f x.1 x.2) b) :
-    ∃ c, Realizes (fun x : ρ × List α => x.2.map (f x.1)) c := ⟨_, by source_fun_prop⟩
+    ∃ c, Realizes (fun x : ρ × List α => x.2.map (f x.1)) c := by
+  let callback := hf.implementation
+  exact ⟨_, by source_fun_prop⟩
 
 example {ρ α β : Type*}
     [UniqueEncoding Tree ρ] [UniqueEncoding Tree α] [UniqueEncoding Tree β]
     {f : ρ → β → α → β} {b : Bounds (ρ × β × α)}
     (hf : Realizes (fun x : ρ × β × α => f x.1 x.2.1 x.2.2) b) :
-    ∃ c, Realizes (fun x : ρ × β × List α => x.2.2.foldl (f x.1) x.2.1) c :=
-    ⟨_, by source_fun_prop⟩
+    ∃ c, Realizes (fun x : ρ × β × List α => x.2.2.foldl (f x.1) x.2.1) c := by
+  let callback := hf.implementation
+  exact ⟨_, by source_fun_prop⟩
 
 example : ∃ b, Realizes (fun x : List Bool × List (List Bool) =>
     x.2.map (fun ys => x.1 ++ ys)) b := ⟨_, by source_fun_prop⟩

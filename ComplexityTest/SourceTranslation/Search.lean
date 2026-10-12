@@ -75,29 +75,22 @@ end Constant
 
 section Composition
 
--- The rejected candidate first succeeds on recursive premises, then rejects its side condition.
-@[local fun_prop] private theorem blockedComp {α β γ : Type*}
-    [UniqueEncoding Tree α] [UniqueEncoding Tree β] [UniqueEncoding Tree γ]
-    {f : α → β} {g : β → γ} {b : Bounds α} {c : Bounds β}
-    (_hf : Realizes f b) (_hg : Realizes g c) (h : False) :
-    Realizes (g ∘ f) identityBounds := h.elim
-
-attribute [local fun_prop] Realizes.comp Realizes.pair identity_realizes
-
--- A named callback rule enters the internal composition search.
-example (f g : Bool → Bool) (hf : Realizes f one) (hg : Realizes g one) :
-    ∃ b, Realizes (fun x => g (f x)) b ∧ ∀ x, b.time x = 2 := by
+-- Selected callback implementations compose with their exact budgets.
+example (f g : Bool → Bool) (hf : Source.Implementation f) (hg : Source.Implementation g) :
+    ∃ b, Realizes (fun x => g (f x)) b ∧
+      ∀ x, b.time x = hf.bounds.time x + hg.bounds.time (f x) := by
   refine ⟨_, by source_fun_prop, ?_⟩
   intro x
   rfl
 
 -- Let sharing also uses the same composition rules; its exact budget is retained.
 example (f : Bool → Bool) (g : Bool × Bool → Bool)
-    (hf : Realizes f one) (hg : Realizes g one) :
-    ∃ b, Realizes (fun x => let y := f x; g (x, y)) b ∧ ∀ x, b.time x = 3 := by
+    (hf : Source.Implementation f) (hg : Source.Implementation g) :
+    ∃ b, Realizes (fun x => let y := f x; g (x, y)) b ∧
+      ∀ x, b.time x = hf.bounds.time x + 1 + hg.bounds.time (x, f x) := by
   refine ⟨_, by source_fun_prop, ?_⟩
   intro x
-  rfl
+  simp only [Source.compBounds, Source.pairBounds, Nat.zero_add]
 
 end Composition
 
@@ -136,11 +129,14 @@ private def chosen (xs : List Bool) := xs.reverse
 
 private theorem availableReverse : Realizes chosen Source.reverseBounds := Source.reverse_realizes
 
-private theorem needsRecursive (_h : Realizes unsupported identityBounds) :
-    Realizes chosen Source.reverseBounds := availableReverse
+@[source_bounds↓] private noncomputable def availableImplementation : Source.Implementation chosen :=
+  availableReverse.implementation
+
+@[source_bounds↓] private noncomputable def needsRecursive (_h : Source.Implementation unsupported) :
+    Source.Implementation chosen := availableImplementation
 
 -- Equal-key function rules visit the most recently registered candidate first.
-attribute [local fun_prop] availableReverse needsRecursive
+attribute [local fun_prop] availableImplementation needsRecursive
 
 example : Realizes chosen Source.reverseBounds := by source_fun_prop
 
@@ -168,9 +164,19 @@ example : ∃ b, Realizes (fun xs => ⌜uncertified xs⌝ₜ) b := ⟨_, by sour
 
 section LocalPriority
 
+-- Existence proofs do not select a callback program; import the chosen certificate explicitly.
+example (f : Bool → Bool) (b₁ b₂ : Bounds Bool)
+    (h₁ : Realizes f b₁) (_h₂ : Realizes f b₂) : True := by
+  fail_if_success have : Source.Implementation f := by source_fun_prop
+  let callback := h₁.implementation
+  have : Source.Implementation f := by source_fun_prop
+  have : ∃ b, Realizes (fun x : ℕ × Bool => f^[x.1] x.2) b := ⟨_, by source_fun_prop⟩
+  trivial
+
 -- The local specification is an explicit choice, even when a certified default is registered.
 example (b : Bounds (List Bool)) (h : Realizes (List.reverse : List Bool → List Bool) b) :
     ∃ c, Realizes (List.reverse : List Bool → List Bool) c ∧ c = b := by
+  let selected := h.implementation
   refine ⟨_, by source_fun_prop, ?_⟩
   rfl
 
@@ -181,21 +187,24 @@ example (h : Source.Implementation (List.reverse : List Bool → List Bool)) :
 
 private def legacy (xs : List Bool) := xs.reverse
 
-@[local fun_prop] private theorem legacyDefault : Realizes legacy Source.reverseBounds :=
-  Source.reverse_realizes
+@[local fun_prop] private def legacyDefault : Source.Implementation legacy :=
+  Source.Implementation.reverse.congr rfl
 
 example (b : Bounds (List Bool)) (h : Realizes legacy b) :
     ∃ c, Realizes legacy c ∧ c = b := by
+  let selected := h.implementation
   refine ⟨_, by source_fun_prop, ?_⟩
   rfl
 
 example (b : Bounds Bool) (h : Realizes (id : Bool → Bool) b) :
     ∃ c, Realizes (id : Bool → Bool) c ∧ c = b := by
+  let selected := h.implementation
   refine ⟨_, by source_fun_prop, ?_⟩
   rfl
 
 example (b : Bounds Bool) (h : Realizes (fun _ : Bool => ()) b) :
     ∃ c, Realizes (fun _ : Bool => ()) c ∧ c = b := by
+  let selected := h.implementation
   refine ⟨_, by source_fun_prop, ?_⟩
   rfl
 
@@ -212,6 +221,7 @@ example : ∃ b, Realizes doubleReverse b ∧ b = identityBounds := by
       exact List.reverse_reverse xs
     rw [he]
     exact identity_realizes
+  let selected := fast.implementation
   refine ⟨_, by source_fun_prop, ?_⟩
   rfl
 
@@ -227,11 +237,18 @@ private def storedBounds (time : ℕ) : Bounds (Bool × Bool) :=
 private theorem storedSpec (time : ℕ) (h : 1 ≤ time) : Realizes stored (storedBounds time) :=
   Source.fst_realizes.mono fun _ => ⟨h, le_rfl⟩
 
-section Legacy
+section SelectedProgram
 
-private theorem preferred : Realizes stored (storedBounds 7) := storedSpec 7 (by decide)
-private theorem secondary : Realizes stored (storedBounds 9) := storedSpec 9 (by decide)
-private theorem fallback : Realizes stored (storedBounds 99) := storedSpec 99 (by decide)
+private def storedImplementation (time : ℕ) (h : 1 ≤ time) : Source.Implementation stored :=
+  Source.Implementation.fst.rebudget (storedBounds time) (fun _ => ⟨h, le_rfl⟩)
+
+private def rebuilt : Source.Implementation stored :=
+  (Source.Implementation.fst.pair Source.Implementation.snd).comp Source.Implementation.fst
+
+@[source_bounds↓] private def preferred : Source.Implementation stored :=
+  rebuilt.rebudget ⟨fun _ => 7, rebuilt.bounds.peak⟩ (fun _ => ⟨by change 4 ≤ 7; decide, le_rfl⟩)
+@[source_bounds↓] private def secondary := storedImplementation 9 (by decide)
+@[source_bounds↓] private def fallback := storedImplementation 99 (by decide)
 
 attribute [local source_fallback] fallback
 
@@ -248,8 +265,20 @@ example : ∃ b, Realizes stored b ∧ ∀ x, b.time x = 7 := by
   intro x
   rfl
 
--- Rejecting an incompatible ordinary rule must preserve the requested tight budget.
-example : Realizes stored Source.projectionBounds := by source_fun_prop
+-- Check program selection directly. The lower-priority projection is different code.
+example : (show Source.Implementation stored from by source_fun_prop).program =
+    preferred.program := rfl
+
+example : (preferred.program Value.input).build 1 |>.2.1 ≠
+    ((secondary.program Value.input).build 1).2.1 := by decide
+
+-- The one-step target needs the other program; budget failure must not select it.
+example : True := by
+  fail_if_success have : Realizes stored Source.projectionBounds := by source_fun_prop
+  trivial
+
+-- The selected program has another valid certificate; its code is unchanged.
+example : Source.Implements preferred.program stored rebuilt.bounds := rebuilt.implements
 
 section
 
@@ -261,7 +290,7 @@ example : ∃ b, Realizes stored b ∧ ∀ x, b.time x = 1 := by
   simp
 
 end
-end Legacy
+end SelectedProgram
 
 section Certified
 
@@ -277,12 +306,13 @@ example : ∃ b, Realizes stored b ∧ ∀ x, b.time x = 11 := by
   rfl
 
 section
-private theorem higherPriority : Realizes stored (storedBounds 7) := storedSpec 7 (by decide)
+@[source_bounds↓] private noncomputable def higherPriority : Source.Implementation stored :=
+  (storedSpec 7 (by decide)).implementation
 
 open Lean Meta Mathlib.Meta.FunProp in
 run_elab addTheorem ``higherPriority .local 20
 
--- Priority orders ordinary candidates across the compatibility boundary too.
+-- Priority orders the already imported implementation candidates.
 example : ∃ b, Realizes stored b ∧ ∀ x, b.time x = 7 := by
   refine ⟨_, by source_fun_prop, ?_⟩
   intro x
@@ -291,7 +321,7 @@ end
 
 attribute [local source_fallback] implementation
 
--- The same stage policy applies to explicit implementations and existential certificates.
+-- Structural projection still precedes fallback implementation rules.
 example : ∃ b, Realizes stored b ∧ ∀ x, b.time x = 1 := by
   refine ⟨_, by source_fun_prop, ?_⟩
   simp
