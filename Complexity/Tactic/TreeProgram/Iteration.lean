@@ -218,6 +218,8 @@ theorem Realizes.iterateWith {ρ α : Type*} [UniqueEncoding Tree ρ] [UniqueEnc
   simpa only [Implementation.bounds_iterateWith, Realizes.bounds_implementation] using
     (hi.implementation.iterateWith hs.implementation).realizes
 
+-- Realizes rules propagate a requested budget to the callback premises before selection.
+-- They also serve native fun_prop, which does not use the source driver's adapters.
 attribute [scoped fun_prop] Implementation.iterate Realizes.iterate
   Implementation.iterateWith Realizes.iterateWith
 

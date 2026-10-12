@@ -962,17 +962,15 @@ private partial def sourceSearch (session : Search.Session) (nested : Bool)
     (ancestors : Array Lean.Expr) (goal : Lean.Expr) : FunPropM (Option Result) := do
   let unfolded := session.unfolded
   let goal ← instantiateMVars goal
-  -- Public inferred requests use one implementation query. Legacy rule premises still
+  -- Inferred requests use one implementation query. Fixed requests retain their bounds
+  -- so rules can constrain callbacks before choosing certificates. Legacy premises still
   -- compose in their own interface, adapting indexed candidates at the boundary below.
-  -- A fixed budget can require the existing branchwise verification after adaptation fails.
-  if !nested && goal.isAppOfArity ``Realizes 6 then
-    let inferred := goal.getAppArgs[5]!.isMVar
-    if let some result ← Search.attempt unfolded do
-        let target ← mkAppOptM ``Implementation (goal.getAppArgs.extract 0 5 |>.map some)
-        let some result ← sourceSearch session nested ancestors target | return none
-        let some proof ← normalizedRealizes goal (← instantiateMVars result.proof) | return none
-        return some ⟨proof⟩ then return some result
-    if inferred then return none
+  if !nested && goal.isAppOfArity ``Realizes 6 && goal.getAppArgs[5]!.isMVar then
+    return ← Search.attempt unfolded do
+      let target ← mkAppOptM ``Implementation (goal.getAppArgs.extract 0 5 |>.map some)
+      let some result ← sourceSearch session nested ancestors target | return none
+      let some proof ← normalizedRealizes goal (← instantiateMVars result.proof) | return none
+      return some ⟨proof⟩
   session.step
   trace[Meta.Tactic.fun_prop] "source step {← session.steps.get}: {goal}"
   if let some result ← localSourceCertificate unfolded goal then return some result

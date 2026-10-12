@@ -15,6 +15,82 @@ def repeatAnd (x : List Unit × Bool × Bool) :=
   (fun a => x.2.1 && a)^[x.1.length] x.2.2
 example : ∃ b, Realizes repeatAnd b := ⟨_, by source_fun_prop⟩
 
+-- The requested bound constrains the callback before a certificate is selected.
+theorem fixedBudget (f : Bool → Bool) (b₁ b₂ : Bounds Bool)
+    (h₁ : Realizes f b₁) (_h₂ : Realizes f b₂) :
+    Realizes (fun x : ℕ × Bool => f^[x.1] x.2) (iterateBounds f b₁) := by
+  source_fun_prop
+
+theorem fixedBudgetReordered (f : Bool → Bool) (b₁ b₂ : Bounds Bool)
+    (_h₂ : Realizes f b₂) (h₁ : Realizes f b₁) :
+    Realizes (fun x : ℕ × Bool => f^[x.1] x.2) (iterateBounds f b₁) := by
+  source_fun_prop
+
+example (f : Bool → Bool) (b : Bounds Bool) (hf : Realizes f b) :
+    Realizes (fun x : ℕ × Bool => f^[x.1] x.2) (iterateBounds f b) := by
+  source_fun_prop
+
+-- Native fun_prop has no source-driver certificate adapter; its existing rules still work.
+example (f : Bool → Bool) (b : Bounds Bool) (hf : Realizes f b) :
+    ∃ c, Realizes (fun x : ℕ × Bool => f^[x.1] x.2) c := ⟨_, by fun_prop⟩
+
+example (f : Bool → Bool) (b₁ b₂ : Bounds Bool)
+    (h₁ : Realizes f b₁) (_h₂ : Realizes f b₂) :
+    Realizes (fun x : ℕ × Bool => f^[x.1] x.2) (iterateBounds f b₁) := by
+  fun_prop
+
+section Captured
+
+variable (f : Bool → Bool → Bool) (count : Bool → ℕ) (initial : Bool → Bool)
+  (bi₁ bi₂ : Bounds Bool) (bs₁ bs₂ : Bounds (Bool × Bool))
+
+example (hi : Realizes (fun e => (count e, (e, initial e))) bi₁)
+    (hs : Realizes (fun x : Bool × Bool => f x.1 x.2) bs₁) :
+    ∃ b, Realizes (fun e => (f e)^[count e] (initial e)) b := ⟨_, by source_fun_prop⟩
+
+-- Initial-state and step certificates can each have several budgets, in either order.
+theorem capturedFixedBudget
+    (hi₁ : Realizes (fun e => (count e, (e, initial e))) bi₁)
+    (_hi₂ : Realizes (fun e => (count e, (e, initial e))) bi₂)
+    (hs₁ : Realizes (fun x : Bool × Bool => f x.1 x.2) bs₁)
+    (_hs₂ : Realizes (fun x : Bool × Bool => f x.1 x.2) bs₂) :
+    Realizes (fun e => (f e)^[count e] (initial e))
+      (iterateWithBounds f count initial bi₁ bs₁) := by source_fun_prop
+
+example
+    (hi₁ : Realizes (fun e => (count e, (e, initial e))) bi₁)
+    (_hi₂ : Realizes (fun e => (count e, (e, initial e))) bi₂)
+    (_hs₂ : Realizes (fun x : Bool × Bool => f x.1 x.2) bs₂)
+    (hs₁ : Realizes (fun x : Bool × Bool => f x.1 x.2) bs₁) :
+    Realizes (fun e => (f e)^[count e] (initial e))
+      (iterateWithBounds f count initial bi₁ bs₁) := by source_fun_prop
+
+example
+    (_hi₂ : Realizes (fun e => (count e, (e, initial e))) bi₂)
+    (hi₁ : Realizes (fun e => (count e, (e, initial e))) bi₁)
+    (hs₁ : Realizes (fun x : Bool × Bool => f x.1 x.2) bs₁)
+    (_hs₂ : Realizes (fun x : Bool × Bool => f x.1 x.2) bs₂) :
+    Realizes (fun e => (f e)^[count e] (initial e))
+      (iterateWithBounds f count initial bi₁ bs₁) := by source_fun_prop
+
+theorem capturedFixedBudgetReordered
+    (_hi₂ : Realizes (fun e => (count e, (e, initial e))) bi₂)
+    (hi₁ : Realizes (fun e => (count e, (e, initial e))) bi₁)
+    (_hs₂ : Realizes (fun x : Bool × Bool => f x.1 x.2) bs₂)
+    (hs₁ : Realizes (fun x : Bool × Bool => f x.1 x.2) bs₁) :
+    Realizes (fun e => (f e)^[count e] (initial e))
+      (iterateWithBounds f count initial bi₁ bs₁) := by source_fun_prop
+
+example
+    (hi₁ : Realizes (fun e => (count e, (e, initial e))) bi₁)
+    (_hi₂ : Realizes (fun e => (count e, (e, initial e))) bi₂)
+    (hs₁ : Realizes (fun x : Bool × Bool => f x.1 x.2) bs₁)
+    (_hs₂ : Realizes (fun x : Bool × Bool => f x.1 x.2) bs₂) :
+    Realizes (fun e => (f e)^[count e] (initial e))
+      (iterateWithBounds f count initial bi₁ bs₁) := by fun_prop
+
+end Captured
+
 -- Per-environment witnesses cannot stand in for one callback accepting every environment.
 example (f : Bool → Bool → Bool)
     (_h : ∀ e, ∃ b, Realizes (f e) b) : True := by
@@ -23,13 +99,19 @@ example (f : Bool → Bool → Bool)
       ⟨_, by source_fun_prop⟩
   trivial
 
-example (f : Bool → Bool) (b : Bounds Bool) (hf : Realizes f b) :
+theorem perStepBounds (f : Bool → Bool) (b : Bounds Bool) (hf : Realizes f b) :
     ∃ c, Realizes (fun x : ℕ × Bool => f^[x.1] x.2) c ∧
-      ∀ a, c.time (2, a) = b.time a + b.time (f a) + 2057 := by
+      ∀ a, c.time (2, a) = b.time a + b.time (f a) + 2057 ∧
+        c.peak (2, a) = max (20 * ⌜((2 : ℕ), a)⌝ₜ.size + 100)
+          (max (2 * b.peak a) (max (20 * ⌜((1 : ℕ), f a)⌝ₜ.size + 100)
+            (max (2 * b.peak (f a)) (2 * ⌜((0 : ℕ), f (f a))⌝ₜ.size + 10)))) := by
   refine ⟨_, by source_fun_prop, ?_⟩
   intro a
-  simp [iterateBounds, show Nat.bits 2 = [false, true] from rfl]
-  omega
+  constructor
+  · simp [iterateBounds, show Nat.bits 2 = [false, true] from rfl]
+    omega
+  · rfl
+
 def repeatNot (x : List Unit × Bool) := Bool.not^[x.1.length] x.2
 
 example : ∃ k, TimeSpaceModel.tree.ComputableInTimeAndSpace repeatNot
