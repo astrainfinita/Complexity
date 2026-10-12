@@ -89,7 +89,7 @@ def relabelRecursion : Recursion relabelFn where
 
 noncomputable def relabelCheck : Implementation relabelTest :=
   (show Realizes relabelTest ⟨fun _ => 10, fun x => ⌜x⌝ₜ.size⟩ from by
-    source_fun_prop).implementation
+    source_cases).implementation
 
 theorem relabelNext_realizes : Realizes relabelNextFn
     ⟨fun x => 1000 * (⌜x⌝ₜ.size + 1), fun x => 1000 * (⌜x⌝ₜ.size + 1)⟩ := by
@@ -112,7 +112,7 @@ theorem relabelNext_realizes : Realizes relabelNextFn
 
 noncomputable def relabelNext : Implementation relabelNextFn := relabelNext_realizes.implementation
 
-attribute [local fun_prop] Realizes.finComp in
+attribute [local fun_prop] Implementation.finComp in
 theorem relabelFinish_realizes : Realizes (fun x => ⌜relabelFinishFn x⌝ₜ)
     ⟨fun x => 1000000 * (⌜x⌝ₜ.size + 1) ^ 3,
      fun x => 1000000 * (⌜x⌝ₜ.size + 1) ^ 2⟩ := by
@@ -148,7 +148,7 @@ theorem relabelFinish_realizes : Realizes (fun x => ⌜relabelFinishFn x⌝ₜ)
     simp only [N, Circuit.encode_outputs, size_encode_prod, size_encode_unit] at h₂ h₃ hN₂ hN₃ ho
     (repeat' apply And.intro) <;> omega
   | gate op args next => cases h
-attribute [local fun_prop] Realizes.finComp in
+attribute [local fun_prop] Implementation.finComp in
 theorem relabelResume_realizes :
     Realizes (fun x : relabelRecursion.Return => ⌜relabelResumeFn x.1 x.2⌝ₜ)
     ⟨fun x => 1000000 * (⌜x⌝ₜ.size + 1) ^ 3,
@@ -322,6 +322,25 @@ theorem relabel_bounds_le (x : RelabelInput) :
         relabelBounds) :=
   h.comp (relabelImplementation.realizes.mono relabel_bounds_le)
 
+noncomputable def Implementation.relabel {ρ : Type} [UniqueEncoding Tree ρ]
+    {n m k : ρ → ℕ}
+    {c : (x : ρ) → Circuit .booleanAlgebra (n x) (m x)}
+    {w : (x : ρ) → Fin (n x) → Fin (k x)}
+    (h : Implementation (fun x => (⟨n x, m x, k x, c x, w x⟩ : RelabelInput))) :
+    Implementation (fun x => ⌜(c x).relabel (w x)⌝ₜ) :=
+  h.comp (relabelImplementation.rebudget relabelBounds relabel_bounds_le)
+
+@[simp, source_bounds↓] theorem Implementation.bounds_relabel {ρ : Type} [UniqueEncoding Tree ρ]
+    {n m k : ρ → ℕ} {c : (x : ρ) → Circuit .booleanAlgebra (n x) (m x)}
+    {w : (x : ρ) → Fin (n x) → Fin (k x)}
+    (h : Implementation (fun x => (⟨n x, m x, k x, c x, w x⟩ : RelabelInput))) :
+    (Implementation.relabel h).bounds =
+      compBounds (fun x => (⟨n x, m x, k x, c x, w x⟩ : RelabelInput)) h.bounds relabelBounds := by
+  exact (Implementation.bounds_comp _ _).trans
+    (congrArg (compBounds _ h.bounds) (Implementation.bounds_rebudget _ _ _))
+
+attribute [scoped fun_prop] Implementation.relabel
+
 abbrev CompInput := Σ n, Σ m, Σ k, Circuit .booleanAlgebra n m × Circuit .booleanAlgebra m k
 
 def compFn (x : CompInput) := x.2.2.2.1.comp x.2.2.2.2
@@ -369,7 +388,7 @@ def compFinishBounds : Bounds {x // compRecursion.test x = false} :=
         (x.1.2.2.2.2.size + 1) * (128 * N x ^ 2 + 1) + 1)⟩
 
 theorem compCheck_realizes : Realizes compTest ⟨fun _ => 10, fun x => ⌜x⌝ₜ.size⟩ := by
-  source_fun_prop
+  source_cases
 theorem compNext_realizes : Realizes compNextFn
     ⟨fun x => 1000 * (⌜x⌝ₜ.size + 1), fun x => 1000 * (⌜x⌝ₜ.size + 1)⟩ := by
   refine Realizes.mono (by source_fun_prop) ?_
@@ -409,10 +428,9 @@ theorem compFinish_realizes : Realizes (fun x => ⌜compFinishFn x⌝ₜ) compFi
   cases c with
   | outputs select =>
     dsimp +instances only
-    simp only [compBounds, Realizes.bounds_implementation, compFinishBounds, relabelBounds,
+    simp only [source_bounds, compBounds, compFinishBounds, relabelBounds,
       UniqueEncoding.encode_subtype,
-      Sigma.encode_mk, size_encode_prod, Circuit.encode_outputs, size_encode_unit,
-      Realizes.bounds_implementation]
+      Sigma.encode_mk, size_encode_prod, Circuit.encode_outputs, size_encode_unit]
     have he : m + k + n + 2 * d.size + 1 = n + m + k + 2 * d.size + 1 := by omega
     simp only [he, max_le_iff]
     (repeat' apply And.intro) <;> omega
@@ -569,6 +587,25 @@ theorem comp_bounds_le (x : CompInput) :
         circuitCompBounds) :=
   h.comp (compImplementation.realizes.mono comp_bounds_le)
 
+noncomputable def Implementation.circuitComp {ρ : Type} [UniqueEncoding Tree ρ]
+    {n m k : ρ → ℕ}
+    {c : (x : ρ) → Circuit .booleanAlgebra (n x) (m x)}
+    {d : (x : ρ) → Circuit .booleanAlgebra (m x) (k x)}
+    (h : Implementation (fun x => (⟨n x, m x, k x, c x, d x⟩ : CompInput))) :
+    Implementation (fun x => ⌜(c x).comp (d x)⌝ₜ) :=
+  h.comp (compImplementation.rebudget circuitCompBounds comp_bounds_le)
+
+@[simp, source_bounds↓] theorem Implementation.bounds_circuitComp {ρ : Type} [UniqueEncoding Tree ρ]
+    {n m k : ρ → ℕ} {c : (x : ρ) → Circuit .booleanAlgebra (n x) (m x)}
+    {d : (x : ρ) → Circuit .booleanAlgebra (m x) (k x)}
+    (h : Implementation (fun x => (⟨n x, m x, k x, c x, d x⟩ : CompInput))) :
+    (Implementation.circuitComp h).bounds =
+      compBounds (fun x => (⟨n x, m x, k x, c x, d x⟩ : CompInput)) h.bounds circuitCompBounds := by
+  exact (Implementation.bounds_comp _ _).trans
+    (congrArg (compBounds _ h.bounds) (Implementation.bounds_rebudget _ _ _))
+
+attribute [scoped fun_prop] Implementation.circuitComp
+
 abbrev KeepInput := Σ n, Σ m, Circuit .booleanAlgebra n m
 
 def keepFn (x : KeepInput) := x.2.2.keepInputs
@@ -616,7 +653,7 @@ def keepResumeBounds : Bounds keepRecursion.Return :=
    fun x => 2 * ⌜x⌝ₜ.size + 1000000000000000000 * N x ^ 4⟩
 
 theorem keepCheck_realizes : Realizes keepTest ⟨fun _ => 10, fun x => ⌜x⌝ₜ.size⟩ := by
-  source_fun_prop
+  source_cases
 theorem keepNext_realizes : Realizes keepNextFn
     ⟨fun x => 1000 * (⌜x⌝ₜ.size + 1), fun x => 1000 * (⌜x⌝ₜ.size + 1)⟩ := by
   refine Realizes.mono (by source_fun_prop) ?_
@@ -690,8 +727,8 @@ theorem keepResume_realizes :
   | outputs select => cases h
   | @gate _ _ arity op args next =>
     change Circuit .booleanAlgebra (n + 1) (n + 1 + m) at result
-    simp only [keepResume, source_bounds]
-    simp only [compBounds, pairBounds, Realizes.bounds_implementation, circuitCompBounds,
+    simp (config := { implicitDefEqProofs := false }) only [keepResume, source_bounds]
+    simp only [compBounds, pairBounds, circuitCompBounds,
       keepResumeBounds, identityBounds, Sigma.encode_mk,
       size_encode_prod, Circuit.encode_outputs, Circuit.size_outputs,
       size_encode_unit, Tree.encode_self]
@@ -779,8 +816,8 @@ theorem keepResume_realizes :
         _ = 100000 * (m * N) := by ring
         _ ≤ 100000 * (N * N) := Nat.mul_le_mul_left _ (Nat.mul_le_mul_right N hmN)
         _ = 100000 * N ^ 2 := by ring
-    simp only [tabulateBounds, compBounds, pairBounds, identityBounds, Sigma.encode_mk,
-      size_encode_prod, encode_fin, Fin.val_castAdd, Fin.val_castSucc,
+    simp only [source_bounds, tabulateBounds, compBounds, pairBounds, identityBounds,
+      Sigma.encode_mk, size_encode_prod, encode_fin, Fin.val_castAdd, Fin.val_castSucc,
       List.map_const', List.sum_replicate, List.length_finRange, smul_eq_mul,
       ← max_assoc, max_le_iff, foldr_max_le]
     dsimp +instances only [id, keepRecursion, keepNextFn] at *
@@ -923,5 +960,22 @@ theorem keep_bounds_le (x : KeepInput) :
     Realizes (fun x => ⌜(c x).keepInputs⌝ₜ)
       (compBounds (fun x => (⟨n x, m x, c x⟩ : KeepInput)) b keepBounds) :=
   h.comp (keepImplementation.realizes.mono keep_bounds_le)
+
+noncomputable def Implementation.keepInputs {ρ : Type} [UniqueEncoding Tree ρ]
+    {n m : ρ → ℕ} {c : (x : ρ) → Circuit .booleanAlgebra (n x) (m x)}
+    (h : Implementation (fun x => (⟨n x, m x, c x⟩ : KeepInput))) :
+    Implementation (fun x => ⌜(c x).keepInputs⌝ₜ) :=
+  h.comp (keepImplementation.rebudget keepBounds keep_bounds_le)
+
+@[simp, source_bounds↓] theorem Implementation.bounds_keepInputs
+    {ρ : Type} [UniqueEncoding Tree ρ]
+    {n m : ρ → ℕ} {c : (x : ρ) → Circuit .booleanAlgebra (n x) (m x)}
+    (h : Implementation (fun x => (⟨n x, m x, c x⟩ : KeepInput))) :
+    (Implementation.keepInputs h).bounds =
+      compBounds (fun x => (⟨n x, m x, c x⟩ : KeepInput)) h.bounds keepBounds := by
+  exact (Implementation.bounds_comp _ _).trans
+    (congrArg (compBounds _ h.bounds) (Implementation.bounds_rebudget _ _ _))
+
+attribute [scoped fun_prop] Implementation.keepInputs
 
 end Complexity.TreeProgram.Source

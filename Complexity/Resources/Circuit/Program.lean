@@ -21,10 +21,14 @@ def gateClauses {α : Type*}
     (x : Σ k, FirstOrder.Language.booleanAlgebra.Functions k × (Fin k → α) × α) : CNF α :=
   CNF.ofGate x.2.1 x.2.2.1 x.2.2.2
 
--- A generated certificate can be registered and reused by native function decomposition.
-@[local fun_prop] theorem gateClauses_realizes {α : Type*} [UniqueEncoding Tree α] :
+-- The saved implementation below imports this certificate for source decomposition.
+theorem gateClauses_realizes {α : Type*} [UniqueEncoding Tree α] :
     Realizes (gateClauses (α := α)) ⟨fun _ => 57, fun x => 4 * ⌜x⌝ₜ.size⟩ := by
   source_cases
+
+@[local fun_prop, source_bounds↓] noncomputable def gateClausesImplementation
+    {α : Type*} [UniqueEncoding Tree α] :=
+  (gateClauses_realizes (α := α)).implementation
 
 /-- Add a gate's clauses to the reversed clause accumulator. -/
 def accumulateGate
@@ -32,7 +36,7 @@ def accumulateGate
       (Σ k, FirstOrder.Language.booleanAlgebra.Functions k × (Fin k → ℕ) × ℕ)) : CNF ℕ :=
   (gateClauses input.2).foldl (fun acc clause => clause :: acc) input.1
 
-@[local fun_prop] theorem accumulateGate_realizes :
+theorem accumulateGate_realizes :
     Realizes accumulateGate ⟨fun _ => 196, fun input => 8 * ⌜input⌝ₜ.size + 6⟩ := by
   refine Realizes.mono (by source_fun_prop) ?_
   rintro ⟨acc, gate⟩
@@ -50,6 +54,9 @@ def accumulateGate
   · intros; simp only [size_encode_prod]; omega
   · omega
 
+@[local fun_prop, source_bounds↓] private noncomputable def accumulateGateImplementation :=
+  accumulateGate_realizes.implementation
+
 /-- Accumulate the current gate, or finish the formula with the output clause. -/
 def circuitClausesStep (input : (Σ n, Circuit .booleanAlgebra n 1) × CNF ℕ) : CNF ℕ :=
   match input.1 with
@@ -57,7 +64,7 @@ def circuitClausesStep (input : (Σ n, Circuit .booleanAlgebra n 1) × CNF ℕ) 
   | ⟨n, .gate (k := k) op args _⟩ =>
     accumulateGate (input.2, ⟨k, op, Fin.val ∘ args, n⟩)
 
-@[local fun_prop] theorem circuitClausesStep_realizes :
+theorem circuitClausesStep_realizes :
     Realizes circuitClausesStep
       ⟨fun x => 13 * ⌜x⌝ₜ.size + 300, fun x => 12 * ⌜x⌝ₜ.size + 20⟩ := by
   refine Realizes.mono (by source_fun_prop) ?_
@@ -77,7 +84,7 @@ def circuitStep (input : (Σ n, Circuit .booleanAlgebra n 1) × CNF ℕ) :
   | ⟨n, .gate (k := k) op args next⟩ =>
       (⟨n + 1, next⟩, accumulateGate (input.2, ⟨k, op, Fin.val ∘ args, n⟩))
 
-@[local fun_prop] theorem circuitStep_realizes :
+theorem circuitStep_realizes :
     Realizes circuitStep ⟨fun x => 28 * ⌜x.1⌝ₜ.size + 300, fun x => 12 * ⌜x⌝ₜ.size + 20⟩ := by
   refine Realizes.mono (by source_fun_prop) ?_
   rintro ⟨⟨n, c⟩, acc⟩
@@ -96,9 +103,9 @@ def circuitContinues (input : (Σ n, Circuit .booleanAlgebra n 1) × CNF ℕ) : 
   | .outputs _ => false
   | .gate _ _ _ => true
 
-@[local fun_prop] theorem circuitContinues_realizes :
+theorem circuitContinues_realizes :
     Realizes circuitContinues ⟨fun _ => 6, fun x => ⌜x⌝ₜ.size⟩ := by
-  source_fun_prop
+  source_cases
 
 /-- Generate Tseitin clauses using a reversed accumulator. -/
 def tseitinLoop : (Σ n, Circuit .booleanAlgebra n 1) → CNF ℕ → CNF ℕ
@@ -127,7 +134,7 @@ theorem tseitinLoop_step (x : (Σ n, Circuit .booleanAlgebra n 1) × CNF ℕ) :
   rcases x with ⟨⟨n, c⟩, acc⟩
   cases c <;> simp [circuitContinues, circuitStep, circuitClausesStep, tseitinLoop]
 
-@[local fun_prop] theorem tseitinLoop_realizes :
+theorem tseitinLoop_realizes :
     Realizes (fun x : (Σ n, Circuit .booleanAlgebra n 1) × CNF ℕ => tseitinLoop x.1 x.2)
       ⟨fun x => 2000 * ⌜x⌝ₜ.size ^ 2, fun x => 140 * ⌜x⌝ₜ.size ^ 2⟩ := by
   let I (x y : (Σ n, Circuit .booleanAlgebra n 1) × CNF ℕ) :=
@@ -187,19 +194,22 @@ theorem tseitinLoop_step (x : (Σ n, Circuit .booleanAlgebra n 1) × CNF ℕ) :
     refine ⟨by dsimp only; omega, by dsimp only; omega, ?_⟩
     simpa only [hfalse, Bool.false_eq_true, ↓reduceIte] using (tseitinLoop_step y).symm.trans hi.2
 
+@[local fun_prop, source_bounds↓] private noncomputable def tseitinLoopImplementation :=
+  tseitinLoop_realizes.implementation
+
 @[local source] theorem tseitin_source :
     (fun input : Σ n, Circuit .booleanAlgebra n 1 => input.2.tseitin) =
       (fun input => tseitinLoop input []) := (funext tseitinLoop_nil).symm
 
-@[local fun_prop] theorem tseitin_realizes :
+theorem tseitin_realizes :
     Realizes (fun input : Σ n, Circuit .booleanAlgebra n 1 => input.2.tseitin)
       ⟨fun x => 20000 * ⌜x⌝ₜ.size ^ 2, fun x => 2000 * ⌜x⌝ₜ.size ^ 2⟩ := by
   refine Realizes.mono (by source_fun_prop) ?_
   intro input
   have hn := Tree.size_pos ⌜input⌝ₜ
-  simp only [compBounds_time, pairBounds_time, identityBounds_time, zero_add, size_encode_prod,
-    encode_list_nil, size_encode_unit, compBounds_peak, pairBounds_peak, identityBounds_peak,
-    le_add_iff_nonneg_left, zero_le, sup_of_le_right, sup_le_iff, Order.add_one_le_iff]
+  simp only [compBounds_time, pairBounds_time, zero_add, size_encode_prod,
+    encode_list_nil, size_encode_unit, compBounds_peak, pairBounds_peak, zero_le, sup_of_le_right,
+    sup_le_iff, Order.add_one_le_iff]
   (repeat' apply And.intro) <;> nlinarith
 
 theorem _root_.Complexity.Circuit.tseitin_model :

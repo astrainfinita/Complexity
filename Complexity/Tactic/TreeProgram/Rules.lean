@@ -663,23 +663,42 @@ theorem Realizes.loop {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding T
     ⟨_, hp.loop hq hr measure I time finishTime space hinit hsize hcheck hstep hfinish⟩
 
 
-theorem increment_realizes :
-    Realizes BitList.increment ⟨fun xs => 28 * xs.length + 25, fun xs => ⌜xs⌝ₜ.size + 5⟩ := by
-  refine ⟨Nat.Code.succ, ?_, ?_⟩
+def Implementation.increment : Implementation BitList.increment := by
+  refine .ofImplements Nat.Code.succ
+    ⟨fun xs => 28 * xs.length + 25, fun xs => ⌜xs⌝ₜ.size + 5⟩ ⟨?_, ?_⟩
   · intro v n _
     change n ≤ n + 23 ∧ n + 22 + 1 ≤ n + 23
     omega
   · intro v n s xs _ hx
     exact Nat.Code.succ_bits_bounded v n s xs hx
 
+@[simp, source_bounds↓] theorem Implementation.bounds_increment :
+    Implementation.increment.bounds =
+      ⟨fun xs => 28 * xs.length + 25, fun xs => ⌜xs⌝ₜ.size + 5⟩ := rfl
+
+def Implementation.succ : Implementation Nat.succ :=
+  .ofEncode (by intro n; simp) (Implementation.increment.mapInput Nat.bits (fun _ => rfl))
+
+@[simp, source_bounds↓] theorem Implementation.bounds_succ :
+    Implementation.succ.bounds =
+      ⟨fun a => 28 * a.bits.length + 25, fun a => ⌜a⌝ₜ.size + 5⟩ := rfl
+
+@[source_bounds↓] def Implementation.addOne : Implementation (fun a : ℕ => a + 1) :=
+  Implementation.succ
+
+theorem increment_realizes :
+    Realizes BitList.increment ⟨fun xs => 28 * xs.length + 25, fun xs => ⌜xs⌝ₜ.size + 5⟩ :=
+  Implementation.increment.realizes
+
 theorem succ_realizes :
-    Realizes Nat.succ ⟨fun a => 28 * a.bits.length + 25, fun a => ⌜a⌝ₜ.size + 5⟩ := by
-  obtain ⟨p, hp⟩ := increment_realizes
-  exact ⟨p, (hp.map_input Nat.bits (fun _ => rfl)).of_encode (by intro n; simp)⟩
+    Realizes Nat.succ ⟨fun a => 28 * a.bits.length + 25, fun a => ⌜a⌝ₜ.size + 5⟩ :=
+  Implementation.succ.realizes
 
 theorem add_one_realizes :
     Realizes (fun a : ℕ => a + 1)
       ⟨fun a => 28 * a.bits.length + 25, fun a => ⌜a⌝ₜ.size + 5⟩ := succ_realizes
+
+attribute [scoped fun_prop] Implementation.increment Implementation.succ Implementation.addOne
 
 /-- Bounds for selecting a field from an encoded pair. -/
 @[simps] def projectionBounds {α : Type*} [UniqueEncoding Tree α] : Bounds α :=

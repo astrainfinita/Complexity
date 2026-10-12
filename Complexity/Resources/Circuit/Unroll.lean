@@ -7,6 +7,7 @@ module
 
 public import Complexity.Resources.Circuit.Composition
 public import Complexity.Models.Circuit.Unroll
+
 /-! # A certified generator for bounded circuit unfolding
 
 The loop carries its layer index with the dependent circuit, and sums the cost of each layer.
@@ -77,12 +78,13 @@ noncomputable def unrollStepImpl : Implementation unrollStep := by source_fun_pr
   let N (x : UnrollState) := 2 * x.1 + x.2.1 + x.2.2.1.size + x.2.2.2.size + 2
   ⟨fun x => 1000000000000000000000000000000 * N x ^ 9,
    fun x => 10000000000000000000000000 * N x ^ 4⟩
+
 theorem unrollStep_realizes : Realizes unrollStep unrollStepBounds := by
   refine unrollStepImpl.realizes.mono ?_
   rintro ⟨n, t, step, current⟩
-  simp only [unrollStepImpl, source_bounds]
+  simp (config := { implicitDefEqProofs := false }) only [unrollStepImpl, source_bounds]
   simp only [compBounds, pairBounds, relabelBounds, keepBounds,
-    circuitCompBounds, unrollStepBounds, identityBounds, Sigma.encode_mk, size_encode_prod,
+    circuitCompBounds, unrollStepBounds, Sigma.encode_mk, size_encode_prod,
     Circuit.size_relabel, Circuit.size_keepInputs, Tree.encode_self]
   dsimp +instances only
   let N := 2 * n + t + step.size + current.size + 2
@@ -328,7 +330,9 @@ private theorem unroll_cost_le (n : ℕ) (step : Circuit .booleanAlgebra (n + 1)
 theorem unroll_base :
     Realizes (fun x : UnrollInput => ⌜x.2.1.unroll x.2.2⌝ₜ) unrollBounds := by
   let result : UnrollState → Tree := fun x => ⌜x.2.2.2⌝ₜ
-  have hr : Realizes result ⟨fun _ => 4, fun x => ⌜x⌝ₜ.size⟩ := by source_fun_prop
+  have hr : Realizes result ⟨fun _ => 4, fun x => ⌜x⌝ₜ.size⟩ := by
+    dsimp only [result]
+    source_cases
   have hc := unrollInitial_realizes.comp (unrollStep_realizes.iterate.comp hr)
   have he : (result ∘ (fun x : ℕ × UnrollState => unrollStep^[x.1] x.2)) ∘ unrollInitial =
       (fun x : UnrollInput => ⌜x.2.1.unroll x.2.2⌝ₜ) := by
@@ -366,5 +370,20 @@ noncomputable def unrollImplementation :
     Realizes (fun x => ⌜(step x).unroll (t x)⌝ₜ)
       (compBounds (fun x => (⟨n x, step x, t x⟩ : UnrollInput)) b unrollBounds) :=
   h.comp unroll_base
+
+noncomputable def Implementation.unroll {ρ : Type} [UniqueEncoding Tree ρ]
+    {n t : ρ → ℕ} {step : (x : ρ) → Circuit .booleanAlgebra (n x + 1) (n x)}
+    (h : Implementation (fun x => (⟨n x, step x, t x⟩ : UnrollInput))) :
+    Implementation (fun x => ⌜(step x).unroll (t x)⌝ₜ) :=
+  h.comp unrollImplementation
+
+@[simp, source_bounds↓] theorem Implementation.bounds_unroll {ρ : Type} [UniqueEncoding Tree ρ]
+    {n t : ρ → ℕ} {step : (x : ρ) → Circuit .booleanAlgebra (n x + 1) (n x)}
+    (h : Implementation (fun x => (⟨n x, step x, t x⟩ : UnrollInput))) :
+    (Implementation.unroll h).bounds =
+      compBounds (fun x => (⟨n x, step x, t x⟩ : UnrollInput)) h.bounds unrollBounds :=
+  Implementation.bounds_comp _ _
+
+attribute [scoped fun_prop] Implementation.unroll
 
 end Complexity.TreeProgram.Source

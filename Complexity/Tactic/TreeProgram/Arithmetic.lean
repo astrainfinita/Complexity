@@ -15,41 +15,65 @@ open Complexity TreeProgram
 namespace Complexity.TreeProgram.Source
 
 -- Binary operations reuse the source-loop compiler and the existing carry implementation.
-@[scoped fun_prop] theorem bits_realizes : Realizes Nat.bits identityBounds := by
-  apply Realizes.of_encode (g := id) (hg := identity_realizes)
-  intro n; rfl
+@[source_bounds↓] def Implementation.bits : Implementation Nat.bits :=
+  .ofEncode (g := id) (fun _ => rfl) Implementation.identity
 
-private def borrowContinues (x : List Bool × List Bool) : Bool :=
+@[scoped fun_prop] theorem bits_realizes : Realizes Nat.bits identityBounds :=
+  Implementation.bits.realizes
+
+def borrowContinues (x : List Bool × List Bool) : Bool :=
   match x.1 with | false :: _ => true | _ => false
 
-private def borrowStep (x : List Bool × List Bool) : List Bool × List Bool :=
+def borrowStep (x : List Bool × List Bool) : List Bool × List Bool :=
   match x.1 with | _ :: xs => (xs, true :: x.2) | [] => x
 
-private def borrowFinish (x : List Bool × List Bool) : List Bool :=
+def borrowFinish (x : List Bool × List Bool) : List Bool :=
   x.2.reverse ++ match x.1 with
     | true :: xs => if xs.isEmpty then [] else false :: xs
     | _ => []
 
-private theorem borrowContinues_realizes :
-    Realizes borrowContinues ⟨fun _ => 10, fun x => ⌜x⌝ₜ.size⟩ := by
-  source_fun_prop
+def borrowContinuesImplementation : Implementation borrowContinues := by
+  let h : Implementation borrowContinues := by source_cases
+  refine h.rebudget ⟨fun _ => 10, fun x => ⌜x⌝ₜ.size⟩ ?_
+  rintro ⟨xs, acc⟩
+  cases xs with
+  | nil => simp [h, source_bounds, borrowContinues]; omega
+  | cons b bs => cases b <;> simp [h, source_bounds, borrowContinues] <;> omega
 
-private theorem borrowStep_realizes :
-    Realizes borrowStep ⟨fun _ => 10, fun x => ⌜x⌝ₜ.size + 5⟩ := by
-  source_fun_prop
+@[simp, source_bounds↓] theorem borrowContinuesImplementation_bounds :
+    borrowContinuesImplementation.bounds = ⟨fun _ => 10, fun x => ⌜x⌝ₜ.size⟩ := rfl
 
-private theorem borrowFinish_realizes :
-    Realizes borrowFinish ⟨fun x => 50 * x.2.length + 50, fun x => 2 * ⌜x⌝ₜ.size + 5⟩ := by
-  refine Realizes.mono (by source_fun_prop) ?_
+def borrowStepImplementation : Implementation borrowStep := by
+  let h : Implementation borrowStep := by source_cases
+  refine h.rebudget ⟨fun _ => 10, fun x => ⌜x⌝ₜ.size + 5⟩ ?_
+  rintro ⟨xs, acc⟩
+  cases xs <;> simp [h, source_bounds, borrowStep]
+  omega
+
+@[simp, source_bounds↓] theorem borrowStepImplementation_bounds :
+    borrowStepImplementation.bounds = ⟨fun _ => 10, fun x => ⌜x⌝ₜ.size + 5⟩ := rfl
+
+def borrowFinishImplementation : Implementation borrowFinish := by
+  let h : Implementation borrowFinish := by source_fun_prop
+  refine h.rebudget
+    ⟨fun x => 50 * x.2.length + 50, fun x => 2 * ⌜x⌝ₜ.size + 5⟩ ?_
+  simp only [h, source_bounds]
   rintro ⟨xs, acc⟩
   cases xs with
   | nil => simp; omega
   | cons b bs => cases b <;> cases bs <;> simp <;> omega
 
-private def borrow (x : List Bool × List Bool) := x.2.reverse ++ BitList.decrement x.1
+@[simp, source_bounds↓] theorem borrowFinishImplementation_bounds :
+    borrowFinishImplementation.bounds =
+      ⟨fun x => 50 * x.2.length + 50, fun x => 2 * ⌜x⌝ₜ.size + 5⟩ := rfl
 
-private theorem borrow_realizes :
-    Realizes borrow ⟨fun x => 100 * ⌜x⌝ₜ.size + 100, fun x => 10 * ⌜x⌝ₜ.size + 10⟩ := by
+def borrow (x : List Bool × List Bool) := x.2.reverse ++ BitList.decrement x.1
+
+def borrowImplementation : Implementation borrow := by
+  refine .ofImplements
+    (loopCode borrowContinuesImplementation.program borrowStepImplementation.program
+      borrowFinishImplementation.program)
+    ⟨fun x => 100 * ⌜x⌝ₜ.size + 100, fun x => 10 * ⌜x⌝ₜ.size + 10⟩ ?_
   let I (x y : List Bool × List Bool) :=
     y.1.length + y.2.length ≤ x.1.length + x.2.length ∧ borrow y = borrow x
   have sizeBound (x y) (h : I x y) : ⌜y⌝ₜ.size ≤ 4 * ⌜x⌝ₜ.size := by
@@ -61,7 +85,13 @@ private theorem borrow_realizes :
     have hx₂ := length_le_codeSize acc
     simp only [I, size_encode_prod] at *
     omega
-  apply (Realizes.loop borrowContinues_realizes borrowStep_realizes borrowFinish_realizes
+  have hc := borrowContinuesImplementation.implements
+  have hs := borrowStepImplementation.implements
+  have hd := borrowFinishImplementation.implements
+  rw [borrowContinuesImplementation_bounds] at hc
+  rw [borrowStepImplementation_bounds] at hs
+  rw [borrowFinishImplementation_bounds] at hd
+  apply (Implements.loop hc hs hd
     (fun x => x.1.length) I (fun _ => 10) (fun x => 50 * ⌜x⌝ₜ.size + 50)
     (fun x => 10 * ⌜x⌝ₜ.size + 10) ?_ ?_ ?_ ?_ ?_).mono
   · rintro ⟨xs, acc⟩
@@ -90,56 +120,79 @@ private theorem borrow_realizes :
       | nil => simpa [borrowFinish, borrow] using hi.2
       | cons b bs => cases b <;> simp_all [borrowContinues, borrowFinish, I, borrow]
 
+@[source_bounds↓] def Implementation.decrement :
+    Implementation BitList.decrement := by
+  let hb := borrowImplementation
+  let h : Implementation (fun xs => borrow (xs, [])) := by source_fun_prop
+  refine (Implementation.ofEncode (by intro xs; simp [borrow]) h).rebudget
+    ⟨fun xs => 100 * ⌜xs⌝ₜ.size + 400, fun xs => 10 * ⌜xs⌝ₜ.size + 40⟩ ?_
+  intro xs
+  simp [h, hb, borrowImplementation, source_bounds]
+  omega
+
 @[scoped fun_prop] theorem decrement_realizes :
     Realizes BitList.decrement ⟨fun xs => 100 * ⌜xs⌝ₜ.size + 400,
-      fun xs => 10 * ⌜xs⌝ₜ.size + 40⟩ := by
-  have hb := borrow_realizes
-  apply Realizes.of_encode (g := fun xs => borrow (xs, []))
-  · intro xs; simp [borrow]
-  · refine Realizes.mono (by source_fun_prop) ?_
-    intro xs; simp; omega
+      fun xs => 10 * ⌜xs⌝ₜ.size + 40⟩ := Implementation.decrement.realizes
+
+def Implementation.pred : Implementation Nat.pred :=
+  .ofEncode (by intro n; simp [Nat.pred_eq_sub_one])
+    (Implementation.bits.comp Implementation.decrement)
+
+@[simp, source_bounds↓] theorem Implementation.bounds_pred :
+    Implementation.pred.bounds =
+      ⟨fun n => 100 * ⌜n⌝ₜ.size + 400, fun n => 10 * ⌜n⌝ₜ.size + 40⟩ := by
+  simp [Implementation.pred, source_bounds, compBounds]
 
 @[scoped fun_prop] theorem pred_realizes :
     Realizes Nat.pred ⟨fun n => 100 * ⌜n⌝ₜ.size + 400, fun n => 10 * ⌜n⌝ₜ.size + 40⟩ := by
-  apply Realizes.of_encode (g := fun n => BitList.decrement n.bits)
-  · intro n; simp [Nat.pred_eq_sub_one]
-  · simpa only [compBounds, identityBounds, Nat.zero_add, Nat.zero_max, Function.comp_def,
-      encode_nat_tree] using bits_realizes.comp decrement_realizes
+  simpa only [Implementation.bounds_pred] using Implementation.pred.realizes
 
-theorem bool_not_realizes :
-    Realizes Bool.not ⟨fun _ => 4, fun _ => 3⟩ := by
-  apply Realizes.of_encode (g := fun x => match x with | false => true | true => false)
-  · intro x; cases x <;> rfl
-  · source_fun_prop
+@[source_bounds↓] def Implementation.boolNot : Implementation Bool.not := by
+  let h : Implementation (fun x => match x with | false => true | true => false) := by source_cases
+  refine (Implementation.ofEncode (by intro x; cases x <;> rfl) h).rebudget
+    ⟨fun _ => 4, fun _ => 3⟩ ?_
+  intro x
+  cases x <;> simp [h, source_bounds]
 
-attribute [scoped fun_prop] bool_not_realizes
+@[scoped fun_prop] theorem bool_not_realizes :
+    Realizes Bool.not ⟨fun _ => 4, fun _ => 3⟩ := Implementation.boolNot.realizes
 
-theorem bool_and_realizes :
+@[source_bounds↓] def Implementation.boolAnd :
+    Implementation (fun x : Bool × Bool => x.1 && x.2) := by
+  let h : Implementation (fun x : Bool × Bool => match x.1 with | false => false | true => x.2) :=
+    by source_cases
+  refine (Implementation.ofEncode (by rintro ⟨a, b⟩; cases a <;> cases b <;> rfl) h).rebudget
+    ⟨fun _ => 6, fun x => ⌜x⌝ₜ.size + 2⟩ ?_
+  rintro ⟨a, b⟩
+  cases a <;> cases b <;> simp [h, source_bounds]
+
+@[scoped fun_prop] theorem bool_and_realizes :
     Realizes (fun x : Bool × Bool => x.1 && x.2)
-      ⟨fun _ => 6, fun x => ⌜x⌝ₜ.size + 2⟩ := by
-  apply Realizes.of_encode (g := fun x => match x.1 with | false => false | true => x.2)
-  · rintro ⟨a, b⟩; cases a <;> cases b <;> rfl
-  · source_fun_prop
-
-attribute [scoped fun_prop] bool_and_realizes
+      ⟨fun _ => 6, fun x => ⌜x⌝ₜ.size + 2⟩ := Implementation.boolAnd.realizes
 
 theorem bool_or_realizes :
     Realizes (fun x : Bool × Bool => x.1 || x.2)
       ⟨fun _ => 6, fun x => ⌜x⌝ₜ.size + 2⟩ := by
   apply Realizes.of_encode (g := fun x => match x.1 with | false => x.2 | true => true)
   · rintro ⟨a, b⟩; cases a <;> cases b <;> rfl
-  · source_fun_prop
+  · source_cases
 
 attribute [scoped fun_prop] bool_or_realizes
+
+@[source_bounds↓] noncomputable def Implementation.boolOr :
+    Implementation (fun x : Bool × Bool => x.1 || x.2) := bool_or_realizes.implementation
 
 theorem bool_xor_realizes :
     Realizes (fun x : Bool × Bool => xor x.1 x.2)
       ⟨fun _ => 20, fun x => ⌜x⌝ₜ.size + 2⟩ := by
   apply Realizes.of_encode (g := fun x => match x.1 with | false => x.2 | true => !x.2)
   · rintro ⟨a, b⟩; cases a <;> cases b <;> rfl
-  · source_fun_prop
+  · source_cases
 
 attribute [scoped fun_prop] bool_xor_realizes
+
+@[source_bounds↓] noncomputable def Implementation.boolXor :
+    Implementation (fun x : Bool × Bool => xor x.1 x.2) := bool_xor_realizes.implementation
 
 theorem bool_beq_realizes :
     Realizes (fun x : Bool × Bool => x.1 == x.2)
@@ -157,6 +210,13 @@ theorem bool_beq_realizes :
         omega)
 
 attribute [scoped fun_prop] bool_beq_realizes
+
+@[source_bounds↓] noncomputable def Implementation.boolBeq :
+    Implementation (fun x : Bool × Bool => x.1 == x.2) := bool_beq_realizes.implementation
+
+attribute [scoped fun_prop] Implementation.bits Implementation.decrement Implementation.pred
+  Implementation.boolNot Implementation.boolAnd Implementation.boolOr Implementation.boolXor
+  Implementation.boolBeq
 
 private def addContinues (x : Bool × List Bool × List Bool × List Bool) : Bool :=
   !x.2.1.isEmpty && !x.2.2.1.isEmpty
@@ -207,6 +267,7 @@ private theorem addStep_realizes :
 private theorem addFinish_realizes :
     Realizes addFinish ⟨fun x => 100 * ⌜x⌝ₜ.size + 100, fun x => 2 * ⌜x⌝ₜ.size + 20⟩ := by
   have hc := carryFinish_realizes
+  let implementation := hc.implementation
   refine Realizes.mono (by source_fun_prop) ?_
   rintro ⟨c, xs, ys, acc⟩
   have hx := length_le_codeSize xs
@@ -276,7 +337,7 @@ private theorem addResult_realizes :
 
 theorem add_realizes : Realizes (fun x : ℕ × ℕ => x.1 + x.2)
     ⟨fun x => 2000 * ⌜x⌝ₜ.size + 10020, fun x => 100 * ⌜x⌝ₜ.size + 1000⟩ := by
-  have hadd := addResult_realizes
+  let hadd := addResult_realizes.implementation
   apply Realizes.of_encode (g := fun x : ℕ × ℕ => addResult (false, x.1.bits, x.2.bits, []))
   · rintro ⟨m, n⟩; simp [addResult, BitList.addCarry_bits]
   · refine Realizes.mono (by source_fun_prop) ?_
@@ -285,6 +346,9 @@ theorem add_realizes : Realizes (fun x : ℕ × ℕ => x.1 + x.2)
     omega
 
 attribute [scoped fun_prop] add_realizes
+
+@[source_bounds↓] noncomputable def Implementation.add :
+    Implementation (fun x : ℕ × ℕ => x.1 + x.2) := add_realizes.implementation
 
 private def leContinues (x : Bool × List Bool × List Bool) :=
   !(x.2.1.isEmpty && x.2.2.isEmpty)
@@ -364,7 +428,7 @@ private theorem leResult_realizes :
 private theorem compare_realizes (c : Bool) :
     Realizes (fun x : ℕ × ℕ => leResult (c, x.1.bits, x.2.bits))
       ⟨fun x => 1000 * ⌜x⌝ₜ.size + 10000, fun x => 100 * ⌜x⌝ₜ.size + 1000⟩ := by
-  have hle := leResult_realizes
+  let hle := leResult_realizes.implementation
   cases c <;> refine Realizes.mono (by source_fun_prop) ?_
   all_goals rintro ⟨m, n⟩; simp; omega
 
@@ -386,9 +450,20 @@ theorem lt_realizes : Realizes (fun x : ℕ × ℕ => decide (x.1 < x.2))
 
 attribute [scoped fun_prop] ble_realizes
 
+@[source_bounds↓] noncomputable def Implementation.ble :
+    Implementation (fun x : ℕ × ℕ => Nat.ble x.1 x.2) := ble_realizes.implementation
+
+attribute [scoped fun_prop] Implementation.add Implementation.ble
+
 -- Recognize source strict comparisons before their successor/ble implementation is expanded.
 open Lean Meta Mathlib.Meta.FunProp in
 run_elab addTheorem ``lt_realizes .scoped 2000
+
+@[source_bounds↓] noncomputable def Implementation.lt :
+    Implementation (fun x : ℕ × ℕ => decide (x.1 < x.2)) := lt_realizes.implementation
+
+open Lean Meta Mathlib.Meta.FunProp in
+run_elab addTheorem ``Implementation.lt .scoped 2000
 
 /-- Equality uses the same binary comparison implementation in both directions. -/
 theorem nat_beq_realizes : Realizes (fun x : ℕ × ℕ => Nat.beq x.1 x.2)
@@ -406,5 +481,10 @@ theorem nat_beq_realizes : Realizes (fun x : ℕ × ℕ => Nat.beq x.1 x.2)
     (repeat' apply And.intro) <;> omega
 
 attribute [scoped fun_prop] nat_beq_realizes
+
+@[source_bounds↓] noncomputable def Implementation.natBeq :
+    Implementation (fun x : ℕ × ℕ => Nat.beq x.1 x.2) := nat_beq_realizes.implementation
+
+attribute [scoped fun_prop] Implementation.natBeq
 
 end Complexity.TreeProgram.Source

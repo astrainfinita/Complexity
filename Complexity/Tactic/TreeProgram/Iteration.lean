@@ -50,40 +50,56 @@ end Costed
 
 def Iteration.continues {α : Type*} (x : ℕ × α) := !x.1.bits.isEmpty
 
-theorem Iteration.continues_realizes {α : Type*} [UniqueEncoding Tree α] :
-    Realizes (Iteration.continues (α := α))
-      ⟨fun _ => 10, fun x => 2 * ⌜x⌝ₜ.size + 10⟩ := by
-  refine Realizes.mono (by source_fun_prop) ?_
+def Iteration.continuesImplementation {α : Type*} [UniqueEncoding Tree α] :
+    Implementation (Iteration.continues (α := α)) := by
+  let h : Implementation (Iteration.continues (α := α)) := by source_fun_prop
+  refine h.rebudget ⟨fun _ => 10, fun x => 2 * ⌜x⌝ₜ.size + 10⟩ ?_
+  simp only [h, source_bounds]
   rintro ⟨n, a⟩
   cases h : n.bits <;> simp [h] <;> omega
 
-theorem Iteration.step_realizes {α : Type*} [UniqueEncoding Tree α]
-    {f : α → α} {b : Bounds α} (hf : Realizes f b) :
-    Realizes (fun x : ℕ × α => (x.1.pred, f x.2))
-      ⟨fun x => b.time x.2 + 100 * ⌜x.1⌝ₜ.size + 404,
-       fun x => max (20 * ⌜x⌝ₜ.size + 100) (2 * b.peak x.2)⟩ := by
-  refine Realizes.mono (by source_fun_prop) ?_
+@[simp, source_bounds↓] theorem Iteration.bounds_continues {α : Type*} [UniqueEncoding Tree α] :
+    (Iteration.continuesImplementation (α := α)).bounds =
+      ⟨fun _ => 10, fun x => 2 * ⌜x⌝ₜ.size + 10⟩ := rfl
+
+def Iteration.stepImplementation {α : Type*} [UniqueEncoding Tree α]
+    {f : α → α} (hf : Implementation f) :
+    Implementation (fun x : ℕ × α => (x.1.pred, f x.2)) := by
+  let h : Implementation (fun x : ℕ × α => (x.1.pred, f x.2)) := by source_fun_prop
+  refine h.rebudget
+    ⟨fun x => hf.bounds.time x.2 + 100 * ⌜x.1⌝ₜ.size + 404,
+     fun x => max (20 * ⌜x⌝ₜ.size + 100) (2 * hf.bounds.peak x.2)⟩ ?_
+  -- Keep the projection equalities explicit: reducing the predecessor implementation
+  -- during kernel conversion is much more expensive than checking these equalities.
+  simp (config := { implicitDefEqProofs := false }) only [h, source_bounds]
   rintro ⟨n, a⟩
-  have hp := pred_realizes.size_le n
-  have hf := hf.size_le a
-  dsimp only at hp
-  simp only [compBounds, pairBounds, projectionBounds, size_encode_prod, max_le_iff]
+  have hp := Implementation.pred.implements.size_le n
+  have hf := hf.implements.size_le a
+  simp only [Implementation.bounds_pred] at hp
+  simp only [compBounds, pairBounds, projectionBounds, size_encode_prod]
+  simp only [max_le_iff]
   (repeat' apply And.intro) <;> omega
 
+@[simp, source_bounds↓] theorem Iteration.bounds_step {α : Type*} [UniqueEncoding Tree α]
+    {f : α → α} (hf : Implementation f) :
+    (Iteration.stepImplementation hf).bounds =
+      ⟨fun x => hf.bounds.time x.2 + 100 * ⌜x.1⌝ₜ.size + 404,
+       fun x => max (20 * ⌜x⌝ₜ.size + 100) (2 * hf.bounds.peak x.2)⟩ := rfl
+
 /-- Compile one callback for every count, retaining the summed evaluation costs. -/
-@[simps program evaluate] noncomputable def Implementation.iterate {α : Type*}
+@[simps program evaluate] def Implementation.iterate {α : Type*}
     [UniqueEncoding Tree α]
     {f : α → α} (hf : Implementation f) :
     Implementation (fun x : ℕ × α => f^[x.1] x.2) := by
-  let hc := (Iteration.continues_realizes (α := α)).implementation
-  let hs := (Iteration.step_realizes hf.realizes).implementation
+  let hc := Iteration.continuesImplementation (α := α)
+  let hs := Iteration.stepImplementation hf
   let eval (x : ℕ × α) := Costed.iterate hf.evaluate x.1 x.2
   refine ⟨loopCode hc.program hs.program (Implementation.snd (α := ℕ) (β := α)).program,
     (fun x => Costed.ofValue (eval x).value ⟨(eval x).cost.time + 17, (eval x).cost.peak⟩),
     (fun x => by simp [eval, hf.value_eq]), ?_⟩
   have hc' := hc.implements
   have hs' := hs.implements
-  simp only [hc, hs, Realizes.bounds_implementation] at hc' hs'
+  simp only [hc, hs, Iteration.bounds_continues, Iteration.bounds_step] at hc' hs'
   let I (x y : ℕ × α) := (eval y).cost.peak ≤ (eval x).cost.peak ∧
     f^[y.1] y.2 = f^[x.1] x.2
   have hsize (x y) (hi : I x y) : 2 * ⌜y⌝ₜ.size + 10 ≤ (eval x).cost.peak :=
@@ -187,7 +203,7 @@ theorem Realizes.iterate {α : Type*} [UniqueEncoding Tree α] {f : α → α}
         (pairBounds Prod.fst (fun a => f a.1 a.2) projectionBounds bs)) projectionBounds)
 
 /-- Captured values stay in one loop state; one callback covers all runtime environments. -/
-noncomputable def Implementation.iterateWith {ρ α : Type*}
+def Implementation.iterateWith {ρ α : Type*}
     [UniqueEncoding Tree ρ] [UniqueEncoding Tree α]
     {f : ρ → α → α} {count : ρ → ℕ} {initial : ρ → α}
     (hi : Implementation (fun e => (count e, (e, initial e))))
@@ -218,8 +234,8 @@ theorem Realizes.iterateWith {ρ α : Type*} [UniqueEncoding Tree ρ] [UniqueEnc
   simpa only [Implementation.bounds_iterateWith, Realizes.bounds_implementation] using
     (hi.implementation.iterateWith hs.implementation).realizes
 
--- Realizes rules propagate a requested budget to the callback premises before selection.
--- They also serve native fun_prop, which does not use the source driver's adapters.
+-- Native fun_prop retains its existential proof interface. The source compiler queries
+-- only Implementation and never changes a selected program to meet a requested budget.
 attribute [scoped fun_prop] Implementation.iterate Realizes.iterate
   Implementation.iterateWith Realizes.iterateWith
 
