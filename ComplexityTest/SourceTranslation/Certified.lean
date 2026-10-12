@@ -123,6 +123,35 @@ def optionalReverseImpl : Implementation optionalReverse := by source_calls
 #guard_msgs in
 #eval (optionalReverseImpl.program Value.input).build 1 |>.2.1
 
+-- Fixed requests must still compile calls inside branches, using exactly their generated budget.
+example : Realizes optionalReverse optionalReverseImpl.bounds := by source_fun_prop
+
+example : Realizes optionalReverse optionalReverseImpl.bounds := by source_calls
+
+example : True := by
+  fail_if_success
+    have : Realizes optionalReverse ⟨fun _ => 0, fun _ => 0⟩ := by source_fun_prop
+  trivial
+
+namespace FixedCallFallback
+
+def relaxedBounds : Bounds (Option (List Bool)) :=
+  ⟨fun x => optionalReverseImpl.bounds.time x + 1, optionalReverseImpl.bounds.peak⟩
+
+@[scoped fun_prop, scoped source_fallback]
+theorem relaxed : Realizes optionalReverse relaxedBounds :=
+  optionalReverseImpl.realizes.mono (fun _ => ⟨Nat.le_add_right _ _, le_rfl⟩)
+
+-- A different fixed budget rejects this structural candidate without blocking later rules.
+example : True := by
+  fail_if_success have : Realizes optionalReverse relaxedBounds := by source_calls
+  trivial
+
+example : Realizes optionalReverse relaxedBounds := by
+  source_fun_prop using FixedCallFallback
+
+end FixedCallFallback
+
 def singletonIndexed (x : Σ n, List (Fin n)) : Σ n, List (List (Fin n)) := ⟨x.1, [x.2]⟩
 
 def singletonIndexedImpl : Implementation singletonIndexed := by

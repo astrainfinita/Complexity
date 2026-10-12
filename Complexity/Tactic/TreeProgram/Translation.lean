@@ -671,7 +671,6 @@ private def sourceCalls (certify : Lean.Expr → MetaM (Lean.Expr × Lean.Expr))
   if let .const name _ := f.eta.getAppFn then
     if ← isRecursiveDefinition name then
       Search.unsupported (Search.recursionMessage name)
-  unless bounds.isMVar do Search.unsupported "source calls: infer the branch budgets first"
   let outer ← getLCtx
   let outerInstances ← getLocalInstances
   let costs ← mkFreshExprMVar
@@ -761,7 +760,8 @@ private def sourceCalls (certify : Lean.Expr → MetaM (Lean.Expr × Lean.Expr))
       let cost := mkApp costs x
       let b ← mkAppM ``Bounds.mk #[← mkLambdaFVars #[x] (← mkAppM ``Prod.fst #[cost]),
         ← mkLambdaFVars #[x] (← mkAppM ``Prod.snd #[cost])]
-      unless ← isDefEq bounds b do throwError "source calls: cannot infer budgets"
+      unless ← isDefEq bounds b do
+        Search.unsupported "source calls: generated budgets do not match the requested budgets"
     let program ← Term.elabTerm (← `(fun $v : Value => $body)) none
     let (certificate, finish) ← certifySourceGoal goal args program bounds
     setGoals [certificate]
