@@ -15,7 +15,7 @@ open ComplexityTest.SourceTranslation.SpecComparison
 
 namespace ComplexityTest.SourceTranslation.Examples
 
-attribute [local fun_prop] duplicate_realizes gateClauses_realizes gateClausesImplementation
+attribute [local fun_prop] duplicate_realizes
 
 @[local fun_prop, source_bounds↓] private noncomputable def duplicateImplementation
     {α : Type*} [UniqueEncoding Tree α] : Implementation (duplicate : List α → List α) :=
@@ -425,7 +425,7 @@ theorem emitGate_model : ∃ k, TimeSpaceModel.tree.ComputableInTimeAndSpace emi
   all_goals
     rename_i x
     have hbits := length_le_codeSize x.2.2.2.bits
-    have hgate := gateClauses_realizes.size_le x
+    have hgate := gateClauses_size_le x
     have hsucc := size_encode_nat_succ_le x.2.2.2
     rcases x with ⟨k, op, args, n⟩
     simp at *
@@ -555,8 +555,7 @@ theorem mapGateClauses_model {α : Type*} [UniqueEncoding Tree α] :
   · rename_i xs
     apply size_encode_map_le _ _ 4 (by decide)
     intro x _
-    have := gateClauses_realizes.size_le x
-    simpa [Nat.max_eq_right (show ⌜x⌝ₜ.size ≤ 4 * ⌜x⌝ₜ.size by omega)] using this
+    exact gateClauses_size_le x
   · intro x hx
     have := size_encode_le_list_of_mem hx
     omega
@@ -586,10 +585,6 @@ theorem foldReverse_model {α : Type*} [UniqueEncoding Tree α] :
     ∃ k, TimeSpaceModel.tree.ComputableInTimeAndSpace (foldReverse (α := α))
       (fun n => 20 * n + 20) (fun n => k * (2 * n + 5)) := by
   model_fun_prop
-  refine (foldlCost_peak_le _ _ ?_ ?_).trans ?_
-  · intros; simp only [encode_list_cons, size_encode_prod]; omega
-  · intros; simp only [size_encode_prod]; omega
-  · simp only [encode_list_nil, size_encode_unit]; omega
 
 theorem foldReverse_ftisp {α : Type*} [UniqueEncoding Tree α] :
     foldReverse (α := α) ∈ FTISP .tree (fun n => n) (fun n => n) := by
@@ -681,22 +676,6 @@ theorem repeatFlag_ftisp : repeatFlag ∈ FTISP .tree (fun n => n) (fun n => n) 
     IsBigO.iff_exists_nat.mpr ⟨30 * k, 1, ?_⟩⟩
   · intro n hn; omega
   · intro n hn; nlinarith
-
--- A gate emits at most three clauses; prepend them to a reversed accumulator.
-
-theorem gateClauses_model {α : Type*} [UniqueEncoding Tree α] :
-    ∃ k, TimeSpaceModel.tree.ComputableInTimeAndSpace (gateClauses (α := α))
-      (fun _ => 61) (fun n => k * (4 * n + 2)) := by
-  model_fun_prop
-
-
-theorem accumulateGate_model :
-    ∃ k, TimeSpaceModel.tree.ComputableInTimeAndSpace accumulateGate
-      (fun _ => 200) (fun n => k * (8 * n + 8)) := by
-  apply accumulateGate_realizes.computableInTimeAndSpace
-  intro input
-  simp
-  omega
 
 theorem accumulateGate_ftisp : accumulateGate ∈ FTISP .tree (fun _ => 1) (fun n => n) := by
   obtain ⟨k, hk⟩ := accumulateGate_model

@@ -9,6 +9,16 @@ open Complexity TreeProgram Complexity.TreeProgram.Source
 
 namespace ComplexityTest.SourceTranslation.CircuitComposition
 
+-- The structural recursion entry keeps the previously selected callback programs.
+example : compImplementation.program =
+    (compRecursion.implementation compCheck compNext compFinish compResume).program := rfl
+
+-- The computed intermediate allowances are tighter than the former public allowances.
+example : circuitCompTimeCoefficient ≤ 10 ^ 16 ∧ circuitCompPeakCoefficient ≤ 10 ^ 14 ∧
+    keepTimeCoefficient ≤ 10 ^ 23 ∧ keepPeakCoefficient ≤ 10 ^ 20 ∧
+    unrollStepTimeCoefficient ≤ 10 ^ 30 ∧ unrollStepPeakCoefficient ≤ 10 ^ 25 := by
+  norm_num
+
 def rewire (x : RelabelInput) : Σ n, Σ m, Circuit .booleanAlgebra n m :=
   ⟨x.2.2.1, x.2.1, x.2.2.2.1.relabel x.2.2.2.2⟩
 example : ∃ b, Realizes rewire b := ⟨_, by source_fun_prop⟩

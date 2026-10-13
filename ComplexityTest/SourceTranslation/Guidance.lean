@@ -74,6 +74,32 @@ example : ∃ k, TimeSpaceModel.tree.ComputableInTimeAndSpace retain
   model_fun_prop via (fun xs : List Bool => xs.reverse.reverse)
   case source_eq => funext xs; simp [retain]
 
+section
+-- Saving a public budget retains the explicitly chosen, slower program.
+@[local source] theorem retain_model :
+    ∃ k, TimeSpaceModel.tree.ComputableInTimeAndSpace retain
+      (fun n => 26 * n + 20) (fun n => k * (n + 3)) := by
+  model_fun_prop via (fun xs : List Bool => xs.reverse.reverse)
+  case source_eq => funext xs; simp [retain]
+
+example : True := by
+  fail_if_success
+    have : ∃ k, TimeSpaceModel.tree.ComputableInTimeAndSpace retain
+        (fun _ => 4) (fun n => k * (n + 3)) := by
+      model_fun_prop
+  trivial
+
+-- A looser valid bound on that same program remains usable.
+example : ∃ k, TimeSpaceModel.tree.ComputableInTimeAndSpace retain
+    (fun n => 30 * n + 40) (fun n => k * (n + 3)) := by
+  model_fun_prop
+end
+
+-- The local model-budget registration ends with its section.
+example : ∃ k, TimeSpaceModel.tree.ComputableInTimeAndSpace retain
+    (fun _ => 4) (fun n => k * (n + 3)) := by
+  model_fun_prop
+
 -- Model automation must leave unrelated goals for the caller.
 example : (∃ k, TimeSpaceModel.tree.ComputableInTimeAndSpace (userReverse (α := Bool))
     (fun n => 13 * n + 20) (fun n => k * (n + 3))) ∧ True := by

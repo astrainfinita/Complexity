@@ -17,6 +17,13 @@ elab (name := guardPublicGoals) "guard_public_goals" : tactic => do
       let displayed := (← ppExpr type).pretty
       if (displayed.splitOn "TreeProgram.Source").length > 1 then
         throwError "recursion exposed an internal certificate or budget in a user goal"
+      for decl in ← getLCtx do
+        if decl.userName == `cost && decl.isLet then
+          throwError "the generated cost's internal definition is visible"
+        if decl.userName == `cost_stop || decl.userName == `cost_step then
+          let type ← instantiateMVars decl.type
+          if (← ppExpr type).pretty.contains "TreeProgram.Source" then
+            throwError "a generated computation equation exposes an internal budget"
 
 #allow_unused_tactic! guardPublicGoals
 
@@ -129,5 +136,53 @@ example : ∃ k, TimeSpaceModel.tree.ComputableInTimeAndSpace (id : List Bool �
       (time := fun _ => 100)
       (space := fun _ => 100)
   model_fun_prop
+
+-- No intermediate time/space allowance: the entry supplies a natural-valued cost
+-- and certified stop/step equations for the selected recursive program.
+def drain : List Bool → Unit
+  | [] => ()
+  | _ :: xs => drain xs
+
+@[source] theorem drain_model : ∃ k, TimeSpaceModel.tree.ComputableInTimeAndSpace drain
+    (fun n => 200 * n + 200) (fun n => k * (20 * (n + 1)^2)) := by
+  model_fun_prop using recursion
+    (test := fun xs : List Bool => !xs.isEmpty) (next := List.tail)
+    (finish := fun _ => ()) (resume := fun _ _ => ())
+    (measure := List.length)
+    (decreases := by intro xs h; cases xs <;> simp_all)
+  guard_public_goals
+  case finish_eq => intro x; exact Subsingleton.elim _ _
+  case resume_eq => intro x; exact Subsingleton.elim _ _
+  case hb.left =>
+    rename_i xs
+    induction xs with
+    | nil => rw [cost_stop [] rfl]; norm_num
+    | cons a xs ih =>
+      rw [cost_step (a :: xs) rfl]
+      cases a <;> simp at ih ⊢ <;> omega
+  case hb.right =>
+    rename_i xs
+    induction xs with
+    | nil => rw [cost_stop [] rfl]; norm_num
+    | cons a xs ih =>
+      rw [cost_step (a :: xs) rfl]
+      cases a <;> simp at ih ⊢ <;>
+        simp only [← max_add_add_right, max_le_iff] at ih ⊢ <;>
+        (repeat' apply And.intro) <;> ring_nf at ih ⊢ <;> omega
+
+-- An explicitly different, constant program can compute this particular function in four steps.
+example : ∃ k, TimeSpaceModel.tree.ComputableInTimeAndSpace drain
+    (fun _ => 4) (fun n => k * (n + 2)) := by
+  model_fun_prop via (fun _ : List Bool => ())
+  case source_eq => funext xs; exact Subsingleton.elim _ _
+
+-- Saving the recursive proof does not let a failed budget silently choose that other program.
+example : True := by
+  fail_if_success
+    have : ∃ k, TimeSpaceModel.tree.ComputableInTimeAndSpace drain
+        (fun _ => 4) (fun n => k * (n + 2)) := by
+      model_fun_prop
+      all_goals omega
+  trivial
 
 end ComplexityTest.SourceTranslation.Recursion
