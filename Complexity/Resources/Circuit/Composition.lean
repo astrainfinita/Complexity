@@ -104,7 +104,7 @@ theorem relabelNext_realizes : Realizes relabelNextFn
   simp only [← encode_fin_function, encode_fin_castSucc, encode_list_cons, encode_list_nil,
     size_encode_prod, size_encode_unit, encode_fin, Fin.val_last] at ha
   cases c <;> dsimp only <;>
-    simp only [compBounds, pairBounds, Sigma.encode_mk,
+    simp only [Sigma.encode_mk,
       size_encode_prod, Tree.encode_self, Circuit.liftInputs, encode_fin_snoc,
       encode_fin_castSucc, Circuit.encode_outputs, Circuit.encode_gate, size_encode_unit,
       encode_fin, Fin.val_last, encode_nat_tree, max_le_iff] at * <;>
@@ -121,7 +121,6 @@ theorem relabelFinish_realizes : Realizes (fun x => ⌜relabelFinishFn x⌝ₜ)
   cases c with
   | outputs select =>
     dsimp only
-    simp only [compBounds, pairBounds]
     let N := ⌜(n, m, k, (Circuit.outputs select : Circuit .booleanAlgebra n m), wires)⌝ₜ.size
     have hn : 1 + ⌜m⌝ₜ.size + (1 + ⌜n⌝ₜ.size +
         (1 + ⌜k⌝ₜ.size + (1 + ⌜select⌝ₜ.size + ⌜wires⌝ₜ.size))) ≤ N := by
@@ -144,7 +143,7 @@ theorem relabelFinish_realizes : Realizes (fun x => ⌜relabelFinishFn x⌝ₜ)
         ((Nat.add_le_add_right (Nat.mul_le_mul hmN (Nat.add_le_add_right hf 1)) 1).trans
           (by simp only [pow_two, Nat.add_mul, Nat.mul_add, Nat.one_mul, Nat.mul_one]; omega))
     simp only [UniqueEncoding.encode_subtype, Sigma.encode_mk, Circuit.encode_outputs,
-      size_encode_prod, size_encode_unit, Tree.encode_self, identityBounds, max_le_iff]
+      size_encode_prod, size_encode_unit, Tree.encode_self, max_le_iff]
     simp only [N, Circuit.encode_outputs, size_encode_prod, size_encode_unit] at h₂ h₃ hN₂ hN₃ ho
     (repeat' apply And.intro) <;> omega
   | gate op args next => cases h
@@ -159,9 +158,8 @@ theorem relabelResume_realizes :
   | outputs select => cases h
   | @gate _ _ arity op args next =>
     dsimp only
-    simp only [compBounds, pairBounds,
-      UniqueEncoding.encode_subtype, Sigma.encode_mk, size_encode_prod,
-      Tree.encode_self, identityBounds]
+    simp only [UniqueEncoding.encode_subtype, Sigma.encode_mk, size_encode_prod,
+      Tree.encode_self, ]
     dsimp +instances only [id, relabelRecursion, relabelNextFn] at *
     let N := 1 + ⌜(n, m, k, Circuit.gate op args next, wires)⌝ₜ.size +
       ⌜result⌝ₜ.size
@@ -210,6 +208,10 @@ private theorem relabel_input_size_le (n m k : ℕ) (c : Circuit .booleanAlgebra
   simp only [Sigma.encode_mk, size_encode_prod]
   nlinarith
 
+/-- Coefficients computed from the callback allowances and the recursive controller. -/
+@[simp, source_bounds] abbrev relabelTimeCoefficient := 3 * (1000000 * 257 ^ 3 + 1000 * 129 + 26)
+@[simp, source_bounds] abbrev relabelPeakCoefficient := 1000000 * 257 ^ 2
+
 private theorem relabel_cost_numeric_le (N : ℕ) (x : RelabelInput)
     (hx : x.1 + x.2.1 + x.2.2.1 + 2 * x.2.2.2.1.size ≤ N) :
     let bc : Bounds RelabelInput := ⟨fun _ => 10, fun x => ⌜x⌝ₜ.size⟩
@@ -220,9 +222,9 @@ private theorem relabel_cost_numeric_le (N : ℕ) (x : RelabelInput)
     let br : Bounds relabelRecursion.Return :=
       ⟨fun x => 1000000 * (⌜x⌝ₜ.size + 1) ^ 3, fun x => 1000000 * (⌜x⌝ₜ.size + 1) ^ 2⟩
     (relabelRecursion.cost bc bs bd br x).time ≤
-        (x.2.2.2.1.size + 1) * (100000000000000 * (N + 1) ^ 6) ∧
+        (x.2.2.2.1.size + 1) * ((1000000 * 257 ^ 3 + 1000 * 129 + 26) * (N + 1) ^ 6) ∧
       (relabelRecursion.cost bc bs bd br x).peak ≤
-        1000000000000 * (N + 1) ^ 4 +
+        (1000000 * 257 ^ 2) * (N + 1) ^ 4 +
           (x.2.2.2.1.size + 1) * (128 * (N + 1) ^ 2 + 1) := by
   let R := N + 1
   have hR : 1 ≤ R := by dsimp [R]; omega
@@ -230,23 +232,24 @@ private theorem relabel_cost_numeric_le (N : ℕ) (x : RelabelInput)
   have hp₄ : R ^ 2 ≤ R ^ 4 := Nat.pow_le_pow_right hR (by decide)
   have hp₆ : R ^ 2 ≤ R ^ 6 := Nat.pow_le_pow_right hR (by decide)
   have budget (s : ℕ) (hs : s ≤ 256 * R ^ 2) :
-      1000000 * (s + 1) ^ 3 + 1000 * (128 * R ^ 2 + 1) + 26 ≤ 100000000000000 * R ^ 6 ∧
-      1000000 * (s + 1) ^ 2 ≤ 1000000000000 * R ^ 4 := by
+      1000000 * (s + 1) ^ 3 + 1000 * (128 * R ^ 2 + 1) + 26 ≤
+        (1000000 * 257 ^ 3 + 1000 * 129 + 26) * R ^ 6 ∧
+      1000000 * (s + 1) ^ 2 ≤ (1000000 * 257 ^ 2) * R ^ 4 := by
     have h : s + 1 ≤ 257 * R ^ 2 := by omega
     have h₂ := pow_le_pow_left' h 2
     have h₃ := pow_le_pow_left' h 3
-    norm_num [mul_pow, ← pow_mul] at h₂ h₃
+    norm_num [mul_pow, ← pow_mul] at h₂ h₃ ⊢
     constructor <;> omega
   apply relabelRecursion.cost_le_of_invariant _ _ _ _
     (fun y => y.1 + y.2.1 + y.2.2.1 + 2 * y.2.2.2.1.size ≤ N)
-    (128 * R ^ 2) (100000000000000 * R ^ 6) (1000000000000 * R ^ 4)
+    (128 * R ^ 2) ((1000000 * 257 ^ 3 + 1000 * 129 + 26) * R ^ 6) ((1000000 * 257 ^ 2) * R ^ 4)
     ?_ ?_ ?_ ?_ x hx
   · rintro ⟨n, m, k, c, w⟩ h
     exact relabel_input_size_le n m k c w N h
   · rintro ⟨n, m, k, c, w⟩ h
     have hs := relabel_input_size_le n m k c w N h
     dsimp only
-    change _ ≤ 1000000000000 * R ^ 4
+    change _ ≤ (1000000 * 257 ^ 2) * R ^ 4
     change _ ≤ 128 * R ^ 2 at hs
     omega
   · rintro ⟨n, m, k, c, w⟩ h hy
@@ -255,7 +258,7 @@ private theorem relabel_cost_numeric_le (N : ℕ) (x : RelabelInput)
       (by change _ ≤ 128 * R ^ 2 at hs; omega)
     dsimp only
     simp only [UniqueEncoding.encode_subtype]
-    change _ ≤ _ ∧ _ ≤ 1000000000000 * R ^ 4
+    change _ ≤ _ ∧ _ ≤ (1000000 * 257 ^ 2) * R ^ 4
     constructor <;> omega
   · rintro ⟨n, m, k, c, w⟩ h hy
     cases c with
@@ -291,8 +294,8 @@ private theorem relabel_cost_numeric_le (N : ℕ) (x : RelabelInput)
 /-- Numeric allowances for the same recursive relabeling program, including its saved callers. -/
 @[simps] def relabelBounds : Bounds RelabelInput :=
   let N (x : RelabelInput) := x.1 + x.2.1 + x.2.2.1 + 2 * x.2.2.2.1.size + 1
-  ⟨fun x => 300000000000000 * (x.2.2.2.1.size + 1) * N x ^ 6 + 20,
-   fun x => 1000000000000 * N x ^ 4 +
+  ⟨fun x => relabelTimeCoefficient * (x.2.2.2.1.size + 1) * N x ^ 6 + 20,
+   fun x => relabelPeakCoefficient * N x ^ 4 +
      (x.2.2.2.1.size + 1) * (128 * N x ^ 2 + 1) + 1⟩
 
 theorem relabel_bounds_le (x : RelabelInput) :
@@ -304,7 +307,7 @@ theorem relabel_bounds_le (x : RelabelInput) :
   constructor
   · calc
       _ ≤ 10 + 3 * ((c.size + 1) *
-          (100000000000000 * (n + m + k + 2 * c.size + 1) ^ 6)) + 10 :=
+          ((1000000 * 257 ^ 3 + 1000 * 129 + 26) * (n + m + k + 2 * c.size + 1) ^ 6)) + 10 :=
         Nat.add_le_add_right (Nat.add_le_add_left (Nat.mul_le_mul_left 3 hc.1) 10) 10
       _ = _ := by
         dsimp only [relabelBounds]
@@ -382,9 +385,9 @@ def compRecursion : Recursion compFn where
 
 def compFinishBounds : Bounds {x // compRecursion.test x = false} :=
   let N x := x.1.1 + x.1.2.1 + x.1.2.2.1 + 2 * x.1.2.2.2.2.size + 1
-  ⟨fun x => 300000000000000 * (x.1.2.2.2.2.size + 1) * N x ^ 6 + 100,
+  ⟨fun x => relabelTimeCoefficient * (x.1.2.2.2.2.size + 1) * N x ^ 6 + 100,
    fun x => max (2 * ⌜x⌝ₜ.size)
-      (1000000000000 * N x ^ 4 +
+      (relabelPeakCoefficient * N x ^ 4 +
         (x.1.2.2.2.2.size + 1) * (128 * N x ^ 2 + 1) + 1)⟩
 
 theorem compCheck_realizes : Realizes compTest ⟨fun _ => 10, fun x => ⌜x⌝ₜ.size⟩ := by
@@ -396,7 +399,7 @@ theorem compNext_realizes : Realizes compNextFn
   have hn := length_le_codeSize n.bits
   have hs := size_encode_nat_succ_le n
   cases c <;> dsimp +instances only <;>
-    simp only [compBounds, pairBounds, Sigma.encode_mk, size_encode_prod,
+    simp only [Sigma.encode_mk, size_encode_prod,
       Circuit.encode_outputs, Circuit.encode_gate, size_encode_unit, encode_nat_tree,
       Tree.encode_self, max_le_iff] at * <;>
     (repeat' apply And.intro) <;> omega
@@ -428,11 +431,11 @@ theorem compFinish_realizes : Realizes (fun x => ⌜compFinishFn x⌝ₜ) compFi
   cases c with
   | outputs select =>
     dsimp +instances only
-    simp only [source_bounds, compBounds, compFinishBounds, relabelBounds,
+    simp only [source_bounds, compFinishBounds, relabelBounds,
       UniqueEncoding.encode_subtype,
       Sigma.encode_mk, size_encode_prod, Circuit.encode_outputs, size_encode_unit]
     have he : m + k + n + 2 * d.size + 1 = n + m + k + 2 * d.size + 1 := by omega
-    simp only [he, max_le_iff]
+    simp only [he, max_le_iff, Nat.mul_assoc]
     (repeat' apply And.intro) <;> omega
   | gate op args next => cases h
 
@@ -443,8 +446,28 @@ noncomputable def compFinish : Implementation (fun x => ⌜compFinishFn x⌝ₜ)
 noncomputable def compResume : Implementation
     (fun x : compRecursion.Return => ⌜compResumeFn x.1 x.2⌝ₜ) := compResume_realizes.implementation
 
-noncomputable def compImplementation : Implementation (fun x => ⌜compFn x⌝ₜ) :=
-  compRecursion.implementation compCheck compNext compFinish compResume
+noncomputable def compImplementation : Implementation (fun x => ⌜compFn x⌝ₜ) := by
+  let check := compCheck
+  let next := compNext
+  let finish : Implementation (fun x => ⌜compFinishFn x⌝ₜ) := compFinish
+  let resume : Implementation
+      (fun x : (x : {x // compTest x = true}) ×
+        Circuit .booleanAlgebra (compNextFn x.val).1 (compNextFn x.val).2.2.1 =>
+          ⌜compResumeFn x.1 x.2⌝ₜ) := compResume
+  source_fun_prop using recursion
+    (test := compTest) (next := compNextFn)
+    (finish := compFinishFn) (resume := compResumeFn)
+    (measure := fun x => x.2.2.2.1.size) (decreases := compRecursion.decreases)
+  case finish_eq => exact compRecursion.finish_eq
+  case resume_eq => exact compRecursion.resume_eq
+
+@[source_bounds] theorem compImplementation_bounds :
+    compImplementation.bounds =
+      compRecursion.bounds compCheck.bounds compNext.bounds
+        compFinish.bounds compResume.bounds := by
+  simp -implicitDefEqProofs only [compImplementation, compRecursion, compCheck, compNext,
+    compFinish, compResume, source_bounds]
+  rfl
 
 private theorem comp_input_size_le (n m k : ℕ) (c : Circuit .booleanAlgebra n m)
     (d : Circuit .booleanAlgebra m k) (N : ℕ)
@@ -464,6 +487,16 @@ private theorem comp_input_size_le (n m k : ℕ) (c : Circuit .booleanAlgebra n 
   simp only [Sigma.encode_mk, size_encode_prod]
   nlinarith
 
+-- A recursive round updates the state, tests it, and reconstructs one gate.
+-- Relabeling happens only once, at the terminal state.
+@[simp, source_bounds] abbrev compRoundTimeCoefficient := 1000 * (256 + 1) + 10 + 1000 + 16
+@[simp, source_bounds] abbrev compStopTimeCoefficient := relabelTimeCoefficient + 100 + 2
+@[simp, source_bounds] abbrev compLocalPeakCoefficient :=
+  (1000 * (1 + 256 + 100 + 1)) + (relabelPeakCoefficient + (128 + 1) + 1)
+@[simp, source_bounds] abbrev circuitCompTimeCoefficient :=
+  10 + 3 * (compRoundTimeCoefficient + compStopTimeCoefficient) + 10
+@[simp, source_bounds] abbrev circuitCompPeakCoefficient := compLocalPeakCoefficient + (256 + 1) + 1
+
 private theorem comp_cost_numeric_le (N : ℕ) (x : CompInput)
     (hx : x.1 + x.2.1 + x.2.2.1 + 2 * (x.2.2.2.1.size + x.2.2.2.2.size) ≤ N) :
     let bc : Bounds CompInput := ⟨fun _ => 10, fun x => ⌜x⌝ₜ.size⟩
@@ -472,9 +505,10 @@ private theorem comp_cost_numeric_le (N : ℕ) (x : CompInput)
     let br : Bounds compRecursion.Return :=
       ⟨fun _ => 1000, fun x => 1000 * (⌜x⌝ₜ.size + 1)⟩
     (compRecursion.cost bc bs compFinishBounds br x).time ≤
-        (x.2.2.2.1.size + 1) * (1000000000000000 * (N + 1) ^ 7) ∧
+        x.2.2.2.1.size * (compRoundTimeCoefficient * (N + 1) ^ 2) +
+          compStopTimeCoefficient * (N + 1) ^ 7 ∧
       (compRecursion.cost bc bs compFinishBounds br x).peak ≤
-        10000000000000 * (N + 1) ^ 4 +
+        compLocalPeakCoefficient * (N + 1) ^ 4 +
           (x.2.2.2.1.size + 1) * (256 * (N + 1) ^ 2 + 1) := by
   let R := N + 1
   have hR : 1 ≤ R := by dsimp [R]; omega
@@ -482,10 +516,12 @@ private theorem comp_cost_numeric_le (N : ℕ) (x : CompInput)
   have h₂₄ : R ^ 2 ≤ R ^ 4 := Nat.pow_le_pow_right hR (by decide)
   have h₂₇ : R ^ 2 ≤ R ^ 7 := Nat.pow_le_pow_right hR (by decide)
   have h₃₄ : R ^ 3 ≤ R ^ 4 := Nat.pow_le_pow_right hR (by decide)
-  refine compRecursion.cost_le_of_invariant _ _ _ _
+  refine compRecursion.cost_le_of_steps _ _ _ _
     (fun y => y.1 + y.2.1 + y.2.2.1 + 2 * (y.2.2.2.1.size + y.2.2.2.2.size) ≤ N)
-    (256 * R ^ 2) (1000000000000000 * R ^ 7) (10000000000000 * R ^ 4)
-    ?_ ?_ ?_ ?_ x hx
+    (256 * R ^ 2) (compStopTimeCoefficient * R ^ 7)
+    (compRoundTimeCoefficient * R ^ 2) (compLocalPeakCoefficient * R ^ 4)
+    ?_ ?_ ?_ ?_ x hx <;>
+    norm_num only [source_bounds]
   · rintro ⟨n, m, k, c, d⟩ hy
     exact comp_input_size_le n m k c d N hy
   · rintro ⟨n, m, k, c, d⟩ hy
@@ -509,12 +545,14 @@ private theorem comp_cost_numeric_le (N : ℕ) (x : CompInput)
       _ ≤ R * (129 * R ^ 2) := Nat.mul_le_mul hd (by omega)
       _ = _ := by rw [pow_succ R 2]; ac_rfl
     constructor
-    · change 300000000000000 * (d.size + 1) * (n + m + k + 2 * d.size + 1) ^ 6 + 100 + 2 ≤ _
+    · change relabelTimeCoefficient * (d.size + 1) * (n + m + k + 2 * d.size + 1) ^ 6 + 100 + 2 ≤ _
       rw [Nat.mul_assoc]
+      norm_num only [source_bounds]
       omega
     · change max (2 * ⌜(⟨n, m, k, c, d⟩ : CompInput)⌝ₜ.size)
-        (1000000000000 * (n + m + k + 2 * d.size + 1) ^ 4 +
+        (relabelPeakCoefficient * (n + m + k + 2 * d.size + 1) ^ 4 +
           (d.size + 1) * (128 * (n + m + k + 2 * d.size + 1) ^ 2 + 1) + 1) ≤ _
+      norm_num only [source_bounds]
       exact max_le (by omega) (by omega)
   · rintro ⟨n, m, k, c, d⟩ h hy
     dsimp only at hy
@@ -544,7 +582,7 @@ private theorem comp_cost_numeric_le (N : ℕ) (x : CompInput)
         omega
 @[simps] def circuitCompBounds : Bounds CompInput :=
   let N (x : CompInput) := x.1 + x.2.1 + x.2.2.1 + 2 * (x.2.2.2.1.size + x.2.2.2.2.size) + 1
-  ⟨fun x => 10000000000000000 * N x ^ 8, fun x => 100000000000000 * N x ^ 4⟩
+  ⟨fun x => circuitCompTimeCoefficient * N x ^ 8, fun x => circuitCompPeakCoefficient * N x ^ 4⟩
 
 theorem comp_bounds_le (x : CompInput) :
     compImplementation.bounds.time x ≤ circuitCompBounds.time x ∧
@@ -565,17 +603,29 @@ theorem comp_bounds_le (x : CompInput) :
   have hs : (c.size + 1) * (256 * R ^ 2 + 1) ≤ 257 * R ^ 3 := calc
     _ ≤ R * (257 * R ^ 2) := Nat.mul_le_mul hg (by omega)
     _ = _ := by rw [pow_succ R 2]; ac_rfl
+  have hstep : c.size * R ^ 2 ≤ R ^ 3 := calc
+    _ ≤ R * R ^ 2 := Nat.mul_le_mul_right _ (by omega)
+    _ = _ := by rw [pow_succ R 2]; ac_rfl
+  have h₃₈ : R ^ 3 ≤ R ^ 8 := Nat.pow_le_pow_right hR (by decide)
+  have h₇₈ : R ^ 7 ≤ R ^ 8 := Nat.pow_le_pow_right hR (by decide)
+  norm_num only [source_bounds] at hc
+  simp only [compImplementation_bounds, Recursion.bounds, compCheck, compNext,
+    compFinish, compResume, source_bounds]
   constructor
   · calc
-      _ ≤ 10 + 3 * ((c.size + 1) * (1000000000000000 * R ^ 7)) + 10 :=
+      _ ≤ 10 + 3 * (c.size * (compRoundTimeCoefficient * R ^ 2) +
+          compStopTimeCoefficient * R ^ 7) + 10 :=
         Nat.add_le_add_right (Nat.add_le_add_left (Nat.mul_le_mul_left 3 hc.1) 10) 10
-      _ ≤ 10000000000000000 * R ^ 8 := by
-        rw [Nat.mul_left_comm (c.size + 1) 1000000000000000]
+      _ ≤ circuitCompTimeCoefficient * R ^ 8 := by
+        rw [Nat.mul_left_comm c.size compRoundTimeCoefficient]
+        norm_num only [source_bounds] at *
         omega
   · calc
-      _ ≤ 10000000000000 * R ^ 4 + (c.size + 1) * (256 * R ^ 2 + 1) + 1 :=
+      _ ≤ compLocalPeakCoefficient * R ^ 4 + (c.size + 1) * (256 * R ^ 2 + 1) + 1 :=
         Nat.add_le_add_right hc.2 1
-      _ ≤ 100000000000000 * R ^ 4 := by omega
+      _ ≤ circuitCompPeakCoefficient * R ^ 4 := by
+        norm_num only [source_bounds] at *
+        omega
 
 @[scoped fun_prop] theorem comp_realizes {ρ : Type} [UniqueEncoding Tree ρ]
     {n m k : ρ → ℕ}
@@ -647,13 +697,19 @@ def keepRecursion : Recursion keepFn where
     cases c <;> simp_all [keepTest, keepNextFn]
 
 
+@[simp, source_bounds] abbrev keepResumeTimeCoefficient :=
+  circuitCompTimeCoefficient * 3 ^ 8 + 1000000
+@[simp, source_bounds] abbrev keepResumePeakCoefficient :=
+  circuitCompPeakCoefficient * 3 ^ 4 + 1000000
+
 def keepResumeBounds : Bounds keepRecursion.Return :=
   let N (x : keepRecursion.Return) := x.1.1.1 + x.1.1.2.1 + x.2.size + 1
-  ⟨fun x => 1000000000000000000000 * N x ^ 8,
-   fun x => 2 * ⌜x⌝ₜ.size + 1000000000000000000 * N x ^ 4⟩
+  ⟨fun x => keepResumeTimeCoefficient * N x ^ 8,
+   fun x => 2 * ⌜x⌝ₜ.size + keepResumePeakCoefficient * N x ^ 4⟩
 
 theorem keepCheck_realizes : Realizes keepTest ⟨fun _ => 10, fun x => ⌜x⌝ₜ.size⟩ := by
   source_cases
+
 theorem keepNext_realizes : Realizes keepNextFn
     ⟨fun x => 1000 * (⌜x⌝ₜ.size + 1), fun x => 1000 * (⌜x⌝ₜ.size + 1)⟩ := by
   refine Realizes.mono (by source_fun_prop) ?_
@@ -661,10 +717,11 @@ theorem keepNext_realizes : Realizes keepNextFn
   have hn := length_le_codeSize n.bits
   have hs := size_encode_nat_succ_le n
   cases c <;> dsimp only <;>
-    simp only [compBounds, pairBounds, Sigma.encode_mk, size_encode_prod,
+    simp only [Sigma.encode_mk, size_encode_prod,
       Circuit.encode_outputs, Circuit.encode_gate, size_encode_unit, encode_nat_tree,
       Tree.encode_self, max_le_iff] at * <;>
     (repeat' apply And.intro) <;> omega
+
 theorem keepFinish_realizes : Realizes (fun x => ⌜keepFinishFn x⌝ₜ)
     ⟨fun x => 1000000 * (x.1.1 + x.1.2.1 + 1) ^ 2,
      fun x => 1000000 * (x.1.1 + x.1.2.1 + 1) ^ 2⟩ := by
@@ -673,8 +730,7 @@ theorem keepFinish_realizes : Realizes (fun x => ⌜keepFinishFn x⌝ₜ)
   cases c with
   | outputs select =>
     dsimp only
-    simp only [pairBounds, identityBounds,
-      UniqueEncoding.encode_subtype, Sigma.encode_mk, size_encode_prod,
+    simp only [UniqueEncoding.encode_subtype, Sigma.encode_mk, size_encode_prod,
       Circuit.encode_outputs, size_encode_unit, Tree.encode_self]
     have hi (i : Fin n) : ⌜i⌝ₜ.size ≤ 4 * n + 1 := by
       have := size_encode_nat_le i.val
@@ -729,14 +785,14 @@ theorem keepResume_realizes :
     change Circuit .booleanAlgebra (n + 1) (n + 1 + m) at result
     simp (config := { implicitDefEqProofs := false }) only [keepResume, source_bounds]
     simp only [compBounds, pairBounds, circuitCompBounds,
-      keepResumeBounds, identityBounds, Sigma.encode_mk,
+      keepResumeBounds, Sigma.encode_mk,
       size_encode_prod, Circuit.encode_outputs, Circuit.size_outputs,
       size_encode_unit, Tree.encode_self]
     dsimp +instances only [id, keepRecursion, keepNextFn] at *
     let N := n + m + result.size + 1
-    change _ ≤ 1000000000000000000000 * N ^ 8 ∧ _ ≤
+    change _ ≤ keepResumeTimeCoefficient * N ^ 8 ∧ _ ≤
       2 * (1 + ⌜(n, m, Circuit.gate op args next)⌝ₜ.size + ⌜result⌝ₜ.size) +
-        1000000000000000000 * N ^ 4
+        keepResumePeakCoefficient * N ^ 4
     have hN : 1 ≤ N := by dsimp [N]; omega
     have hN₂ := Nat.le_self_pow (by decide : 2 ≠ 0) N
     have h₁₂ : 1 ≤ N ^ 2 := Nat.one_le_pow 2 _ hN
@@ -816,11 +872,12 @@ theorem keepResume_realizes :
         _ = 100000 * (m * N) := by ring
         _ ≤ 100000 * (N * N) := Nat.mul_le_mul_left _ (Nat.mul_le_mul_right N hmN)
         _ = 100000 * N ^ 2 := by ring
-    simp only [source_bounds, tabulateBounds, compBounds, pairBounds, identityBounds,
+    simp only [source_bounds, tabulateBounds,
       Sigma.encode_mk, size_encode_prod, encode_fin, Fin.val_castAdd, Fin.val_castSucc,
       List.map_const', List.sum_replicate, List.length_finRange, smul_eq_mul,
       ← max_assoc, max_le_iff, foldr_max_le]
     dsimp +instances only [id, keepRecursion, keepNextFn] at *
+    norm_num only [source_bounds] at *
     (repeat' apply And.intro) <;> first
     | omega
     | (change 1 + (1 + ⌜n⌝ₜ.size + (1 + ⌜m⌝ₜ.size +
@@ -850,6 +907,15 @@ private theorem keep_input_size_le (n m : ℕ) (c : Circuit .booleanAlgebra n m)
   simp only [Sigma.encode_mk, size_encode_prod]
   nlinarith
 
+@[simp, source_bounds] abbrev keepRoundTimeCoefficient :=
+  1000 * (128 + 1) + 10 + keepResumeTimeCoefficient + 16
+@[simp, source_bounds] abbrev keepStopTimeCoefficient := 1000000 + 2
+@[simp, source_bounds] abbrev keepLocalPeakCoefficient :=
+  1000 * (128 + 1) + 1000000 + 2 * (1 + 128 + 100) + keepResumePeakCoefficient
+@[simp, source_bounds] abbrev keepTimeCoefficient :=
+  10 + 3 * (keepRoundTimeCoefficient + keepStopTimeCoefficient) + 10
+@[simp, source_bounds] abbrev keepPeakCoefficient := keepLocalPeakCoefficient + (128 + 1) + 1
+
 private theorem keep_cost_numeric_le (N : ℕ) (x : KeepInput)
     (hx : x.1 + x.2.1 + 2 * x.2.2.size ≤ N) :
     let bc : Bounds KeepInput := ⟨fun _ => 10, fun x => ⌜x⌝ₜ.size⟩
@@ -859,19 +925,22 @@ private theorem keep_cost_numeric_le (N : ℕ) (x : KeepInput)
       ⟨fun x => 1000000 * (x.1.1 + x.1.2.1 + 1) ^ 2,
        fun x => 1000000 * (x.1.1 + x.1.2.1 + 1) ^ 2⟩
     (keepRecursion.cost bc bs bd keepResumeBounds x).time ≤
-        (x.2.2.size + 1) * (10000000000000000000000 * (N + 1) ^ 8) ∧
+        x.2.2.size * (keepRoundTimeCoefficient * (N + 1) ^ 8) +
+          keepStopTimeCoefficient * (N + 1) ^ 2 ∧
       (keepRecursion.cost bc bs bd keepResumeBounds x).peak ≤
-        10000000000000000000 * (N + 1) ^ 4 +
+        keepLocalPeakCoefficient * (N + 1) ^ 4 +
           (x.2.2.size + 1) * (128 * (N + 1) ^ 2 + 1) := by
   let R := N + 1
   have hR : 1 ≤ R := by dsimp [R]; omega
   have h₂ : 1 ≤ R ^ 2 := Nat.one_le_pow 2 _ hR
   have h₂₄ : R ^ 2 ≤ R ^ 4 := Nat.pow_le_pow_right hR (by decide)
   have h₂₈ : R ^ 2 ≤ R ^ 8 := Nat.pow_le_pow_right hR (by decide)
-  refine keepRecursion.cost_le_of_invariant _ _ _ _
+  refine keepRecursion.cost_le_of_steps _ _ _ _
     (fun y => y.1 + y.2.1 + 2 * y.2.2.size ≤ N)
-    (128 * R ^ 2) (10000000000000000000000 * R ^ 8) (10000000000000000000 * R ^ 4)
-    ?_ ?_ ?_ ?_ x hx
+    (128 * R ^ 2) (keepStopTimeCoefficient * R ^ 2)
+    (keepRoundTimeCoefficient * R ^ 8) (keepLocalPeakCoefficient * R ^ 4)
+    ?_ ?_ ?_ ?_ x hx <;>
+    norm_num only [source_bounds]
   · rintro ⟨n, m, c⟩ hy
     exact keep_input_size_le n m c N hy
   · rintro ⟨n, m, c⟩ hy
@@ -910,18 +979,20 @@ private theorem keep_cost_numeric_le (N : ℕ) (x : KeepInput)
         omega
       · change 2 * (1 + ⌜(⟨n, m, .gate op args next⟩ : KeepInput)⌝ₜ.size +
           ⌜next.keepInputs⌝ₜ.size) +
-            1000000000000000000 * (n + m + next.keepInputs.size + 1) ^ 4 ≤ _
+            keepResumePeakCoefficient * (n + m + next.keepInputs.size + 1) ^ 4 ≤ _
         rw [Circuit.size_keepInputs]
+        norm_num only [source_bounds]
         omega
       · change 1000 * (⌜(⟨n, m, .gate op args next⟩ : KeepInput)⌝ₜ.size + 1) + 10 +
-          1000000000000000000000 * (n + m + next.keepInputs.size + 1) ^ 8 + 16 ≤ _
+          keepResumeTimeCoefficient * (n + m + next.keepInputs.size + 1) ^ 8 + 16 ≤ _
         rw [Circuit.size_keepInputs]
+        norm_num only [source_bounds]
         omega
 
 @[simps] def keepBounds : Bounds KeepInput :=
   let N (x : KeepInput) := x.1 + x.2.1 + 2 * x.2.2.size + 1
-  ⟨fun x => 100000000000000000000000 * N x ^ 9,
-   fun x => 100000000000000000000 * N x ^ 4⟩
+  ⟨fun x => keepTimeCoefficient * N x ^ 9,
+   fun x => keepPeakCoefficient * N x ^ 4⟩
 
 theorem keep_bounds_le (x : KeepInput) :
     keepImplementation.bounds.time x ≤ keepBounds.time x ∧
@@ -942,17 +1013,26 @@ theorem keep_bounds_le (x : KeepInput) :
   have hs : (c.size + 1) * (128 * R ^ 2 + 1) ≤ 129 * R ^ 3 := calc
     _ ≤ R * (129 * R ^ 2) := Nat.mul_le_mul hg (by omega)
     _ = _ := by rw [pow_succ R 2]; ac_rfl
+  have hstep : c.size * R ^ 8 ≤ R ^ 9 := calc
+    _ ≤ R * R ^ 8 := Nat.mul_le_mul_right _ (by omega)
+    _ = _ := by rw [pow_succ R 8]; ac_rfl
+  have h₂₉ : R ^ 2 ≤ R ^ 9 := Nat.pow_le_pow_right hR (by decide)
+  norm_num only [source_bounds] at hc
   constructor
   · calc
-      _ ≤ 10 + 3 * ((c.size + 1) * (10000000000000000000000 * R ^ 8)) + 10 :=
+      _ ≤ 10 + 3 * (c.size * (keepRoundTimeCoefficient * R ^ 8) +
+          keepStopTimeCoefficient * R ^ 2) + 10 :=
         Nat.add_le_add_right (Nat.add_le_add_left (Nat.mul_le_mul_left 3 hc.1) 10) 10
-      _ ≤ 100000000000000000000000 * R ^ 9 := by
-        rw [Nat.mul_left_comm (c.size + 1) 10000000000000000000000]
+      _ ≤ keepTimeCoefficient * R ^ 9 := by
+        rw [Nat.mul_left_comm c.size keepRoundTimeCoefficient]
+        norm_num only [source_bounds] at *
         omega
   · calc
-      _ ≤ 10000000000000000000 * R ^ 4 + (c.size + 1) * (128 * R ^ 2 + 1) + 1 :=
+      _ ≤ keepLocalPeakCoefficient * R ^ 4 + (c.size + 1) * (128 * R ^ 2 + 1) + 1 :=
         Nat.add_le_add_right hc.2 1
-      _ ≤ 100000000000000000000 * R ^ 4 := by omega
+      _ ≤ keepPeakCoefficient * R ^ 4 := by
+        norm_num only [source_bounds] at *
+        omega
 
 @[scoped fun_prop] theorem keepInputs_realizes {ρ : Type} [UniqueEncoding Tree ρ]
     {n m : ρ → ℕ} {c : (x : ρ) → Circuit .booleanAlgebra (n x) (m x)} {b : Bounds ρ}

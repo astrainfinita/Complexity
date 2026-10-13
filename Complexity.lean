@@ -153,4 +153,5 @@ public import Complexity.Tactic.TreeProgram.Registration
 public import Complexity.Tactic.TreeProgram.Rules
 public import Complexity.Tactic.TreeProgram.Search
 public import Complexity.Tactic.TreeProgram.Translation
+public import Complexity.Tactic.TreeProgram.TailRecursion
 public import Complexity.Tactic.TreeProgram.Traversal

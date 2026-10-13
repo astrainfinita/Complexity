@@ -189,6 +189,26 @@ theorem foldlCost_peak_le {α β : Type*} [UniqueEncoding Tree α] [UniqueEncodi
   · intro acc hi
     omega
 
+/-- Prepending retains exactly the final list's size as its peak, including the empty fold.
+The two sizes are the input and output of the structural cons callback. -/
+@[simp] theorem foldlCost_prepend_peak {α : Type*} [UniqueEncoding Tree α]
+    (time : List α → α → ℕ) (acc xs : List α) :
+    (foldlCost (fun acc x => x :: acc)
+      (fun acc x => ⟨time acc x,
+        max (1 + ⌜acc⌝ₜ.size + ⌜x⌝ₜ.size) (1 + ⌜x⌝ₜ.size + ⌜acc⌝ₜ.size)⟩) acc xs).peak =
+      ⌜xs.reverse ++ acc⌝ₜ.size := by
+  induction xs generalizing acc with
+  | nil => simp
+  | cons x xs ih =>
+    rw [foldlCost_cons]
+    change max _ (max _ _) = _
+    rw [ih]
+    simp only [List.reverse_cons, List.append_assoc, List.singleton_append, size_encode_prod]
+    have := size_encode_list_append xs.reverse (x :: acc)
+    simp only [encode_list_cons, size_encode_prod] at this
+    have := Tree.size_pos ⌜xs.reverse⌝ₜ
+    omega
+
 /-- Fold bounds written solely in terms of the source callback and its input-dependent bounds. -/
 @[simps] def foldlSumBounds {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
     (f : β → α → β) (b : Bounds (β × α)) : Bounds (β × List α) :=

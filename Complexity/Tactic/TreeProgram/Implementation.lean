@@ -48,6 +48,8 @@ def Realizes {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
 @[simps] def compBounds {α β : Type*} (f : α → β) (b : Bounds α) (c : Bounds β) : Bounds α :=
   ⟨fun x => b.time x + c.time (f x), fun x => max (b.peak x) (c.peak (f x))⟩
 
+attribute [source_bounds↓] compBounds_time compBounds_peak
+
 namespace Implements
 
 variable {α β γ : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]

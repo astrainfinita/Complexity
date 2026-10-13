@@ -74,10 +74,21 @@ theorem iterate_unrollStep (n : ℕ) (step : Circuit .booleanAlgebra (n + 1) n) 
 
 noncomputable def unrollStepImpl : Implementation unrollStep := by source_fun_prop using tabulate
 
+-- Substitute the numeric size estimates into the already-composed callback budgets.
+@[simp, source_bounds] abbrev unrollRelabelTimeCoefficient := relabelTimeCoefficient * 2 ^ 6 + 20
+@[simp, source_bounds] abbrev unrollRelabelPeakCoefficient :=
+  relabelPeakCoefficient * 2 ^ 4 + (128 * 2 ^ 2 + 1) + 1
+@[simp, source_bounds] abbrev unrollStepTimeCoefficient :=
+  2 * unrollRelabelTimeCoefficient + keepTimeCoefficient * 2 ^ 9 +
+    circuitCompTimeCoefficient * 2 ^ 8 + 1000000
+@[simp, source_bounds] abbrev unrollStepPeakCoefficient :=
+  2 * unrollRelabelPeakCoefficient + keepPeakCoefficient * 2 ^ 4 +
+    circuitCompPeakCoefficient * 2 ^ 4 + 1000000
+
 @[simps] def unrollStepBounds : Bounds UnrollState :=
   let N (x : UnrollState) := 2 * x.1 + x.2.1 + x.2.2.1.size + x.2.2.2.size + 2
-  ⟨fun x => 1000000000000000000000000000000 * N x ^ 9,
-   fun x => 10000000000000000000000000 * N x ^ 4⟩
+  ⟨fun x => unrollStepTimeCoefficient * N x ^ 9,
+   fun x => unrollStepPeakCoefficient * N x ^ 4⟩
 
 theorem unrollStep_realizes : Realizes unrollStep unrollStepBounds := by
   refine unrollStepImpl.realizes.mono ?_
@@ -88,8 +99,8 @@ theorem unrollStep_realizes : Realizes unrollStep unrollStepBounds := by
     Circuit.size_relabel, Circuit.size_keepInputs, Tree.encode_self]
   dsimp +instances only
   let N := 2 * n + t + step.size + current.size + 2
-  change _ ≤ 1000000000000000000000000000000 * N ^ 9 ∧
-    _ ≤ 10000000000000000000000000 * N ^ 4
+  change _ ≤ unrollStepTimeCoefficient * N ^ 9 ∧
+    _ ≤ unrollStepPeakCoefficient * N ^ 4
   have hN : 1 ≤ N := by dsimp [N]; omega
   have hN₂ := Nat.le_self_pow (by decide : 2 ≠ 0) N
   have h₁₂ : 1 ≤ N ^ 2 := Nat.one_le_pow 2 _ hN
@@ -151,9 +162,10 @@ theorem unrollStep_realizes : Realizes unrollStep unrollStepBounds := by
     (Fin.natAdd (n + (t + 1)) : Fin n → Fin (n + t + 1 + n))
   have hw₃ := wireSize (by omega) (by dsimp [N]; omega) wires
   have relabelBudget (g q : ℕ) (hg : g + 1 ≤ N) (hq : q ≤ 2 * N) :
-      300000000000000 * (g + 1) * q ^ 6 + 20 ≤ 1000000000000000000 * N ^ 7 ∧
-        1000000000000 * q ^ 4 + (g + 1) * (128 * q ^ 2 + 1) + 1 ≤
-          1000000000000000 * N ^ 4 := by
+      (3 * (1000000 * 257 ^ 3 + 1000 * 129 + 26)) * (g + 1) * q ^ 6 + 20 ≤
+        unrollRelabelTimeCoefficient * N ^ 7 ∧
+        (1000000 * 257 ^ 2) * q ^ 4 + (g + 1) * (128 * q ^ 2 + 1) + 1 ≤
+          unrollRelabelPeakCoefficient * N ^ 4 := by
     have hq₂ := pow_le_pow_left' hq 2
     have hq₄ := pow_le_pow_left' hq 4
     have hq₆ := pow_le_pow_left' hq 6
@@ -165,6 +177,7 @@ theorem unrollStep_realizes : Realizes unrollStep unrollStepBounds := by
       _ ≤ N * (513 * N ^ 2) := Nat.mul_le_mul hg (by omega)
       _ = _ := by rw [pow_succ N 2]; ac_rfl
     rw [Nat.mul_assoc]
+    norm_num only [source_bounds]
     omega
   have hra := relabelBudget current.size
     (n + t + n + (n + t + 1) + 2 * current.size + 1)
@@ -208,6 +221,7 @@ theorem unrollStep_realizes : Realizes unrollStep unrollStepBounds := by
     Fin.val_castSucc, List.map_const', List.sum_replicate, List.length_finRange,
     smul_eq_mul, ← max_assoc, max_le_iff, foldr_max_le]
   dsimp +instances only [id] at *
+  norm_num only [source_bounds] at *
   (repeat' apply And.intro) <;> first
   | omega
   | (change 1 + (1 + ⌜n⌝ₜ.size + (1 + ⌜t⌝ₜ.size +
@@ -259,6 +273,7 @@ theorem unrollInitial_realizes : Realizes unrollInitial unrollInitialBounds := b
   dsimp +instances only [id] at *
   simp only [List.map_const', List.sum_replicate, List.length_finRange, smul_eq_mul,
     encode_fin, max_le_iff, foldr_max_le]
+  norm_num only [source_bounds] at *
   (repeat' apply And.intro) <;> first
   | omega
   | (change 1 + (1 + ⌜n⌝ₜ.size + (1 + ⌜step⌝ₜ.size + ⌜t⌝ₜ.size)) +
@@ -272,12 +287,18 @@ theorem unrollInitial_realizes : Realizes unrollInitial unrollInitialBounds := b
 noncomputable def unrollInitialImpl : Implementation unrollInitial :=
   unrollInitial_realizes.implementation
 
+-- The counter encoding, loop control and live state are charged by iterateCost_succ.
+@[simp, source_bounds] abbrev unrollRoundTimeCoefficient :=
+  unrollStepTimeCoefficient + 100 * (4 + 1) + 420
+@[simp, source_bounds] abbrev unrollLoopPeakCoefficient :=
+  20 * (1 + (4 + 1) + 256) + 100 + 2 * unrollStepPeakCoefficient
+
 private theorem unroll_cost_le (n : ℕ) (step : Circuit .booleanAlgebra (n + 1) n) (t : ℕ) :
     let N := 2 * n + t + (t + 1) * step.size + 2
     (iterateCost unrollStep unrollStepBounds t ⟨n, 0, step, Circuit.id _ n⟩).time ≤
-        t * (10000000000000000000000000000000 * N ^ 9) ∧
+        t * (unrollRoundTimeCoefficient * N ^ 9) ∧
       (iterateCost unrollStep unrollStepBounds t ⟨n, 0, step, Circuit.id _ n⟩).peak ≤
-        100000000000000000000000000 * N ^ 4 := by
+        unrollLoopPeakCoefficient * N ^ 4 := by
   let N := 2 * n + t + (t + 1) * step.size + 2
   have hN : 1 ≤ N := by dsimp [N]; omega
   have htN : t ≤ N := by dsimp [N]; omega
@@ -292,8 +313,8 @@ private theorem unroll_cost_le (n : ℕ) (step : Circuit .booleanAlgebra (n + 1)
     omega
   have h := iterateCost_le unrollStep unrollStepBounds
     (fun r y => ∃ i, i + r = t ∧ y = (⟨n, i, step, step.unroll i⟩ : UnrollState))
-    (fun r _ => r * (10000000000000000000000000000000 * N ^ 9))
-    (100000000000000000000000000 * N ^ 4) t ⟨n, 0, step, Circuit.id _ n⟩
+    (fun r _ => r * (unrollRoundTimeCoefficient * N ^ 9))
+    (unrollLoopPeakCoefficient * N ^ 4) t ⟨n, 0, step, Circuit.id _ n⟩
     ⟨0, by omega, rfl⟩ ?_ ?_
   · exact h.2
   · rintro r y ⟨i, hi, rfl⟩
@@ -303,22 +324,26 @@ private theorem unroll_cost_le (n : ℕ) (step : Circuit .booleanAlgebra (n + 1)
     change _ ≤ 256 * N ^ 2 at hs
     have hcount := size_encode_nat_le (r + 1)
     have htime : unrollStepBounds.time ⟨n, i, step, step.unroll i⟩ ≤
-        1000000000000000000000000000000 * N ^ 9 :=
+        unrollStepTimeCoefficient * N ^ 9 :=
       Nat.mul_le_mul_left _ (pow_le_pow_left' (hiN i hi') 9)
     have hpeak : unrollStepBounds.peak ⟨n, i, step, step.unroll i⟩ ≤
-        10000000000000000000000000 * N ^ 4 :=
+        unrollStepPeakCoefficient * N ^ 4 :=
       Nat.mul_le_mul_left _ (pow_le_pow_left' (hiN i hi') 4)
     refine ⟨⟨i + 1, by omega, rfl⟩, ?_, ?_, ?_⟩
-    · rw [Nat.add_mul, Nat.one_mul]
+    · rw [Nat.add_mul r 1, Nat.one_mul]
+      norm_num only [source_bounds] at *
       omega
     · simp only [size_encode_prod]
+      norm_num only [source_bounds] at *
       omega
-    · omega
+    · norm_num only [source_bounds] at *
+      omega
   · rintro y ⟨i, hi, rfl⟩
     have hs := size_unrollState_le n step t i (by omega)
     change _ ≤ 256 * N ^ 2 at hs
     have hz := size_encode_nat_le 0
     simp only [size_encode_prod]
+    norm_num only [source_bounds] at *
     omega
 
 /-- Generator bounds in the numeric layer count, including all intermediate circuits. -/
@@ -348,9 +373,9 @@ theorem unroll_base :
   have h₁₀ : 1 ≤ N ^ 10 := Nat.one_le_pow 10 _ hN
   have h₂₁₀ : N ^ 2 ≤ N ^ 10 := Nat.pow_le_pow_right hN (by decide)
   have h₂₄ : N ^ 2 ≤ N ^ 4 := Nat.pow_le_pow_right hN (by decide)
-  have htime : t * (10000000000000000000000000000000 * N ^ 9) ≤
-      10000000000000000000000000000000 * N ^ 10 := calc
-    _ ≤ N * (10000000000000000000000000000000 * N ^ 9) := Nat.mul_le_mul_right _ htN
+  have htime : t * (unrollRoundTimeCoefficient * N ^ 9) ≤
+      unrollRoundTimeCoefficient * N ^ 10 := calc
+    _ ≤ N * (unrollRoundTimeCoefficient * N ^ 9) := Nat.mul_le_mul_right _ htN
     _ = _ := by rw [pow_succ N 9]; ac_rfl
   have hi := unroll_cost_le n step t
   have hs := size_unrollState_le n step t t le_rfl
@@ -358,6 +383,7 @@ theorem unroll_base :
   dsimp only [N] at htime h₁₀ h₂₁₀ h₂₄
   simp only [compBounds, unrollInitialBounds, unrollBounds, unrollInitial, iterateBounds,
     iterate_unrollStep, max_le_iff]
+  norm_num only [source_bounds] at *
   omega
 
 noncomputable def unrollImplementation :

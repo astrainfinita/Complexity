@@ -309,21 +309,21 @@ theorem cost_step (bc bs : Bounds α) (bd : Bounds {x // r.test x = false})
   simp only [h, ↓reduceDIte]
 
 omit [∀ x, UniqueEncoding Tree (β x)] in
-/-- Bound a recursive evaluation using a source invariant and uniform local allowances.
+/-- Bound a recursive evaluation with separate terminal and per-round allowances.
 The final term explicitly pays for every saved caller in the stack. -/
-theorem cost_le_of_invariant
+theorem cost_le_of_steps
     (bc bs : Bounds α) (bd : Bounds {x // r.test x = false}) (br : Bounds r.Return)
-    (I : α → Prop) (size time peak : ℕ)
+    (I : α → Prop) (size stop step peak : ℕ)
     (hsize : ∀ x, I x → ⌜x⌝ₜ.size ≤ size)
     (hcheck : ∀ x, I x → bc.peak x ≤ peak)
     (hstop : ∀ x (h : r.test x = false), I x →
-      bd.time ⟨x, h⟩ + 2 ≤ time ∧ bd.peak ⟨x, h⟩ ≤ peak)
+      bd.time ⟨x, h⟩ + 2 ≤ stop ∧ bd.peak ⟨x, h⟩ ≤ peak)
     (hstep : ∀ x (h : r.test x = true), I x →
       I (r.next x) ∧ bs.peak x ≤ peak ∧
       br.peak ⟨⟨x, h⟩, f (r.next x)⟩ ≤ peak ∧
-      bs.time x + bc.time (r.next x) + br.time ⟨⟨x, h⟩, f (r.next x)⟩ + 16 ≤ time)
+      bs.time x + bc.time (r.next x) + br.time ⟨⟨x, h⟩, f (r.next x)⟩ + 16 ≤ step)
     (x : α) (hx : I x) :
-    (r.cost bc bs bd br x).time ≤ (r.measure x + 1) * time ∧
+    (r.cost bc bs bd br x).time ≤ r.measure x * step + stop ∧
       (r.cost bc bs bd br x).peak ≤ peak + (r.measure x + 1) * (size + 1) := by
   induction hm : r.measure x using Nat.strong_induction_on generalizing x with
   | h n ih =>
@@ -350,6 +350,28 @@ theorem cost_le_of_invariant
       · nlinarith [hc.1]
       · simp only [max_le_iff]
         (repeat' apply And.intro) <;> nlinarith [hc.2]
+
+
+omit [∀ x, UniqueEncoding Tree (β x)] in
+/-- Bound a recursive evaluation using a source invariant and uniform local allowances.
+The final term explicitly pays for every saved caller in the stack. -/
+theorem cost_le_of_invariant
+    (bc bs : Bounds α) (bd : Bounds {x // r.test x = false}) (br : Bounds r.Return)
+    (I : α → Prop) (size time peak : ℕ)
+    (hsize : ∀ x, I x → ⌜x⌝ₜ.size ≤ size)
+    (hcheck : ∀ x, I x → bc.peak x ≤ peak)
+    (hstop : ∀ x (h : r.test x = false), I x →
+      bd.time ⟨x, h⟩ + 2 ≤ time ∧ bd.peak ⟨x, h⟩ ≤ peak)
+    (hstep : ∀ x (h : r.test x = true), I x →
+      I (r.next x) ∧ bs.peak x ≤ peak ∧
+      br.peak ⟨⟨x, h⟩, f (r.next x)⟩ ≤ peak ∧
+      bs.time x + bc.time (r.next x) + br.time ⟨⟨x, h⟩, f (r.next x)⟩ + 16 ≤ time)
+    (x : α) (hx : I x) :
+    (r.cost bc bs bd br x).time ≤ (r.measure x + 1) * time ∧
+      (r.cost bc bs bd br x).peak ≤ peak + (r.measure x + 1) * (size + 1) := by
+  have h := r.cost_le_of_steps bc bs bd br I size time time peak
+    hsize hcheck hstop hstep x hx
+  simpa only [Nat.add_mul, Nat.one_mul] using h
 
 @[simps] def bounds (bc bs : Bounds α) (bd : Bounds {x // r.test x = false})
     (br : Bounds r.Return) : Bounds α :=

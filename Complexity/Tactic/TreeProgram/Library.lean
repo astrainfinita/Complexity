@@ -6,6 +6,7 @@ Authors: Yuyang Zhao
 module
 
 public import Complexity.Tactic.TreeProgram.Iteration
+public import Complexity.Tactic.TreeProgram.TailRecursion
 
 /-! # Source specifications for binary arithmetic and finite tables -/
 

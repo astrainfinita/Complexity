@@ -18,6 +18,18 @@ the bound uses the encoded description size, not the number of available wires.
 
 @[expose] public section
 
+namespace Complexity.CNF
+
+/-- A gate's output-size estimate depends only on its ordinary clause definition. -/
+theorem size_encode_ofGate_le {α : Type*} [UniqueEncoding Tree α] {k : ℕ}
+    (op : FirstOrder.Language.booleanAlgebra.Functions k) (args : Fin k → α) (out : α) :
+    ⌜CNF.ofGate op args out⌝ₜ.size ≤ 4 * ⌜(⟨k, op, args, out⟩ :
+      Σ k, FirstOrder.Language.booleanAlgebra.Functions k × (Fin k → α) × α)⌝ₜ.size := by
+  change _ ≤ 4 * (1 + ⌜k⌝ₜ.size + (1 + ⌜op⌝ₜ.size + (1 + ⌜args⌝ₜ.size + ⌜out⌝ₜ.size)))
+  cases op <;> simp [CNF.ofGate, List.ofFn_succ] <;> omega
+
+end Complexity.CNF
+
 namespace Complexity.Circuit
 
 open FirstOrder

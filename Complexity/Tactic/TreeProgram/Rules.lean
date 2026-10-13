@@ -36,6 +36,8 @@ theorem length_le_codeSize {α : Type*} [UniqueEncoding Tree α] (xs : List α) 
 @[simps -fullyApplied] def reverseBounds {α : Type*} [UniqueEncoding Tree α] : Bounds (List α) :=
   ⟨fun xs => 13 * xs.length + 8, fun xs => ⌜xs⌝ₜ.size + 1⟩
 
+attribute [source_bounds↓] reverseBounds_time reverseBounds_peak
+
 /-- A certified linear-time reversal, without traversing the encoded elements. -/
 def Implementation.reverse {α : Type*} [UniqueEncoding Tree α] :
     Implementation (List.reverse : List α → List α) :=
@@ -151,6 +153,8 @@ theorem append_spec {α : Type*} [UniqueEncoding Tree α] :
     fun xs => max (b.peak xs) (max (c.peak xs)
       ((encode Tree (f xs)).size + (encode Tree (g xs)).size))⟩
 
+attribute [source_bounds↓] appendBounds_time appendBounds_peak
+
 /-- Compute two encoded lists and append them. -/
 def Implementation.append {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
     {f g : α → List β} (hf : Implementation f) (hg : Implementation g) :
@@ -170,6 +174,8 @@ theorem Realizes.append {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding
 
 /-- Zero-cost bounds for returning the input value. -/
 @[simps -fullyApplied] def identityBounds {α : Type*} : Bounds α := ⟨fun _ => 0, fun _ => 0⟩
+
+attribute [source_bounds↓] identityBounds_time identityBounds_peak
 
 theorem identity_realizes {α : Type*} [UniqueEncoding Tree α] :
     Realizes (id : α → α) identityBounds := Implementation.identity.realizes
@@ -516,23 +522,23 @@ def loopCode (test step finish : Value → Code Value) (v : Value) : Code Value 
        .while (.var (n + 1)) (.seq advance check), Code.block done.2.2])⟩
 
 /-- A source loop spends the actual step and test allowances from a remaining budget. -/
-theorem Implements.loop_budget {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
+theorem Implements.loop_budget_finish {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
     {pc ps pd : Value → Code Value}
     {test : α → Bool} {step : α → α} {finish result : α → β}
     {bc bs bd : Bounds α} (hc : Implements pc test bc) (hs : Implements ps step bs)
     (hd : Implements pd finish bd) (I : α → α → Prop) (budget : α → α → ℕ)
-    (finishTime space : α → ℕ)
+    (space : α → ℕ)
     (hinit : ∀ x, I x x)
     (hsize : ∀ x y, I x y → ⌜y⌝ₜ.size ≤ space x)
     (hcheck : ∀ x y, I x y → bc.peak y ≤ space x)
-    (hstop : ∀ x y, I x y → test y = false → 2 ≤ budget x y)
+    (hstop : ∀ x y, I x y → test y = false → bd.time y + 2 ≤ budget x y)
     (hstep : ∀ x y, I x y → test y = true →
       bs.peak y ≤ space x ∧ I x (step y) ∧
         bs.time y + bc.time (step y) + 6 + budget x (step y) ≤ budget x y)
     (hfinish : ∀ x y, I x y → test y = false →
-      bd.time y ≤ finishTime x ∧ bd.peak y ≤ space x ∧ finish y = result x) :
+      bd.peak y ≤ space x ∧ finish y = result x) :
     Implements (loopCode pc ps pd) result
-      ⟨fun x => bc.time x + budget x x + finishTime x + 4, space⟩ := by
+      ⟨fun x => bc.time x + budget x x + 4, space⟩ := by
   constructor
   · intro v n hv
     obtain ⟨hn, hr⟩ := hd.1 (.var n) (n + 2) (by change n + 1 ≤ n + 2; omega)
@@ -546,16 +552,28 @@ theorem Implements.loop_budget {α β : Type*} [UniqueEncoding Tree α] [UniqueE
       callInto_bounded hc (.var n) (n + 2) (n + 1) t y (by change n + 1 ≤ n + 2; omega) hy
         le_rfl (hcheck x y hi) (hsize x y hi)
     have run (t : ℕ → Tree) (k : ℕ) (hj : J t k) :
-        (Cmd.while (.var (n + 1))
+        (Cmd.seq (Cmd.while (.var (n + 1))
           (.seq (callInto (ps (.var n)) (n + 2) n)
-            (callInto (pc (.var n)) (n + 2) (n + 1)))).Bounded t k (space x)
-          (fun u => (∃ remaining, J u remaining) ∧ (u (n + 1)).root = false) := by
-      apply Cmd.Bounded.loop_budget (.var (n + 1)) J k hj
+            (callInto (pc (.var n)) (n + 2) (n + 1))))
+          (.seq (Code.block ((pd (.var n)).build (n + 2)).2.2) .skip)).Bounded t k (space x)
+          (fun t => ((pd (.var n)).build (n + 2)).1.eval t = ⌜result x⌝ₜ ∧
+            ∀ j < n, t j = s j) := by
+      apply Cmd.Bounded.loop_budget_seq (.var (n + 1)) J k hj
       · rintro u k ⟨y, hy, hb, hi, _, _⟩
         simpa only [Expr.maxSize, hb] using
           (hc.size_le y).trans (max_le (hsize x y hi) (hcheck x y hi))
-      · rintro u k ⟨y, hy, hb, hi, rfl, _⟩ hr
-        exact hstop x y hi (by simpa [hb] using hr)
+      · rintro u k ⟨y, hy, hb, hi, rfl, hf⟩ hr
+        have hfalse : test y = false := by simpa [hb] using hr
+        have ht := hstop x y hi hfalse
+        refine ⟨by simpa only [Expr.steps] using (by omega : 2 ≤ budget x y), ?_⟩
+        rw [Cmd.bounded_seq_skip_iff]
+        change (pd (.var n)).Bounded (n + 2) u (budget x y - 2) (space x)
+          (fun w t => w.eval t = ⌜result x⌝ₜ ∧ ∀ j < n, t j = s j)
+        apply (hd.2 (.var n) (n + 2) u y (by change n + 1 ≤ n + 2; omega) hy).mono
+          (by simpa only [Expr.steps] using Nat.le_sub_of_add_le ht) (hfinish x y hi hfalse).1
+        intro w t ⟨ho, htf⟩
+        exact ⟨ho.trans (congrArg (encode Tree) (hfinish x y hi hfalse).2),
+          fun j hj => (htf j (by omega)).trans (hf j hj)⟩
       · rintro u k ⟨y, hy, hb, hi, rfl, hf⟩ hr
         obtain ⟨hpeak, hi', ht⟩ := hstep x y hi (by simpa [hb] using hr)
         refine ⟨(bs.time y + 2) + (bc.time (step y) + 2), ?_⟩
@@ -574,7 +592,7 @@ theorem Implements.loop_budget {α β : Type*} [UniqueEncoding Tree α] [UniqueE
     change (Code.block _).Bounded _ _ _ _
     simp only [loopCode, Code.block]
     apply Cmd.Bounded.mono
-      (time := 2 + ((bc.time x + 2) + (budget x x + finishTime x))) ?_
+      (time := 2 + ((bc.time x + 2) + (budget x x))) ?_
       (by omega) le_rfl (fun _ h => h)
     apply Cmd.Bounded.seq (Q := fun t => t = Function.update s n ⌜x⌝ₜ)
       (by
@@ -586,17 +604,38 @@ theorem Implements.loop_budget {α β : Type*} [UniqueEncoding Tree α] [UniqueE
     have ht : t n = ⌜x⌝ₜ := by simpa using hf n (by omega) (by omega)
     have hj : J t (budget x x) := ⟨x, ht, hflag, hinit x, rfl, fun j hj => by
       simpa [Nat.ne_of_lt hj] using hf j (by omega) (by omega)⟩
-    apply Cmd.Bounded.seq (run t _ hj)
-    rintro u ⟨⟨_, y, hy, hflag, hi, _, hf⟩, hstop⟩
-    have hfalse : test y = false := by simpa [hflag] using hstop
-    rw [Cmd.bounded_seq_skip_iff]
-    change (pd (.var n)).Bounded (n + 2) u (finishTime x) (space x)
-      (fun w t => w.eval t = ⌜result x⌝ₜ ∧ ∀ j < n, t j = s j)
-    apply (hd.2 (.var n) (n + 2) u y (by change n + 1 ≤ n + 2; omega) hy).mono
-      (hfinish x y hi hfalse).1 (hfinish x y hi hfalse).2.1
-    intro w t ⟨ho, htf⟩
-    refine ⟨ho.trans ?_, fun j hj => (htf j (by omega)).trans (hf j hj)⟩
-    exact congrArg (encode Tree) (hfinish x y hi hfalse).2.2
+    exact run t _ hj
+
+/-- A source loop spends the actual step and test allowances from a remaining budget. -/
+theorem Implements.loop_budget {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
+    {pc ps pd : Value → Code Value}
+    {test : α → Bool} {step : α → α} {finish result : α → β}
+    {bc bs bd : Bounds α} (hc : Implements pc test bc) (hs : Implements ps step bs)
+    (hd : Implements pd finish bd) (I : α → α → Prop) (budget : α → α → ℕ)
+    (finishTime space : α → ℕ)
+    (hinit : ∀ x, I x x)
+    (hsize : ∀ x y, I x y → ⌜y⌝ₜ.size ≤ space x)
+    (hcheck : ∀ x y, I x y → bc.peak y ≤ space x)
+    (hstop : ∀ x y, I x y → test y = false → 2 ≤ budget x y)
+    (hstep : ∀ x y, I x y → test y = true →
+      bs.peak y ≤ space x ∧ I x (step y) ∧
+        bs.time y + bc.time (step y) + 6 + budget x (step y) ≤ budget x y)
+    (hfinish : ∀ x y, I x y → test y = false →
+      bd.time y ≤ finishTime x ∧ bd.peak y ≤ space x ∧ finish y = result x) :
+    Implements (loopCode pc ps pd) result
+      ⟨fun x => bc.time x + budget x x + finishTime x + 4, space⟩ := by
+  have h := hc.loop_budget_finish hs hd (result := result) I
+    (fun x y => budget x y + finishTime x) space hinit hsize hcheck ?_ ?_ ?_
+  · simpa only [← Nat.add_assoc] using h
+  · intro x y hi ht
+    have := hstop x y hi ht
+    have := (hfinish x y hi ht).1
+    omega
+  · intro x y hi ht
+    obtain ⟨hp, hi', hb⟩ := hstep x y hi ht
+    exact ⟨hp, hi', by omega⟩
+  · intro x y hi ht
+    exact (hfinish x y hi ht).2
 
 /-- A decreasing source measure recovers the uniform-per-step loop bound. -/
 theorem Implements.loop {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
@@ -704,6 +743,8 @@ attribute [scoped fun_prop] Implementation.increment Implementation.succ Impleme
 @[simps] def projectionBounds {α : Type*} [UniqueEncoding Tree α] : Bounds α :=
   ⟨fun _ => 1, fun x => ⌜x⌝ₜ.size⟩
 
+attribute [source_bounds↓] projectionBounds_time projectionBounds_peak
+
 /-- Select the first field of an encoded pair. -/
 def Implementation.fst {α β : Type*}
     [UniqueEncoding Tree α] [UniqueEncoding Tree β] :
@@ -747,6 +788,8 @@ theorem snd_realizes {α β : Type*}
     (f : α → β) (g : α → γ) (b c : Bounds α) : Bounds α :=
   ⟨fun x => b.time x + (c.time x + 1),
     fun x => max (b.peak x) (max (c.peak x) ⌜(f x, g x)⌝ₜ.size)⟩
+
+attribute [source_bounds↓] pairBounds_time pairBounds_peak
 
 theorem Realizes.pair {α β γ : Type*}
     [UniqueEncoding Tree α] [UniqueEncoding Tree β] [UniqueEncoding Tree γ]

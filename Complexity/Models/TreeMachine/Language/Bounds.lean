@@ -113,6 +113,32 @@ theorem seq {a b : ℕ} (hp : p.Bounded s a space Q)
   obtain ⟨m, u, d, hq, hm, hd, hR⟩ := hq t hQ
   exact ⟨n + m, u, max c d, .seq hp hq, Nat.add_le_add hn hm, Nat.max_le.mpr ⟨hc, hd⟩, hR⟩
 
+/-- Spend the remaining credit on the final command as well as the loop itself. -/
+theorem loop_budget_seq (e : Expr ν) (I : (ν → Tree) → ℕ → Prop) (budget : ℕ)
+    (hs : I s budget) (he : ∀ s k, I s k → e.maxSize s ≤ space)
+    (stop : ∀ s k, I s k → (e.eval s).root = false →
+      e.steps + 2 ≤ k ∧ q.Bounded s (k - (e.steps + 2)) space Q)
+    (body : ∀ s k, I s k → (e.eval s).root = true →
+      ∃ bodyTime, p.Bounded s bodyTime space (fun t =>
+        ∃ remaining, I t remaining ∧ bodyTime + e.steps + 2 + remaining ≤ k)) :
+    (Cmd.seq (.while e p) q).Bounded s budget space Q := by
+  induction budget using Nat.strong_induction_on generalizing s with
+  | h budget ih =>
+    cases hr : (e.eval s).root with
+    | false =>
+      obtain ⟨ht, n, t, b, hq, hn, hb, hQ⟩ := stop s budget hs hr
+      exact ⟨_, t, _, .seq (.while_false hr) hq, by omega,
+        max_le (he s budget hs) hb, hQ⟩
+    | true =>
+      obtain ⟨bodyTime, a, t, c, hp, ha, hc, remaining, ht, hbudget⟩ := body s budget hs hr
+      obtain ⟨b, u, d, hu, hb, hd, hQ⟩ := ih remaining (by omega) ht
+      cases hu with
+      | seq hw hq =>
+        exact ⟨_, u, _, .seq (.while_true hr hp hw) hq, by omega,
+          by simpa only [max_le_iff] using
+            And.intro (And.intro (he s budget hs) (And.intro hc (max_le_iff.mp hd).1))
+              (max_le_iff.mp hd).2, hQ⟩
+
 /-- A loop spends a remaining budget. Each successful iteration pays for its test,
 body and back edge; the final failed test is included in the invariant. -/
 theorem loop_budget (e : Expr ν) (I : (ν → Tree) → ℕ → Prop) (budget : ℕ)
@@ -123,16 +149,10 @@ theorem loop_budget (e : Expr ν) (I : (ν → Tree) → ℕ → Prop) (budget :
         ∃ remaining, I t remaining ∧ bodyTime + e.steps + 2 + remaining ≤ k)) :
     (Cmd.while e p).Bounded s budget space
       (fun t => (∃ remaining, I t remaining) ∧ (e.eval t).root = false) := by
-  induction budget using Nat.strong_induction_on generalizing s with
-  | h budget ih =>
-    cases hr : (e.eval s).root with
-    | false => exact ⟨_, s, _, .while_false hr, stop s budget hs hr,
-        he s budget hs, ⟨budget, hs⟩, hr⟩
-    | true =>
-      obtain ⟨bodyTime, a, t, c, hb, ha, hc, remaining, ht, hbudget⟩ := body s budget hs hr
-      obtain ⟨b, u, d, hu, hb', hd, hQ⟩ := ih remaining (by omega) ht
-      exact ⟨_, u, _, .while_true hr hb hu, by omega,
-        Nat.max_le.mpr ⟨he s budget hs, Nat.max_le.mpr ⟨hc, hd⟩⟩, hQ⟩
+  rw [← bounded_seq_skip_iff]
+  apply loop_budget_seq e I budget hs he ?_ body
+  intro t k hi hr
+  exact ⟨stop t k hi hr, 0, t, 0, .skip t, Nat.zero_le _, Nat.zero_le _, ⟨k, hi⟩, hr⟩
 
 /-- A decreasing measure gives a loop bound from a uniform per-iteration budget.
 The final failed test is included, and space does not accumulate across iterations. -/

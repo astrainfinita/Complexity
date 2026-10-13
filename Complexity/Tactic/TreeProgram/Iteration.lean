@@ -76,7 +76,7 @@ def Iteration.stepImplementation {α : Type*} [UniqueEncoding Tree α]
   have hp := Implementation.pred.implements.size_le n
   have hf := hf.implements.size_le a
   simp only [Implementation.bounds_pred] at hp
-  simp only [compBounds, pairBounds, projectionBounds, size_encode_prod]
+  simp only [size_encode_prod]
   simp only [max_le_iff]
   (repeat' apply And.intro) <;> omega
 

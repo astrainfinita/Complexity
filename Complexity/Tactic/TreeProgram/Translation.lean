@@ -61,6 +61,29 @@ theorem Implementation.exists_computableInTimeAndSpace {α β : Type*}
   subst b
   exact ⟨_, hf.computableInTimeAndSpace hb⟩
 
+/-- Reuse the budget proof of a model theorem for its already selected program. -/
+@[simps! program] def Implementation.rebudgetModel {α β : Type*}
+    [UniqueEncoding Tree α] [UniqueEncoding Tree β]
+    {f : α → β} {time space : ℕ → ℕ} (hf : Implementation f) {b : Bounds α}
+    (bounds_eq : hf.bounds = b)
+    (hb : ∀ x, b.time x + 4 ≤ time ⌜x⌝ₜ.size ∧
+      max ⌜x⌝ₜ.size (b.peak x) + 2 ≤ space ⌜x⌝ₜ.size) : Implementation f :=
+  hf.rebudget ⟨fun x => time ⌜x⌝ₜ.size - 4, fun x => space ⌜x⌝ₜ.size - 2⟩ (by
+    intro x
+    rw [bounds_eq]
+    exact ⟨Nat.le_sub_of_add_le (hb x).1,
+      (Nat.le_max_right _ _).trans (Nat.le_sub_of_add_le (hb x).2)⟩)
+
+@[simp, source_bounds↓] theorem Implementation.bounds_rebudgetModel {α β : Type*}
+    [UniqueEncoding Tree α] [UniqueEncoding Tree β]
+    {f : α → β} {time space : ℕ → ℕ} (hf : Implementation f) {b : Bounds α}
+    (bounds_eq : hf.bounds = b)
+    (hb : ∀ x, b.time x + 4 ≤ time ⌜x⌝ₜ.size ∧
+      max ⌜x⌝ₜ.size (b.peak x) + 2 ≤ space ⌜x⌝ₜ.size) :
+    (hf.rebudgetModel bounds_eq hb).bounds =
+      ⟨fun x => time ⌜x⌝ₜ.size - 4, fun x => space ⌜x⌝ₜ.size - 2⟩ :=
+  Implementation.bounds_rebudget _ _ _
+
 theorem Realizes.computableInTimeAndSpace {α β : Type*}
     [UniqueEncoding Tree α] [UniqueEncoding Tree β]
     {f : α → β} {b : Bounds α} {time space : ℕ → ℕ} (hf : Realizes f b)
@@ -75,6 +98,7 @@ end
 
 public meta section
 
+set_option linter.style.longFile 1600
 
 namespace Complexity.TreeProgram.Source
 
@@ -857,7 +881,7 @@ private def sourceCalls (certify : Lean.Expr → MetaM (Lean.Expr × Lean.Expr))
 end FiniteCases
 
 open Lean Meta in
-private def normalizeSourceBounds (implementation : Lean.Expr) : MetaM (Lean.Expr × Lean.Expr) := do
+def normalizeSourceBounds (implementation : Lean.Expr) : MetaM (Lean.Expr × Lean.Expr) := do
   let some ext ← getSimpExtension? `source_bounds | throwError "missing source budget projections"
   -- Keep budget equalities explicit: kernel conversion through a composed evaluator
   -- can be much more expensive than checking its projection theorem.
@@ -1155,25 +1179,36 @@ declare_syntax_cat sourceRecursion
 syntax "recursion" " (" &"test" " := " term ")" " (" &"next" " := " term ")"
   " (" &"finish" " := " term ")" " (" &"resume" " := " term ")"
   " (" &"time" " := " term ")" " (" &"space" " := " term ")" : sourceRecursion
+syntax "recursion" " (" &"test" " := " term ")" " (" &"next" " := " term ")"
+  " (" &"finish" " := " term ")" " (" &"resume" " := " term ")"
+  " (" &"measure" " := " term ")" " (" &"decreases" " := " term ")" : sourceRecursion
 
 open Lean Meta Elab Tactic Mathlib.Meta.FunProp in
 private def proveRecursion (method : TSyntax `sourceRecursion) (scope : Option Ident := none) :
     TacticM (Array Ident × Bool × Lean.Expr × List MVarId) :=
     withSourceSpecs scope <| withMainContext do
-  let `(sourceRecursion| recursion (test := $test) (next := $next)
-      (finish := $finish) (resume := $resume)
-      (time := $time) (space := $space)) := method | throwUnsupportedSyntax
+  let (test, next, finish, resume, allowance) ← match method with
+    | `(sourceRecursion| recursion (test := $test) (next := $next)
+        (finish := $finish) (resume := $resume) (time := $time) (space := $space)) =>
+      pure (test, next, finish, resume, Sum.inl (time, space))
+    | `(sourceRecursion| recursion (test := $test) (next := $next)
+        (finish := $finish) (resume := $resume) (measure := $measure) (decreases := $decreases)) =>
+      pure (test, next, finish, resume, Sum.inr (measure, decreases))
+    | _ => throwUnsupportedSyntax
   let goal ← getMainGoal
   let rest := (← getGoals).drop 1
   let (args, _) ← sourceGoalArgs goal
   let source := args[4]!
   let allowanceType ← mkArrow args[0]! (mkConst ``Nat)
-  let time ← elabTermEnsuringType time allowanceType
-  let space ← elabTermEnsuringType space allowanceType
-  Term.synthesizeSyntheticMVarsNoPostponing
-  if (← instantiateMVars time).hasExprMVar || (← instantiateMVars space).hasExprMVar then
-    throwError "source recursion: provide concrete `time` and `space` allowance functions"
-  let bounds ← mkAppM ``Bounds.mk #[time, space]
+  let bounds ← match allowance with
+    | .inl (time, space) => do
+      let time ← elabTermEnsuringType time allowanceType
+      let space ← elabTermEnsuringType space allowanceType
+      Term.synthesizeSyntheticMVarsNoPostponing
+      if (← instantiateMVars time).hasExprMVar || (← instantiateMVars space).hasExprMVar then
+        throwError "source recursion: provide concrete `time` and `space` allowance functions"
+      pure (some (← mkAppM ``Bounds.mk #[time, space], space))
+    | .inr _ => pure none
   -- An encoded dependent result still describes an ordinary dependent source function.
   let f ← lambdaTelescope source fun xs body => do
     if body.isAppOfArity ``UniqueEncoding.encode 4 then
@@ -1188,7 +1223,13 @@ private def proveRecursion (method : TSyntax `sourceRecursion) (scope : Option I
     let value ← elabTermEnsuringType value (← inferType fields[index]!)
     fields[index]!.mvarId!.assign value
   Term.synthesizeSyntheticMVarsNoPostponing
-  fields[9]!.mvarId!.assign space
+  match allowance, bounds with
+  | .inl _, some (_, space) => fields[9]!.mvarId!.assign space
+  | .inr (measure, decreases), _ =>
+    fields[9]!.mvarId!.assign (← elabTermEnsuringType measure allowanceType)
+    fields[10]!.mvarId!.assign (← elabTermEnsuringType decreases (← inferType fields[10]!))
+    Term.synthesizeSyntheticMVarsNoPostponing
+  | _, _ => throwError "source recursion: missing resource allowance"
   let mut obligations := []
   for (index, tag) in #[(7, `finish_eq), (8, `resume_eq)] do
     let h ← mkFreshExprSyntheticOpaqueMVar (← instantiateMVars (← inferType fields[index]!))
@@ -1209,6 +1250,7 @@ private def proveRecursion (method : TSyntax `sourceRecursion) (scope : Option I
     if proof.hasExprMVar || proof.hasSorry then
       throwError "source recursion: the `{name}` callback has unfinished obligations"
     trace[source.translation] "source recursion: translating {name} complete"
+    if bounds.isNone then return proof
     let (_, equality) ← normalizeSourceBounds proof
     trace[source.translation] "source recursion: certified {name}"
     let program ← mkAppM ``Implementation.program #[proof]
@@ -1230,8 +1272,14 @@ private def proveRecursion (method : TSyntax `sourceRecursion) (scope : Option I
     let call := mkAppN resume #[← mkAppM ``Sigma.fst #[x], ← mkAppM ``Sigma.snd #[x]]
     mkLambdaFVars #[x] (← mkAppM ``encode #[mkConst ``Tree, call])
   let hr ← certify `resume resume
-  let mut proof ← mkAppM ``Recursion.implements #[r, hc, hs, hd, hr, bounds]
-  for tag in #[`input_size, `check_space, `stop_bounds, `step_bounds] do
+  let automatic ← if bounds.isNone then
+      some <$> mkAppM ``Recursion.implementation #[r, hc, hs, hd, hr]
+    else pure none
+  let mut proof ← match bounds with
+    | some (bounds, _) => mkAppM ``Recursion.implements #[r, hc, hs, hd, hr, bounds]
+    | none => mkAppM ``Implementation.implements #[automatic.get!]
+  for tag in (if bounds.isSome then
+      #[`input_size, `check_space, `stop_bounds, `step_bounds] else #[]) do
     let type ← whnf (← inferType proof)
     -- Reduce record projections before creating obligations: their types must not retain
     -- the not-yet-proved termination field of the recursion record.
@@ -1242,6 +1290,7 @@ private def proveRecursion (method : TSyntax `sourceRecursion) (scope : Option I
     proof := mkApp proof h
     obligations := obligations ++ [h.mvarId!]
     if tag == `step_bounds then
+      let space := bounds.get!.2
       let decreases ← forallTelescope (← instantiateMVars (← inferType fields[10]!)) fun xs _ => do
         let credit := mkProj ``And 0 (mkProj ``And 1 (mkProj ``And 1 (mkAppN h xs)))
         let lower := mkApp space (mkApp fields[4]! xs[0]!)
@@ -1251,7 +1300,9 @@ private def proveRecursion (method : TSyntax `sourceRecursion) (scope : Option I
       unless ← fields[10]!.mvarId!.checkedAssign (← instantiateMVars decreases) do
         throwError "source recursion: could not derive termination from the space allowance"
   let actual := (← inferType proof).getAppArgs
-  let implementation ← mkAppM ``Implementation.ofImplements #[actual[4]!, actual[6]!, proof]
+  let implementation ← match automatic with
+    | some implementation => pure implementation
+    | none => mkAppM ``Implementation.ofImplements #[actual[4]!, actual[6]!, proof]
   let equality ← withLocalDeclD `x args[0]! fun x => do
     let lhs ← mkAppM ``encode #[mkConst ``Tree, mkApp source x]
     let rhs ← mkAppM ``encode #[mkConst ``Tree, mkApp actual[5]! x]
@@ -1275,7 +1326,8 @@ private def proveRecursion (method : TSyntax `sourceRecursion) (scope : Option I
   let (names, _) ← session.unfolded.get
   let names := names.map mkIdent
   let lemmas ← names.mapM fun n => `(Lean.Parser.Tactic.simpLemma| $n:term)
-  evalTactic (← `(tactic| all_goals simp [$lemmas,*, source_bounds, FiniteCases.sourcePair]))
+  if bounds.isSome then
+    evalTactic (← `(tactic| all_goals simp [$lemmas,*, source_bounds, FiniteCases.sourcePair]))
   trace[source.translation] "source recursion: conditions simplified"
   let mut remaining := []
   for goal in ← getGoals do
@@ -1349,12 +1401,58 @@ private def modelFunPropCore
   setGoals (obligations ++ (← getGoals) ++ originalGoals.drop 1)
 
 open Lean Elab Tactic in
-private def modelFunProp
+def modelFunProp
     (translate : TacticM (Array Ident × Bool × Lean.Expr × List Lean.MVarId)) :
     TacticM Unit := do
   let saved ← saveState
   try modelFunPropCore translate
   catch ex => saved.restore; throw ex
+
+open Lean Meta Elab Tactic in
+/-- Present a generated recursive cost as an ordinary natural-valued function, with
+its two computation equations. This only inspects the cost generated by this entry. -/
+private def exposeRecursionCost (goal : MVarId) : TacticM MVarId := goal.withContext do
+  let target ← instantiateMVars (← goal.getType)
+  let field? (e : Lean.Expr) : Option (Lean.Expr × Lean.Expr) := do
+    match e with
+    | .proj ``Cost i value =>
+      return (mkConst (if i == 0 then ``Cost.time else ``Cost.peak), value)
+    | _ =>
+      if e.isAppOfArity ``Cost.time 1 || e.isAppOfArity ``Cost.peak 1 then
+        return (e.getAppFn, e.appArg!)
+      none
+  let some field := target.find? fun e =>
+      (field? e).any (·.2.isAppOf ``Recursion.cost) | return goal
+  let (projection, value) := (field? field).get!
+  let cost := value.appFn!
+  let type ← whnf (← inferType cost)
+  let value ← withLocalDeclD `x type.bindingDomain! fun x =>
+    mkLambdaFVars #[x] (mkApp projection (mkApp cost x))
+  let (ids, goal) ← (← goal.assertExt `cost (← inferType value) value `cost_eq).introNP 2
+  let id := ids[0]!
+  goal.withContext do
+    let abstractCost (e : Lean.Expr) := e.replace fun e =>
+      match field? e with
+      | some (p, v) => if p == projection && v.isApp && v.appFn! == cost then
+          some (mkApp (mkFVar id) v.appArg!) else none
+      | none => none
+    let transport (type : Lean.Expr) := do
+      mkCongrArg (← mkLambdaFVars #[mkFVar id] (abstractCost type))
+        (← mkEqSymm (mkFVar ids[1]!))
+    let mut goal ← goal.replaceTargetEq (abstractCost target) (← transport target)
+    let a := cost.getAppArgs
+    let ctx ← mkSimpContext (← `(tactic| simp -implicitDefEqProofs only [source_bounds])) false
+    for (name, thm) in
+        #[(`cost_stop, ``Recursion.cost_stop), (`cost_step, ``Recursion.cost_step)] do
+      let h ← mkAppM thm (a.extract (a.size - 5) a.size)
+      let h ← forallTelescope (← inferType h) fun xs _ => do
+        mkLambdaFVars xs (← mkCongrArg projection (mkAppN h xs))
+      let h ← mkEqMP (← transport (← inferType h)) h
+      let (result, _) ← simp (abstractCost (← inferType h)) ctx.ctx ctx.simprocs
+      let h ← mkEqMP (← result.getProof) h
+      let (_, next) ← goal.note name h (some (abstractCost result.expr))
+      goal := next
+    return ← goal.clear ids[1]!
 
 syntax "model_fun_prop" (" using " ident)? (" via " term)? : tactic
 
@@ -1364,11 +1462,19 @@ elab_rules : tactic
     modelFunProp (proveSource scope replacement)
 
 syntax "model_fun_prop" " using " sourceRecursion (" using " ident)? : tactic
+syntax "source_fun_prop" " using " sourceRecursion (" using " ident)? : tactic
 
 open Lean Elab Tactic in
 elab_rules : tactic
   | `(tactic| model_fun_prop using $method:sourceRecursion $[using $scope:ident]?) =>
-    modelFunProp (proveRecursion method scope)
+    do
+      modelFunProp (proveRecursion method scope)
+      if let `(sourceRecursion| recursion (test := $_) (next := $_)
+          (finish := $_) (resume := $_) (measure := $_) (decreases := $_)) := method then
+        setGoals (← (← getGoals).mapM exposeRecursionCost)
+  | `(tactic| source_fun_prop using $method:sourceRecursion $[using $scope:ident]?) => do
+    let (_, _, _, obligations) ← proveRecursion method scope
+    setGoals (obligations ++ (← getGoals))
 
 open Lean Meta in
 private def withSourceEncodings (parameters : List Lean.Expr) (action : MetaM Unit) :
@@ -1384,15 +1490,15 @@ private def withSourceEncodings (parameters : List Lean.Expr) (action : MetaM Un
       else withSourceEncodings rest action
     else withSourceEncodings rest action
 
-/-- Certify the right-hand implementation of an ordinary function equality once, for reuse.
-The left-hand function uses the right-hand implementation. The generated certificate is
-internal; local and scoped registrations use `fun_prop`, and `using ns` selects scoped rules. -/
+/-- Save an equality's right-hand implementation, or the same program with the budget proved
+directly by `model_fun_prop`. Arbitrary model existence theorems are not source certificates.
+Local and scoped registrations use `fun_prop`; `using ns` selects rules for an equality. -/
 syntax (name := sourceAttribute) "source" (" using " ident)? : attr
 
 open Lean Meta Elab Tactic Mathlib.Meta.FunProp in
 initialize registerBuiltinAttribute {
   name := `sourceAttribute
-  descr := "certify and reuse the implementation on the right of a source-function equality"
+  descr := "save a source implementation, including a directly certified model budget"
   applicationTime := .afterCompilation
   add := fun name stx kind => MetaM.run' do
     let saved ← getEnv
@@ -1407,29 +1513,55 @@ initialize registerBuiltinAttribute {
             if !parameterDecl.binderInfo.isInstImplicit && (← isProp parameterDecl.type) then
               throwError "`source` needs an unconditional function equality; \
                 use a local `via` proof for a replacement depending on a hypothesis"
-          let some (_, f, g) := type.eq? |
-            throwError "`source` expects an equality between ordinary source functions"
-          unless (← whnf (← inferType f)).isForall do
-            throwError "`source` expects a function equality; use `funext` for pointwise equations"
-          let target ← mkAppM ``Implementation #[g]
-          let goal ← mkFreshExprSyntheticOpaqueMVar target
-          let action : TermElabM Unit := do
-            discard <| Tactic.run goal.mvarId! do
-              discard <| proveSource scope
-          discard <| action.run {} {}
-          let proof ← instantiateMVars goal
-          if proof.hasExprMVar || proof.hasSorry then
-            throwError "the selected source implementation has unfinished obligations"
-          let result ← mkAppM ``Implementation.congr
-            #[proof, ← mkEqSymm (mkAppN equality parameters)]
-          let certificate ← mkAuxDefinition (← mkFreshUserName (name ++ `sourceImplementation))
-            (← inferType result) result (compile := false)
-          setReducibilityStatus certificate.getAppFn.constName! .reducible
-          addTheorem certificate.getAppFn.constName! kind 1001
+          let result ← if let some (_, f, g) := type.eq? then do
+            unless (← whnf (← inferType f)).isForall do
+              throwError "`source` expects a function equality; \
+                use `funext` for pointwise equations"
+            let target ← mkAppM ``Implementation #[g]
+            let goal ← mkFreshExprSyntheticOpaqueMVar target
+            let action : TermElabM Unit := do
+              discard <| Tactic.run goal.mvarId! do
+                discard <| proveSource scope
+            discard <| action.run {} {}
+            let proof ← instantiateMVars goal
+            if proof.hasExprMVar || proof.hasSorry then
+              throwError "the selected source implementation has unfinished obligations"
+            mkAppM ``Implementation.congr #[proof, ← mkEqSymm (mkAppN equality parameters)]
+          else withoutExporting do
+            let proofInfo ← getConstInfo name
+            let some value := proofInfo.value? (allowOpaque := true) |
+              throwError "`source` needs a function equality or a direct `model_fun_prop` proof"
+            let proof := (mkAppN value parameters).headBeta.consumeMData
+            unless proof.isAppOfArity ``Implementation.exists_computableInTimeAndSpace 11 do
+              throwError "`source` needs a function equality or a direct `model_fun_prop` proof; \
+                it cannot recover a source program from an arbitrary model theorem"
+            if proof.hasSorry then
+              throwError "the model budget proof has unfinished obligations"
+            if scope.isSome then
+              throwError "select the scope with `model_fun_prop using`, before saving its budget"
+            mkAppOptM ``Implementation.rebudgetModel (proof.getAppArgs.map some)
+          -- Keep private proof dependencies behind the saved definition. Consumers use an
+          -- explicit budget equation instead of unfolding its evaluator or certification.
+          let (certificate, projection) ← withoutExporting do
+            let certificate ← mkAuxDefinition (← mkFreshUserName (name ++ `sourceImplementation))
+              (← inferType result) result (compile := false)
+            let (bounds, proof) ← normalizeSourceBounds result
+            let type ← mkEq (← mkAppM ``Implementation.bounds #[certificate]) bounds
+            let closed ← Closure.mkValueTypeClosure type proof false
+            let projection ← mkFreshUserName (name ++ `sourceBounds)
+            addDecl <| .thmDecl {
+              name := projection
+              levelParams := closed.levelParams.toList
+              type := closed.type
+              value := closed.value }
+            pure (certificate.getAppFn.constName!, projection)
+          for attr in #[`simp, `source_bounds] do
+            let some ext ← getSimpExtension? attr | throwError "missing {attr} simplifier"
+            addSimpTheorem ext projection (post := false) (inv := false) .global 1000
+          addTheorem certificate kind 1001
     catch ex =>
       setEnv saved
       throw ex
 }
-
 
 end Complexity.TreeProgram.Source
