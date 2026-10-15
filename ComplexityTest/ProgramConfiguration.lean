@@ -47,8 +47,8 @@ theorem echo_spec (xs : Array Bool) (c : Cfg (Fin 0) Bool Unit xs) :
 
 -- A configuration-only proof still proves a fact about the actual finite controller.
 theorem echo_computes (xs : Array Bool) :
-    (Program.compile echo).ComputesInTimeAndSpace xs.toList [xs[0]?.getD false] 2 0 := by
-  apply Program.cfg_computesInTimeAndSpace (P := fun s b ↦ s = (rawExecution xs.toList).init () ∧ b = 2)
+    (Program.compile echo).ComputesWithin xs.toList [xs[0]?.getD false] 2 0 := by
+  apply Program.cfg_computesWithin (P := fun s b ↦ s = (rawExecution xs.toList).init () ∧ b = 2)
   · constructor
     intro s b hs
     exact (echo_spec xs ((rawExecution xs.toList).init ())).entails_wp_of_post

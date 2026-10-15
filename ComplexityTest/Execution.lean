@@ -26,20 +26,20 @@ example {k : ℕ} [NeZero k] {Q : Type*} (M : TreeMachine Id k Q)
     M.ComputesWith (Config := TreeMachine.Cfg k Q)
       (fun h ↦ h.actionSum TreeMachine.Action.sizeCost)
       (fun h ↦ h.configSup TreeMachine.Cfg.mass) a b t s ↔
-      M.ComputesInTimeAndSpace a b t s :=
+      M.ComputesWithin a b t s :=
   Iff.rfl
 
 example {κ Γ Q : Type*} [Inhabited Γ] [Fintype κ]
     (M : TM Id κ Γ Q) (xs ys : List Γ) (t s : ℕ) :
     M.ComputesWith (Config := TM.Cfg κ Γ Q xs.toArray)
       Controller.History.length Controller.History.space xs ys t s ↔
-      M.ComputesInTimeAndSpace xs ys t s :=
+      M.ComputesWithin xs ys t s :=
   Iff.rfl
 
 -- The unified computation retains the old fixed-time meaning, including halted padding.
 example {κ Γ Q : Type*} [Inhabited Γ] [Fintype κ]
     (M : TM Id κ Γ Q) (xs ys : List Γ) (t s : ℕ) :
-    M.ComputesInTimeAndSpace xs ys t s ↔
+    M.ComputesWithin xs ys t s ↔
       M.Halted (M.run (TM.Cfg κ Γ Q xs.toArray) xs t) ∧
       (M.run (TM.Cfg κ Γ Q xs.toArray) xs t).output = ys.toArray ∧
       (M.runHistory (TM.Cfg κ Γ Q xs.toArray) xs t).space ≤ s := by

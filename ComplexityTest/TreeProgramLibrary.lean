@@ -25,10 +25,10 @@ example (x : Tree) :
 
 -- One ordinary source program computes Nat.succ on every encoded natural number.
 private theorem succ_computable :
-    TimeSpaceModel.tree.ComputableInTimeAndSpace Nat.succ (fun n ↦ 28 * n + 29)
-      (fun n ↦ (Nat.Code.succ .input).registers * (n + 7)) := by
-  apply Code.computableInTimeAndSpace (Nat.Code.succ .input) Nat.succ
-    (fun n ↦ 28 * n + 25) (fun n ↦ n + 5)
+    TimeSpaceModel.tree.ComputableWithin Nat.succ (fun a ↦ 28 * (encode Tree a).size + 29)
+      (fun a ↦ (Nat.Code.succ .input).registers * ((encode Tree a).size + 7)) := by
+  apply Code.computableWithin (Nat.Code.succ .input) Nat.succ
+    (fun a ↦ 28 * (encode Tree a).size + 25) (fun a ↦ (encode Tree a).size + 5)
   · intro a
     refine (Nat.Code.succ_bounded _ _ _ a ?_).mono ?_ le_rfl (fun _ _ h ↦ h.1)
     · simp
@@ -37,10 +37,11 @@ private theorem succ_computable :
   · intro a; omega
 
 -- The already established conversion handles size charges; source proofs only use unit time.
-example : TimeSpaceModel.sizeCostTree.ComputableInTimeAndSpace Nat.succ
-    (fun n ↦ (28 * n + 29) * ((Nat.Code.succ .input).registers * (n + 7)))
-    (fun n ↦ (Nat.Code.succ .input).registers * (n + 7)) :=
-  TreeMachine.computableInTimeAndSpace_toSizeCost succ_computable
+example : TimeSpaceModel.sizeCostTree.ComputableWithin Nat.succ
+    (fun a ↦ (28 * (encode Tree a).size + 29) *
+      ((Nat.Code.succ .input).registers * ((encode Tree a).size + 7)))
+    (fun a ↦ (Nat.Code.succ .input).registers * ((encode Tree a).size + 7)) :=
+  succ_computable.toSizeCost
 
 -- Two calls compose at the source level without inspecting either generated program.
 def addTwo (x : Value) : Code Value := do
@@ -65,10 +66,11 @@ private theorem addTwo_bounded (x : Value) (n : ℕ) (s : ℕ → Tree) (a : ℕ
   simpa [Nat.add_assoc] using hv.1
 
 private theorem addTwo_computable :
-    TimeSpaceModel.tree.ComputableInTimeAndSpace (fun a : ℕ ↦ a + 2)
-      (fun n ↦ 56 * n + 82) (fun n ↦ (addTwo .input).registers * (n + 11)) := by
-  apply Code.computableInTimeAndSpace (addTwo .input) (fun a : ℕ ↦ a + 2)
-    (fun n ↦ 56 * n + 78) (fun n ↦ n + 9)
+    TimeSpaceModel.tree.ComputableWithin (fun a : ℕ ↦ a + 2)
+      (fun a ↦ 56 * (encode Tree a).size + 82)
+      (fun a ↦ (addTwo .input).registers * ((encode Tree a).size + 11)) := by
+  apply Code.computableWithin (addTwo .input) (fun a : ℕ ↦ a + 2)
+    (fun a ↦ 56 * (encode Tree a).size + 78) (fun a ↦ (encode Tree a).size + 9)
   · intro a
     refine (addTwo_bounded _ _ _ a ?_).mono ?_ le_rfl (fun _ _ h ↦ h)
     · simp
@@ -76,10 +78,11 @@ private theorem addTwo_computable :
       omega
   · intro a; omega
 
-example : TimeSpaceModel.sizeCostTree.ComputableInTimeAndSpace (fun a : ℕ ↦ a + 2)
-    (fun n ↦ (56 * n + 82) * ((addTwo .input).registers * (n + 11)))
-    (fun n ↦ (addTwo .input).registers * (n + 11)) :=
-  TreeMachine.computableInTimeAndSpace_toSizeCost addTwo_computable
+example : TimeSpaceModel.sizeCostTree.ComputableWithin (fun a : ℕ ↦ a + 2)
+    (fun a ↦ (56 * (encode Tree a).size + 82) *
+      ((addTwo .input).registers * ((encode Tree a).size + 11)))
+    (fun a ↦ (addTwo .input).registers * ((encode Tree a).size + 11)) :=
+  addTwo_computable.toSizeCost
 
 
 -- The last failed loop test costs two transitions even when the body never runs.

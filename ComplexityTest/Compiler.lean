@@ -154,9 +154,9 @@ example (x : Tree) (q : ℕ) :
 
 -- The public compiler exposes native stack computation and its complete resource theorem.
 example {k : ℕ} [NeZero k] {Q : Type} [FinEnum Q] (M : TreeMachine Id k Q)
-    (x a : Tree) (t s : ℕ) (h : M.ComputesInTimeAndSpace x a t s) :
-    (compiler M).ComputesInTimeAndSpace (BitList.encodeTree x) (BitList.encodeTree a)
+    (x a : Tree) (t s : ℕ) (h : M.ComputesWithin x a t s) :
+    (compiler M).ComputesWithin (BitList.encodeTree x) (BitList.encodeTree a)
       (Simulation.timeBound k x.size t) (Simulation.spaceBound k s) :=
-  Simulation.computesInTimeAndSpace M h
+  Simulation.computesWithin M h
 
 end CompilerTests

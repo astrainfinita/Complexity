@@ -159,10 +159,10 @@ private theorem copy_spec (xs : List Bool) :
   · exact body_spec xs
 
 -- The same finite controller copies every input length; bits remain distinct from blank.
-theorem copyInput_computesInTimeAndSpace (xs : List Bool) :
-    (Program.compile copyInput).ComputesInTimeAndSpace
+theorem copyInput_computesWithin (xs : List Bool) :
+    (Program.compile copyInput).ComputesWithin
       (input xs).toList (input xs).toList (4 * xs.length + 2) 0 := by
-  apply Program.computesInTimeAndSpace (copy_spec xs)
+  apply Program.computesWithin (copy_spec xs)
   refine ⟨0, Nat.zero_le _, ?_, by simp⟩
   apply cfg_ext <;> rfl
 

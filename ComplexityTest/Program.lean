@@ -50,9 +50,9 @@ theorem eraseAfterRead_spec :
     by_cases h : (0 : ℤ) = j <;> by_cases h' : (1 : ℤ) = j <;> simp [h, h']
   · rfl
 
-theorem eraseAfterRead_computesInTimeAndSpace :
-    eraseAfterRead.compile.ComputesInTimeAndSpace [] [true] 8 2 := by
-  apply Program.computesInTimeAndSpace (P := fun s b ↦ s = start ∧ b = 8)
+theorem eraseAfterRead_computesWithin :
+    eraseAfterRead.compile.ComputesWithin [] [true] 8 2 := by
+  apply Program.computesWithin (P := fun s b ↦ s = start ∧ b = 8)
     (hp := ⟨rfl, rfl⟩)
   constructor
   apply Triple.entails_wp_of_post eraseAfterRead_spec

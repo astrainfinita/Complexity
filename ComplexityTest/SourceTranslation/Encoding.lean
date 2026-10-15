@@ -48,9 +48,9 @@ example {α : Type u} {β : Type v} {γ : Type w}
 
 -- Adding a logical output certificate preserves the behavior and both exact budgets.
 example {Data α β : Type*} [Encoding Data α] [UniqueEncoding Data β]
-    {model : TimeSpaceModel Id Data} {f : α → β} {t s : ℕ → ℕ}
-    (hf : model.ComputableInTimeAndSpace f t s) (P : β → Prop) (hP : ∀ x, P (f x)) :
-    model.ComputableInTimeAndSpace (fun x => (⟨f x, hP x⟩ : {y // P y})) t s :=
+    {model : TimeSpaceModel Id Data} {f : α → β} {t s : α → ℕ}
+    (hf : model.ComputableWithin f t s) (P : β → Prop) (hP : ∀ x, P (f x)) :
+    model.ComputableWithin (fun x => (⟨f x, hP x⟩ : {y // P y})) t s :=
   hf.of_encode (fun _ => rfl)
 
 example {Data α β : Type*} [Encoding Data α] [UniqueEncoding Data β]

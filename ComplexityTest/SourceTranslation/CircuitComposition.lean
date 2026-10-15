@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Yuyang Zhao
 -/
 import Complexity.Resources.Circuit.Unroll
+import Complexity.Resources.Circuit.Composition
 import Complexity.Classes.Functions.Basic
 open Complexity TreeProgram Complexity.TreeProgram.Source
 
@@ -13,132 +14,137 @@ namespace ComplexityTest.SourceTranslation.CircuitComposition
 example : compImplementation.program =
     (compRecursion.implementation compCheck compNext compFinish compResume).program := rfl
 
--- The computed intermediate allowances are tighter than the former public allowances.
-example : circuitCompTimeCoefficient ≤ 10 ^ 16 ∧ circuitCompPeakCoefficient ≤ 10 ^ 14 ∧
-    keepTimeCoefficient ≤ 10 ^ 23 ∧ keepPeakCoefficient ≤ 10 ^ 20 ∧
-    unrollStepTimeCoefficient ≤ 10 ^ 30 ∧ unrollStepPeakCoefficient ≤ 10 ^ 25 := by
-  norm_num
+-- Recursive certification keeps the explicitly selected terminal callback.
+example : relabelImplementation.program =
+    (relabelRecursion.implementation relabelCheck relabelNext relabelFinish relabelResume).program := rfl
+example : relabelFinish.HasGrowth
+    (fun x => ⌜x⌝ₜ.size ^ 3) (fun x => ⌜x⌝ₜ.size ^ 2) := relabelFinish_growth
 
 def rewire (x : RelabelInput) : Σ n, Σ m, Circuit .booleanAlgebra n m :=
   ⟨x.2.2.1, x.2.1, x.2.2.2.1.relabel x.2.2.2.2⟩
-example : ∃ b, Realizes rewire b := ⟨_, by source_fun_prop⟩
+noncomputable example : Implementation rewire := by source_fun_prop
 
 def pipeline (x : CompInput) : Σ n, Σ m, Circuit .booleanAlgebra n m :=
   ⟨x.1, x.2.2.1, x.2.2.2.1.comp x.2.2.2.2⟩
-example : ∃ b, Realizes pipeline b := ⟨_, by source_fun_prop⟩
+noncomputable example : Implementation pipeline := by source_fun_prop
 
 def preserve (x : Σ n, Σ m, Circuit .booleanAlgebra n m) :
     Σ n, Σ m, Circuit .booleanAlgebra n m := ⟨x.1, x.1 + x.2.1, x.2.2.keepInputs⟩
-example : ∃ b, Realizes preserve b := ⟨_, by source_fun_prop⟩
+noncomputable example : Implementation preserve := by source_fun_prop
 
 def layers (x : Σ n, Circuit .booleanAlgebra (n + 1) n × ℕ) :
     Σ n, Σ m, Circuit .booleanAlgebra n m :=
   ⟨x.1 + x.2.2, x.1, x.2.1.unroll x.2.2⟩
-example : ∃ b, Realizes layers b := ⟨_, by source_fun_prop⟩
+noncomputable example : Implementation layers := by source_fun_prop
 
 /-- Rewiring an already represented set of inputs, retaining the same input count. -/
 def rewireStored (x : Σ n, Σ m, Circuit .booleanAlgebra n m × (Fin n → Fin n)) :
     Σ n, Σ m, Circuit .booleanAlgebra n m := ⟨x.1, x.2.1, x.2.2.1.relabel x.2.2.2⟩
 
-theorem rewireStored_model :
-    ∃ k, TimeSpaceModel.tree.ComputableInTimeAndSpace rewireStored
-      (fun n => 100000000000000000000 * (n + 1) ^ 7)
-      (fun n => k * (10000000000000000 * (n + 1) ^ 4)) := by
-  model_fun_prop
-  all_goals
-    rename_i x
+abbrev StoredRelabelInput := Σ n, Σ m, Circuit .booleanAlgebra n m × (Fin n → Fin n)
+
+noncomputable def rewireStoredImplementation : Implementation rewireStored := by source_fun_prop
+
+/-- Compose the saved specification; only the mathematical size relations remain. -/
+theorem rewireStored_growth : rewireStoredImplementation.HasGrowth
+    (fun x => ⌜x⌝ₜ.size ^ 7) (fun x => ⌜x⌝ₜ.size ^ 4) := by
+  let u (x : Σ n, Σ m, Circuit .booleanAlgebra n m × (Fin n → Fin n)) : RelabelInput :=
+    ⟨x.1, x.2.1, x.1, x.2.2.1, x.2.2.2⟩
+  let S (x : Σ n, Σ m, Circuit .booleanAlgebra n m × (Fin n → Fin n)) := ⌜x⌝ₜ.size
+  let o x := ⌜relabelFn (u x)⌝ₜ.size
+  have hpos x : 0 < S x := Tree.size_pos _
+  have hR : Dominated (relabelScale ∘ u) S := Dominated.of_le_mul 6 fun x => by
     rcases x with ⟨n, m, c, w⟩
-    let S := ⌜(n, m, c, w)⌝ₜ.size
-    let R := n + m + n + 2 * c.size + 1
-    have hc : ⌜c⌝ₜ.size ≤ S := by simp only [S, size_encode_prod]; omega
-    have hw : ⌜w⌝ₜ.size ≤ S := by simp only [S, size_encode_prod]; omega
-    have hn : n ≤ S := (card_le_size_encode_fin_function w).trans hw
-    have hm : m ≤ S := c.outputs_le_size_encode.trans hc
-    have hg : c.size ≤ S := c.size_le_size_encode.trans hc
-    have hR : R ≤ 5 * (S + 1) := by dsimp only [R]; omega
-    have h₂ := pow_le_pow_left' hR 2
-    have h₄ := pow_le_pow_left' hR 4
-    have h₆ := pow_le_pow_left' hR 6
-    norm_num only [mul_pow, Nat.reducePow] at h₂ h₄ h₆
-    have hS₂ := Nat.le_self_pow (by decide : 2 ≠ 0) (S + 1)
-    have hp₂ : 1 ≤ (S + 1) ^ 2 := Nat.one_le_pow 2 _ (by omega)
-    have hp₄ : (S + 1) ^ 2 ≤ (S + 1) ^ 4 := Nat.pow_le_pow_right (by omega) (by decide)
-    have hp₃₄ : (S + 1) ^ 3 ≤ (S + 1) ^ 4 := Nat.pow_le_pow_right (by omega) (by decide)
-    have hp₇ : 1 ≤ (S + 1) ^ 7 := Nat.one_le_pow 7 _ (by omega)
-    have ht : (c.size + 1) * R ^ 6 ≤ 15625 * (S + 1) ^ 7 := calc
-      _ ≤ (S + 1) * (15625 * (S + 1) ^ 6) :=
-        Nat.mul_le_mul (Nat.add_le_add_right hg 1) h₆
-      _ = _ := by rw [pow_succ (S + 1) 6]; ac_rfl
-    have hs : (c.size + 1) * (128 * R ^ 2 + 1) ≤ 3201 * (S + 1) ^ 3 := calc
-      _ ≤ (S + 1) * (3201 * (S + 1) ^ 2) :=
-        Nat.mul_le_mul (Nat.add_le_add_right hg 1) (by omega)
-      _ = _ := by rw [pow_succ (S + 1) 2]; ac_rfl
-    have hout : ⌜c.relabel w⌝ₜ.size ≤ 400 * (S + 1) ^ 2 := by
-      have h := (c.relabel w).size_encode_numeric_le
-      simp only [Circuit.size_relabel] at h
-      apply h.trans
-      have hprod := Nat.mul_le_mul
-        (Nat.mul_le_mul_left 100 (by omega : c.size + m + 1 ≤ 2 * (S + 1)))
-        (by omega : n + c.size + 1 ≤ 2 * (S + 1))
-      convert hprod using 1; ring
-    have hncode : ⌜n⌝ₜ.size ≤ S := by simp only [S, size_encode_prod]; omega
-    have hmcode : ⌜m⌝ₜ.size ≤ S := by simp only [S, size_encode_prod]; omega
-    simp only [R, S, size_encode_prod, encode_nat_tree, encode_fin_function]
-      at hncode hmcode h₂ h₄ ht hs hS₂ hp₂ hp₄ hp₃₄ hp₇ hout
-    simp only [Sigma.encode_mk, size_encode_prod, encode_nat_tree,
-      encode_fin_function, Nat.mul_assoc, ← max_add_add_right, max_le_iff]
-    (repeat' apply And.intro) <;> omega
+    have hc : ⌜c⌝ₜ.size ≤ S ⟨n, m, c, w⟩ := by
+      simp only [S, Sigma.encode_mk, size_encode_prod]
+      omega
+    have hw : ⌜w⌝ₜ.size ≤ S ⟨n, m, c, w⟩ := by
+      simp only [S, Sigma.encode_mk, size_encode_prod]
+      omega
+    have hn := (card_le_size_encode_fin_function w).trans hw
+    have hm := c.outputs_le_size_encode.trans hc
+    have hg := c.size_le_size_encode.trans hc
+    have hp := hpos ⟨n, m, c, w⟩
+    dsimp [Function.comp_def, u, relabelScale]
+    omega
+  have ho : Dominated o (fun x => S x ^ 2) :=
+    (Dominated.comp (Dominated.of_le_mul 100 size_encode_relabelFn_le) u).trans (hR.pow 2)
+  have hS : Dominated S (fun x => S x ^ 4) :=
+    Dominated.of_le fun x => Nat.le_self_pow (by decide) _
+  have ho4 := ho.trans (Dominated.of_le fun x => Nat.pow_le_pow_right (hpos x) (by decide : 2 ≤ 4))
+  source_fun_prop
+  · simp only [Dominated.add_iff]
+    repeat' apply And.intro
+    all_goals first
+      | exact Dominated.const_of_pos _ (fun _ => Nat.pow_pos (Tree.size_pos _))
+      | exact hR.pow 7
+  · have hp : Dominated (fun x => 2 * S x + o x + 2 + relabelScale (u x) ^ 4)
+        (fun x => S x ^ 4) := by
+      simp only [Dominated.add_iff]
+      exact ⟨⟨⟨hS.const_mul_left 2, ho4⟩,
+        Dominated.const_of_pos 2 fun x => Nat.pow_pos (hpos x)⟩, hR.pow 4⟩
+    apply hp.mono_left
+    rintro ⟨n, m, c, w⟩
+    dsimp only [S, o, u, Function.comp_apply, relabelFn]
+    simp only [Sigma.encode_mk, size_encode_prod, Tree.encode_self]
+    omega
+
+@[source] theorem rewireStored_ftisp :
+    rewireStored ∈ FTISP .tree (fun n => n ^ 7) (fun n => n ^ 4) :=
+  rewireStored_growth.mem_ftisp_pow (by decide)
 
 /-- Unary storage makes the number of generated layers bounded by input size. -/
 def layersStored (x : Σ n, Circuit .booleanAlgebra (n + 1) n × List Unit) :
     Σ n, Σ m, Circuit .booleanAlgebra n m :=
   ⟨x.1 + x.2.2.length, x.1, x.2.1.unroll x.2.2.length⟩
 
-theorem layersStored_model :
-    ∃ k, TimeSpaceModel.tree.ComputableInTimeAndSpace layersStored
-      (fun n => 10 ^ 40 * (n + 1) ^ 20) (fun n => k * (10 ^ 32 * (n + 1) ^ 8)) := by
-  model_fun_prop
-  all_goals
-    rename_i x
-    rcases x with ⟨n, step, xs⟩
-    let S := ⌜(n, step, xs)⌝ₜ.size
-    let N := 2 * n + xs.length + (xs.length + 1) * step.size + 2
-    have hs : ⌜step⌝ₜ.size ≤ S := by simp only [S, size_encode_prod]; omega
-    have hxs : ⌜xs⌝ₜ.size ≤ S := by simp only [S, size_encode_prod]; omega
-    have hn : n ≤ S := step.outputs_le_size_encode.trans hs
-    have hg : step.size ≤ S := step.size_le_size_encode.trans hs
-    have ht : xs.length ≤ S := (length_le_codeSize xs).trans hxs
-    have hprod := Nat.mul_le_mul (Nat.add_le_add_right ht 1) hg
-    have hN : N ≤ 2 * (S + 1) ^ 2 := by dsimp [N]; nlinarith only [hn, ht, hprod]
-    have h₂ := pow_le_pow_left' hN 2
-    have h₄ := pow_le_pow_left' hN 4
-    have h₁₀ := pow_le_pow_left' hN 10
-    norm_num only [mul_pow, ← pow_mul, Nat.reducePow, Nat.reduceMul] at h₂ h₄ h₁₀
-    have hS₂ := Nat.le_self_pow (by decide : 2 ≠ 0) (S + 1)
-    have h₁₂ : 1 ≤ (S + 1) ^ 2 := Nat.one_le_pow 2 _ (by omega)
-    have h₂₈ : (S + 1) ^ 2 ≤ (S + 1) ^ 8 := Nat.pow_le_pow_right (by omega) (by decide)
-    have h₄₈ : (S + 1) ^ 4 ≤ (S + 1) ^ 8 := Nat.pow_le_pow_right (by omega) (by decide)
-    have h₂₂₀ : (S + 1) ^ 2 ≤ (S + 1) ^ 20 := Nat.pow_le_pow_right (by omega) (by decide)
-    have ht₂ := pow_le_pow_left' (Nat.add_le_add_right ht 1) 2
-    have hstate := size_unrollState_le n step xs.length xs.length le_rfl
-    have hout : ⌜step.unroll xs.length⌝ₜ.size ≤ 256 * N ^ 2 := by
-      simp only [Sigma.encode_mk, size_encode_prod] at hstate
-      dsimp [N]
-      omega
-    have hncode : ⌜n⌝ₜ.size ≤ S := by simp only [S, size_encode_prod]; omega
-    have htcode := size_encode_nat_le xs.length
-    have hntcode := size_encode_nat_le (n + xs.length)
-    simp only [N, S, size_encode_prod, encode_nat_tree]
-      at hs hxs hn ht hncode htcode hntcode h₂ h₄ h₁₀ hS₂ h₁₂ h₂₈ h₄₈ h₂₂₀ ht₂ hout
-    simp only [Sigma.encode_mk, size_encode_prod, encode_nat_tree,
-      ← max_add_add_right, max_le_iff]
-    (repeat' apply And.intro) <;> omega
+noncomputable def layersStoredImplementation : Implementation layersStored := by source_fun_prop
 
-theorem layersStored_ftisp :
-    layersStored ∈ FTISP .tree (fun n => n ^ 20) (fun n => n ^ 8) := by
-  obtain ⟨k, hk⟩ := layersStored_model
-  exact ⟨_, _, hk, IsBigO.of_le_mul_add_one_pow (10 ^ 40) 20 (fun _ => le_rfl),
-    IsBigO.of_le_mul_add_one_pow (k * 10 ^ 32) 8
-      (fun _ => by simp only [Nat.mul_assoc, le_refl])⟩
+theorem layersStored_growth : layersStoredImplementation.HasGrowth
+    (fun x => ⌜x⌝ₜ.size ^ 18) (fun x => ⌜x⌝ₜ.size ^ 8) := by
+  let S (x : Σ n, Circuit .booleanAlgebra (n + 1) n × List Unit) := ⌜x⌝ₜ.size
+  let u (x : Σ n, Circuit .booleanAlgebra (n + 1) n × List Unit) : UnrollInput :=
+    ⟨x.1, x.2.1, x.2.2.length⟩
+  have hS x : 0 < S x := Tree.size_pos _
+  have hc : Dominated (fun x => ⌜x.2.1⌝ₜ.size) S := Dominated.of_le fun x => by
+    rcases x with ⟨n, c, xs⟩; simp only [S, Sigma.encode_mk, size_encode_prod]; omega
+  have hxs : Dominated (fun x => ⌜x.2.2⌝ₜ.size) S := Dominated.of_le fun x => by
+    rcases x with ⟨n, c, xs⟩; simp only [S, Sigma.encode_mk, size_encode_prod]; omega
+  have hn : Dominated (fun x => x.1) S := hc.mono_left fun x => x.2.1.outputs_le_size_encode
+  have hg : Dominated (fun x => x.2.1.size) S := hc.mono_left fun x => x.2.1.size_le_size_encode
+  have ht : Dominated (fun x => x.2.2.length) S := hxs.mono_left fun x => length_le_codeSize _
+  have hcn := Dominated.size_encode_nat hn hS
+  have hct := Dominated.size_encode_nat ht hS
+  have hcnt := Dominated.size_encode_nat (hn.add_same ht) hS
+  have hR : Dominated (unrollScale ∘ u) (fun x => S x ^ 2) := by
+    have hm := (ht.add_same (Dominated.one hS)).mul hg
+    simp only [← pow_two] at hm
+    simp only [Function.comp_def, u, unrollScale, Dominated.add_iff]
+    exact ⟨⟨⟨Dominated.le_pow (hn.const_mul_left 2) (by decide), ht.le_pow (by decide)⟩, hm⟩,
+      Dominated.const_of_pos 2 (fun x => Nat.pow_pos (hS x))⟩
+  have hu : Dominated (fun x => ⌜u x⌝ₜ.size) S := by
+    simp only [u, Sigma.encode_mk, size_encode_prod, Dominated.add_iff]
+    exact ⟨⟨Dominated.const_of_pos 1 hS, hcn⟩,
+      ⟨⟨Dominated.const_of_pos 1 hS, hc⟩, hct⟩⟩
+  have htime := hR.pow 9
+  have hpeak := hR.pow 4
+  simp only [← pow_mul, Function.comp_def, u] at htime hpeak
+  have hout := (Dominated.comp unroll_growth.size_encode u).trans
+    ((hu.le_pow (by decide : 0 < 8)).max_same hpeak)
+  simp only [Tree.encode_self, Function.comp_def, u] at hout
+  source_fun_prop
+  all_goals
+    simp only [Function.comp_apply, Sigma.encode_mk, Tree.encode_self,
+      size_encode_prod, Dominated.add_iff, Dominated.max_iff]
+    repeat' apply And.intro
+  all_goals with_reducible first
+    | assumption
+    | exact Dominated.const_of_pos _ (fun x => Nat.pow_pos (hS x))
+    | exact Dominated.le_pow (g := S) (by first | assumption | exact Dominated.refl _) (by decide)
+    | exact Dominated.mono_pow (hxs.pow 2) (by decide) hS
+
+@[source] theorem layersStored_ftisp :
+    layersStored ∈ FTISP .tree (fun n => n ^ 18) (fun n => n ^ 8) :=
+  layersStored_growth.mem_ftisp_pow (by decide)
 
 end ComplexityTest.SourceTranslation.CircuitComposition

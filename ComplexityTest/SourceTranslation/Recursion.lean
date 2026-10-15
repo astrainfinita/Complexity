@@ -17,13 +17,6 @@ elab (name := guardPublicGoals) "guard_public_goals" : tactic => do
       let displayed := (← ppExpr type).pretty
       if (displayed.splitOn "TreeProgram.Source").length > 1 then
         throwError "recursion exposed an internal certificate or budget in a user goal"
-      for decl in ← getLCtx do
-        if decl.userName == `cost && decl.isLet then
-          throwError "the generated cost's internal definition is visible"
-        if decl.userName == `cost_stop || decl.userName == `cost_step then
-          let type ← instantiateMVars decl.type
-          if (← ppExpr type).pretty.contains "TreeProgram.Source" then
-            throwError "a generated computation equation exposes an internal budget"
 
 #allow_unused_tactic! guardPublicGoals
 
@@ -36,36 +29,31 @@ def invertResume (x : {xs : List Bool // (!xs.isEmpty) = true}) (result : List B
   | [] => False.elim (by simpa [h] using x.property)
   | a :: _ => (!a) :: result
 
-theorem size_invert (xs : List Bool) : ⌜invert xs⌝ₜ.size ≤ 2 * ⌜xs⌝ₜ.size := by
+theorem length_invert (xs : List Bool) : (invert xs).length = xs.length := by
   induction xs with
-  | nil => simp [invert]
-  | cons a xs ih => cases a <;> simp [invert] at * <;> omega
+  | nil => rfl
+  | cons a xs ih => simpa only [invert, List.length_cons] using congrArg Nat.succ ih
 
-theorem invert_model : ∃ k, TimeSpaceModel.tree.ComputableInTimeAndSpace invert
-    (fun n => 1000 * n + 1000) (fun n => k * (1000 * (n + 1)^2)) := by
-  model_fun_prop using recursion
-    (test := fun xs : List Bool => !xs.isEmpty)
-    (next := List.tail)
-    (finish := fun _ => [])
-    (resume := invertResume)
-    (time := fun xs => 100 * xs.length + 100)
-    (space := fun xs => 100 * (⌜xs⌝ₜ.size + 1)^2)
+open TreeProgram.Source
+
+-- The measured entry exposes source equations, without a guessed exact allowance.
+noncomputable def invertImplementation : Implementation invert := by
+  source_fun_prop using recursion
+    (test := fun xs : List Bool => !xs.isEmpty) (next := List.tail)
+    (finish := fun _ => []) (resume := invertResume)
+    (measure := List.length)
+    (decreases := by intro xs h; cases xs <;> simp_all)
   guard_public_goals
-  case finish_eq => rfl
-  case resume_eq =>
-    intro xs h
+  case finish_eq =>
+    rintro ⟨xs, h⟩
     cases xs with
-    | nil => exact (h rfl).elim
-    | cons a xs => rfl
-  case input_size => nlinarith
-  case check_space =>
-    rename_i xs
-    have hp : 0 < (⌜xs⌝ₜ.size + 1)^2 := by positivity
-    split_ifs <;> (repeat' apply And.intro) <;> nlinarith
-  case step_bounds.cons =>
-    rename_i a xs h
-    have hs := size_invert xs
-    cases a <;> simp_all <;> (repeat' apply And.intro) <;> nlinarith
+    | nil => rfl
+    | cons => cases h
+  case resume_eq =>
+    rintro ⟨xs, h⟩
+    cases xs with
+    | nil => cases h
+    | cons => rfl
 
 def endPosition (xs : List Bool) : Fin (xs.length + 1) := Fin.last xs.length
 
@@ -74,115 +62,157 @@ def positionResume : (x : {xs : List Bool // (!xs.isEmpty) = true}) →
   | ⟨[], h⟩, _ => False.elim (by simp at h)
   | ⟨_ :: _, _⟩, result => result.succ
 
--- The dependent result uses the existing public encoding view at the model boundary.
--- Its callbacks still return ordinary Fin values; their encoding is automatic.
-theorem endPosition_model : ∃ k, TimeSpaceModel.tree.ComputableInTimeAndSpace
-    (fun xs => ⌜endPosition xs⌝ₜ)
-    (fun n => 100000 * (n + 1)^2) (fun n => k * (100000 * (n + 1)^2)) := by
-  model_fun_prop using recursion
-    (test := fun xs : List Bool => !xs.isEmpty)
-    (next := List.tail)
-    (finish := fun _ => 0)
-    (resume := positionResume)
-    (time := fun xs => 10000 * (xs.length + 1)^2)
-    (space := fun xs => 10000 * (⌜xs⌝ₜ.size + 1)^2)
+-- A dependent result still uses the public encoding view; callbacks return ordinary Fin values.
+noncomputable def endPositionImplementation : Implementation (fun xs => ⌜endPosition xs⌝ₜ) := by
+  source_fun_prop using recursion
+    (test := fun xs : List Bool => !xs.isEmpty) (next := List.tail)
+    (finish := fun _ => 0) (resume := positionResume)
+    (measure := List.length)
+    (decreases := by intro xs h; cases xs <;> simp_all)
   guard_public_goals
-  case finish_eq => rintro a rfl; rfl
-  case resume_eq =>
-    intro xs h
+  case finish_eq =>
+    rintro ⟨xs, h⟩
     cases xs with
-    | nil => exact (h rfl).elim
-    | cons a xs => rfl
-  case input_size => nlinarith
-  case check_space =>
-    rename_i xs
-    have hp : 0 < (⌜xs⌝ₜ.size + 1)^2 := by positivity
-    split_ifs <;> (repeat' apply And.intro) <;> nlinarith
-  case step_bounds.cons =>
-    rename_i a xs h
-    have hn := size_encode_nat_le xs.length
-    have hb : xs.length.bits.length ≤ ⌜xs.length⌝ₜ.size := by
-      simp only [encode_nat_tree, size_encode_list]; omega
-    have hl : xs.length ≤ ⌜xs⌝ₜ.size := by simp only [size_encode_list]; omega
-    cases a <;> simp_all [endPosition] <;> (repeat' apply And.intro) <;> nlinarith
-  case hb.left =>
-    rename_i xs
-    have hl : xs.length ≤ ⌜xs⌝ₜ.size := by simp only [size_encode_list]; omega
-    nlinarith
+    | nil => rfl
+    | cons => cases h
+  case resume_eq =>
+    rintro ⟨xs, h⟩
+    cases xs with
+    | nil => cases h
+    | cons => rfl
 
--- An impossible credit cannot silently select the already supported identity implementation.
-example : True := by
+-- An unsupported callback fails before changing the selected source goal.
+noncomputable example : Implementation (id : List Bool → List Bool) := by
   fail_if_success
-    have : ∃ k, TimeSpaceModel.tree.ComputableInTimeAndSpace (id : List Bool → List Bool)
-        (fun _ => 4) (fun n => k * (n + 3)) := by
-      model_fun_prop using recursion
-        (test := fun _ => false)
-        (next := id)
-        (finish := fun x => x.val)
-        (resume := fun x _ => x.val)
-        (time := fun _ => 0)
-        (space := fun _ => 0)
-  trivial
+    source_fun_prop using recursion
+      (test := fun xs => !xs.isEmpty) (next := fun xs => invert xs.tail)
+      (finish := fun x => x.val) (resume := fun x _ => x.val)
+      (measure := List.length)
+      (decreases := by intro xs h; rw [length_invert]; cases xs <;> simp_all)
+  source_fun_prop
 
--- An uncertified selected callback fails immediately and restores the original model goal.
-example : ∃ k, TimeSpaceModel.tree.ComputableInTimeAndSpace (id : List Bool → List Bool)
-    (fun _ => 4) (fun n => k * (n + 3)) := by
-  fail_if_success
-    model_fun_prop using recursion
-      (test := fun xs => !xs.isEmpty)
-      (next := invert)
-      (finish := fun x => x.val)
-      (resume := fun x _ => x.val)
-      (time := fun _ => 100)
-      (space := fun _ => 100)
-  model_fun_prop
-
--- No intermediate time/space allowance: the entry supplies a natural-valued cost
--- and certified stop/step equations for the selected recursive program.
 def drain : List Bool → Unit
   | [] => ()
   | _ :: xs => drain xs
 
-@[source] theorem drain_model : ∃ k, TimeSpaceModel.tree.ComputableInTimeAndSpace drain
-    (fun n => 200 * n + 200) (fun n => k * (20 * (n + 1)^2)) := by
-  model_fun_prop using recursion
-    (test := fun xs : List Bool => !xs.isEmpty) (next := List.tail)
-    (finish := fun _ => ()) (resume := fun _ _ => ())
-    (measure := List.length)
-    (decreases := by intro xs h; cases xs <;> simp_all)
-  guard_public_goals
-  case finish_eq => intro x; exact Subsingleton.elim _ _
-  case resume_eq => intro x; exact Subsingleton.elim _ _
-  case hb.left =>
-    rename_i xs
-    induction xs with
-    | nil => rw [cost_stop [] rfl]; norm_num
-    | cons a xs ih =>
-      rw [cost_step (a :: xs) rfl]
-      cases a <;> simp at ih ⊢ <;> omega
-  case hb.right =>
-    rename_i xs
-    induction xs with
-    | nil => rw [cost_stop [] rfl]; norm_num
-    | cons a xs ih =>
-      rw [cost_step (a :: xs) rfl]
-      cases a <;> simp at ih ⊢ <;>
-        simp only [← max_add_add_right, max_le_iff] at ih ⊢ <;>
-        (repeat' apply And.intro) <;> ring_nf at ih ⊢ <;> omega
+def drainRecursion : TreeProgram.Source.Recursion drain where
+  test xs := !xs.isEmpty
+  next := List.tail
+  finish _ := ()
+  resume _ _ := ()
+  finish_eq := by intros; exact Subsingleton.elim _ _
+  resume_eq := by intros; exact Subsingleton.elim _ _
+  measure := List.length
+  decreases := by intro xs h; cases xs <;> simp_all
 
--- An explicitly different, constant program can compute this particular function in four steps.
-example : ∃ k, TimeSpaceModel.tree.ComputableInTimeAndSpace drain
-    (fun _ => 4) (fun n => k * (n + 2)) := by
-  model_fun_prop via (fun _ : List Bool => ())
-  case source_eq => funext xs; exact Subsingleton.elim _ _
+noncomputable def drainFinish : Implementation (fun x => ⌜drainRecursion.finish x⌝ₜ) := by
+  source_fun_prop
 
--- Saving the recursive proof does not let a failed budget silently choose that other program.
+noncomputable def drainResume : Implementation
+    (fun x : drainRecursion.Return => ⌜drainRecursion.resume x.1 x.2⌝ₜ) := by source_fun_prop
+
+@[source_growth] theorem drainFinish_growth : drainFinish.HasGrowth (fun _ => 1) (fun _ => 1) := by
+  source_fun_prop
+  all_goals exact Dominated.const _
+
+@[source_growth] theorem drainResume_growth : drainResume.HasGrowth (fun _ => 1) (fun _ => 1) := by
+  source_fun_prop
+  all_goals exact Dominated.const _
+
+noncomputable def drainImplementation : Implementation drain :=
+  Implementation.ofEncode (g := fun xs => ⌜drain xs⌝ₜ) (fun _ => rfl)
+    (drainRecursion.implementation Implementation.listNonempty Implementation.listTail
+      drainFinish drainResume)
+
+-- Callback allowances are already growth specifications. No coefficient is selected in induction.
+private theorem drain_cost_growth :
+    let bc : Bounds (List Bool) := ⟨fun _ => 1, fun xs => ⌜xs⌝ₜ.size⟩
+    let bd : Bounds {xs // drainRecursion.test xs = false} := ⟨fun _ => 1, fun _ => 1⟩
+    let br : Bounds drainRecursion.Return := ⟨fun _ => 1, fun _ => 1⟩
+    Dominated (fun xs => (drainRecursion.cost bc bc bd br xs).time) (fun xs => xs.length + 1) ∧
+    Dominated (fun xs => (drainRecursion.cost bc bc bd br xs).peak)
+      (fun xs => ⌜xs⌝ₜ.size + (xs.length + 1) * (⌜xs⌝ₜ.size + 1)) := by
+  dsimp only
+  let I (xs ys : List Bool) := ⌜ys⌝ₜ.size ≤ ⌜xs⌝ₜ.size
+  have hsize : Dominated
+      (fun z : {p : List Bool × List Bool // I p.1 p.2} => ⌜z.1.2⌝ₜ.size)
+      (fun z => ⌜z.1.1⌝ₜ.size) := Dominated.of_le fun z => z.2
+  simpa only [drainRecursion, Nat.mul_one, id_eq] using
+    drainRecursion.dominated_cost_of_bounds
+      ⟨fun _ => 1, fun xs => ⌜xs⌝ₜ.size⟩ ⟨fun _ => 1, fun xs => ⌜xs⌝ₜ.size⟩
+      ⟨fun _ => 1, fun _ => 1⟩ ⟨fun _ => 1, fun _ => 1⟩
+      I id (fun xs => ⌜xs⌝ₜ.size) (fun _ => 1) (fun _ => 1) (fun xs => ⌜xs⌝ₜ.size)
+      (fun _ => le_rfl)
+      (fun xs ys hi _ => (show ⌜ys.tail⌝ₜ.size ≤ ⌜ys⌝ₜ.size by cases ys <;> simp).trans hi)
+      hsize hsize hsize
+      (Dominated.const_of_pos 1 fun _ => Tree.size_pos _)
+      (Dominated.const_of_pos 1 fun _ => Tree.size_pos _)
+      (Dominated.refl _) (Dominated.refl _) (Dominated.refl _) (Dominated.refl _)
+      (fun _ => Nat.zero_lt_one) (fun _ => Nat.zero_lt_one)
+
+-- The terminal allowance appears once; the stack allowance grows with recursion depth.
+theorem drain_structural_growth : drainImplementation.HasGrowth
+    (fun xs => 1 + (xs.length + 1) + 1)
+    (fun xs => (⌜xs⌝ₜ.size + (xs.length + 1) * (⌜xs⌝ₜ.size + 1)) + 1) :=
+  (drainRecursion.hasGrowth_of_growth Implementation.hasGrowth_listNonempty
+    Implementation.hasGrowth_listTail drainFinish_growth drainResume_growth
+    drain_cost_growth).ofEncode (fun _ => rfl)
+
+-- The automatic entry follows the same recursive program and saved callback specifications.
+example : drainImplementation.HasGrowth
+    (fun xs => 1 + (xs.length + 1) + 1)
+    (fun xs => (⌜xs⌝ₜ.size + (xs.length + 1) * (⌜xs⌝ₜ.size + 1)) + 1) := by
+  source_fun_prop
+  · exact ((Dominated.refl _).add drain_cost_growth.1).add (Dominated.refl _)
+  · exact drain_cost_growth.2.add (Dominated.refl _)
+
+-- Before registering the recursive specification, failed comparison still cannot change programs.
 example : True := by
   fail_if_success
-    have : ∃ k, TimeSpaceModel.tree.ComputableInTimeAndSpace drain
-        (fun _ => 4) (fun n => k * (n + 2)) := by
-      model_fun_prop
-      all_goals omega
+    have : drainImplementation.HasGrowth (fun _ => 0) (fun _ => 0) := by
+      source_fun_prop
+      all_goals exact Dominated.zero
   trivial
+
+@[source_growth] theorem drain_growth : drainImplementation.HasGrowth
+    (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size ^ 2) := by
+  have hlen : Dominated (List.length : List Bool → ℕ) (fun xs => ⌜xs⌝ₜ.size) :=
+    Dominated.of_le length_le_codeSize
+  have hpos (xs : List Bool) : 0 < ⌜xs⌝ₜ.size := Tree.size_pos _
+  have hc : Dominated (fun _ : List Bool => 1) (fun xs => ⌜xs⌝ₜ.size) := Dominated.one hpos
+  have hs := (hlen.add_same hc).mul ((Dominated.refl _).add_same hc)
+  simp only [← pow_two] at hs
+  apply drain_structural_growth.mono
+  · simp only [Dominated.add_iff]
+    exact ⟨⟨hc, hlen, hc⟩, hc⟩
+  · simp only [Dominated.add_iff]
+    exact ⟨⟨(Dominated.refl _).le_pow (by decide), hs⟩, hc.le_pow (by decide)⟩
+
+@[source] theorem drain_model : drain ∈ FTISP .tree (fun n => n ^ 1) (fun n => n ^ 2) :=
+  (by simpa only [pow_one] using drain_growth :
+    drainImplementation.HasGrowth (fun xs => ⌜xs⌝ₜ.size ^ 1)
+      (fun xs => ⌜xs⌝ₜ.size ^ 2)).mem_ftisp_pow (by decide)
+
+-- A terminal callback is paid only in the stop equation, not at every recursive step.
+example (bc bs : Bounds (List Bool))
+    (bd : Bounds {xs // drainRecursion.test xs = false}) (br : Bounds drainRecursion.Return) :
+    (drainRecursion.cost bc bs bd br []).time = bd.time ⟨[], rfl⟩ + 2 := by
+  rw [drainRecursion.cost_stop bc bs bd br [] rfl]
+
+-- General recursion saves the caller's data in addition to the recursive tail's peak.
+example (bc bs : Bounds (List Bool))
+    (bd : Bounds {xs // drainRecursion.test xs = false}) (br : Bounds drainRecursion.Return)
+    (a : Bool) (xs : List Bool) :
+    (drainRecursion.cost bc bs bd br xs).peak + ⌜a :: xs⌝ₜ.size + 1 ≤
+      (drainRecursion.cost bc bs bd br (a :: xs)).peak := by
+  rw [drainRecursion.cost_step bc bs bd br (a :: xs) rfl]
+  exact (Nat.le_max_right ..).trans ((Nat.le_max_right ..).trans ((Nat.le_max_right ..).trans
+    (Nat.le_max_right ..)))
+
+-- A different explicitly requested program can compute this function in constant time.
+example : drain ∈ FTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
+  model_fun_prop via (fun _ : List Bool => ())
+  case source_eq => funext xs; exact Subsingleton.elim _ _
+  all_goals exact Dominated.zero
 
 end ComplexityTest.SourceTranslation.Recursion

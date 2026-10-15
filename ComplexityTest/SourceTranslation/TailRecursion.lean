@@ -5,11 +5,11 @@ Authors: Yuyang Zhao
 -/
 module
 
-public import Complexity.Tactic.TreeProgram.Library
+public import Complexity.Tactic.TreeProgram.TailRecursion
 
 @[expose] public section
 
-open Complexity
+open Complexity TreeProgram TreeProgram.Source
 namespace ComplexityTest.SourceTranslation.TailRecursion
 
 open Lean Meta Elab Tactic in
@@ -40,141 +40,206 @@ def advance (x : Bool × List (List Bool) × List Bool) :=
   | [] => x
   | xs :: rest => (x.1, rest, x.1 :: x.1 :: (xs.reverse ++ x.2.2))
 
--- This is a remaining-time estimate, not a declaration of exact callback costs.
--- Its definition uses the list's structural termination proof.
-def credit : List (List Bool) → ℕ
-  | [] => 200
-  | xs :: rest => 100 * (⌜xs⌝ₜ.size + 1) + credit rest
+abbrev GatherInput := Bool × List (List Bool) × List Bool
 
-theorem credit_le (xs : List (List Bool)) : credit xs ≤ 100 * ⌜xs⌝ₜ.size + 100 := by
-  induction xs with
-  | nil => simp [credit]
-  | cons xs rest ih => simp only [credit, encode_list_cons, size_encode_prod]; omega
+def chunkWork (x : GatherInput) : ℕ :=
+  match x.2.1 with | [] => 1 | xs :: _ => ⌜xs⌝ₜ.size + 1
 
-@[scoped source] theorem gather_model : ∃ k, TimeSpaceModel.tree.ComputableInTimeAndSpace gather
-    (fun n => 300 * n + 300) (fun n => k * (20 * n + 20)) := by
-  model_fun_prop using loop
-    (test := fun x : Bool × List (List Bool) × List Bool => !x.2.1.isEmpty)
-    (next := advance) (finish := fun x => x.2.2)
-    (invariant := fun x y => ⌜y⌝ₜ.size + 10 * y.2.1.length ≤ ⌜x⌝ₜ.size + 10 * x.2.1.length)
-    (time := fun _ y => credit y.2.1)
-    (space := fun x => 20 * ⌜x⌝ₜ.size + 18)
-  guard_tail_goals
-  case equation =>
-    rintro ⟨tag, xs, acc⟩
-    cases xs <;> simp [gather, advance]
-  case initial => intro x; exact le_rfl
-  case input_size =>
-    rintro ⟨xt, xs, xa⟩ ⟨yt, ys, ya⟩ hi _
-    have := TreeProgram.Source.length_le_codeSize xs
-    simp at hi ⊢
+noncomputable def advanceImplementation : Implementation advance := by source_fun_prop
+
+@[source_growth] theorem advance_growth : advanceImplementation.HasGrowth
+    chunkWork (fun x => ⌜x⌝ₜ.size + 10) := by
+  source_fun_prop
+  all_goals
+    apply Dominated.of_cover (fun x : Bool × List Bool => (x.1, [], x.2))
+      (fun x : Bool × List Bool × List (List Bool) × List Bool => (x.1, x.2.1 :: x.2.2.1, x.2.2.2))
+      (by rintro ⟨tag, xs, acc⟩; cases xs with
+          | nil => exact Or.inl ⟨(tag, acc), rfl⟩
+          | cons head tail => exact Or.inr ⟨(tag, head, tail, acc), rfl⟩)
+  all_goals
+    simp only [Function.comp_def, chunkWork, size_encode_prod,
+      encode_list_cons, List.length_reverse, size_encode_reverse]
+  all_goals
+    simp only [Dominated.add_iff, Dominated.max_iff, Dominated.const_mul_left_iff,
+      Nat.ofNat_pos]
+  all_goals repeat' apply And.intro
+  all_goals first
+    | exact Dominated.const _
+    | exact Dominated.refl _
+    | exact Dominated.const_of_pos _ (fun _ => by positivity)
+    | (exact (Implementation.hasGrowth_reverse.1.comp
+         (fun x : Bool × List Bool × List (List Bool) × List Bool => x.2.1)).mono
+         (fun x => by simp only [Function.comp_apply]; omega))
+    | (exact (Implementation.hasGrowth_reverse.2.comp
+         (fun x : Bool × List Bool × List (List Bool) × List Bool => x.2.1)).mono
+         (fun x => by simp only [Function.comp_apply]; omega))
+    | (apply Dominated.of_le; intro x
+       have h := length_le_codeSize x.2.1
+       omega)
+    | (apply Dominated.of_le; rintro ⟨tag, acc⟩
+       dsimp only
+       omega)
+    | (apply Dominated.of_le; rintro ⟨tag, head, tail, acc⟩
+       dsimp only
+       have h := size_encode_list_append head.reverse acc
+       have hb := size_encode_bool_le tag
+       simp only [size_encode_reverse] at h
+       omega)
+
+def gatherCheck (x : GatherInput) := !x.2.1.isEmpty
+noncomputable def gatherCheckImplementation : Implementation gatherCheck := by source_fun_prop
+@[source_growth] theorem gatherCheck_growth : gatherCheckImplementation.HasGrowth
+    (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
+  source_fun_prop
+  all_goals simp only [Dominated.add_iff, Dominated.max_iff]
+  all_goals repeat' apply And.intro
+  all_goals first
+    | exact Dominated.const _
+    | (apply Dominated.of_le; rintro ⟨tag, xs, acc⟩
+       have hb := size_encode_bool_le xs.isEmpty
+       have hn := size_encode_bool_le (Bool.rec true false xs.isEmpty)
+       have hp := Tree.size_pos ⌜xs⌝ₜ
+       simp only [size_encode_prod]; omega)
+
+noncomputable def gatherFinishImplementation : Implementation (fun x : GatherInput => x.2.2) := by
+  source_fun_prop
+@[source_growth] theorem gatherFinish_growth : gatherFinishImplementation.HasGrowth
+    (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
+  source_fun_prop
+  all_goals simp only [Dominated.add_iff, Dominated.max_iff]
+  all_goals repeat' apply And.intro
+  all_goals first
+    | exact Dominated.const _
+    | (apply Dominated.of_le; rintro ⟨tag, xs, acc⟩
+       have hb := size_encode_bool_le xs.isEmpty
+       have hn := size_encode_bool_le (Bool.rec true false xs.isEmpty)
+       have hp := Tree.size_pos ⌜xs⌝ₜ
+       simp only [size_encode_prod]; omega)
+
+-- The invariant permits the accumulator to grow as chunks are consumed.
+def gatherInvariant (x y : GatherInput) : Prop :=
+  ⌜y⌝ₜ.size + 10 * y.2.1.length ≤ ⌜x⌝ₜ.size + 10 * x.2.1.length
+
+theorem gather_input_size : Dominated
+    (fun z : {p : GatherInput × GatherInput // gatherInvariant p.1 p.2} => ⌜z.1.2⌝ₜ.size)
+    (fun z => ⌜z.1.1⌝ₜ.size) := by
+  have hlen : Dominated
+      (fun z : {p : GatherInput × GatherInput // gatherInvariant p.1 p.2} => z.1.1.2.1.length)
+      (fun z => ⌜z.1.1⌝ₜ.size) := Dominated.of_le fun z => by
+    rcases z with ⟨⟨⟨tag, xs, acc⟩, y⟩, hi⟩
+    have h := length_le_codeSize xs
+    simp only [size_encode_prod]
     omega
-  case check_space =>
-    rintro ⟨xt, xs, xa⟩ ⟨yt, ys, ya⟩ hi _
-    have := TreeProgram.Source.length_le_codeSize xs
-    cases ys <;> simp at hi ⊢ <;> omega
-  case stop_bounds =>
-    rintro ⟨xt, xs, xa⟩ ⟨yt, ys, ya⟩ hi _ h
-    have := TreeProgram.Source.length_le_codeSize xs
-    simp at h
-    subst ys
-    simp [credit] at hi ⊢
-    omega
-  case step_bounds =>
-    rintro ⟨xt, original, initial⟩ ⟨tag, ys, acc⟩ hi _ h
+  apply ((Dominated.refl _).add_same (hlen.const_mul_left 10)).mono_left
+  intro z
+  have h := z.2
+  dsimp only [gatherInvariant] at h
+  omega
+
+noncomputable def gatherPlan : TailPotentialGrowth gatherCheckImplementation
+    advanceImplementation gatherFinishImplementation gather := by
+  refine TailPotentialGrowth.ofGrowth ⟨fun _ => 1, fun x => ⌜x⌝ₜ.size⟩
+    ⟨chunkWork, fun x => ⌜x⌝ₜ.size + 10⟩ ⟨fun _ => 1, fun x => ⌜x⌝ₜ.size⟩
+    gatherCheck_growth advance_growth gatherFinish_growth gatherInvariant
+    (fun _ x => ⌜x.2.1⌝ₜ.size) (fun _ => 1) (fun x => ⌜x⌝ₜ.size)
+    ?_ (fun _ => le_rfl) ?_ gather_input_size gather_input_size ?_ gather_input_size ?_ ?_
+  · rintro ⟨tag, xs, acc⟩
+    cases xs <;> simp [gather, gatherCheck, advance]
+  · rintro ⟨xt, original, initial⟩ ⟨tag, ys, acc⟩ hi ht
     cases ys with
-    | nil => simp at h
+    | nil => simp [gatherCheck] at ht
     | cons xs rest =>
-      have := TreeProgram.Source.length_le_codeSize original
-      have := TreeProgram.Source.length_le_codeSize xs
       have ha := size_encode_list_append xs.reverse acc
-      simp only [TreeProgram.Source.size_encode_reverse] at ha
-      dsimp only [advance, credit] at *
+      simp only [size_encode_reverse] at ha
+      dsimp only [gatherInvariant, advance] at *
       cases tag <;> simp only [size_encode_prod, encode_bool_false, encode_bool_true,
-        encode_list_cons, size_encode_unit, List.length_cons,
-        List.length_reverse, TreeProgram.Source.size_encode_reverse, max_le_iff] at hi ⊢
-      all_goals (repeat' apply And.intro) <;> omega
-  case hb.left =>
-    rename_i x
-    have h := credit_le x.2.1
-    rcases x with ⟨tag, xs, acc⟩
-    simp only [size_encode_prod] at h ⊢
-    omega
+        encode_list_cons, size_encode_unit, List.length_cons] at hi ⊢ <;> omega
+  · exact gather_input_size.add_same (Dominated.const_of_pos 10 fun _ => Tree.size_pos _)
+  · exact Dominated.const 2
+  · have h : Dominated
+        (fun y : {y : GatherInput // gatherCheck y = true} => chunkWork y.1)
+        (fun y => ⌜y.1.2.1⌝ₜ.size - ⌜(advance y.1).2.1⌝ₜ.size) := by
+      apply Dominated.of_le
+      rintro ⟨⟨tag, ys, acc⟩, ht⟩
+      cases ys with
+      | nil => simp [gatherCheck] at ht
+      | cons xs rest => simp [chunkWork, advance, size_encode_prod]
+    have hp : ∀ y : {y : GatherInput // gatherCheck y = true}, 0 < chunkWork y.1 := by
+      intro y; rcases y with ⟨⟨tag, ys, acc⟩, ht⟩
+      cases ys <;> simp [chunkWork]
+    exact (((Dominated.refl _).add_same (Dominated.const_of_pos 1 hp)).add_same
+      (Dominated.const_of_pos 1 hp) |>.trans h).comp
+        (fun z : {p : GatherInput × GatherInput //
+          gatherInvariant p.1 p.2 ∧ gatherCheck p.2 = true} => ⟨z.1.2, z.2.2⟩)
+
+noncomputable def gatherImplementation : Implementation gather := gatherPlan.implementation
+
+@[source_growth] theorem gather_growth : gatherImplementation.HasGrowth
+    (fun x => ⌜x⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
+  apply gatherPlan.hasGrowth.mono
+  · have hc : Dominated gatherCheckImplementation.bounds.time (fun x => ⌜x⌝ₜ.size) :=
+      gatherCheck_growth.1.trans (Dominated.const_of_pos 1 fun _ => Tree.size_pos _)
+    have hp : Dominated (fun x : GatherInput => ⌜x.2.1⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) :=
+      Dominated.of_le fun ⟨tag, xs, acc⟩ => by simp only [size_encode_prod]; omega
+    exact (hc.add_same (hp.add_same (Dominated.const_of_pos 1 fun _ => Tree.size_pos _))).add_same
+      (Dominated.const_of_pos 4 fun _ => Tree.size_pos _)
+  · exact Dominated.refl _
+
+@[source] theorem gather_model : gather ∈ FTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) :=
+  (by simpa only [pow_one] using gather_growth :
+    gatherImplementation.HasGrowth (fun x => ⌜x⌝ₜ.size ^ 1) (fun x => ⌜x⌝ₜ.size ^ 1)).mem_ftisp_pow
+      (by decide)
 
 -- The accumulator really grows; no decreasing-space condition is hidden in the interface.
-example : ⌜((true, [[]], []) : Bool × List (List Bool) × List Bool)⌝ₜ.size <
+example : ⌜((true, [[]], []) : GatherInput)⌝ₜ.size <
     ⌜advance (true, [[]], [])⌝ₜ.size := by decide
 
--- Different chunk lengths produce different certified per-round costs.
-open TreeProgram.Source in
-example : ∃ b, Realizes advance b ∧
-    b.time (true, [[]], []) < b.time (true, [[true]], []) := by
-  refine ⟨_, by source_fun_prop, ?_⟩
-  simp
+-- Variable rounds remain visible both in the public work measure and the semantic allowance.
+example : chunkWork (true, [[]], []) < chunkWork (true, [[true]], []) := by decide
+example : advanceImplementation.bounds.time (true, [[]], []) <
+    advanceImplementation.bounds.time (true, [[true]], []) := by decide
+
+example : gatherImplementation.program = loopCode gatherCheckImplementation.program
+    advanceImplementation.program gatherFinishImplementation.program := rfl
 
 def keep (xs : List Bool) := xs
 
--- The ordinary implementation would meet time 4 before a loop is selected.
-example : ∃ k, TimeSpaceModel.tree.ComputableInTimeAndSpace keep
-    (fun _ => 4) (fun n => k * (n + 2)) := by model_fun_prop
-
-@[scoped source] theorem keep_loop_model :
-    ∃ k, TimeSpaceModel.tree.ComputableInTimeAndSpace keep
-      (fun _ => 11) (fun n => k * (n + 2)) := by
-  model_fun_prop using loop
+noncomputable def keepImplementation : Implementation keep := by
+  source_fun_prop using loop
     (test := fun _ => false) (next := id) (finish := id)
     (invariant := fun x y => y = x)
-    (time := fun _ _ => 2) (space := fun x => ⌜x⌝ₜ.size)
+    (measure := fun _ => 0) (step := fun _ => 1) (stop := fun _ => 1)
+    (space := fun x => ⌜x⌝ₜ.size)
   guard_tail_goals
-  all_goals simp_all [keep]
+  case equation => intro; rfl
+  case initial => intro; rfl
+  case next_state => simp
+  case decreases => simp
+  case input_size => exact Dominated.of_le (fun z => by rw [z.2])
+  case check_peak => exact Dominated.zero
+  case step_peak => exact Dominated.zero
+  case stop_peak => exact Dominated.zero
+  case step_time => exact Dominated.zero
+  case check_time => exact Dominated.const _
+  case stop_time => exact Dominated.zero
+  all_goals intro; decide
 
--- The selected loop cannot meet time 4, even though the identity program could.
+@[source_growth] theorem keep_growth : keepImplementation.HasGrowth
+    (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
+  source_fun_prop
+  · dsimp only
+    exact Dominated.const _
+  · exact Dominated.refl _
+
+@[source] theorem keep_loop_model : keep ∈ FTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
+  exact (show keepImplementation.HasGrowth (fun x => ⌜x⌝ₜ.size ^ 0)
+        (fun x => ⌜x⌝ₜ.size ^ 1) from by simpa only [pow_zero, pow_one] using keep_growth).mem_ftisp_pow
+      (by decide)
+
+-- A zero allowance cannot replace the selected loop by the ordinary identity program.
 example : True := by
   fail_if_success
-    have : ∃ k, TimeSpaceModel.tree.ComputableInTimeAndSpace keep
-        (fun _ => 4) (fun n => k * (n + 2)) := by model_fun_prop
+    have : keepImplementation.HasGrowth (fun _ => 0) (fun _ => 0) := by source_fun_prop
   trivial
-
--- Another valid budget for that same program remains usable.
-example : ∃ k, TimeSpaceModel.tree.ComputableInTimeAndSpace keep
-    (fun _ => 15) (fun n => k * (n + 2)) := by model_fun_prop
-
--- Insufficient remaining credit is rejected at the local stop condition too.
-example : True := by
-  fail_if_success
-    have : ∃ k, TimeSpaceModel.tree.ComputableInTimeAndSpace (id : List Bool → List Bool)
-        (fun _ => 11) (fun n => k * (n + 2)) := by
-      model_fun_prop using loop
-        (test := fun _ => false) (next := id) (finish := id)
-        (invariant := fun x y => y = x)
-        (time := fun _ _ => 0) (space := fun x => ⌜x⌝ₜ.size)
-      all_goals simp_all
-  trivial
-
--- Applying a pointwise estimate keeps the selected callback. An identity-program
--- estimate cannot replace the reverse callback, even in a loop that never advances.
-open TreeProgram.Source in
-example : ∃ k, TimeSpaceModel.tree.ComputableInTimeAndSpace (id : List Bool → List Bool)
-    (fun _ => 11) (fun n => k * (n + 2)) := by
-  let next := Implementation.reverse (α := Bool)
-  have next_bound (xs : List Bool) :
-      next.bounds.time xs ≤ 13 * xs.length + 9 ∧ next.bounds.peak xs ≤ ⌜xs⌝ₜ.size + 1 := by
-    simp [next, reverseBounds]
-  have other_bound (xs : List Bool) :
-      (Implementation.identity (α := List Bool)).bounds.time xs ≤ 0 ∧
-        (Implementation.identity (α := List Bool)).bounds.peak xs ≤ 0 := by simp
-  fail_if_success
-    model_fun_prop using loop
-      (test := fun _ => false) (next := List.reverse) (finish := id)
-      (invariant := fun x y => y = x)
-      (time := fun _ _ => 2) (space := fun x => ⌜x⌝ₜ.size)
-      (next_bound := other_bound)
-  model_fun_prop using loop
-    (test := fun _ => false) (next := List.reverse) (finish := id)
-    (invariant := fun x y => y = x)
-    (time := fun _ _ => 2) (space := fun x => ⌜x⌝ₜ.size)
-    (next_bound := next_bound)
-  guard_tail_goals
-  all_goals simp_all
 
 end ComplexityTest.SourceTranslation.TailRecursion

@@ -38,21 +38,21 @@ private def fixedOutputs (ys : Multiset (RawWord Bool)) : TimeSpaceModel Multise
     exact h
 
 -- Finite failure rejects; it does not create an accepting branch.
-example : (fixedOutputs 0).NDecidableInTimeAndSpace
+example : (fixedOutputs 0).NDecidableWithin
     (fun _ : List Bool => False) (fun _ => 0) (fun _ => 0) := by
-  refine ⟨_, rfl, fun x a ha => ⟨0, rfl, ?_, ?_⟩⟩ <;> simp
+  refine ⟨_, rfl, fun _ _ _ => ⟨0, rfl, ?_, ?_⟩⟩ <;> simp
 
-example : ¬(fixedOutputs 0).NDecidableInTimeAndSpace
+example : ¬(fixedOutputs 0).NDecidableWithin
     (fun _ : List Bool => True) (fun _ => 0) (fun _ => 0) := by
   rintro ⟨R, rfl, h⟩
-  obtain ⟨ys, rfl, _, h⟩ := h (⌜([] : List Bool)⌝₂) [] (UniqueEncoding.mem_decode_iff.mpr rfl)
+  obtain ⟨ys, rfl, _, h⟩ := h [] (encode (RawWord Bool) ([] : List Bool)) (by simp)
   simp at h
 
 -- Even alongside a valid accepting result, a malformed branch invalidates the decision.
-example : ¬(fixedOutputs {RawWord.ofList [], ⌜true⌝₂}).NDecidableInTimeAndSpace
+example : ¬(fixedOutputs {RawWord.ofList [], ⌜true⌝₂}).NDecidableWithin
     (fun _ : List Bool => True) (fun _ => 0) (fun _ => 0) := by
   rintro ⟨R, rfl, h⟩
-  obtain ⟨ys, rfl, hb, _⟩ := h (⌜([] : List Bool)⌝₂) [] (UniqueEncoding.mem_decode_iff.mpr rfl)
+  obtain ⟨ys, rfl, hb, _⟩ := h [] (encode (RawWord Bool) ([] : List Bool)) (by simp)
   obtain ⟨b, hb⟩ := Part.dom_iff_mem.mp (hb (RawWord.ofList []) (by simp))
   have he := UniqueEncoding.mem_decode_iff.mp hb
   cases b <;> cases he
@@ -106,23 +106,39 @@ private theorem guess_accepts (xs : RawWord Bool) : guess.Accepts xs := by
   obtain ⟨c, hc, h⟩ := Multiset.mem_map.mp hm
   exact ⟨c, hc, congrArg Prod.snd h⟩
 
-theorem guess_spec : guess.DecidesInTimeAndSpace (fun _ : List Bool => True)
+theorem guess_spec : guess.DecidesWithin (fun _ : List Bool => True)
     (fun _ => 3) (fun _ => 0) := by
-  intro xs _ _
+  intro xs a ha
   refine ⟨guess_time _, ?_, guess_boolean _, iff_true_intro (guess_accepts _)⟩
   intro n c _
   simp [History.space]
 
+private theorem guess_size_spec : TimeSpaceModel.ntm.NDecidableWithSizeBudgets
+    (fun _ : List Bool => True) (fun _ => 3) (fun _ => 0) :=
+  guess_spec.nDecidableWithin
+
 example : (fun _ : List Bool => True) ∈ NTISP .ntm (fun _ => 3) (fun _ => 0) :=
-  guess_spec.decidableInTimeAndSpace.mem_ntisp
+  guess_size_spec.mem_ntisp
 
 example : (fun _ : List Bool => True) ∈ NP .ntm := by
-  apply NP.of_time_le guess_spec.decidesInTime.decidableInTime 3 0
+  apply NP.of_time_le guess_size_spec.mem_ntime 3 0
   simp
+
+example : (fun _ : List Bool => True) ∈ NSPACE .ntm (fun _ => 0) :=
+  guess_size_spec.mem_nspace
+
+-- Changing the predicate and budget preserves every accepting and rejecting branch.
+-- Only the final comparison with O(n) excludes n=0; the machine still terminates there.
+example : (fun xs : List Bool => xs = xs) ∈ NTISP .ntm id (fun _ => 0) := by
+  have h : TimeSpaceModel.ntm.NDecidableWithSizeBudgets
+      (fun xs : List Bool => xs = xs) (fun n => n + 3) (fun _ => 0) :=
+    (guess_size_spec.mono (fun n => by omega) (fun _ => le_rfl)).congr (fun _ => by simp)
+  exact h.mem_ntisp_of_dominated
+    (dominatedAtTop_iff.mpr ⟨4, 1, fun n hn => by dsimp; omega⟩) (DominatedAtTop.refl _)
 
 -- A space-only machine proof supplies its implicit time bound through the model bridge.
 example : TimeSpaceModel.ntm.NDecidableInSpace (fun _ : List Bool => True) (fun _ => 0) :=
-  guess_spec.decidesInSpace.decidableInSpace
+  guess_spec.nDecidableWithin.nDecidableInSpace
 
 -- The two branches visit [-1,0] and [0,1]: each uses two cells.
 def splitHeads : NTM (Fin 1) (Option Bool) Bool where
@@ -212,9 +228,10 @@ private theorem forever_diverges (xs : List (Option Bool)) : ¬NTM.Terminates fo
   rintro ⟨n, hn⟩
   exact Bool.false_ne_true hn
 
-example : ¬NTM.DecidesInSpace forever.toBinary (fun _ : List Bool => False) (fun _ => 0) := by
-  intro h
-  exact forever_diverges _ (h.decides (⌜([] : List Bool)⌝₂) [] (UniqueEncoding.mem_decode_iff.mpr rfl)).1
+example : ¬∃ t, NTM.DecidesWithin forever.toBinary
+    (fun _ : List Bool => False) t (fun _ => 0) := by
+  rintro ⟨t, h⟩
+  exact forever_diverges _ (h (encode (RawWord Bool) ([] : List Bool)) [] (by simp)).1.terminates
 
 -- A malformed terminal output cannot silently count as rejection.
 def malformed : TM Id (Fin 0) (Option Bool) Bool where
@@ -232,5 +249,57 @@ example : ¬NTM.BooleanOutput malformed.toBinary (.ofList []) := by
     simp only [Controller.mem_runWith_toBinary_iff]
   obtain ⟨b, hb⟩ := h _ hc
   cases b <;> cases congrArg Array.size hb
+
+-- Refactoring through a common coding predicate preserves the complete old quantifiers:
+-- the behavior is fixed before all inputs, and both budgets constrain the same outputs.
+section ClassSemantics
+
+variable {Data α : Type*} [Encoding Data α] [Encoding Data Bool]
+  (model : TimeSpaceModel Multiset Data) (p : α → Prop) (T S : ℕ → ℕ)
+
+example : p ∈ NTISP model T S ↔
+    ∃ t s, (∃ R ∈ model.behaviors, ∀ src a,
+      a ∈ decode α src → ∃ outs,
+        R src outs (t (model.inputSize src))
+          (s (model.inputSize src)) ∧
+        (∀ dst ∈ outs, (decode Bool dst).Dom) ∧
+        ((∃ dst ∈ outs, true ∈ decode Bool dst) ↔ p a)) ∧
+      DominatedAtTop t T ∧ DominatedAtTop s S := by
+  constructor
+  · rintro ⟨t, s, ⟨R, hb, h⟩, ht, hs⟩
+    exact ⟨t, s, ⟨R, hb, fun src a => h a src⟩, ht, hs⟩
+  · rintro ⟨t, s, ⟨R, hb, h⟩, ht, hs⟩
+    exact ⟨t, s, ⟨R, hb, fun a src => h src a⟩, ht, hs⟩
+
+-- The unmeasured resource remains a function of input length, outside the input quantifier.
+example : p ∈ NTIME model T ↔
+    ∃ t, (∃ s : ℕ → ℕ, ∃ R ∈ model.behaviors, ∀ src a,
+      a ∈ decode α src → ∃ outs,
+        R src outs (t (model.inputSize src))
+          (s (model.inputSize src)) ∧
+        (∀ dst ∈ outs, (decode Bool dst).Dom) ∧
+        ((∃ dst ∈ outs, true ∈ decode Bool dst) ↔ p a)) ∧
+      DominatedAtTop t T := by
+  constructor
+  · rintro ⟨t, ⟨s, R, hb, h⟩, ht⟩
+    exact ⟨t, ⟨s, R, hb, fun src a => h a src⟩, ht⟩
+  · rintro ⟨t, ⟨s, R, hb, h⟩, ht⟩
+    exact ⟨t, ⟨s, R, hb, fun a src => h src a⟩, ht⟩
+
+example : p ∈ NSPACE model S ↔
+    ∃ s, (∃ t : ℕ → ℕ, ∃ R ∈ model.behaviors, ∀ src a,
+      a ∈ decode α src → ∃ outs,
+        R src outs (t (model.inputSize src))
+          (s (model.inputSize src)) ∧
+        (∀ dst ∈ outs, (decode Bool dst).Dom) ∧
+        ((∃ dst ∈ outs, true ∈ decode Bool dst) ↔ p a)) ∧
+      DominatedAtTop s S := by
+  constructor
+  · rintro ⟨s, ⟨t, R, hb, h⟩, hs⟩
+    exact ⟨s, ⟨t, R, hb, fun src a => h a src⟩, hs⟩
+  · rintro ⟨s, ⟨t, R, hb, h⟩, hs⟩
+    exact ⟨s, ⟨t, R, hb, fun a src => h src a⟩, hs⟩
+
+end ClassSemantics
 
 end NondeterministicTest

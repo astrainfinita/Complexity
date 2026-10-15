@@ -15,22 +15,37 @@ local instance : Encoding (Bool × ℕ) Bool where
   decode r := Part.some r.1
   exists_code b := ⟨(b, 0), Part.mem_some b⟩
 
--- The output can choose another code; the budget uses the actual input code.
-example : Encoding.Computes
-    (fun (r q : Bool × ℕ) t s => q = (r.1, r.2 + 1) ∧ t = r.2 ∧ s = 0)
-    Prod.snd (id : Bool → Bool) id (fun _ => 0) := by
-  intro r a ha
+-- The condition can use both the value and its actual code, with no resource convention.
+example : Encoding.Computes (id : Bool → Bool)
+    (fun b (src dst : Bool × ℕ) =>
+      dst = (b, src.2 + 1)) := by
+  intro a r ha
   change a ∈ Part.some r.1 at ha
   obtain rfl := Part.mem_some_iff.mp ha
-  exact ⟨(r.1, r.2 + 1), Part.mem_some r.1, rfl, rfl, rfl⟩
+  exact ⟨(r.1, r.2 + 1), Part.mem_some r.1, rfl⟩
 
 -- Handling just one selected code for each value is insufficient.
-example : ¬ Encoding.Computes
-    (fun (r _ : Bool × ℕ) _ _ => r.2 = 0)
-    Prod.snd (id : Bool → Bool) id id := by
+example : ¬ Encoding.Computes (id : Bool → Bool)
+    (fun _ (src _ : Bool × ℕ) => src.2 = 0) := by
   intro h
-  obtain ⟨_, _, hr⟩ := h (false, 1) false (Part.mem_some false)
+  obtain ⟨_, _, hr⟩ := h false (false, 1) (Part.mem_some false)
   cases hr
+
+-- An output satisfying the condition must also encode the specified result.
+-- There are correct outputs, and outputs whose first component is true, but no shared witness.
+example : ¬ Encoding.Computes (fun _ : Bool => false)
+    (fun _ (_ dst : Bool × ℕ) => dst.1 = true) := by
+  intro h
+  obtain ⟨q, hq, htrue⟩ := h false (false, 0) (Part.mem_some false)
+  change false ∈ Part.some q.1 at hq
+  have hfalse := Part.mem_some_iff.mp hq
+  simp [← hfalse] at htrue
+
+-- Weakening the condition preserves the very same correct output witness.
+example {f : Bool → Bool} {P Q : Bool → (Bool × ℕ) → (Bool × ℕ) → Prop}
+    (h : Encoding.Computes f P) (hPQ : ∀ a r q, P a r q → Q a r q) :
+    Encoding.Computes f Q :=
+  h.mono (fun hP => hPQ _ _ _ hP)
 
 section Promise
 
@@ -41,12 +56,12 @@ local instance : Encoding (Bool × ℕ) {b // p b} where
   exists_code b := ⟨(b.val, 0), b.property, rfl⟩
 
 -- The relation has no runs on invalid inputs. No decision procedure for p is needed.
-example : Encoding.Computes
-    (fun (r q : Bool × ℕ) t s => p r.1 ∧ q.1 = r.1 ∧ t = r.2 ∧ s = 0)
-    Prod.snd (Subtype.val : {b // p b} → Bool) id (fun _ => 0) := by
-  intro r a ha
+example : Encoding.Computes (Subtype.val : {b // p b} → Bool)
+    (fun _ (src dst : Bool × ℕ) =>
+      p src.1 ∧ dst.1 = src.1) := by
+  intro a r ha
   obtain ⟨h, rfl⟩ := ha
-  exact ⟨r, Part.mem_some r.1, h, rfl, rfl, rfl⟩
+  exact ⟨r, Part.mem_some r.1, h, rfl⟩
 
 end Promise
 

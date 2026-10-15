@@ -20,14 +20,14 @@ def pairOnce : TreeMachine Id 1 Bool where
   transition _ _ := pure <| Action.assign true (.pair 0 0 0)
 
 -- The same program and data incur three size units, or one unit of step time.
-example : pairOnce.ComputesInTimeAndSpace Tree.nil (Tree.pair Tree.nil Tree.nil) 3 3 := by
+example : pairOnce.ComputesWithin Tree.nil (Tree.pair Tree.nil Tree.nil) 3 3 := by
   refine ⟨1, rfl, rfl, ?_, ?_⟩ <;> decide
 
 private theorem pairOnce_unit :
     pairOnce.ComputesInUnitTimeAndSpace Tree.nil (Tree.pair Tree.nil Tree.nil) 1 3 := by
   refine ⟨1, rfl, rfl, ?_, ?_⟩ <;> decide
 
-example : pairOnce.ComputesInTimeAndSpace Tree.nil (Tree.pair Tree.nil Tree.nil) 3 3 :=
+example : pairOnce.ComputesWithin Tree.nil (Tree.pair Tree.nil Tree.nil) 3 3 :=
   pairOnce_unit.toSizeCost
 
 -- Shrinking pays for the source; the unit-to-size bound uses the peak before the write.
@@ -36,7 +36,7 @@ def rightOnce : TreeMachine Id 1 Bool where
   halt := id
   transition _ _ := pure <| Action.assign true (.right 0 0)
 
-example : rightOnce.ComputesInTimeAndSpace
+example : rightOnce.ComputesWithin
     (.pair (.pair .nil .nil) .nil) .nil 5 5 := by
   have h : rightOnce.ComputesInUnitTimeAndSpace
       (.pair (.pair .nil .nil) .nil) .nil 1 5 := by
@@ -49,25 +49,25 @@ example : pairOnce.ComputesInUnitTimeAndSpace Tree.nil (Tree.pair Tree.nil Tree.
 
 -- One machine handles every input code, with budgets measured on that code.
 private theorem pairBool_unit :
-    TimeSpaceModel.tree.ComputableInTimeAndSpace
+    TimeSpaceModel.tree.ComputableWithin
       (fun b : Bool ↦ Tree.pair (encode Tree b) (encode Tree b))
-      (fun _ ↦ 1) (fun n ↦ 2 * n + 1) := by
+      (fun _ ↦ 1) (fun b ↦ 2 * (encode Tree b).size + 1) := by
   refine ⟨_, ⟨1, inferInstance, Bool, inferInstance, pairOnce, rfl⟩, ?_⟩
   apply Encoding.Computes.iff_of_uniqueEncoding.mpr
   intro b
   cases b <;> refine ⟨1, rfl, rfl, ?_, ?_⟩ <;> decide
 
-example : TimeSpaceModel.sizeCostTree.ComputableInTimeAndSpace
+example : TimeSpaceModel.sizeCostTree.ComputableWithin
     (fun b : Bool ↦ Tree.pair (encode Tree b) (encode Tree b))
-    (fun n ↦ 2 * n + 1) (fun n ↦ 2 * n + 1) := by
-  simpa using computableInTimeAndSpace_toSizeCost pairBool_unit
+    (fun b ↦ 2 * (encode Tree b).size + 1) (fun b ↦ 2 * (encode Tree b).size + 1) := by
+  simpa using pairBool_unit.toSizeCost
 
 -- This difference affects bounded computations, not just reported diagnostic totals.
 example : ¬Controller.ComputesWith (Config := Cfg 1 Bool) pairOnce
     (fun h ↦ h.actionSum Action.sizeCost) (fun h ↦ h.configSup Cfg.mass)
     Tree.nil (Tree.pair Tree.nil Tree.nil) 1 3 := by
   intro h
-  have hbound : pairOnce.ComputesInTimeAndSpace _ _ _ _ := h
+  have hbound : pairOnce.ComputesWithin _ _ _ _ := h
   have := hbound.output_size_le_mass_add_time
   norm_num [pairOnce, initInput_tree,  Cfg.mass, input, Tree.size] at this
 
@@ -80,7 +80,7 @@ example : ¬Controller.ComputesWith (Config := Cfg 1 Bool) pairOnce
     (fun h ↦ h.actionSum Action.sizeCost) (fun h ↦ h.configSup Cfg.mass)
     Tree.nil (Tree.pair Tree.nil Tree.nil) 3 2 := by
   intro h
-  have hbound : pairOnce.ComputesInTimeAndSpace _ _ _ _ := h
+  have hbound : pairOnce.ComputesWithin _ _ _ _ := h
   have := hbound.output_size_le_space
   norm_num [Tree.size] at this
 

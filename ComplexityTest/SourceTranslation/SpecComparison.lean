@@ -3,7 +3,7 @@ Copyright (c) 2026 Yuyang Zhao. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Yuyang Zhao
 -/
-import Complexity.Tactic.TreeProgram.Library
+import Complexity.Tactic.TreeProgram.Translation
 import Std.WP
 import Std.Tactic.Do
 
@@ -19,11 +19,14 @@ def duplicate {α : Type*} (xs : List α) := xs ++ xs
 @[simps] def duplicateBounds {α : Type*} [UniqueEncoding Tree α] : Bounds (List α) :=
   ⟨fun xs => 26 * xs.length + 16, fun xs => 2 * (encode Tree xs).size⟩
 
-theorem duplicate_realizes {α : Type*} [UniqueEncoding Tree α] :
-    Realizes (duplicate : List α → List α) duplicateBounds := by
-  change Realizes (fun xs => id xs ++ id xs) duplicateBounds
-  simpa only [id_eq, appendBounds, identityBounds, duplicateBounds,
-    Nat.zero_add, Nat.zero_max, two_mul] using identity_realizes.append identity_realizes
+def duplicateImplementation {α : Type*} [UniqueEncoding Tree α] :
+    Implementation (duplicate : List α → List α) :=
+  Implementation.identity.append Implementation.identity
+
+@[simp] theorem bounds_duplicateImplementation {α : Type*} [UniqueEncoding Tree α] :
+    (duplicateImplementation (α := α)).bounds = duplicateBounds := by
+  change appendBounds (id : List α → List α) id identityBounds identityBounds = duplicateBounds
+  simp [appendBounds, identityBounds, duplicateBounds, two_mul]
 
 section SpecComparison
 
@@ -33,18 +36,21 @@ structure Source where
 def source (f : List Bool → List Bool) : Source := ⟨f⟩
 
 instance sourceWP : WP Source (Bounds (List Bool)) Prop Unit where
-  wpTrans f := ⟨fun Q _ => ∃ b, Realizes f.fn b ∧ Q b⟩
+  wpTrans f := ⟨fun Q _ => ∃ impl : Implementation f.fn, Q impl.bounds⟩
   wp_trans_monotone _ := by
-    intro Q R _ _ _ h ⟨b, hb, hQ⟩
-    exact ⟨b, hb, h _ hQ⟩
+    intro Q R _ _ _ h ⟨impl, hQ⟩
+    exact ⟨impl, h _ hQ⟩
 
 @[spec] theorem spec_reverse (Q : Bounds (List Bool) → Prop) :
     Triple (source List.reverse) (Q reverseBounds) Q () :=
-  ⟨fun h => ⟨_, reverse_realizes, h⟩⟩
+  ⟨fun h => ⟨Implementation.reverse, h⟩⟩
 
 @[spec] theorem spec_duplicate (Q : Bounds (List Bool) → Prop) :
     Triple (source duplicate) (Q duplicateBounds) Q () :=
-  ⟨fun h => ⟨_, duplicate_realizes, h⟩⟩
+  ⟨fun h => ⟨duplicateImplementation, by
+    change Q (duplicateImplementation (α := Bool)).bounds
+    rw [bounds_duplicateImplementation]
+    exact h⟩⟩
 
 @[spec 1100] theorem spec_duplicate_lambda (Q : Bounds (List Bool) → Prop) :
     Triple (source (fun xs : List Bool => xs ++ xs)) (Q duplicateBounds) Q () :=
@@ -54,8 +60,11 @@ instance sourceWP : WP Source (Bounds (List Bool)) Prop Unit where
     Triple (source (g ∘ f))
       (wp (source f) (fun b => wp (source g) (fun c => Q (compBounds f b c)) ()) ()) Q () := by
   constructor
-  rintro ⟨b, hf, c, hg, hQ⟩
-  exact ⟨_, hf.comp hg, hQ⟩
+  change (∃ hf : Implementation f, ∃ hg : Implementation g,
+    Q (compBounds f hf.bounds hg.bounds)) →
+      ∃ impl : Implementation (g ∘ f), Q impl.bounds
+  rintro ⟨hf, hg, hQ⟩
+  exact ⟨hf.comp hg, by rw [Implementation.bounds_comp]; exact hQ⟩
 
 def twiceExplicit : List Bool → List Bool := List.reverse ∘ List.reverse
 def twiceLet (xs : List Bool) := let ys := xs.reverse; ys.reverse
@@ -97,7 +106,7 @@ local instance : WP (List Bool → List Bool) (Bounds (List Bool)) Prop Unit whe
 @[local spec] theorem bare_lambda_spec (Q : Bounds (List Bool) → Prop) :
     Triple (fun xs : List Bool => xs.reverse.reverse)
       (Q (compBounds List.reverse reverseBounds reverseBounds)) Q () :=
-  ⟨fun h => ⟨_, reverse_realizes.comp reverse_realizes, h⟩⟩
+  ⟨fun h => ⟨Implementation.reverse.comp Implementation.reverse, h⟩⟩
 
 /-- error: No spec found for program fun xs => xs.reverse.reverse. -/
 #guard_msgs in

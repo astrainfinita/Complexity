@@ -6,7 +6,7 @@ Authors: Yuyang Zhao
 module
 
 import all Init.Data.List.Scan.Basic
-import Complexity.Models.TreeMachine.Composition
+import Complexity.Resources.TreeMachine.Composition
 meta import Complexity.Models.TreeMachine.Composition
 meta import Complexity.Models.TreeMachine.Deterministic
 meta import Complexity.Models.TreeMachine.Cost
@@ -110,15 +110,40 @@ def narrower := dirty.comp (needsClean 2)
     (Cfg (max 1 1 + 1) (Comp.State 1 1 Unit Unit)) a 1).regs 0 = a
 #guard (((halted 1).comp (halted 1)).runHistory _ a 20).actionSum Action.sizeCost = 1
 
-private theorem dirty_computes : dirty.ComputesInTimeAndSpace a (.pair a a) 21 21 := by
+private theorem dirty_computes : dirty.ComputesWithin a (.pair a a) 21 21 := by
   refine ⟨3, rfl, rfl, ?_, ?_⟩ <;> decide
 
 private theorem needsClean_computes :
-    (needsClean 4).ComputesInTimeAndSpace (.pair a a) a 7 10 := by
+    (needsClean 4).ComputesWithin (.pair a a) a 7 10 := by
   refine ⟨1, rfl, rfl, ?_, ?_⟩ <;> decide
 
 -- The public composition bound agrees with the concrete execution above.
-example : wider.ComputesInTimeAndSpace a a 32 23 :=
-  comp_computesInTimeAndSpace dirty (needsClean 4) dirty_computes needsClean_computes
+example : wider.ComputesWithin a a 32 23 :=
+  comp_computesWithin dirty (needsClean 4) dirty_computes needsClean_computes
+
+section NonuniqueEncoding
+
+-- Both codes denote the same value. Specifications must handle either code,
+-- and a nested call cannot assume that its input is the chosen representative.
+local instance : Encoding Tree Unit where
+  decode r := ⟨r = .nil ∨ r = .pair .nil .nil, fun _ => ()⟩
+  exists_code _ := ⟨.nil, Or.inl rfl, Subsingleton.elim _ _⟩
+
+private theorem halted_growth :
+    ∃ t s, Computes (halted 1) (fun _ : Unit => ()) t s ∧
+      Dominated t (fun _ => 0) ∧ Dominated s (fun _ => 1) := by
+  refine ⟨fun _ => 0, fun _ => 3, ?_, Dominated.refl _, Dominated.const 3⟩
+  intro x r hx
+  obtain ⟨hr, rfl⟩ := hx
+  refine ⟨r, ⟨hr, rfl⟩, 0, rfl, input_get (0 : Fin 1) r, le_rfl, ?_⟩
+  rcases hr with rfl | rfl <;> decide
+
+-- Zero component time leaves the genuine clearing cost in the fixed composite;
+-- space still includes padding, and constant substitution needs no size condition.
+example : ∃ t s, Computes ((halted 1).comp (halted 1)) (fun _ : Unit => ()) t s ∧
+    Dominated t (fun _ => 1) ∧ Dominated s (fun _ => 2) := by
+  exact comp_computesWithGrowth halted_growth halted_growth
+
+end NonuniqueEncoding
 
 end Complexity.TreeCompositionTest

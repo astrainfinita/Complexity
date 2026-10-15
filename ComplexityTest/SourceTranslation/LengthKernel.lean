@@ -6,11 +6,24 @@ namespace ComplexityTest.SourceTranslation.LengthKernel
 
 -- Exercise the current translator, including length, composition, and pair budget normalization.
 theorem certificate :
-    ∃ b, Realizes (fun x : List Unit × Bool => (x.1.length, x.2)) b := ⟨_, by source_fun_prop⟩
+    ∃ hf : Implementation (fun x : List Unit × Bool => (x.1.length, x.2)),
+      hf.HasGrowth (fun x => ⌜x.1⌝ₜ.size ^ 2 + 1)
+        (fun x => ⌜x⌝ₜ.size + ⌜(x.1.length, x.2)⌝ₜ.size) := by
+  refine ⟨by source_fun_prop, ?_⟩
+  source_fun_prop
+  all_goals
+    simp only [Dominated.add_iff, Dominated.max_iff]
+    repeat' apply And.intro
+    all_goals first
+      | exact Dominated.const_of_pos _ (fun _ => Nat.zero_lt_succ _)
+      | apply Dominated.of_le
+        intro x
+        have := size_encode_fst_le x
+        omega
 
 -- Recheck the generated proof with a kernel-only allocation limit, independent of tactic cost
--- and machine speed. On Lean 4.35.0-rc2 this needs about 8 heartbeats (1000 raw allocations each).
--- Omitting budget equality proofs in normalizeSourceBounds needs over 26000 and fails this limit.
+-- and machine speed. The benchmark records current raw heartbeats separately.
+-- A historical version omitting structural equality proofs exceeded 26000 heartbeats.
 open Lean Elab in
 run_elab do
   let .thmInfo info ← getConstInfo ``certificate | throwError "expected length certificate"

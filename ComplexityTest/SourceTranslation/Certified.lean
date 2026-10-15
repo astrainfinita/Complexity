@@ -3,7 +3,7 @@ Copyright (c) 2026 Yuyang Zhao. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Yuyang Zhao
 -/
-import Complexity.Tactic.TreeProgram.Library
+import Complexity.Tactic.TreeProgram.Translation
 
 open Complexity TreeProgram Complexity.TreeProgram.Source
 
@@ -71,8 +71,8 @@ example : threeReverses.evaluate =
       Implementation.reverse).evaluate := rfl
 
 -- The public resource proposition remains an immediate consequence of the same object.
-example : Realizes (fun xs : List Bool => xs.reverse.reverse)
-    (compBounds List.reverse reverseBounds reverseBounds) := twice.realizes
+example : Implements twice.program (fun xs : List Bool => xs.reverse.reverse)
+    (compBounds List.reverse reverseBounds reverseBounds) := twice.implements
 
 -- One program for each runtime index does not provide one program for the whole input.
 example (f : ℕ → Bool → Bool) (_h : ∀ n, Implementation (f n)) : True := by
@@ -89,21 +89,18 @@ def negateBoolImpl : Implementation negateBool := by source_cases
 #guard_msgs in
 #eval (negateBoolImpl.program Value.input).build 1 |>.2.1
 
-example : ∃ b, Realizes negateBool b := ⟨_, by source_cases⟩
+example : Implementation negateBool := by source_cases
 
 private def unequalBranches (x : Bool × List Bool) : List Bool :=
   if x.1 then x.2 else true :: x.2
 
--- Structural correctness is checked before the supplied, input-sensitive budget.
-example : Realizes unequalBranches
-    ⟨fun x => if x.1 then 3 else 5,
-      fun x => max ⌜x⌝ₜ.size ⌜unequalBranches x⌝ₜ.size⟩ := by
-  source_cases
+private def unequalBranchesImpl : Implementation unequalBranches := by source_cases
 
-example : True := by
-  fail_if_success
-    have : Realizes unequalBranches ⟨fun _ => 0, fun _ => 0⟩ := by source_cases
-  trivial
+-- Each selected branch takes five steps; the unused branch is not added to the budget.
+example (x : Bool × List Bool) :
+    unequalBranchesImpl.bounds.time x = 5 := by
+  rcases x with ⟨b, xs⟩
+  cases b <;> simp [unequalBranchesImpl]
 
 private def nonemptyTailReverse (x : {xs : List Bool // xs ≠ []}) : List Bool :=
   match h : x.1 with
@@ -111,7 +108,7 @@ private def nonemptyTailReverse (x : {xs : List Bool // xs ≠ []}) : List Bool 
   | _ :: tail => tail.reverse
 
 -- Impossible branches are replayed, and proof fields are erased from runtime environments.
-example : ∃ b, Realizes nonemptyTailReverse b := ⟨_, by source_fun_prop⟩
+example : Implementation nonemptyTailReverse := by source_fun_prop
 
 def optionalReverse : Option (List Bool) → List Bool
   | none => []
@@ -123,35 +120,9 @@ def optionalReverseImpl : Implementation optionalReverse := by source_calls
 #guard_msgs in
 #eval (optionalReverseImpl.program Value.input).build 1 |>.2.1
 
--- Fixed requests must still compile calls inside branches, using exactly their generated budget.
-example : Realizes optionalReverse optionalReverseImpl.bounds := by source_fun_prop
-
-example : Realizes optionalReverse optionalReverseImpl.bounds := by source_calls
-
-example : True := by
-  fail_if_success
-    have : Realizes optionalReverse ⟨fun _ => 0, fun _ => 0⟩ := by source_fun_prop
-  trivial
-
-namespace SelectedCallBudget
-
-def relaxedBounds : Bounds (Option (List Bool)) :=
-  ⟨fun x => optionalReverseImpl.bounds.time x + 1, optionalReverseImpl.bounds.peak⟩
-
--- Prove another allowance for the already selected program, without restarting translation.
-def relaxedImplementation : Implementation optionalReverse :=
-  optionalReverseImpl.rebudget relaxedBounds (fun _ => ⟨Nat.le_add_right _ _, le_rfl⟩)
-
-example : relaxedImplementation.program = optionalReverseImpl.program := rfl
-
-example : Realizes optionalReverse relaxedBounds := relaxedImplementation.realizes
-
--- The caller may supply that budget proof without changing the selected program.
-example : Realizes optionalReverse relaxedBounds := by
-  let selected := relaxedImplementation
-  source_fun_prop
-
-end SelectedCallBudget
+-- Certification retains the same generated program and its structural budget.
+example : Implements optionalReverseImpl.program optionalReverse optionalReverseImpl.bounds :=
+  optionalReverseImpl.implements
 
 def singletonIndexed (x : Σ n, List (Fin n)) : Σ n, List (List (Fin n)) := ⟨x.1, [x.2]⟩
 
@@ -168,11 +139,9 @@ opaque legacy (xs : List Bool) : List Bool := xs
 def mixedCalls (x : Bool × List Bool) : List Bool :=
   if x.1 then x.2.reverse else legacy x.2
 
--- Only the opaque compatibility leaf requires choosing an existential witness.
-noncomputable def mixedCallsImpl (b : Bounds (List Bool)) (h : Realizes legacy b) :
-    Implementation mixedCalls := by
-  let legacyImplementation := h.implementation
-  source_calls
+-- An opaque call is supplied by one explicit implementation for every input.
+def mixedCallsImpl (legacyImplementation : Implementation legacy) :
+    Implementation mixedCalls := by source_calls
 
 def conditionalReverse : Implementation
     (fun x : Bool × List Bool => if x.1 then x.2.reverse else x.2) := by source_fun_prop
@@ -202,15 +171,12 @@ def aliasInLet (xs : List Bool) :=
   let ys := reverseAlias xs
   reverseAlias ys ++ xs
 
-example : ∃ k, TimeSpaceModel.tree.ComputableInTimeAndSpace aliasInLet
-    (fun n => 52 * n + 39) (fun n => k * (2 * n + 3)) := by
-  model_fun_prop
+example : Implementation aliasInLet := by source_fun_prop
 
 -- Encoding proofs retain their source type even when both encodings reduce to `Tree.nil`.
 example {α : Type*} [UniqueEncoding Tree α] :
-    ∃ k, TimeSpaceModel.tree.ComputableInTimeAndSpace
-      (fun x : Option (List α) => match x with | none => [] | some xs => xs.reverse)
-      (fun n => 13 * n + 20) (fun n => k * (n + 3)) := by
-  model_fun_prop
+    Implementation
+      (fun x : Option (List α) => match x with | none => [] | some xs => xs.reverse) := by
+  source_fun_prop
 
 end ComplexityTest.SourceTranslation.Certified

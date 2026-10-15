@@ -27,7 +27,7 @@ private theorem copyInput_unit (x : Tree) :
 
 -- Size charging uses the same machine and the proved intermediate-space bound.
 example (x : Tree) :
-    copyInput.compile.ComputesInTimeAndSpace x x (2 * (2 * x.size + 1)) (2 * x.size + 1) :=
+    copyInput.compile.ComputesWithin x x (2 * (2 * x.size + 1)) (2 * x.size + 1) :=
   (copyInput_unit x).toSizeCost
 
 -- A program that returns immediately still accounts for the initial input tree.

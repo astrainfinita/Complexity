@@ -42,10 +42,6 @@ example (a : List Unit) (xs : List (List Unit)) :
   · intros; simp
   · omega
 
--- The coarse estimate changes only the certificate, keeping the implementing program.
-example {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β] {f : β → α → β}
-    (hf : Implementation (Function.uncurry f)) : hf.foldlUniform.program = hf.foldl.program := rfl
-
 -- Capturing a runtime flag preserves per-element summation.
 private def reverseCaptured (input : Bool × List (List Unit)) : List Unit :=
   input.2.foldl (fun _ ys => if input.1 then ys.reverse else ys) []
@@ -59,21 +55,15 @@ example (m : ℕ) : captured.bounds.time
 
 section DependentMap
 
-attribute [local fun_prop] Realizes.comp Realizes.of_encode Realizes.pair
-  fst_realizes snd_realizes identity_realizes encode_realizes finApply_realizes
-  Realizes.mapDependentWith
-
 -- A runtime table and its indices share the same runtime length; the table is captured once.
-example : ∃ b, Realizes
-    (fun x : Σ n, (Fin n → ℕ) × List (Fin n) => x.2.2.map x.2.1) b :=
-  ⟨_, by source_fun_prop⟩
+example : Nonempty (Implementation (fun x : Σ n, (Fin n → ℕ) × List (Fin n) => x.2.2.map x.2.1)) :=
+  ⟨by source_fun_prop⟩
 
 -- Pointwise choices must never masquerade as one implementation for all runtime lengths.
-example (f : (n : ℕ) → Fin n → Bool) (b : (n : ℕ) → Bounds (Fin n))
-    (_hf : ∀ n, Realizes (f n) (b n)) : True := by
+example (f : (n : ℕ) → Fin n → Bool) (_hf : ∀ n, Implementation (f n)) : True := by
   fail_if_success
-    have : ∃ c, Realizes (fun x : Σ n, List (Fin n) => x.2.map (f x.1)) c :=
-      ⟨_, by source_fun_prop⟩
+    have : Nonempty (Implementation (fun x : Σ n, List (Fin n) => x.2.map (f x.1))) :=
+      ⟨by source_fun_prop⟩
   trivial
 
 end DependentMap

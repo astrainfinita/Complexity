@@ -12,20 +12,43 @@ public import ComplexityTest.SourceTranslation.TailRecursion
 open Complexity
 open ComplexityTest.SourceTranslation.TailRecursion
 
--- Importing the saved model restores its selected program and public allowance.
-example : ∃ k, TimeSpaceModel.tree.ComputableInTimeAndSpace keep
-    (fun _ => 11) (fun n => k * (n + 2)) := by model_fun_prop
+open TreeProgram.Source
+
+-- Importing the saved model restores its selected program and canonical specification.
+noncomputable def recalledKeep : Implementation keep := by source_fun_prop
+example : recalledKeep.program = keepImplementation.program := by
+  simpa only [recalledKeep] using keep_loop_model.program_sourceImplementation
+example : recalledKeep.HasGrowth (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
+  source_fun_prop
+  all_goals exact Dominated.refl _
+example : keep ∈ FTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
+  model_fun_prop
+  all_goals simpa only [pow_zero, pow_one] using Dominated.refl _
 
 example : True := by
   fail_if_success
-    have : ∃ k, TimeSpaceModel.tree.ComputableInTimeAndSpace keep
-        (fun _ => 4) (fun n => k * (n + 2)) := by model_fun_prop
+    have : recalledKeep.HasGrowth (fun _ => 0) (fun _ => 0) := by source_fun_prop
   trivial
 
 def optionalGather : Option (Bool × List (List Bool) × List Bool) → List Bool
   | none => []
   | some x => gather x
 
-example : ∃ k, TimeSpaceModel.tree.ComputableInTimeAndSpace optionalGather
-    (fun n => 400 * n + 400) (fun n => k * (30 * n + 30)) := by
+-- Ordinary nested calls consume gather's linear saved specification.
+example : optionalGather ∈ FTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by
   model_fun_prop
+  all_goals
+    apply Dominated.of_cover (fun _ : Unit => none) some
+      (by intro x; cases x with
+          | none => exact Or.inl ⟨(), rfl⟩
+          | some x => exact Or.inr ⟨x, rfl⟩)
+  all_goals
+    simp only [Function.comp_def, pow_one, encode_option_none, encode_option_some,
+      size_encode_prod, size_encode_unit, encode_list_nil, Dominated.add_iff, Dominated.max_iff]
+  all_goals repeat' apply And.intro
+  all_goals first
+    | exact Dominated.const _
+    | exact Dominated.const_of_pos _ (fun _ => by positivity)
+    | exact gather_model.hasGrowth_sourceImplementation.1.mono (fun _ => by omega)
+    | exact gather_model.hasGrowth_sourceImplementation.2.mono (fun _ => by omega)
+    | exact Dominated.of_le (fun _ => by omega)
