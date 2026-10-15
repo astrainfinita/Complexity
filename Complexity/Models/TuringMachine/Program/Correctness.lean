@@ -16,7 +16,7 @@ public import Complexity.Models.TuringMachine.Deterministic
 One program transition is exactly one transition of its compiled machine. The history
 maintained by the program semantics covers the machine's visited work cells, including
 the initial positions. Thus a total program execution proves actual machine termination,
-output correctness, and bounds in `ComputesInTimeAndSpace`.
+output correctness, and bounds in `ComputesWithin`.
 -/
 
 @[expose] public section
@@ -55,13 +55,13 @@ theorem run_compile {p : TM.Program κ Γ α} {q : p.State ⊕ p.Exit}
     rfl
 
 /-- A source execution proves output, time, and visited-cell space of the compiled machine. -/
-theorem computesInTimeAndSpace_of_exec [Fintype κ] (p : TM.Program κ Γ α) {ys : Array Γ}
+theorem computesWithin_of_exec [Fintype κ] (p : TM.Program κ Γ α) {ys : Array Γ}
     {n t s : ℕ} {a : α} {v : History (Cfg κ Γ Unit xs) (Action κ Γ Unit)}
     (h : Program.Syntax.Exec
       (⟨eval, observe, apply⟩ : Program.Semantics _ _ _ _ _)
       p (History.nil ((rawExecution xs.toList).init ())) n a v)
     (hn : n ≤ t) (ho : v.last.output = ys) (hs : v.space ≤ s) :
-    (compile p).ComputesInTimeAndSpace xs.toList ys.toList t s := by
+    (compile p).ComputesWithin xs.toList ys.toList t s := by
   obtain ⟨e, _, hc, hv⟩ := run_compile h.toControl
     (History.nil ((rawExecution xs.toList).init (compile p).q₀)) rfl (by simp)
   simp only [Controller.runFrom_nil, Controller.last_runHistoryFrom] at hc hv

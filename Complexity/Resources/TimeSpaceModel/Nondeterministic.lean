@@ -18,69 +18,110 @@ as `true`. Invalid input codes impose no obligations.
 
 @[expose] public section
 
-namespace Complexity.TimeSpaceModel
+namespace Complexity
+
+/-- A complete multiset of branch outputs decides `p`: every output decodes as a Boolean,
+and some output decodes as `true` exactly when `p` holds. The additional condition refers
+to that same multiset, including rejecting branches and their multiplicities. -/
+def Encoding.NDecides {Data α : Type*} [Encoding Data α] [Encoding Data Bool]
+    (p : α → Prop) (P : α → Data → Multiset Data → Prop) : Prop :=
+  ∀ a src, a ∈ decode α src →
+    ∃ outs, P a src outs ∧
+      (∀ dst ∈ outs, (decode Bool dst).Dom) ∧
+      ((∃ dst ∈ outs, true ∈ decode Bool dst) ↔ p a)
+
+namespace Encoding.NDecides
+
+variable {Data α : Type*} [Encoding Data Bool] {p : α → Prop}
+  {P Q : α → Data → Multiset Data → Prop}
+
+theorem mono [Encoding Data α] (h : NDecides p P)
+    (hPQ : ∀ {a src outs}, P a src outs → Q a src outs) : NDecides p Q := by
+  intro a src hsrc
+  obtain ⟨outs, hP, hvalid, haccept⟩ := h a src hsrc
+  exact ⟨outs, hPQ hP, hvalid, haccept⟩
+
+theorem iff_of_uniqueInput [UniqueEncoding Data α] :
+    NDecides p P ↔ ∀ a,
+      ∃ outs, P a (encode Data a) outs ∧
+        (∀ dst ∈ outs, (decode Bool dst).Dom) ∧
+        ((∃ dst ∈ outs, true ∈ decode Bool dst) ↔ p a) := by
+  simp only [NDecides, UniqueEncoding.mem_decode_iff, forall_eq']
+
+end Encoding.NDecides
+
+namespace TimeSpaceModel
+
+section InputBudgets
 
 variable {Data α : Type*} [Encoding Data α] [Encoding Data Bool]
 
-/-- One behavior decides a predicate on every valid input code within both bounds.
-All branch outputs are Boolean codes, and acceptance is existential. -/
-def NDecidableInTimeAndSpace (model : TimeSpaceModel Multiset Data) (p : α → Prop)
-    (t s : ℕ → ℕ) : Prop :=
-  ∃ R ∈ model.behaviors, ∀ x a, a ∈ decode α x →
-    ∃ ys, R x ys (t (model.inputSize x)) (s (model.inputSize x)) ∧
-      (∀ y ∈ ys, (decode Bool y).Dom) ∧
-      ((∃ y ∈ ys, true ∈ decode Bool y) ↔ p a)
+/-- One behavior decides every legal representation with budgets indexed by both the
+input value and its actual code. The complete branch multiset is retained. -/
+def NDecidableWithCodeBudgets (model : TimeSpaceModel Multiset Data) (p : α → Prop)
+    (t s : α → Data → ℕ) : Prop :=
+  ∃ R ∈ model.behaviors, Encoding.NDecides p fun a src outs =>
+    R src outs (t a src) (s a src)
 
-/-- Decide a predicate nondeterministically within a pointwise time bound. -/
+/-- Value-indexed budgets uniformly cover all legal representations of each value. -/
+def NDecidableWithin (model : TimeSpaceModel Multiset Data) (p : α → Prop)
+    (t s : α → ℕ) : Prop :=
+  model.NDecidableWithCodeBudgets p (fun a _ => t a) (fun a _ => s a)
+
 def NDecidableInTime (model : TimeSpaceModel Multiset Data) (p : α → Prop)
-    (t : ℕ → ℕ) : Prop :=
-  ∃ s, model.NDecidableInTimeAndSpace p t s
+    (t : α → ℕ) : Prop := ∃ s, model.NDecidableWithin p t s
 
-/-- Decide a predicate nondeterministically within a pointwise space bound,
-with some time bound requiring every branch to terminate. -/
 def NDecidableInSpace (model : TimeSpaceModel Multiset Data) (p : α → Prop)
-    (s : ℕ → ℕ) : Prop :=
-  ∃ t, model.NDecidableInTimeAndSpace p t s
+    (s : α → ℕ) : Prop := ∃ t, model.NDecidableWithin p t s
 
-variable {model : TimeSpaceModel Multiset Data} {p q : α → Prop}
-  {t s t' s' : ℕ → ℕ}
+/-- Both all-input growth budgets use the same nondeterministic behavior; every branch
+must still terminate within its resource bounds. -/
+def NDecidableWithGrowth (model : TimeSpaceModel Multiset Data) (p : α → Prop)
+    (T S : α → ℕ) : Prop :=
+  ∃ t s, model.NDecidableWithin p t s ∧ Dominated t T ∧ Dominated s S
 
-theorem NDecidableInTimeAndSpace.mono (h : model.NDecidableInTimeAndSpace p t s)
-    (ht : ∀ n, t n ≤ t' n) (hs : ∀ n, s n ≤ s' n) :
-    model.NDecidableInTimeAndSpace p t' s' := by
+variable {model : TimeSpaceModel Multiset Data} {p q : α → Prop} {t s t' s' : α → ℕ}
+
+theorem NDecidableWithCodeBudgets.mono {t s t' s' : α → Data → ℕ}
+    (h : model.NDecidableWithCodeBudgets p t s)
+    (ht : ∀ a src, t a src ≤ t' a src)
+    (hs : ∀ a src, s a src ≤ s' a src) :
+    model.NDecidableWithCodeBudgets p t' s' := by
   obtain ⟨R, hR, h⟩ := h
-  refine ⟨R, hR, fun x a ha => ?_⟩
-  obtain ⟨ys, hy, hb, hp⟩ := h x a ha
-  exact ⟨ys, model.budget_mono hR hy (ht _) (hs _), hb, hp⟩
+  exact ⟨R, hR, h.mono fun hrun =>
+    model.budget_mono hR hrun (ht _ _) (hs _ _)⟩
 
-theorem NDecidableInTimeAndSpace.congr (h : model.NDecidableInTimeAndSpace p t s)
-    (hp : ∀ a, p a ↔ q a) : model.NDecidableInTimeAndSpace q t s :=
+theorem NDecidableWithCodeBudgets.congr {t s : α → Data → ℕ}
+    (h : model.NDecidableWithCodeBudgets p t s) (hp : ∀ a, p a ↔ q a) :
+    model.NDecidableWithCodeBudgets q t s :=
   funext (fun a => propext (hp a)) ▸ h
 
-theorem NDecidableInTimeAndSpace.nDecidableInTime
-    (h : model.NDecidableInTimeAndSpace p t s) : model.NDecidableInTime p t :=
-  ⟨s, h⟩
+theorem NDecidableWithin.mono (h : model.NDecidableWithin p t s)
+    (ht : ∀ a, t a ≤ t' a) (hs : ∀ a, s a ≤ s' a) :
+    model.NDecidableWithin p t' s' :=
+  NDecidableWithCodeBudgets.mono h (fun a _ => ht a) (fun a _ => hs a)
 
-theorem NDecidableInTimeAndSpace.nDecidableInSpace
-    (h : model.NDecidableInTimeAndSpace p t s) : model.NDecidableInSpace p s :=
-  ⟨t, h⟩
+theorem NDecidableWithin.nDecidableInTime
+    (h : model.NDecidableWithin p t s) : model.NDecidableInTime p t := ⟨s, h⟩
 
-theorem NDecidableInTime.mono (h : model.NDecidableInTime p t)
-    (ht : ∀ n, t n ≤ t' n) : model.NDecidableInTime p t' := by
-  obtain ⟨s, h⟩ := h
-  exact ⟨s, h.mono ht (fun _ => le_rfl)⟩
+theorem NDecidableWithin.nDecidableInSpace
+    (h : model.NDecidableWithin p t s) : model.NDecidableInSpace p s := ⟨t, h⟩
 
-theorem NDecidableInTime.congr (h : model.NDecidableInTime p t)
-    (hp : ∀ a, p a ↔ q a) : model.NDecidableInTime q t :=
-  funext (fun a => propext (hp a)) ▸ h
+theorem NDecidableWithin.congr (h : model.NDecidableWithin p t s)
+    (hp : ∀ a, p a ↔ q a) : model.NDecidableWithin q t s :=
+  NDecidableWithCodeBudgets.congr h hp
 
-theorem NDecidableInSpace.mono (h : model.NDecidableInSpace p s)
-    (hs : ∀ n, s n ≤ s' n) : model.NDecidableInSpace p s' := by
-  obtain ⟨t, h⟩ := h
-  exact ⟨t, h.mono (fun _ => le_rfl) hs⟩
+theorem NDecidableWithin.nDecidableWithGrowth
+    (h : model.NDecidableWithin p t s) : model.NDecidableWithGrowth p t s :=
+  ⟨t, s, h, Dominated.refl _, Dominated.refl _⟩
 
-theorem NDecidableInSpace.congr (h : model.NDecidableInSpace p s)
-    (hp : ∀ a, p a ↔ q a) : model.NDecidableInSpace q s :=
-  funext (fun a => propext (hp a)) ▸ h
+theorem NDecidableWithGrowth.mono (h : model.NDecidableWithGrowth p t s)
+    (ht : Dominated t t') (hs : Dominated s s') : model.NDecidableWithGrowth p t' s' := by
+  obtain ⟨u, v, h, hu, hv⟩ := h
+  exact ⟨u, v, h, hu.trans ht, hv.trans hs⟩
 
-end Complexity.TimeSpaceModel
+end InputBudgets
+
+end TimeSpaceModel
+
+end Complexity

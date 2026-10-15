@@ -214,4 +214,51 @@ instance {p : α → Prop} [c : UniqueEncoding R α] : UniqueEncoding R {a // p 
 
 end UniqueEncoding
 
+namespace Encoding
+
+variable {Data α β : Type*}
+
+/-- Every valid input code admits one correct output code satisfying `P`.
+The condition refers to that same output, and may depend on the input value and code.
+It can specify execution, resources, or other requirements; decoding is only a
+mathematical interpretation, not an extra machine operation. -/
+def Computes [Encoding Data α] [Encoding Data β]
+    (f : α → β) (P : α → Data → Data → Prop) : Prop :=
+  ∀ a src, a ∈ decode α src →
+    ∃ dst, f a ∈ decode β dst ∧ P a src dst
+
+namespace Computes
+
+variable {f : α → β} {P Q : α → Data → Data → Prop}
+
+theorem mono [Encoding Data α] [Encoding Data β] (h : Computes f P)
+    (hPQ : ∀ {a src dst}, P a src dst → Q a src dst) : Computes f Q := by
+  intro a src hsrc
+  obtain ⟨dst, hdst, hP⟩ := h a src hsrc
+  exact ⟨dst, hdst, hPQ hP⟩
+
+/-- A unique output encoding fixes the output witness, but still covers every input code. -/
+theorem iff_of_uniqueOutput [Encoding Data α] [UniqueEncoding Data β] :
+    Computes f P ↔ ∀ a src, a ∈ decode α src → P a src (encode Data (f a)) := by
+  simp only [Computes, UniqueEncoding.mem_decode_iff, exists_eq_left']
+
+/-- A unique input encoding fixes only the input code; any correct output code is allowed. -/
+theorem iff_of_uniqueInput [UniqueEncoding Data α] [Encoding Data β] :
+    Computes f P ↔ ∀ a, ∃ dst, f a ∈ decode β dst ∧ P a (encode Data a) dst := by
+  simp only [Computes, UniqueEncoding.mem_decode_iff, forall_eq']
+
+theorem iff_of_uniqueEncoding [UniqueEncoding Data α] [UniqueEncoding Data β] :
+    Computes f P ↔ ∀ a, P a (encode Data a) (encode Data (f a)) := by
+  simp only [iff_of_uniqueOutput, UniqueEncoding.mem_decode_iff, forall_eq']
+
+theorem of_encode {γ : Type*} [Encoding Data α]
+    [UniqueEncoding Data β] [UniqueEncoding Data γ] {g : α → γ}
+    (h : Computes g P) (hfg : ∀ a, encode Data (f a) = encode Data (g a)) :
+    Computes f P := by
+  simpa only [iff_of_uniqueOutput, hfg] using h
+
+end Computes
+
+end Encoding
+
 end Complexity

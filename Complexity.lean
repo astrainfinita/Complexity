@@ -1,6 +1,8 @@
 module  -- shake: keep-all --deprecated_module: ignore
 
 public import Complexity.Asymptotics.Basic
+public import Complexity.Asymptotics.IsBigO
+public import Complexity.Asymptotics.Nat
 public import Complexity.Asymptotics.Polynomial
 public import Complexity.Classes.Basic
 public import Complexity.Classes.Deterministic
@@ -61,6 +63,7 @@ public import Complexity.Encoding.Prod
 public import Complexity.Encoding.RawWord
 public import Complexity.Encoding.Sigma
 public import Complexity.Encoding.Tree
+public import Complexity.Encoding.TreeSize
 public import Complexity.ModelTheory.Algebra.BooleanAlgebra.Basic
 public import Complexity.ModelTheory.Algebra.BooleanAlgebra.TreeEncoding
 public import Complexity.Models.Circuit.Basic
@@ -143,15 +146,15 @@ public import Complexity.Resources.TreeMachine.Program
 public import Complexity.Resources.TreeMachine.StackMachine
 public import Complexity.Resources.TuringMachine
 public import Complexity.Tactic.TreeProgram.Arithmetic
+public import Complexity.Tactic.TreeProgram.Translation
+public import Complexity.Tactic.TreeProgram.Recursion
+public import Complexity.Tactic.TreeProgram.Rules
+public import Complexity.Tactic.TreeProgram.TailRecursion
+public import Complexity.Tactic.TreeProgram.Implementation
 public import Complexity.Tactic.TreeProgram.Attributes
 public import Complexity.Tactic.TreeProgram.Environment
-public import Complexity.Tactic.TreeProgram.Implementation
 public import Complexity.Tactic.TreeProgram.Iteration
 public import Complexity.Tactic.TreeProgram.Library
-public import Complexity.Tactic.TreeProgram.Recursion
 public import Complexity.Tactic.TreeProgram.Registration
-public import Complexity.Tactic.TreeProgram.Rules
 public import Complexity.Tactic.TreeProgram.Search
-public import Complexity.Tactic.TreeProgram.Translation
-public import Complexity.Tactic.TreeProgram.TailRecursion
 public import Complexity.Tactic.TreeProgram.Traversal

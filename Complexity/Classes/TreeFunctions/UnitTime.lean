@@ -7,7 +7,6 @@ module
 
 public import Complexity.Classes.Deterministic
 public import Complexity.Resources.TreeMachine.Basic
-public import Mathlib.Analysis.Asymptotics.Ring
 
 /-! # Comparing unit-time and size-charged tree complexity classes -/
 
@@ -20,23 +19,28 @@ variable {α β : Type*} [Encoding Tree α] [Encoding Tree β]
 theorem ftisp_sizeCost_subset_unitTime (T S : ℕ → ℕ) :
     FTISP (α := α) (β := β) .sizeCostTree T S ⊆ FTISP .tree T S := by
   rintro f ⟨t, s, h, ht, hs⟩
-  exact ⟨t, s, computableInTimeAndSpace_toUnitTime h, ht, hs⟩
+  have h : TimeSpaceModel.tree.ComputableWithSizeBudgets f t s :=
+    TimeSpaceModel.ComputableWithCodeBudgets.toUnitTime h
+  exact h.mem_ftisp_of_dominated ht hs
 
 /-- Size charging multiplies the unit-time bound by the space bound. -/
 theorem ftisp_unitTime_subset_sizeCost (T S : ℕ → ℕ) :
     FTISP (α := α) (β := β) .tree T S ⊆ FTISP .sizeCostTree (fun n ↦ T n * S n) S := by
   rintro f ⟨t, s, h, ht, hs⟩
-  refine ⟨_, s, computableInTimeAndSpace_toSizeCost h, ?_, hs⟩
-  simpa only [IsBigO, Nat.cast_mul] using Asymptotics.IsBigO.mul ht hs
+  have h : TimeSpaceModel.sizeCostTree.ComputableWithSizeBudgets f (fun n => t n * s n) s :=
+    TimeSpaceModel.ComputableWithCodeBudgets.toSizeCost h
+  exact h.mem_ftisp_of_dominated (ht.mul hs) hs
 
 /-- Changing action charges preserves every expanded-tree space class. -/
 theorem fspace_eq_sizeCost (S : ℕ → ℕ) :
     FSPACE (α := α) (β := β) .tree S = FSPACE .sizeCostTree S := by
   apply Set.Subset.antisymm
   · rintro f ⟨s, ⟨t, h⟩, hs⟩
-    exact ⟨s, ⟨_, computableInTimeAndSpace_toSizeCost h⟩, hs⟩
+    exact FTISP.subset_space (ftisp_unitTime_subset_sizeCost t S
+      (h.mem_ftisp_of_dominated (DominatedAtTop.refl _) hs))
   · rintro f ⟨s, ⟨t, h⟩, hs⟩
-    exact ⟨s, ⟨t, computableInTimeAndSpace_toUnitTime h⟩, hs⟩
+    exact FTISP.subset_space (ftisp_sizeCost_subset_unitTime t S
+      (h.mem_ftisp_of_dominated (DominatedAtTop.refl _) hs))
 
 theorem dspace_eq_sizeCost (S : ℕ → ℕ) :
     DSPACE (α := α) .tree S = DSPACE .sizeCostTree S :=

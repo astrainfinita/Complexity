@@ -8,15 +8,11 @@ module
 public import Complexity.Encoding.Basic
 
 /-!
-# Resource bounds for functions on encoded values
+# Decision specifications
 
-`Encoding.Computes run size f t s` lifts a raw computation relation to a function between
-encoded types. It requires a terminating computation on every valid input code,
-with bounds measured on that actual code. Any valid code for the result is allowed.
-Invalid inputs impose no obligations, and decoding is not an extra machine operation.
-
-A `TimeSpaceModel` supplies admissible relations and their input size. Concrete
-models can realize each relation by one finite machine for all inputs and budgets.
+`Encoding.Computes` supplies the common encoded computation predicate.
+Resource models specialize its condition to execution and budgets; this file
+adds the Boolean correctness condition used by deterministic decision classes.
 -/
 
 @[expose] public section
@@ -24,52 +20,6 @@ models can realize each relation by one finite machine for all inputs and budget
 namespace Complexity
 
 variable {Data α β : Type*}
-
-/-- A raw computation implements a function on every valid input representation,
-within time and space bounds measured on that representation. -/
-def Encoding.Computes [Encoding Data α] [Encoding Data β]
-    (run : Data → Data → ℕ → ℕ → Prop) (size : Data → ℕ) (f : α → β)
-    (t s : ℕ → ℕ) : Prop :=
-  ∀ r a, a ∈ decode α r → ∃ q, f a ∈ decode β q ∧ run r q (t (size r)) (s (size r))
-
-namespace Encoding.Computes
-
-variable {run : Data → Data → ℕ → ℕ → Prop} {size : Data → ℕ} {f : α → β}
-  {t s t' s' : ℕ → ℕ}
-
-/-- Increasing either resource budget preserves a computation when the raw
-computation relation permits the same increase. -/
-theorem mono [Encoding Data α] [Encoding Data β] (h : Computes run size f t s)
-    (hm : ∀ {r q t s t' s'}, run r q t s → t ≤ t' → s ≤ s' → run r q t' s')
-    (ht : ∀ n, t n ≤ t' n) (hs : ∀ n, s n ≤ s' n) : Computes run size f t' s' := by
-  intro r a ha
-  obtain ⟨q, hq, hr⟩ := h r a ha
-  exact ⟨q, hq, hm hr (ht _) (hs _)⟩
-
-/-- A unique output encoding removes the output witness without restricting input codes. -/
-theorem iff_of_uniqueOutput [Encoding Data α] [UniqueEncoding Data β] :
-    Computes run size f t s ↔
-      ∀ r a, a ∈ decode α r →
-        run r (encode Data (f a)) (t (size r)) (s (size r)) := by
-  simp only [Computes, UniqueEncoding.mem_decode_iff, exists_eq_left']
-
-/-- For unique input and output encodings, the representation-based specification
-reduces to computing the encoder's result on the encoder's input. -/
-theorem iff_of_uniqueEncoding [UniqueEncoding Data α] [UniqueEncoding Data β] :
-    Computes run size f t s ↔
-      ∀ a, run (encode Data a) (encode Data (f a))
-        (t (size (encode Data a))) (s (size (encode Data a))) := by
-  simp only [iff_of_uniqueOutput, UniqueEncoding.mem_decode_iff]
-  exact forall_comm.trans (by simp only [forall_eq'])
-
-/-- Changing the output interpretation preserves the same raw computation and budgets. -/
-theorem of_encode {γ : Type*} [Encoding Data α]
-    [UniqueEncoding Data β] [UniqueEncoding Data γ] {g : α → γ}
-    (hg : Computes run size g t s) (hfg : ∀ x, encode Data (f x) = encode Data (g x)) :
-    Computes run size f t s := by
-  simpa only [iff_of_uniqueOutput, hfg] using hg
-
-end Encoding.Computes
 
 /-- A Boolean-valued function decides a predicate, including rejection of every
 value outside the predicate. -/

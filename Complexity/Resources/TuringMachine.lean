@@ -16,9 +16,10 @@ Functions use bit-string encodings. External bits occupy `some b` cells and
 `none` is blank. Time counts transitions; space counts visited work cells and
 excludes the read-only input and append-only output.
 
-`TimeSpaceModel.tm.ComputableInTimeAndSpace` requires one fixed machine with finite control for
-all valid inputs. Its bounds are pointwise functions of the actual input length.
-The time-only and space-only variants omit one bound, but still require termination.
+`TimeSpaceModel.tm.ComputableWithin` uses input-dependent budgets for all
+legal representations. Complexity classes measure actual code length at their boundary.
+Specifications require one fixed finite machine on all valid inputs. Time-only and
+space-only variants omit one bound, but still require termination.
 -/
 
 @[expose] public section
@@ -27,12 +28,6 @@ namespace Complexity.TM
 
 variable {α β : Type*} [Encoding (RawWord Bool) α] [Encoding (RawWord Bool) β]
 
-/-- A bit-alphabet machine computes a function on all valid input encodings. -/
-def Computes {κ : Type*} [Fintype κ] {Q : Type*} (M : TM Id κ (Option Bool) Q)
-    (f : α → β) (t s : ℕ → ℕ) : Prop :=
-  Encoding.Computes (fun xs ys ↦ M.ComputesInTimeAndSpace (xs.toList.map some) (ys.toList.map some))
-    RawWord.length f t s
-
 /-- Finite Turing machines on bit strings, with transition time and visited
 work-cell space. Each behavior is realized by one machine for all inputs. -/
 def _root_.Complexity.TimeSpaceModel.tm : TimeSpaceModel Id (RawWord Bool) where
@@ -40,14 +35,24 @@ def _root_.Complexity.TimeSpaceModel.tm : TimeSpaceModel Id (RawWord Bool) where
   behaviors := {R | ∃ (κ : Type) (_ : Fintype κ) (Q : Type) (_ : Finite Q)
       (M : TM Id κ (Option Bool) Q),
       R = fun xs result =>
-        M.ComputesInTimeAndSpace (xs.toList.map some) (result.run.toList.map some)}
+        M.ComputesWithin (xs.toList.map some) (result.run.toList.map some)}
   budget_mono := by
     rintro R ⟨κ, hκ, Q, hQ, M, rfl⟩ x y t s t' s' h ht hs
     exact h.mono ht hs
 
-/-- Recover the single finite machine realizing the abstract resource behavior. -/
-theorem computableInTimeAndSpace_iff {f : α → β} {t s : ℕ → ℕ} :
-    TimeSpaceModel.tm.ComputableInTimeAndSpace f t s ↔
+section InputBudgets
+
+variable {α β : Type*} [Encoding (RawWord Bool) α] [Encoding (RawWord Bool) β]
+
+/-- One machine, with both budgets indexed by the input value. -/
+def Computes {κ : Type*} [Fintype κ] {Q : Type*} (M : TM Id κ (Option Bool) Q)
+    (f : α → β) (t s : α → ℕ) : Prop :=
+  Encoding.Computes f fun value (input output : RawWord Bool) =>
+    M.ComputesWithin (input.toList.map some) (output.toList.map some)
+      (t value) (s value)
+
+theorem computableWithin_iff {f : α → β} {t s : α → ℕ} :
+    TimeSpaceModel.tm.ComputableWithin f t s ↔
       ∃ (κ : Type) (_ : Fintype κ) (Q : Type) (_ : Finite Q)
         (M : TM Id κ (Option Bool) Q), Computes M f t s := by
   constructor
@@ -56,18 +61,16 @@ theorem computableInTimeAndSpace_iff {f : α → β} {t s : ℕ → ℕ} :
   · rintro ⟨κ, hκ, Q, hQ, M, h⟩
     exact ⟨_, ⟨κ, hκ, Q, hQ, M, rfl⟩, h⟩
 
-namespace Computes
+theorem Computes.mono {κ : Type*} [Fintype κ] {Q : Type*} {M : TM Id κ (Option Bool) Q}
+    {f : α → β} {t s t' s' : α → ℕ} (h : Computes M f t s)
+    (ht : ∀ a, t a ≤ t' a) (hs : ∀ a, s a ≤ s' a) : Computes M f t' s' :=
+  Encoding.Computes.mono h (fun hc => hc.mono (ht _) (hs _))
 
-theorem mono {κ : Type*} [Fintype κ] {Q : Type*} {M : TM Id κ (Option Bool) Q}
-    {f : α → β} {t s t' s' : ℕ → ℕ} (h : Computes M f t s)
-    (ht : ∀ n, t n ≤ t' n) (hs : ∀ n, s n ≤ s' n) : Computes M f t' s' :=
-  Encoding.Computes.mono h (fun h ht hs ↦ h.mono ht hs) ht hs
+theorem Computes.computableWithin {κ : Type} [Fintype κ] {Q : Type} [Finite Q]
+    {M : TM Id κ (Option Bool) Q} {f : α → β} {t s : α → ℕ}
+    (h : Computes M f t s) : TimeSpaceModel.tm.ComputableWithin f t s :=
+  computableWithin_iff.mpr ⟨κ, inferInstance, Q, inferInstance, M, h⟩
 
-theorem computableInTimeAndSpace {κ : Type} [Fintype κ] {Q : Type} [Finite Q]
-    {M : TM Id κ (Option Bool) Q} {f : α → β} {t s : ℕ → ℕ}
-    (h : Computes M f t s) : TimeSpaceModel.tm.ComputableInTimeAndSpace f t s :=
-  computableInTimeAndSpace_iff.mpr ⟨κ, inferInstance, Q, inferInstance, M, h⟩
-
-end Computes
+end InputBudgets
 
 end Complexity.TM

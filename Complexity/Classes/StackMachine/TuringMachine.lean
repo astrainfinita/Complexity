@@ -7,7 +7,6 @@ module
 
 public import Complexity.Classes.Deterministic
 public import Complexity.Resources.StackMachine.TuringMachine
-public import Mathlib.Analysis.Asymptotics.Ring
 
 /-!
 # Complexity classes shared by stack and Turing machines
@@ -26,33 +25,37 @@ variable {α β : Type*} [Encoding (RawWord Bool) α] [Encoding (RawWord Bool) �
 theorem ftime_eq_tm (T : ℕ → ℕ) :
     FTIME (α := α) (β := β) .stack T = FTIME .tm T := by
   apply Set.Subset.antisymm
-  · rintro f ⟨t, ⟨s, h⟩, ht⟩
-    obtain ⟨c, h⟩ := computableInTimeAndSpace_toTM h
-    exact ⟨t, h.computableInTime, ht⟩
-  · rintro f ⟨t, ⟨s, h⟩, ht⟩
-    exact ⟨t, (TM.computableInTimeAndSpace_toStack h).computableInTime, ht⟩
+  · rintro f ⟨t, ⟨s, R, ⟨κ, hκ, Q, hQ, M, rfl⟩, h⟩, ht⟩
+    exact ⟨t, ⟨fun n => Fintype.card κ * (s n + 1), _,
+      ⟨κ, hκ, _, inferInstance, M.toTM, rfl⟩, h.mono (fun hc => hc.toTM)⟩, ht⟩
+  · rintro f ⟨t, ⟨s, R, ⟨κ, hκ, Q, hQ, M, rfl⟩, h⟩, ht⟩
+    exact ⟨t, ⟨fun n => 2 * s n, _,
+      ⟨_, inferInstance, _, inferInstance, M.toStack, rfl⟩,
+      h.mono (fun hc => hc.toStack)⟩, ht⟩
 
 /-- Both simulations preserve simultaneous time and eventually positive space bounds. -/
-theorem ftisp_eq_tm (T S : ℕ → ℕ) (hS : IsBigO (fun _ ↦ 1) S) :
+theorem ftisp_eq_tm (T S : ℕ → ℕ) (hS : DominatedAtTop (fun _ ↦ 1) S) :
     FTISP (α := α) (β := β) .stack T S = FTISP .tm T S := by
   apply Set.Subset.antisymm
-  · rintro f ⟨t, s, h, ht, hs⟩
-    obtain ⟨c, h⟩ := computableInTimeAndSpace_toTM h
-    refine ⟨_, _, h, ht, ?_⟩
-    simpa [IsBigO, Nat.cast_mul, Nat.cast_add] using
-      (Asymptotics.IsBigO.add hs hS).const_mul_left (c : ℝ)
-  · rintro f ⟨t, s, h, ht, hs⟩
-    refine ⟨_, _, TM.computableInTimeAndSpace_toStack h, ht, ?_⟩
-    simpa [IsBigO, Nat.cast_mul] using Asymptotics.IsBigO.const_mul_left hs (2 : ℝ)
+  · rintro f ⟨t, s, ⟨R, ⟨κ, hκ, Q, hQ, M, rfl⟩, h⟩, ht, hs⟩
+    exact ⟨t, fun n => Fintype.card κ * (s n + 1),
+      ⟨_, ⟨κ, hκ, _, inferInstance, M.toTM, rfl⟩,
+        h.mono (fun hc => hc.toTM)⟩, ht, (hs.add_same hS).const_mul_left _⟩
+  · rintro f ⟨t, s, ⟨R, ⟨κ, hκ, Q, hQ, M, rfl⟩, h⟩, ht, hs⟩
+    exact ⟨t, fun n => 2 * s n,
+      ⟨_, ⟨_, inferInstance, _, inferInstance, M.toStack, rfl⟩,
+        h.mono (fun hc => hc.toStack)⟩, ht, hs.const_mul_left 2⟩
 
 /-- Eventually positive asymptotic space classes agree. -/
-theorem fspace_eq_tm (S : ℕ → ℕ) (hS : IsBigO (fun _ ↦ 1) S) :
+theorem fspace_eq_tm (S : ℕ → ℕ) (hS : DominatedAtTop (fun _ ↦ 1) S) :
     FSPACE (α := α) (β := β) .stack S = FSPACE .tm S := by
   apply Set.Subset.antisymm
   · rintro f ⟨s, ⟨t, h⟩, hs⟩
-    exact FTISP.subset_space ((ftisp_eq_tm t S hS).subset ⟨t, s, h, IsBigO.refl _, hs⟩)
+    exact FTISP.subset_space ((ftisp_eq_tm t S hS).subset
+      (h.mem_ftisp_of_dominated (DominatedAtTop.refl _) hs))
   · rintro f ⟨s, ⟨t, h⟩, hs⟩
-    exact FTISP.subset_space ((ftisp_eq_tm t S hS).superset ⟨t, s, h, IsBigO.refl _, hs⟩)
+    exact FTISP.subset_space ((ftisp_eq_tm t S hS).superset
+      (h.mem_ftisp_of_dominated (DominatedAtTop.refl _) hs))
 
 /-- Stack and Turing machines compute the same polynomial-time functions. -/
 theorem fp_eq_tm :
@@ -63,11 +66,11 @@ theorem dtime_eq_tm (T : ℕ → ℕ) :
     DTIME (α := α) .stack T = DTIME .tm T :=
   congrArg DecisionClass (ftime_eq_tm T)
 
-theorem dtisp_eq_tm (T S : ℕ → ℕ) (hS : IsBigO (fun _ ↦ 1) S) :
+theorem dtisp_eq_tm (T S : ℕ → ℕ) (hS : DominatedAtTop (fun _ ↦ 1) S) :
     DTISP (α := α) .stack T S = DTISP .tm T S :=
   congrArg DecisionClass (ftisp_eq_tm T S hS)
 
-theorem dspace_eq_tm (S : ℕ → ℕ) (hS : IsBigO (fun _ ↦ 1) S) :
+theorem dspace_eq_tm (S : ℕ → ℕ) (hS : DominatedAtTop (fun _ ↦ 1) S) :
     DSPACE (α := α) .stack S = DSPACE .tm S :=
   congrArg DecisionClass (fspace_eq_tm S hS)
 

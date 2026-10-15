@@ -89,7 +89,7 @@ def UsesSpace (M : TreeMachine Id k Q) (a : Tree) (s : ℕ) : Prop :=
 /-- Compute a tree in register zero within a cumulative size-charge time budget
 and a maximum expanded-tree space budget. The transition count is an existential witness,
 since the external time charge depends on the trees read or constructed. -/
-def ComputesInTimeAndSpace (M : TreeMachine Id k Q) (a : Tree)
+def ComputesWithin (M : TreeMachine Id k Q) (a : Tree)
     (b : Tree) (t s : ℕ) : Prop :=
   M.ComputesWith (Config := Cfg k Q)
     (fun h ↦ h.actionSum Action.sizeCost) (fun h ↦ h.configSup Cfg.mass) a b t s
@@ -100,8 +100,8 @@ def ComputesInUnitTimeAndSpace (M : TreeMachine Id k Q) (a b : Tree) (t s : ℕ)
     Controller.History.length (fun h ↦ h.configSup Cfg.mass) a b t s
 
 /-- Switching to unit charges preserves both advertised bounds on the same run. -/
-theorem ComputesInTimeAndSpace.toUnitTime {M : TreeMachine Id k Q} {a b : Tree}
-    {t s : ℕ} (h : M.ComputesInTimeAndSpace a b t s) :
+theorem ComputesWithin.toUnitTime {M : TreeMachine Id k Q} {a b : Tree}
+    {t s : ℕ} (h : M.ComputesWithin a b t s) :
     M.ComputesInUnitTimeAndSpace a b t s := by
   obtain ⟨n, hh, ho, ht, hs⟩ := h
   exact ⟨n, hh, ho, (length_le_actionSum _).trans ht, hs⟩
@@ -109,7 +109,7 @@ theorem ComputesInTimeAndSpace.toUnitTime {M : TreeMachine Id k Q} {a b : Tree}
 /-- A bound on all intermediate register trees permits size charging on the same run. -/
 theorem ComputesInUnitTimeAndSpace.toSizeCost {M : TreeMachine Id k Q} {a b : Tree}
     {t s : ℕ} (h : M.ComputesInUnitTimeAndSpace a b t s) :
-    M.ComputesInTimeAndSpace a b (t * s) s := by
+    M.ComputesWithin a b (t * s) s := by
   obtain ⟨n, hh, ho, ht, hs⟩ := h
   exact ⟨n, hh, ho,
     (actionSum_le_length_mul_mass _).trans (Nat.mul_le_mul ht hs), hs⟩
@@ -120,31 +120,31 @@ theorem ComputesInUnitTimeAndSpace.mono {M : TreeMachine Id k Q} {a b : Tree}
   Controller.computesWith_mono h ht hs
 
 /-- A halted run's time budget also bounds its peak space by input size and register count. -/
-theorem ComputesInTimeAndSpace.of_run {M : TreeMachine Id k Q} {a b : Tree} {n t s : ℕ}
+theorem ComputesWithin.of_run {M : TreeMachine Id k Q} {a b : Tree} {n t s : ℕ}
     (hh : M.Halted (M.run (Cfg k Q) a n))
     (ho : (M.run (Cfg k Q) a n).regs 0 = b)
     (ht : (M.runHistory (Cfg k Q) a n).actionSum Action.sizeCost ≤ t) (hs : a.size + k + t ≤ s) :
-    M.ComputesInTimeAndSpace a b t s := by
+    M.ComputesWithin a b t s := by
   refine ⟨n, hh, ho, ht, ?_⟩
   exact (M.configSup_mass_le _ n).trans
     ((Nat.add_le_add (mass_input_le M a) ht).trans hs)
 
 /-- Replace a computation's space budget with the bound supplied by its time cost. -/
-theorem ComputesInTimeAndSpace.space_of_time {M : TreeMachine Id k Q} {a b : Tree} {t s : ℕ}
-    (h : M.ComputesInTimeAndSpace a b t s) :
-    M.ComputesInTimeAndSpace a b t (a.size + k + t) := by
+theorem ComputesWithin.space_of_time {M : TreeMachine Id k Q} {a b : Tree} {t s : ℕ}
+    (h : M.ComputesWithin a b t s) :
+    M.ComputesWithin a b t (a.size + k + t) := by
   obtain ⟨n, hh, ho, ht, _⟩ := h
   exact .of_run hh ho ht le_rfl
 
-theorem ComputesInTimeAndSpace.terminates {M : TreeMachine Id k Q} {a : Tree}
-    {b : Tree} {t s : ℕ} (h : M.ComputesInTimeAndSpace a b t s) :
+theorem ComputesWithin.terminates {M : TreeMachine Id k Q} {a : Tree}
+    {b : Tree} {t s : ℕ} (h : M.ComputesWithin a b t s) :
     M.Terminates a := by
   obtain ⟨n, hn, _⟩ := h
   exact ⟨n, hn⟩
 
 /-- The witness can be chosen to be the first halting time, which is at most the time budget. -/
-theorem ComputesInTimeAndSpace.exists_haltsAt {M : TreeMachine Id k Q} {a : Tree}
-    {b : Tree} {t s : ℕ} (h : M.ComputesInTimeAndSpace a b t s) :
+theorem ComputesWithin.exists_haltsAt {M : TreeMachine Id k Q} {a : Tree}
+    {b : Tree} {t s : ℕ} (h : M.ComputesWithin a b t s) :
     ∃ n ≤ t, M.HaltsAt a n ∧ (M.run (Cfg k Q) a n).regs 0 = b ∧
       (M.runHistory (Cfg k Q) a n).actionSum Action.sizeCost ≤ t ∧
       (M.runHistory (Cfg k Q) a n).configSup Cfg.mass ≤ s := by
@@ -157,66 +157,66 @@ theorem ComputesInTimeAndSpace.exists_haltsAt {M : TreeMachine Id k Q} {a : Tree
   rwa [M.run_eq_of_halted a hh.1 hn] at ha
 
 /-- A terminating bounded computation controls space along the entire padded execution. -/
-theorem ComputesInTimeAndSpace.usesSpace {M : TreeMachine Id k Q} {a : Tree}
-    {b : Tree} {t s : ℕ} (h : M.ComputesInTimeAndSpace a b t s) :
+theorem ComputesWithin.usesSpace {M : TreeMachine Id k Q} {a : Tree}
+    {b : Tree} {t s : ℕ} (h : M.ComputesWithin a b t s) :
     M.UsesSpace a s :=
   fun u => Controller.computesWith_configSup_le h u
 
-theorem ComputesInTimeAndSpace.actionSum_le {M : TreeMachine Id k Q} {a : Tree}
-    {b : Tree} {t s : ℕ} (h : M.ComputesInTimeAndSpace a b t s)
+theorem ComputesWithin.actionSum_le {M : TreeMachine Id k Q} {a : Tree}
+    {b : Tree} {t s : ℕ} (h : M.ComputesWithin a b t s)
     (u : ℕ) : (M.runHistory (Cfg k Q) a u).actionSum Action.sizeCost ≤ t :=
   Controller.computesWith_actionSum_le h u
 
 /-- The time budget controls space even without using the explicit space budget. -/
-theorem ComputesInTimeAndSpace.configSup_mass_le_add_time
+theorem ComputesWithin.configSup_mass_le_add_time
     {M : TreeMachine Id k Q} {a : Tree} {b : Tree} {t s : ℕ}
-    (h : M.ComputesInTimeAndSpace a b t s) (u : ℕ) :
+    (h : M.ComputesWithin a b t s) (u : ℕ) :
     (M.runHistory (Cfg k Q) a u).configSup Cfg.mass ≤
       (M.initInput (Config := Cfg k Q) a).mass + t :=
   (M.configSup_mass_le _ u).trans (Nat.add_le_add_left (h.actionSum_le u) _)
 
-theorem ComputesInTimeAndSpace.mass_le {M : TreeMachine Id k Q} {a : Tree}
-    {b : Tree} {t s : ℕ} (h : M.ComputesInTimeAndSpace a b t s)
+theorem ComputesWithin.mass_le {M : TreeMachine Id k Q} {a : Tree}
+    {b : Tree} {t s : ℕ} (h : M.ComputesWithin a b t s)
     (u : ℕ) : (M.run (Cfg k Q) a u).mass ≤ s :=
   (M.config_le_configSup_runHistory Cfg.mass a (Nat.le_refl u)).trans
     (h.usesSpace u)
 
-theorem ComputesInTimeAndSpace.mass_le_mass_add_time
+theorem ComputesWithin.mass_le_mass_add_time
     {M : TreeMachine Id k Q} {a : Tree} {b : Tree} {t s : ℕ}
-    (h : M.ComputesInTimeAndSpace a b t s) (u : ℕ) :
+    (h : M.ComputesWithin a b t s) (u : ℕ) :
     (M.run (Cfg k Q) a u).mass ≤ (M.initInput (Config := Cfg k Q) a).mass + t :=
   (M.config_le_configSup_runHistory Cfg.mass a (Nat.le_refl u)).trans
     (h.configSup_mass_le_add_time u)
 
 /-- The initial input register is bounded by the explicit space budget. -/
-theorem ComputesInTimeAndSpace.input_size_le_space
+theorem ComputesWithin.input_size_le_space
     {M : TreeMachine Id k Q} {a b : Tree} {t s : ℕ}
-    (h : M.ComputesInTimeAndSpace a b t s) : a.size ≤ s := by
+    (h : M.ComputesWithin a b t s) : a.size ≤ s := by
   have hi := (M.initInput (Config := Cfg k Q) a).reg_size_le_mass 0
   simpa using hi.trans (h.mass_le 0)
 
 /-- The output register is bounded by the explicit space budget. -/
-theorem ComputesInTimeAndSpace.output_size_le_space
+theorem ComputesWithin.output_size_le_space
     {M : TreeMachine Id k Q} {a : Tree} {b : Tree} {t s : ℕ}
-    (h : M.ComputesInTimeAndSpace a b t s) : b.size ≤ s := by
+    (h : M.ComputesWithin a b t s) : b.size ≤ s := by
   have hm := h.mass_le
   obtain ⟨n, _, ha, _, _⟩ := h
   rw [← ha]
   exact ((M.run (Cfg k Q) a n).reg_size_le_mass 0).trans (hm n)
 
 /-- The output size is bounded by initial mass and the time budget. -/
-theorem ComputesInTimeAndSpace.output_size_le_mass_add_time
+theorem ComputesWithin.output_size_le_mass_add_time
     {M : TreeMachine Id k Q} {a : Tree} {b : Tree} {t s : ℕ}
-    (h : M.ComputesInTimeAndSpace a b t s) :
+    (h : M.ComputesWithin a b t s) :
     b.size ≤ (M.initInput (Config := Cfg k Q) a).mass + t := by
   have hm := h.mass_le_mass_add_time
   obtain ⟨n, _, ha, _, _⟩ := h
   rw [← ha]
   exact ((M.run (Cfg k Q) a n).reg_size_le_mass 0).trans (hm n)
 
-theorem ComputesInTimeAndSpace.mono {M : TreeMachine Id k Q} {a : Tree}
-    {b : Tree} {t s t' s' : ℕ} (h : M.ComputesInTimeAndSpace a b t s)
-    (ht : t ≤ t') (hs : s ≤ s') : M.ComputesInTimeAndSpace a b t' s' :=
+theorem ComputesWithin.mono {M : TreeMachine Id k Q} {a : Tree}
+    {b : Tree} {t s t' s' : ℕ} (h : M.ComputesWithin a b t s)
+    (ht : t ≤ t') (hs : s ≤ s') : M.ComputesWithin a b t' s' :=
   Controller.computesWith_mono h ht hs
 
 end Canonical

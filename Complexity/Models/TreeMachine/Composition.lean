@@ -288,12 +288,12 @@ end Comp
 
 /-- Sequential machines share their work registers. Clearing costs only the fixed number
 of work registers; peak space is the larger padded phase bound. -/
-theorem comp_computesInTimeAndSpace [NeZero k] [NeZero l]
+theorem comp_computesWithin [NeZero k] [NeZero l]
     (M : TreeMachine Id k Q) (N : TreeMachine Id l Q')
     {x a b : Tree} {t s u v : ℕ}
-    (hM : M.ComputesInTimeAndSpace x a t s)
-    (hN : N.ComputesInTimeAndSpace a b u v) :
-    (comp M N).ComputesInTimeAndSpace x b (t + max k l + u)
+    (hM : M.ComputesWithin x a t s)
+    (hN : N.ComputesWithin a b u v) :
+    (comp M N).ComputesWithin x b (t + max k l + u)
       (max (s + (max k l + 1 - k)) (v + (max k l + 1 - l))) := by
   obtain ⟨n, _, hn, ha, hc, _⟩ := hM.exists_haltsAt
   obtain ⟨m, _, hm, hb, hd, _⟩ := hN.exists_haltsAt

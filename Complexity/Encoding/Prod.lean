@@ -53,6 +53,17 @@ variable {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
 @[simp] theorem size_encode_prod (a : α) (b : β) :
     ⌜(a, b)⌝ₜ.size = 1 + ⌜a⌝ₜ.size + ⌜b⌝ₜ.size := rfl
 
+/-- Each field fits in the encoding of the whole pair, including an opaque pair input. -/
+theorem size_encode_fst_le (x : α × β) : ⌜x.1⌝ₜ.size ≤ ⌜x⌝ₜ.size := by
+  rcases x with ⟨a, b⟩
+  simp only [size_encode_prod]
+  omega
+
+theorem size_encode_snd_le (x : α × β) : ⌜x.2⌝ₜ.size ≤ ⌜x⌝ₜ.size := by
+  rcases x with ⟨a, b⟩
+  simp only [size_encode_prod]
+  omega
+
 @[simp] theorem encode_prod_ne_nil (a : α) (b : β) : ⌜(a, b)⌝ₜ ≠ .nil := by
   intro h; cases h
 @[simp] theorem nil_ne_encode_prod (a : α) (b : β) : Tree.nil ≠ ⌜(a, b)⌝ₜ :=

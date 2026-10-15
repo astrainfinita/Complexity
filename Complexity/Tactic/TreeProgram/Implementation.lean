@@ -5,6 +5,7 @@ Authors: Yuyang Zhao
 -/
 module
 
+public import Complexity.Asymptotics.Nat
 public import Complexity.Models.TreeMachine.Language.Bounds
 public import Complexity.Encoding.Prod
 public import Mathlib.Control.ULiftable
@@ -15,7 +16,7 @@ public import Complexity.Tactic.TreeProgram.Attributes
 
 `Implements` fixes one program and certifies its result, time and intermediate-tree peak.
 `Implementation` also stores a joint evaluation of source values and resource bounds.
-Composition keeps the same program witness throughout; `Realizes` forgets its identity.
+Composition keeps the same program witness throughout.
 -/
 
 @[expose] public section
@@ -39,10 +40,6 @@ def Implements {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
   ∀ v n s x, v.expression.bound ≤ n → v.eval s = ⌜x⌝ₜ →
     (p v).Bounded n s (b.time x) (b.peak x) (fun w t =>
       w.eval t = ⌜f x⌝ₜ ∧ ∀ j < n, t j = s j)
-
-/-- A resource specification that hides the implementing program. -/
-def Realizes {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
-    (f : α → β) (b : Bounds α) : Prop := ∃ p, Implements p f b
 
 /-- Add sequential time allowances and take the maximum intermediate-tree allowance. -/
 @[simps] def compBounds {α β : Type*} (f : α → β) (b : Bounds α) (c : Bounds β) : Bounds α :=
@@ -105,24 +102,6 @@ theorem map_input (hp : Implements p f b) (i : γ → α)
   exact hp.2 v n s (i x) hv (hx.trans (hi x).symm)
 
 end Implements
-
-namespace Realizes
-
-variable {α β γ : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
-  [UniqueEncoding Tree γ] {f : α → β} {g : β → γ} {b c : Bounds α}
-
-theorem mono (hf : Realizes f b)
-    (h : ∀ x, b.time x ≤ c.time x ∧ b.peak x ≤ c.peak x) : Realizes f c :=
-  hf.elim fun p hp => ⟨p, hp.mono h⟩
-
-theorem size_le (hf : Realizes f b) (x : α) :
-    ⌜f x⌝ₜ.size ≤ max ⌜x⌝ₜ.size (b.peak x) := hf.elim fun _ hp => hp.size_le x
-
-theorem comp {d : Bounds β} (hf : Realizes f b) (hg : Realizes g d) :
-    Realizes (g ∘ f) (compBounds f b d) :=
-  hf.elim fun _ hp => hg.elim fun _ hq => ⟨_, hp.comp hq⟩
-
-end Realizes
 
 /-- Sequential time and the maximum size of an intermediate tree. -/
 @[ext] structure Cost where
@@ -209,8 +188,6 @@ def bounds (hf : Implementation f) : Bounds α := Costed.bounds hf.evaluate
 
 theorem implements (hf : Implementation f) : Implements hf.program f hf.bounds := by
   simpa only [hf.value_eq, bounds] using hf.sound
-
-theorem realizes (hf : Implementation f) : Realizes f hf.bounds := ⟨hf.program, hf.implements⟩
 
 /-- Supply an existing fixed-program certificate without choosing a new implementation. -/
 @[simps program evaluate] def ofImplements (p : Value → Code Value) (b : Bounds α)
@@ -351,14 +328,57 @@ theorem call_bounded (hf : Implementation f) (e : Expr ℕ)
 
 end Implementation
 
-/-- Compatibility for existential specifications; the selected program need not be executable. -/
-noncomputable def Realizes.implementation {α β : Type*}
-    [UniqueEncoding Tree α] [UniqueEncoding Tree β] {f : α → β} {b : Bounds α}
-    (hf : Realizes f b) : Implementation f :=
-  Implementation.ofImplements hf.choose b hf.choose_spec
+end Complexity.TreeProgram.Source
 
-@[simp, source_bounds↓] theorem Realizes.bounds_implementation {α β : Type*}
-    [UniqueEncoding Tree α] [UniqueEncoding Tree β] {f : α → β} {b : Bounds α}
-    (hf : Realizes f b) : hf.implementation.bounds = b := rfl
+namespace Complexity.TreeProgram.Source
+
+variable {α β γ : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
+  [UniqueEncoding Tree γ] {f : α → β} {g : β → γ}
+
+/-- One all-input growth specification for an already selected implementation.
+The coefficient covers every call, including repeated calls on small inputs. -/
+def Implementation.HasGrowth (hf : Implementation f) (time peak : α → ℕ) : Prop :=
+  Dominated hf.bounds.time time ∧ Dominated hf.bounds.peak peak
+
+namespace Implementation
+
+/-- Use a proved budget equation without asking kernel conversion to evaluate the budget. -/
+theorem HasGrowth.of_bounds (hf : Implementation f) {b : Bounds α} {t p : α → ℕ}
+    (eq : hf.bounds = b) (ht : Dominated b.time t) (hp : Dominated b.peak p) :
+    hf.HasGrowth t p := by
+  unfold HasGrowth
+  rw [eq]
+  exact ⟨ht, hp⟩
+
+/-- A call's output fits in either its input storage or its certified intermediate peak. -/
+theorem HasGrowth.size_encode {hf : Implementation f} {t p : α → ℕ}
+    (h : hf.HasGrowth t p) :
+    Dominated (fun x => ⌜f x⌝ₜ.size) (fun x => max ⌜x⌝ₜ.size (p x)) :=
+  ((Dominated.refl _).max h.2).mono_left hf.implements.size_le
+
+theorem HasGrowth.mono {hf : Implementation f} {t p t' p' : α → ℕ}
+    (h : hf.HasGrowth t p) (ht : Dominated t t') (hp : Dominated p p') :
+    hf.HasGrowth t' p' := ⟨h.1.trans ht, h.2.trans hp⟩
+
+theorem HasGrowth.comp {hf : Implementation f} {hg : Implementation g}
+    {t p : α → ℕ} {u q : β → ℕ} (h : hf.HasGrowth t p)
+    (k : hg.HasGrowth u q) :
+    (hf.comp hg).HasGrowth (fun x => t x + u (f x))
+      (fun x => max (p x) (q (f x))) := by
+  unfold HasGrowth
+  rw [bounds_comp]
+  exact ⟨h.1.add (Dominated.comp k.1 f), h.2.max (Dominated.comp k.2 f)⟩
+
+end Implementation
 
 end Complexity.TreeProgram.Source
+
+namespace Complexity.TreeProgram.Source.Implementation
+variable {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β] {f : α → β}
+
+/-- Retain the calculated budget, including all its local constants. -/
+theorem HasGrowth.refl (hf : Implementation f) :
+    hf.HasGrowth hf.bounds.time hf.bounds.peak :=
+  ⟨Dominated.refl _, Dominated.refl _⟩
+
+end Complexity.TreeProgram.Source.Implementation

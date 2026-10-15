@@ -92,14 +92,14 @@ def initial (xs : Array Γ) : History (Cfg κ Γ Unit xs) (Action κ Γ Unit) :=
   History.nil ((rawExecution xs.toList).init ())
 
 /-- A program-level total specification suffices for the compiled machine's resource bound. -/
-theorem computesInTimeAndSpace [Fintype κ] {p : TM.Program κ Γ α} {xs ys : Array Γ} {t s : ℕ}
+theorem computesWithin [Fintype κ] {p : TM.Program κ Γ α} {xs ys : Array Γ} {t s : ℕ}
     {P : History (Cfg κ Γ Unit xs) (Action κ Γ Unit) → ℕ → Prop}
     (h : Triple (p.verify (semantics xs)) P
       (fun _ v _ ↦ v.last.output = ys ∧ v.space ≤ s) ())
     (hp : P (initial xs) t) :
-    (compile p).ComputesInTimeAndSpace xs.toList ys.toList t s := by
+    (compile p).ComputesWithin xs.toList ys.toList t s := by
   obtain ⟨n, a, v, hn, he, ho, hs⟩ := Program.exec_of_spec h hp
-  exact computesInTimeAndSpace_of_exec p he hn ho hs
+  exact computesWithin_of_exec p he hn ho hs
 
 section Configuration
 
@@ -120,16 +120,16 @@ theorem cfg_of_history {p : TM.Program κ Γ α}
     (by rintro a s _ b rfl hs; exact hq a s b hs)
 
 /-- A total time specification gives the compiled machine's time and coarse space bounds. -/
-theorem cfg_computesInTimeAndSpace [Fintype κ] {p : TM.Program κ Γ α} {ys : Array Γ} {t : ℕ}
+theorem cfg_computesWithin [Fintype κ] {p : TM.Program κ Γ α} {ys : Array Γ} {t : ℕ}
     {P : Cfg κ Γ Unit xs → ℕ → Prop}
     (h : Triple (p.verify (cfgSemantics xs)) P (fun _ c _ ↦ c.output = ys) ())
     (hp : P ((rawExecution xs.toList).init ()) t) :
-    (compile p).ComputesInTimeAndSpace xs.toList ys.toList t (Fintype.card κ * (t + 1)) := by
+    (compile p).ComputesWithin xs.toList ys.toList t (Fintype.card κ * (t + 1)) := by
   obtain ⟨n, a, c, hn, he, ho⟩ := Program.exec_of_spec h hp
   obtain ⟨v, hv, hr⟩ := Program.Exec.lift History.last
     (e' := semantics xs)
     (fun _ ↦ rfl) (fun _ _ ↦ by simp) he (History.nil ((rawExecution xs.toList).init ())) rfl
-  exact (computesInTimeAndSpace_of_exec p hr hn (by rw [hv]; exact ho) le_rfl).space_of_time
+  exact (computesWithin_of_exec p hr hn (by rw [hv]; exact ho) le_rfl).space_of_time
 
 end Configuration
 

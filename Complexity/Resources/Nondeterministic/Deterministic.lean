@@ -21,43 +21,71 @@ space. Both specifications cover every valid input encoding.
 
 namespace Complexity.TM
 
+section InputBudgets
+
 variable {α : Type*} [Encoding (RawWord Bool) α]
-variable {f : α → Bool} {p : α → Prop} {t s : ℕ → ℕ}
+  {f : α → Bool} {p : α → Prop} {t s : α → ℕ}
 
-/-- A deterministic Boolean computation decides the same predicate after
-duplicating its transitions, without changing either resource bound. -/
-theorem Computes.decidesInTimeAndSpace {κ : Type*} [Fintype κ] {Q : Type*}
-    {M : TM Id κ (Option Bool) Q} (h : Computes M f t s) (hp : Decides f p) :
-    NTM.DecidesInTimeAndSpace M.toBinary p t s := by
-  have h := Encoding.Computes.iff_of_uniqueOutput.mp h
-  intro xs a ha
-  have hc := h xs a ha
-  obtain ⟨hhalt, hout⟩ := hc.run_spec
+private theorem toBinary_decides {κ : Type*} [Fintype κ] {Q : Type*}
+    {M : TM Id κ (Option Bool) Q} {src : RawWord Bool} {output : Bool}
+    {t s : ℕ}
+    (h : M.ComputesWithin (src.toList.map some)
+      ((encode (RawWord Bool) output).toList.map some) t s) :
+    NTM.UsesTime M.toBinary (src.toList.map some) t ∧
+      NTM.UsesSpace M.toBinary (src.toList.map some) s ∧
+      NTM.BooleanOutput M.toBinary src ∧
+      (NTM.Accepts M.toBinary src ↔ output = true) := by
+  obtain ⟨hhalt, hout⟩ := h.run_spec
   have ht := (M.usesTime_toBinary_iff _ _).2 hhalt
-  refine ⟨ht, (M.usesSpace_toBinary_iff _ _).2 hc.usesSpace, ?_, ?_⟩
+  refine ⟨ht, (M.usesSpace_toBinary_iff _ _).2 h.usesSpace, ?_, ?_⟩
   · rw [NTM.booleanOutput_iff_of_usesTime ht]
-    intro c hc'
-    obtain rfl := (M.mem_runWith_toBinary_iff _ _ _).1 hc'
-    exact ⟨f a, hout⟩
+    intro c hc
+    obtain rfl := (M.mem_runWith_toBinary_iff _ _ _).1 hc
+    exact ⟨output, hout⟩
   · rw [NTM.accepts_iff_of_usesTime ht]
-    simpa only [Controller.mem_runWith_toBinary_iff, exists_eq_left, hout, Array.mk.injEq,
-      List.map_inj_right (fun _ _ ↦ Option.some.inj), RawWord.toList_inj,
-      UniqueEncoding.encode_inj] using hp a
+    simp only [Controller.mem_runWith_toBinary_iff, exists_eq_left, hout, Array.mk.injEq,
+      List.map_inj_right (fun _ _ => Option.some.inj), RawWord.toList_inj,
+      UniqueEncoding.encode_inj]
 
-theorem decidableInTimeAndSpace_of_computable
-    (h : TimeSpaceModel.tm.ComputableInTimeAndSpace f t s) (hp : Decides f p) :
-    TimeSpaceModel.ntm.NDecidableInTimeAndSpace p t s := by
-  obtain ⟨κ, hκ, Q, hQ, M, h⟩ := computableInTimeAndSpace_iff.mp h
-  exact (h.decidesInTimeAndSpace hp).decidableInTimeAndSpace
+/-- Duplicating deterministic transitions preserves both input-dependent budgets on all
+branches, rather than only an accepting execution. -/
+theorem Computes.decidesWithin {κ : Type*} [Fintype κ] {Q : Type*}
+    {M : TM Id κ (Option Bool) Q} (h : Computes M f t s) (hp : Decides f p) :
+    NTM.DecidesWithin M.toBinary p t s := by
+  have h := Encoding.Computes.iff_of_uniqueOutput.mp h
+  intro src a hsrc
+  obtain ⟨ht, hs, hvalid, haccept⟩ := toBinary_decides (h a src hsrc)
+  exact ⟨ht, hs, hvalid, haccept.trans (hp a)⟩
 
-theorem decidableInTime_of_computable (h : TimeSpaceModel.tm.ComputableInTime f t)
-    (hp : Decides f p) : TimeSpaceModel.ntm.NDecidableInTime p t := by
-  obtain ⟨s, h⟩ := h
-  exact (decidableInTimeAndSpace_of_computable h hp).nDecidableInTime
+/-- Duplicating a deterministic machine preserves the budgets for the actual input
+code, and retains every halted branch in the nondeterministic output multiset. -/
+theorem nDecidableWithCodeBudgets_of_computable {t s : α → RawWord Bool → ℕ}
+    (h : TimeSpaceModel.tm.ComputableWithCodeBudgets f t s) (hp : Decides f p) :
+    TimeSpaceModel.ntm.NDecidableWithCodeBudgets p t s := by
+  obtain ⟨R, ⟨κ, hκ, Q, hQ, M, rfl⟩, h⟩ := h
+  refine ⟨_, ⟨κ, hκ, Q, hQ, M.toBinary, rfl⟩, fun a r ha => ?_⟩
+  obtain ⟨q, hq, hc⟩ := h a r ha
+  obtain rfl := UniqueEncoding.mem_decode_iff.mp hq
+  dsimp only [Id.run, pure] at hc
+  change M.ComputesWithin (r.toList.map some)
+    ((encode (RawWord Bool) (f a)).toList.map some) (t a r) (s a r) at hc
+  obtain ⟨ht, hs, hvalid, haccept⟩ := toBinary_decides hc
+  simp only [and_assoc, exists_and_left]
+  refine ⟨ht, hs, (NTM.exists_boolean_outputs_iff _ _ _).mpr ?_⟩
+  exact ⟨(NTM.booleanOutput_iff_of_usesTime ht).mp hvalid,
+    (NTM.accepts_iff_of_usesTime ht).symm.trans (haccept.trans (hp a))⟩
 
-theorem decidableInSpace_of_computable (h : TimeSpaceModel.tm.ComputableInSpace f s)
-    (hp : Decides f p) : TimeSpaceModel.ntm.NDecidableInSpace p s := by
-  obtain ⟨t, h⟩ := h
-  exact (decidableInTimeAndSpace_of_computable h hp).nDecidableInSpace
+theorem nDecidableWithin_of_computable
+    (h : TimeSpaceModel.tm.ComputableWithin f t s) (hp : Decides f p) :
+    TimeSpaceModel.ntm.NDecidableWithin p t s :=
+  nDecidableWithCodeBudgets_of_computable h hp
+
+theorem decidableWithGrowth_of_computable
+    (h : TimeSpaceModel.tm.ComputableWithGrowth f t s) (hp : Decides f p) :
+    TimeSpaceModel.ntm.NDecidableWithGrowth p t s := by
+  obtain ⟨u, v, h, hu, hv⟩ := h
+  exact ⟨u, v, nDecidableWithin_of_computable h hp, hu, hv⟩
+
+end InputBudgets
 
 end Complexity.TM

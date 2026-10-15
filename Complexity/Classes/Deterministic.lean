@@ -35,7 +35,7 @@ theorem of_decides {f : α → Bool} {p : α → Prop} {T : ℕ → ℕ}
     (hf : f ∈ FTIME model T) (hp : Decides f p) : p ∈ DTIME model T :=
   DecisionClass.of_decides hf hp
 
-theorem mono {T T' : ℕ → ℕ} (h : IsBigO T T') :
+theorem mono {T T' : ℕ → ℕ} (h : DominatedAtTop T T') :
     DTIME (α := α) model T ⊆ DTIME model T' :=
   DecisionClass.mono (FTIME.mono h)
 
@@ -53,7 +53,7 @@ theorem of_decides {f : α → Bool} {p : α → Prop} {S : ℕ → ℕ}
     (hf : f ∈ FSPACE model S) (hp : Decides f p) : p ∈ DSPACE model S :=
   DecisionClass.of_decides hf hp
 
-theorem mono {S S' : ℕ → ℕ} (h : IsBigO S S') :
+theorem mono {S S' : ℕ → ℕ} (h : DominatedAtTop S S') :
     DSPACE (α := α) model S ⊆ DSPACE model S' :=
   DecisionClass.mono (FSPACE.mono h)
 
@@ -71,7 +71,7 @@ theorem of_decides {f : α → Bool} {p : α → Prop} {T S : ℕ → ℕ}
     (hf : f ∈ FTISP model T S) (hp : Decides f p) : p ∈ DTISP model T S :=
   DecisionClass.of_decides hf hp
 
-theorem mono {T S T' S' : ℕ → ℕ} (hT : IsBigO T T') (hS : IsBigO S S') :
+theorem mono {T S T' S' : ℕ → ℕ} (hT : DominatedAtTop T T') (hS : DominatedAtTop S S') :
     DTISP (α := α) model T S ⊆ DTISP model T' S' :=
   DecisionClass.mono (FTISP.mono hT hS)
 

@@ -193,9 +193,9 @@ theorem run_toTM (M : StackMachine Id κ Γ Q) (xs : List Γ) (n : ℕ) :
 
 /-- Simulation preserves time and bounds every tape by the source peak stack space,
 including the blank bottom cell. -/
-theorem ComputesInTimeAndSpace.toTM [Fintype κ] {M : StackMachine Id κ Γ Q}
-    {xs ys : List Γ} {t s : ℕ} (h : M.ComputesInTimeAndSpace xs ys t s) :
-    M.toTM.ComputesInTimeAndSpace (xs.map some) (ys.map some)
+theorem ComputesWithin.toTM [Fintype κ] {M : StackMachine Id κ Γ Q}
+    {xs ys : List Γ} {t s : ℕ} (h : M.ComputesWithin xs ys t s) :
+    M.toTM.ComputesWithin (xs.map some) (ys.map some)
       t (Fintype.card κ * (s + 1)) := by
   obtain ⟨hh, ho, hs⟩ := Controller.computesWith_unit_iff.mp h
   obtain ⟨cached, hr⟩ := M.run_toTM xs t

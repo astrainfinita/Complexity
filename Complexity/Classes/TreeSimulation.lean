@@ -30,15 +30,24 @@ theorem fp_subset_stack {α β : Type*} [Encoding Tree α] [Encoding Tree β] :
     FP (α := α) (β := β) .sizeCostTree ⊆ FP .stack := by
   classical
   intro f hf
-  obtain ⟨p, s, h⟩ := FP.exists_polynomial_bound hf
-  obtain ⟨k, hk, Q, hQ, M, h⟩ := computableInTimeAndSpace_iff.mp h
+  obtain ⟨p, s, R, ⟨k, hk, Q, hQ, M, rfl⟩, h⟩ := FP.exists_polynomial_bound hf
   let : Fintype Q := Fintype.ofFinite Q
   let : FinEnum Q := FinEnum.ofEquiv (Fin (Fintype.card Q)) (Fintype.equivFin Q)
   let q : Polynomial ℕ := 43 * p + 12 * Polynomial.X + Polynomial.C (6 * k + 8)
   have hq (n : ℕ) : timeBound k n (p.eval n) = q.eval n := by simp [timeBound, q]; omega
-  obtain ⟨b, hb⟩ := IsBigO.exists_pow q
-  exact FP.ftime_subset b ⟨_, ⟨_, h.toStack.computableInTimeAndSpace⟩,
-    (IsBigO.of_le fun n ↦ (hq n).le).trans hb⟩
+  obtain ⟨b, hb⟩ := Polynomial.exists_dominatedAtTop_pow q
+  apply FP.ftime_subset b
+  refine ⟨_, ⟨fun n => spaceBound k (s n), _,
+    ⟨_, inferInstance, _, inferInstance, compiler M, rfl⟩, fun a xs ha => ?_⟩,
+    (DominatedAtTop.of_le fun n => (hq n).le).trans hb⟩
+  obtain ⟨x, hx, hax⟩ := (Encoding.mem_comp_iff RawWord.treeEncoding.toEncoding
+    (inferInstance : Encoding Tree α)).mp ha
+  obtain rfl := RawWord.treeEncoding.mem_decode_iff.mp hx
+  obtain ⟨y, hy, hrun⟩ := h a x hax
+  refine ⟨RawWord.treeEncoding.encode y,
+    (Encoding.mem_comp_encode RawWord.treeEncoding (inferInstance : Encoding Tree β)).mpr hy, ?_⟩
+  simpa [RawWord.treeEncoding_encode, TimeSpaceModel.stack, TimeSpaceModel.sizeCostTree]
+    using computesWithin M hrun
 
 end TreeMachine
 

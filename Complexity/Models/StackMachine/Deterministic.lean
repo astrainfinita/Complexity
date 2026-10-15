@@ -41,37 +41,37 @@ theorem configSup_mass_le {xs : Array Γ} (h : Controller.History (Cfg κ Γ Q x
   simp [Cfg.mass, Controller.initInput]
 
 /-- One terminating history bounds transitions and the peak total work-stack length. -/
-def ComputesInTimeAndSpace (M : StackMachine Id κ Γ Q) (xs ys : List Γ) (t s : ℕ) : Prop :=
+def ComputesWithin (M : StackMachine Id κ Γ Q) (xs ys : List Γ) (t s : ℕ) : Prop :=
   M.ComputesWith (Config := Cfg κ Γ Q xs.toArray)
     Controller.History.length (fun h ↦ h.configSup Cfg.mass) xs ys t s
 
 /-- Initially empty work stacks grow by at most one symbol per stack per transition. -/
-theorem ComputesInTimeAndSpace.of_run {M : StackMachine Id κ Γ Q}
+theorem ComputesWithin.of_run {M : StackMachine Id κ Γ Q}
     {xs ys : List Γ} {n t : ℕ}
     (hh : M.Halted (M.run (Cfg κ Γ Q xs.toArray) xs n))
     (ho : (M.run (Cfg κ Γ Q xs.toArray) xs n).output = ys.toArray) (hn : n ≤ t) :
-    M.ComputesInTimeAndSpace xs ys t (Fintype.card κ * t) := by
+    M.ComputesWithin xs ys t (Fintype.card κ * t) := by
   have ht := ((M.runHistory_spec (Cfg κ Γ Q xs.toArray) xs n).length_le).trans hn
   refine ⟨n, hh, ho, ht, ?_⟩
   exact (configSup_mass_le _).trans
     (by simpa [Controller.runHistory] using Nat.mul_le_mul_left (Fintype.card κ) ht)
 
 /-- Read the halted result at the advertised transition budget. -/
-theorem ComputesInTimeAndSpace.run_spec {M : StackMachine Id κ Γ Q}
-    {xs ys : List Γ} {t s : ℕ} (h : M.ComputesInTimeAndSpace xs ys t s) :
+theorem ComputesWithin.run_spec {M : StackMachine Id κ Γ Q}
+    {xs ys : List Γ} {t s : ℕ} (h : M.ComputesWithin xs ys t s) :
     M.Halted (M.run (Cfg κ Γ Q xs.toArray) xs t) ∧
       (M.run (Cfg κ Γ Q xs.toArray) xs t).output = ys.toArray := by
   have ⟨hh, ho, _⟩ := Controller.computesWith_unit_iff.mp h
   exact ⟨hh, ho⟩
 
-theorem ComputesInTimeAndSpace.space_of_time {M : StackMachine Id κ Γ Q}
-    {xs ys : List Γ} {t s : ℕ} (h : M.ComputesInTimeAndSpace xs ys t s) :
-    M.ComputesInTimeAndSpace xs ys t (Fintype.card κ * t) :=
+theorem ComputesWithin.space_of_time {M : StackMachine Id κ Γ Q}
+    {xs ys : List Γ} {t s : ℕ} (h : M.ComputesWithin xs ys t s) :
+    M.ComputesWithin xs ys t (Fintype.card κ * t) :=
   .of_run h.run_spec.1 h.run_spec.2 le_rfl
 
-theorem ComputesInTimeAndSpace.mono {M : StackMachine Id κ Γ Q}
-    {xs ys : List Γ} {t s t' s' : ℕ} (h : M.ComputesInTimeAndSpace xs ys t s)
-    (ht : t ≤ t') (hs : s ≤ s') : M.ComputesInTimeAndSpace xs ys t' s' :=
+theorem ComputesWithin.mono {M : StackMachine Id κ Γ Q}
+    {xs ys : List Γ} {t s t' s' : ℕ} (h : M.ComputesWithin xs ys t s)
+    (ht : t ≤ t') (hs : s ≤ s') : M.ComputesWithin xs ys t' s' :=
   Controller.computesWith_mono h ht hs
 
 end Complexity.StackMachine

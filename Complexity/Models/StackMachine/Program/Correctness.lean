@@ -102,12 +102,12 @@ theorem run_compile_history [Fintype κ]
     · simp [hstep, hc, hs, Cfg.mass]
 
 /-- A history specification supplies independent time and peak-space bounds. -/
-theorem computesInTimeAndSpace_history [Fintype κ] {p : StackMachine.Program κ Γ α}
+theorem computesWithin_history [Fintype κ] {p : StackMachine.Program κ Γ α}
     {xs ys : List Γ} {t s : ℕ}
     (h : Triple (p.verify (historySemantics xs.toArray))
       (fun h b ↦ h = History.nil ((execution xs).init ()) ∧ t ≤ b)
       (fun _ h _ ↦ h.last.output = ys.toArray ∧ h.configSup Cfg.mass ≤ s) ()) :
-    p.compile.ComputesInTimeAndSpace xs ys t s := by
+    p.compile.ComputesWithin xs ys t s := by
   obtain ⟨n, a, v, hn, he, ho, hs⟩ := Program.exec_of_spec h ⟨rfl, le_rfl⟩
   obtain ⟨e, _, hc, hv⟩ := run_compile_history he.toControl
     (History.nil (p.compile.initInput (Config := Cfg κ Γ _ xs.toArray) xs)) rfl
@@ -118,13 +118,13 @@ theorem computesInTimeAndSpace_history [Fintype κ] {p : StackMachine.Program κ
   · exact (congrArg Cfg.output hc).trans ho
 
 /-- A total stack-program specification yields native computation and resource bounds. -/
-theorem computesInTimeAndSpace [Fintype κ] (p : StackMachine.Program κ Γ α)
+theorem computesWithin [Fintype κ] (p : StackMachine.Program κ Γ α)
     {xs ys : List Γ} {t : ℕ}
     (h : Triple (p.verify (semantics xs.toArray))
       (fun c b ↦ c = (execution xs).init () ∧ t ≤ b)
       (fun _ c _ ↦ c.output = ys.toArray) ()) :
-    (compile p).ComputesInTimeAndSpace xs ys t (Fintype.card κ * t) := by
-  apply computesInTimeAndSpace_history
+    (compile p).ComputesWithin xs ys t (Fintype.card κ * t) := by
+  apply computesWithin_history
   have hh := spec_history (n := t) (r := 0) (P := fun _ c ↦ c.output = ys.toArray)
     (by simpa using h) (S := Fintype.card κ * t) (by simp [Cfg.mass]) 0
   constructor

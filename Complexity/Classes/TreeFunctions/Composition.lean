@@ -23,18 +23,24 @@ variable {α β γ : Type*} [Encoding Tree α] [Encoding Tree β] [Encoding Tree
 valid codes are not unique. -/
 theorem fp_comp (hg : g ∈ FP .sizeCostTree) (hf : f ∈ FP .sizeCostTree) :
     g ∘ f ∈ FP .sizeCostTree := by
-  obtain ⟨p, s, hf⟩ := FP.exists_polynomial_bound hf
-  obtain ⟨q, v, hg⟩ := FP.exists_polynomial_bound hg
-  obtain ⟨k, hk, Q, hQ, M, hf⟩ := computableInTimeAndSpace_iff.mp hf
-  obtain ⟨l, hl, Q', hQ', N, hg⟩ := computableInTimeAndSpace_iff.mp hg
+  obtain ⟨p, s, R, ⟨k, hk, Q, hQ, M, rfl⟩, hf⟩ := FP.exists_polynomial_bound hf
+  obtain ⟨q, v, R', ⟨l, hl, Q', hQ', N, rfl⟩, hg⟩ := FP.exists_polynomial_bound hg
   let a : Polynomial ℕ := Polynomial.X + Polynomial.C k + p
   let b : Polynomial ℕ := p + Polynomial.C (max k l) + q.comp a
-  have h := hg.comp hf q.monotone_eval_nat
-  obtain ⟨d, hb⟩ := IsBigO.exists_pow b
+  obtain ⟨d, hb⟩ := Polynomial.exists_dominatedAtTop_pow b
   apply FP.ftime_subset d
-  refine ⟨b.eval, ⟨_, h.computableInTimeAndSpace.mono ?_ (fun _ => le_rfl)⟩, hb⟩
-  intro n
-  simp [TreeMachine.compTimeBound, b, a]
+  refine ⟨b.eval, ⟨fun n => n + (max k l + 1) + b.eval n, _,
+    ⟨max k l + 1, inferInstance, _, inferInstance, M.comp N, rfl⟩, ?_⟩, hb⟩
+  intro x r hx
+  obtain ⟨y, hy, hm⟩ := hf x r hx
+  obtain ⟨z, hz, hn⟩ := hg (f x) y hy
+  have ht : p.eval r.size + max k l + q.eval y.size ≤ b.eval r.size := by
+    have hy := q.monotone_eval_nat hm.output_size_le
+    simp only [b, a, Polynomial.eval_add, Polynomial.eval_C, Polynomial.eval_comp,
+      Polynomial.eval_X]
+    exact Nat.add_le_add_left hy _
+  have hcomp := comp_computesWithin M N hm hn
+  exact ⟨z, hz, hcomp.space_of_time.mono ht (Nat.add_le_add_left ht _)⟩
 
 private def identity : TreeMachine Id 1 Unit where
   q₀ := ()
@@ -44,12 +50,13 @@ private def identity : TreeMachine Id 1 Unit where
 /-- Leaving the input register unchanged computes the identity at zero time cost. -/
 theorem fp_id : (id : α → α) ∈ FP .sizeCostTree := by
   apply FP.of_time_le (t := fun _ => 0) (c := 0) (d := 0) _ (by simp)
-  refine ⟨fun n => n, Computes.computableInTimeAndSpace (M := identity) ?_⟩
-  intro a x hx
+  refine ⟨fun _ => 0, ⟨fun n => n, _,
+    ⟨1, inferInstance, Unit, inferInstance, identity, rfl⟩, ?_⟩, DominatedAtTop.refl _⟩
+  intro x a hx
   refine ⟨a, hx, 0, rfl, ?_, ?_, ?_⟩
   · exact TreeMachine.input_get (0 : Fin 1) a
   · simp
-  · simp [TreeMachine.Cfg.mass]
+  · simp [TreeMachine.Cfg.mass, TimeSpaceModel.sizeCostTree]
 
 end Complexity.TreeMachine
 

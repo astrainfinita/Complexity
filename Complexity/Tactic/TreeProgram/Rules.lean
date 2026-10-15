@@ -56,10 +56,6 @@ def Implementation.reverse {α : Type*} [UniqueEncoding Tree α] :
 @[simp, source_bounds↓] theorem Implementation.bounds_reverse {α : Type*} [UniqueEncoding Tree α] :
     (Implementation.reverse (α := α)).bounds = reverseBounds := rfl
 
-theorem reverse_realizes {α : Type*} [UniqueEncoding Tree α] :
-    Realizes (List.reverse : List α → List α) reverseBounds :=
-  Implementation.reverse.realizes
-
 /-- Backend contract for a primitive receiving two source-value handles. -/
 def BinarySpec {α β γ : Type*} [UniqueEncoding Tree α]
     [UniqueEncoding Tree β] [UniqueEncoding Tree γ]
@@ -166,19 +162,10 @@ def Implementation.append {α β : Type*} [UniqueEncoding Tree α] [UniqueEncodi
     (hf.append hg).bounds = appendBounds f g hf.bounds hg.bounds := by
   simp only [append, bounds_binary, appendBounds]
 
-theorem Realizes.append {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
-    {f g : α → List β} {b c : Bounds α}
-    (hf : Realizes f b) (hg : Realizes g c) :
-    Realizes (fun xs => f xs ++ g xs) (appendBounds f g b c) :=
-  hf.elim fun _ hp => hg.elim fun _ hq => ⟨_, Implements.binary append_spec hp hq⟩
-
 /-- Zero-cost bounds for returning the input value. -/
 @[simps -fullyApplied] def identityBounds {α : Type*} : Bounds α := ⟨fun _ => 0, fun _ => 0⟩
 
 attribute [source_bounds↓] identityBounds_time identityBounds_peak
-
-theorem identity_realizes {α : Type*} [UniqueEncoding Tree α] :
-    Realizes (id : α → α) identityBounds := Implementation.identity.realizes
 
 
 open TreeProgram.Code
@@ -280,12 +267,6 @@ theorem Implements.map {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding 
     exact ((foldr_max_le b.peak xs _).mp le_rfl x hmem).trans
         ((Nat.le_max_right _ _).trans (Nat.le_max_right _ _))
 
-
-theorem Realizes.map {α β : Type*}
-    [UniqueEncoding Tree α] [UniqueEncoding Tree β]
-    {f : α → β} {b : Bounds α} (hf : Realizes f b) :
-    Realizes (List.map f) (mapBounds f b) :=
-  hf.elim fun _ hp => ⟨_, hp.map⟩
 
 private theorem map_evaluate_bounds {α β : Type*}
     [UniqueEncoding Tree α] [UniqueEncoding Tree β] (run : α → Costed β) :
@@ -404,93 +385,6 @@ def Implementation.mapDependent {ρ β : Type*} {α : ρ → Type*}
     hf.mapDependent.bounds = mapDependentBounds f hf.bounds := by
   simpa only [Implementation.bounds, Implementation.mapDependent, hf.value_eq] using
     mapDependent_evaluate_bounds hf.evaluate
-
-/-- Maximum callback time and intermediate-tree size along a source fold. -/
-@[simp] def foldlMax {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
-    (f : β → α → β) (b : Bounds (β × α)) (a : β) : List α → ℕ × ℕ
-  | [] => (0, ⌜a⌝ₜ.size)
-  | x :: xs =>
-    let next := foldlMax f b (f a x) xs
-    (max (b.time (a, x)) next.1, max ⌜(a, x)⌝ₜ.size (max (b.peak (a, x)) next.2))
-
-/-- Bound every reached accumulator using an invariant on source values. -/
-theorem foldlMax_le {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
-    {f : β → α → β} {b : Bounds (β × α)} {a : β} {xs : List α} {time space : ℕ}
-    (I : List α → β → Prop) (hI : I xs a)
-    (hstep : ∀ x as c, I (x :: as) c → b.time (c, x) ≤ time ∧
-      ⌜(c, x)⌝ₜ.size ≤ space ∧ b.peak (c, x) ≤ space ∧ I as (f c x))
-    (hstop : ∀ c, I [] c → ⌜c⌝ₜ.size ≤ space) :
-    (foldlMax f b a xs).1 ≤ time ∧ (foldlMax f b a xs).2 ≤ space := by
-  induction xs generalizing a with
-  | nil => simpa using hstop a hI
-  | cons x xs ih =>
-    obtain ⟨ht, hs, hb, hi⟩ := hstep x xs a hI
-    obtain ⟨ht', hs'⟩ := ih hi
-    simpa only [foldlMax, Nat.max_le] using And.intro ⟨ht, ht'⟩ ⟨hs, hb, hs'⟩
-
-theorem foldlMax_cons_le {α : Type*} [UniqueEncoding Tree α]
-    {b : Bounds (List α × α)} {time : ℕ} (acc xs : List α)
-    (h : ∀ acc x, b.time (acc, x) ≤ time ∧ b.peak (acc, x) ≤ ⌜(acc, x)⌝ₜ.size) :
-    (foldlMax (fun acc x => x :: acc) b acc xs).1 ≤ time ∧
-      (foldlMax (fun acc x => x :: acc) b acc xs).2 ≤ ⌜acc⌝ₜ.size + ⌜xs⌝ₜ.size := by
-  apply foldlMax_le (fun rest a => ⌜rest⌝ₜ.size + ⌜a⌝ₜ.size ≤ ⌜acc⌝ₜ.size + ⌜xs⌝ₜ.size)
-  · omega
-  · intro x rest a hi
-    have := h a x
-    simp only [encode_list_cons, size_encode_prod] at hi this ⊢
-    omega
-  · intro a hi
-    exact (Nat.le_add_left _ _).trans hi
-
-/-- Coarse fold bounds using the maximum callback time and number of iterations. -/
-@[simps] def foldlBounds {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
-    (f : β → α → β) (b : Bounds (β × α)) : Bounds (β × List α) :=
-  ⟨fun x => ((foldlMax f b x.1 x.2).1 + 13) * x.2.length + 10,
-    fun x => max ⌜x⌝ₜ.size (foldlMax f b x.1 x.2).2⟩
-
-/-- The uniform estimate is a relaxation of the summed source budget. -/
-theorem foldlCost_le_max {α β : Type*}
-    [UniqueEncoding Tree α] [UniqueEncoding Tree β]
-    (f : β → α → β) (b : Bounds (β × α)) (a : β) (xs : List α) :
-    (foldlCost f (fun a x => ⟨b.time (a, x), b.peak (a, x)⟩) a xs).time ≤
-        (foldlMax f b a xs).1 * xs.length ∧
-      (foldlCost f (fun a x => ⟨b.time (a, x), b.peak (a, x)⟩) a xs).peak ≤
-        (foldlMax f b a xs).2 := by
-  let I as c := (foldlMax f b c as).1 ≤ (foldlMax f b a xs).1 ∧
-    (foldlMax f b c as).2 ≤ (foldlMax f b a xs).2
-  have h := foldlCost_le (f := f) (b := fun a x => ⟨b.time (a, x), b.peak (a, x)⟩)
-    I (fun as _ => (foldlMax f b a xs).1 * as.length)
-    (foldlMax f b a xs).2 xs a ⟨le_rfl, le_rfl⟩ ?_ ?_
-  · exact h.2
-  · rintro x as c ⟨ht, hp⟩
-    simp only [foldlMax, Nat.max_le] at ht hp
-    refine ⟨⟨ht.2, hp.2.2⟩, ?_, hp.1, hp.2.1⟩
-    simp only [List.length_cons, Nat.mul_add, Nat.mul_one]
-    omega
-  · intro c hi
-    simpa only [foldlMax] using hi.2
-
-/-- The same fold implementation with the convenient maximum-times-length estimate. -/
-def Implementation.foldlUniform {α β : Type*}
-    [UniqueEncoding Tree α] [UniqueEncoding Tree β] {f : β → α → β}
-    (hf : Implementation (Function.uncurry f)) :
-    Implementation (fun x : β × List α => x.2.foldl f x.1) :=
-  hf.foldl.rebudget (foldlBounds f hf.bounds) (by
-    rintro ⟨a, xs⟩
-    have hc := foldlCost_le_max f hf.bounds a xs
-    simp only [Implementation.bounds_foldl, foldlSumBounds, foldlBounds]
-    exact ⟨by nlinarith [hc.1], max_le_max le_rfl hc.2⟩)
-
-@[simp, source_bounds↓] theorem Implementation.bounds_foldlUniform {α β : Type*}
-    [UniqueEncoding Tree α] [UniqueEncoding Tree β] {f : β → α → β}
-    (hf : Implementation (Function.uncurry f)) :
-    hf.foldlUniform.bounds = foldlBounds f hf.bounds := rfl
-
-theorem Realizes.foldl {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
-    {f : β → α → β} {b : Bounds (β × α)} (hf : Realizes (Function.uncurry f) b) :
-    Realizes (fun x : β × List α => x.2.foldl f x.1) (foldlBounds f b) := by
-  obtain ⟨p, hp⟩ := hf
-  exact (Implementation.ofImplements p b hp).foldlUniform.realizes
 
 /-- Call code and copy its returned value to a fixed register. -/
 def callInto (p : Code Value) (n dest : ℕ) : Cmd ℕ :=
@@ -637,71 +531,6 @@ theorem Implements.loop_budget {α β : Type*} [UniqueEncoding Tree α] [UniqueE
   · intro x y hi ht
     exact (hfinish x y hi ht).2
 
-/-- A decreasing source measure recovers the uniform-per-step loop bound. -/
-theorem Implements.loop {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
-    {pc ps pd : Value → Code Value}
-    {test : α → Bool} {step : α → α} {finish result : α → β}
-    {bc bs bd : Bounds α} (hc : Implements pc test bc) (hs : Implements ps step bs)
-    (hd : Implements pd finish bd) (measure : α → ℕ) (I : α → α → Prop)
-    (time finishTime space : α → ℕ)
-    (hinit : ∀ x, I x x)
-    (hsize : ∀ x y, I x y → ⌜y⌝ₜ.size ≤ space x)
-    (hcheck : ∀ x y, I x y → bc.time y ≤ time x ∧ bc.peak y ≤ space x)
-    (hstep : ∀ x y, I x y → test y = true →
-      bs.time y ≤ time x ∧ bs.peak y ≤ space x ∧ I x (step y) ∧ measure (step y) < measure y)
-    (hfinish : ∀ x y, I x y → test y = false →
-      bd.time y ≤ finishTime x ∧ bd.peak y ≤ space x ∧ finish y = result x) :
-    Implements (loopCode pc ps pd) result
-      ⟨fun x => (2 * time x + 6) * measure x + time x + finishTime x + 6, space⟩ := by
-  apply (hc.loop_budget hs hd I (fun x y => (2 * time x + 6) * measure y + 2)
-    finishTime space hinit hsize (fun x y hi => (hcheck x y hi).2)
-    (fun _ _ _ _ => by omega) ?_ hfinish).mono
-  · intro x
-    have := (hcheck x x (hinit x)).1
-    exact ⟨by dsimp only; omega, le_rfl⟩
-  · intro x y hi ht
-    obtain ⟨hb, hp, hi', hm⟩ := hstep x y hi ht
-    have hc' := (hcheck x (step y) hi').1
-    have hmul := Nat.mul_le_mul_left (2 * time x + 6)
-      (show measure (step y) + 1 ≤ measure y by omega)
-    rw [Nat.mul_add, Nat.mul_one] at hmul
-    exact ⟨hp, hi', by omega⟩
-
-theorem Realizes.loop_budget {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
-    {test : α → Bool} {step : α → α} {finish result : α → β}
-    {bc bs bd : Bounds α} (hc : Realizes test bc) (hs : Realizes step bs)
-    (hd : Realizes finish bd) (I : α → α → Prop) (budget : α → α → ℕ)
-    (finishTime space : α → ℕ)
-    (hinit : ∀ x, I x x)
-    (hsize : ∀ x y, I x y → ⌜y⌝ₜ.size ≤ space x)
-    (hcheck : ∀ x y, I x y → bc.peak y ≤ space x)
-    (hstop : ∀ x y, I x y → test y = false → 2 ≤ budget x y)
-    (hstep : ∀ x y, I x y → test y = true →
-      bs.peak y ≤ space x ∧ I x (step y) ∧
-        bs.time y + bc.time (step y) + 6 + budget x (step y) ≤ budget x y)
-    (hfinish : ∀ x y, I x y → test y = false →
-      bd.time y ≤ finishTime x ∧ bd.peak y ≤ space x ∧ finish y = result x) :
-    Realizes result ⟨fun x => bc.time x + budget x x + finishTime x + 4, space⟩ :=
-  hc.elim fun _ hp => hs.elim fun _ hq => hd.elim fun _ hr =>
-    ⟨_, hp.loop_budget hq hr I budget finishTime space hinit hsize hcheck hstop hstep hfinish⟩
-
-theorem Realizes.loop {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
-    {test : α → Bool} {step : α → α} {finish result : α → β}
-    {bc bs bd : Bounds α} (hc : Realizes test bc) (hs : Realizes step bs)
-    (hd : Realizes finish bd) (measure : α → ℕ) (I : α → α → Prop)
-    (time finishTime space : α → ℕ)
-    (hinit : ∀ x, I x x)
-    (hsize : ∀ x y, I x y → ⌜y⌝ₜ.size ≤ space x)
-    (hcheck : ∀ x y, I x y → bc.time y ≤ time x ∧ bc.peak y ≤ space x)
-    (hstep : ∀ x y, I x y → test y = true →
-      bs.time y ≤ time x ∧ bs.peak y ≤ space x ∧ I x (step y) ∧ measure (step y) < measure y)
-    (hfinish : ∀ x y, I x y → test y = false →
-      bd.time y ≤ finishTime x ∧ bd.peak y ≤ space x ∧ finish y = result x) :
-    Realizes result ⟨fun x => (2 * time x + 6) * measure x + time x + finishTime x + 6, space⟩ :=
-  hc.elim fun _ hp => hs.elim fun _ hq => hd.elim fun _ hr =>
-    ⟨_, hp.loop hq hr measure I time finishTime space hinit hsize hcheck hstep hfinish⟩
-
-
 def Implementation.increment : Implementation BitList.increment := by
   refine .ofImplements Nat.Code.succ
     ⟨fun xs => 28 * xs.length + 25, fun xs => ⌜xs⌝ₜ.size + 5⟩ ⟨?_, ?_⟩
@@ -724,18 +553,6 @@ def Implementation.succ : Implementation Nat.succ :=
 
 @[source_bounds↓] def Implementation.addOne : Implementation (fun a : ℕ => a + 1) :=
   Implementation.succ
-
-theorem increment_realizes :
-    Realizes BitList.increment ⟨fun xs => 28 * xs.length + 25, fun xs => ⌜xs⌝ₜ.size + 5⟩ :=
-  Implementation.increment.realizes
-
-theorem succ_realizes :
-    Realizes Nat.succ ⟨fun a => 28 * a.bits.length + 25, fun a => ⌜a⌝ₜ.size + 5⟩ :=
-  Implementation.succ.realizes
-
-theorem add_one_realizes :
-    Realizes (fun a : ℕ => a + 1)
-      ⟨fun a => 28 * a.bits.length + 25, fun a => ⌜a⌝ₜ.size + 5⟩ := succ_realizes
 
 attribute [scoped fun_prop] Implementation.increment Implementation.succ Implementation.addOne
 
@@ -760,10 +577,6 @@ def Implementation.fst {α β : Type*}
     [UniqueEncoding Tree α] [UniqueEncoding Tree β] :
     (Implementation.fst (α := α) (β := β)).bounds = projectionBounds := rfl
 
-theorem fst_realizes {α β : Type*}
-    [UniqueEncoding Tree α] [UniqueEncoding Tree β] :
-    Realizes (Prod.fst : α × β → α) projectionBounds := Implementation.fst.realizes
-
 /-- Select the second field of an encoded pair. -/
 def Implementation.snd {α β : Type*}
     [UniqueEncoding Tree α] [UniqueEncoding Tree β] :
@@ -779,10 +592,6 @@ def Implementation.snd {α β : Type*}
     [UniqueEncoding Tree α] [UniqueEncoding Tree β] :
     (Implementation.snd (α := α) (β := β)).bounds = projectionBounds := rfl
 
-theorem snd_realizes {α β : Type*}
-    [UniqueEncoding Tree α] [UniqueEncoding Tree β] :
-    Realizes (Prod.snd : α × β → β) projectionBounds := Implementation.snd.realizes
-
 /-- Bounds for computing two values and pairing their encodings. -/
 @[simps] def pairBounds {α β γ : Type*} [UniqueEncoding Tree β] [UniqueEncoding Tree γ]
     (f : α → β) (g : α → γ) (b c : Bounds α) : Bounds α :=
@@ -790,12 +599,6 @@ theorem snd_realizes {α β : Type*}
     fun x => max (b.peak x) (max (c.peak x) ⌜(f x, g x)⌝ₜ.size)⟩
 
 attribute [source_bounds↓] pairBounds_time pairBounds_peak
-
-theorem Realizes.pair {α β γ : Type*}
-    [UniqueEncoding Tree α] [UniqueEncoding Tree β] [UniqueEncoding Tree γ]
-    {f : α → β} {g : α → γ} {b c : Bounds α} (hf : Realizes f b) (hg : Realizes g c) :
-    Realizes (fun x => (f x, g x)) (pairBounds f g b c) :=
-  hf.elim fun _ hp => hg.elim fun _ hq => ⟨_, Implements.binary pair_spec hp hq⟩
 
 /-- Compute two values and pair their encodings. -/
 def Implementation.pair {α β γ : Type*}
@@ -811,12 +614,6 @@ def Implementation.pair {α β γ : Type*}
 
 
 -- The same implementation works for different result types when their encoded outputs coincide.
-theorem Realizes.of_encode {α β γ : Type*}
-    [UniqueEncoding Tree α] [UniqueEncoding Tree β] [UniqueEncoding Tree γ]
-    {f : α → β} {g : α → γ} {b : Bounds α}
-    (hfg : ∀ x, ⌜f x⌝ₜ = ⌜g x⌝ₜ) (hg : Realizes g b) : Realizes f b :=
-  hg.elim fun p hp => ⟨p, hp.of_encode hfg⟩
-
 /-- Return the empty tree representing unit without allocating a register. -/
 def Implementation.unit {α : Type*} [UniqueEncoding Tree α] :
     Implementation (fun _ : α => ()) := by
@@ -828,9 +625,6 @@ def Implementation.unit {α : Type*} [UniqueEncoding Tree α] :
 
 @[simp, source_bounds↓] theorem Implementation.bounds_unit {α : Type*} [UniqueEncoding Tree α] :
     (Implementation.unit (α := α)).bounds = identityBounds := rfl
-
-theorem unit_realizes {α : Type*} [UniqueEncoding Tree α] :
-    Realizes (fun _ : α => ()) identityBounds := Implementation.unit.realizes
 
 private theorem branch_spec {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
     {p q : Value → Code Value} {f g : α → β} {b c : Bounds α}
@@ -920,12 +714,6 @@ theorem Implements.ite {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding 
     (hc.ite ht hf).bounds = iteBounds c hc.bounds ht.bounds hf.bounds := by
   ext x <;> cases h : c x <;> simp [bounds, ite_evaluate, hc.value_eq, iteBounds, h]
 
-theorem Realizes.ite {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
-    {c : α → Bool} {f g : α → β} {bc bt bf : Bounds α}
-    (hc : Realizes c bc) (ht : Realizes f bt) (hf : Realizes g bf) :
-    Realizes (fun x => if c x then f x else g x) (iteBounds c bc bt bf) :=
-  hc.elim fun _ hp => ht.elim fun _ hq => hf.elim fun _ hr => ⟨_, hp.ite hq hr⟩
-
 /-- Ordinary decidable conditions share the Boolean branch implementation and its path budget. -/
 def Implementation.iteProp {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
     {c : α → Prop} [DecidablePred c] {f g : α → β}
@@ -943,14 +731,7 @@ def Implementation.iteProp {α β : Type*} [UniqueEncoding Tree α] [UniqueEncod
       iteBounds (fun x => decide (c x)) hc.bounds ht.bounds hf.bounds := by
   simp only [iteProp, bounds_congr, bounds_ite]
 
-theorem Realizes.iteProp {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
-    {c : α → Prop} [DecidablePred c] {f g : α → β} {bc bt bf : Bounds α}
-    (hc : Realizes (fun x => decide (c x)) bc) (ht : Realizes f bt) (hf : Realizes g bf) :
-    Realizes (fun x => if c x then f x else g x)
-      (iteBounds (fun x => decide (c x)) bc bt bf) :=
-  .of_encode (by intro x; simp) (hc.ite ht hf)
-
-attribute [scoped fun_prop] Implementation.iteProp Realizes.iteProp
+attribute [scoped fun_prop] Implementation.iteProp
 
 /-- Summed callback bounds including one shared environment and its traversal overhead. -/
 @[simps] def foldlWithBounds {ρ α β : Type*}
@@ -1033,18 +814,6 @@ def Implementation.foldlWith {ρ α β : Type*}
     (hi.foldlWith hs).bounds = foldlWithBounds f a xs hi.bounds hs.bounds := by
   rfl
 
-theorem Realizes.foldlWith {ρ α β : Type*}
-    [UniqueEncoding Tree ρ] [UniqueEncoding Tree α] [UniqueEncoding Tree β]
-    {f : ρ → β → α → β} {a : ρ → β} {xs : ρ → List α}
-    {bi : Bounds ρ} {bs : Bounds (ρ × β × α)}
-    (hi : Realizes (fun e => ((e, a e), xs e)) bi)
-    (hs : Realizes (fun p : ρ × β × α => f p.1 p.2.1 p.2.2) bs) :
-    Realizes (fun e => (xs e).foldl (f e) (a e)) (foldlWithBounds f a xs bi bs) := by
-  obtain ⟨pi, hpi⟩ := hi
-  obtain ⟨ps, hps⟩ := hs
-  simpa only [Implementation.bounds_foldlWith, Implementation.bounds_ofImplements] using
-    ((Implementation.ofImplements pi bi hpi).foldlWith (.ofImplements ps bs hps)).realizes
-
 
 /-- Compose environment preparation with dependent-map bounds. -/
 @[simps!] def mapDependentWithBounds {ρ β : Type*} {α : ρ → Type*}
@@ -1070,19 +839,6 @@ def Implementation.mapDependentWith {ρ β : Type*} {α : ρ → Type*}
     (hi.mapDependentWith hf).bounds = mapDependentWithBounds f xs hi.bounds hf.bounds := by
   rw [mapDependentWith, bounds_comp, bounds_mapDependent]
   rfl
-
-/-- One callback program handles every runtime index in a dependent input family. -/
-theorem Realizes.mapDependentWith {ρ β : Type*} {α : ρ → Type*}
-    [UniqueEncoding Tree ρ] [∀ e, UniqueEncoding Tree (α e)] [UniqueEncoding Tree β]
-    {f : (e : ρ) → α e → β} {xs : (e : ρ) → List (α e)}
-    {bi : Bounds ρ} {b : Bounds (Σ e, α e)}
-    (hi : Realizes (fun e => (⟨e, xs e⟩ : Σ e, List (α e))) bi)
-    (hf : Realizes (fun p : Σ e, α e => f p.1 p.2) b) :
-    Realizes (fun e => (xs e).map (f e)) (mapDependentWithBounds f xs bi b) := by
-  obtain ⟨pi, hpi⟩ := hi
-  obtain ⟨pf, hpf⟩ := hf
-  simpa only [Implementation.bounds_mapDependentWith, Implementation.bounds_ofImplements] using
-    ((Implementation.ofImplements pi bi hpi).mapDependentWith (.ofImplements pf b hpf)).realizes
 
 /-- Bounds for a map whose callback shares a runtime environment. -/
 @[simps] def mapWithBounds {ρ α β : Type*}
@@ -1116,27 +872,245 @@ def Implementation.mapWith {ρ α β : Type*}
   ext e <;> simp only [mapDependentWithBounds, mapDependentBounds, mapWithBounds,
     compBounds, Function.comp_apply, Nat.add_assoc, Sigma.encode_mk]
 
-theorem Realizes.mapWith {ρ α β : Type*}
-    [UniqueEncoding Tree ρ] [UniqueEncoding Tree α] [UniqueEncoding Tree β]
-    {f : ρ → α → β} {xs : ρ → List α} {bi : Bounds ρ} {b : Bounds (ρ × α)}
-    (hi : Realizes (fun e => (e, xs e)) bi)
-    (hf : Realizes (fun p : ρ × α => f p.1 p.2) b) :
-    Realizes (fun e => (xs e).map (f e)) (mapWithBounds f xs bi b) := by
-  obtain ⟨pi, hpi⟩ := hi
-  obtain ⟨pf, hpf⟩ := hf
-  simpa only [Implementation.bounds_mapWith, Implementation.bounds_ofImplements] using
-    ((Implementation.ofImplements pi bi hpi).mapWith (.ofImplements pf b hpf)).realizes
 
-
-attribute [scoped fun_prop] Realizes.comp Realizes.append Realizes.map Realizes.foldl
-  reverse_realizes identity_realizes increment_realizes succ_realizes add_one_realizes
-  fst_realizes snd_realizes
-  Realizes.pair Realizes.of_encode unit_realizes Realizes.ite
 attribute [scoped fun_prop] Implementation.identity Implementation.comp Implementation.reverse
   Implementation.map Implementation.append Implementation.fst Implementation.snd
   Implementation.pair Implementation.unit Implementation.ofEncode Implementation.ite
   Implementation.foldl
-attribute [scoped fun_prop] Realizes.foldlWith Implementation.foldlWith
-  Implementation.mapDependentWith Realizes.mapDependentWith Implementation.mapWith Realizes.mapWith
+attribute [scoped fun_prop] Implementation.foldlWith
+  Implementation.mapDependentWith Implementation.mapWith
 
 end Complexity.TreeProgram.Source
+
+namespace Complexity.TreeProgram.Source.Implementation
+
+variable {α β γ : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
+  [UniqueEncoding Tree γ] {f : α → β} {g : α → γ}
+
+theorem HasGrowth.ofEncode {hf : Implementation f} {t p : α → ℕ}
+    (h : hf.HasGrowth t p) (eq : ∀ x, ⌜g x⌝ₜ = ⌜f x⌝ₜ) :
+    (Implementation.ofEncode eq hf).HasGrowth t p := by
+  apply HasGrowth.of_bounds _ (bounds_ofEncode _ _) h.1 h.2
+
+theorem HasGrowth.mapInput {hf : Implementation f} {t p : α → ℕ}
+    (h : hf.HasGrowth t p) (i : γ → α) (hi : ∀ x, ⌜i x⌝ₜ = ⌜x⌝ₜ) :
+    (hf.mapInput i hi).HasGrowth (t ∘ i) (p ∘ i) :=
+  HasGrowth.of_bounds _ (bounds_mapInput _ _ _) (h.1.comp i) (h.2.comp i)
+
+theorem HasGrowth.mapOutput {hf : Implementation f} {t p : α → ℕ}
+    (h : hf.HasGrowth t p) (o : β → γ) (ho : ∀ x, ⌜o x⌝ₜ = ⌜x⌝ₜ) :
+    (hf.mapOutput o ho).HasGrowth t p :=
+  HasGrowth.of_bounds _ (bounds_mapOutput _ _ _) h.1 h.2
+
+theorem HasGrowth.congr {hf : Implementation f} {t p : α → ℕ}
+    (h : hf.HasGrowth t p) {g : α → β} (eq : f = g) :
+    (hf.congr eq).HasGrowth t p := h
+
+theorem HasGrowth.pair {hf : Implementation f} {hg : Implementation g}
+    {t p u q : α → ℕ} (h : hf.HasGrowth t p) (k : hg.HasGrowth u q) :
+    (hf.pair hg).HasGrowth (fun x => t x + (u x + 1))
+      (fun x => max (p x) (max (q x) ⌜(f x, g x)⌝ₜ.size)) := by
+  apply HasGrowth.of_bounds _ (bounds_pair _ _)
+  · exact h.1.add (k.1.add (Dominated.const 1))
+  · exact h.2.max (k.2.max (Dominated.refl _))
+
+/-- The branch is chosen at runtime, with coefficients uniform across both branches. -/
+theorem HasGrowth.ite {c : α → Bool} {k : α → β}
+    {hc : Implementation c} {hf : Implementation f} {hk : Implementation k}
+    {tc pc tf pf tk pk : α → ℕ}
+    (gc : hc.HasGrowth tc pc) (gf : hf.HasGrowth tf pf) (gk : hk.HasGrowth tk pk) :
+    (hc.ite hf hk).HasGrowth
+      (fun x => tc x + (if c x then tf x else tk x) + 1)
+      (fun x => max ⌜x⌝ₜ.size (max (pc x) (if c x then pf x else pk x))) := by
+  apply HasGrowth.of_bounds _ (bounds_ite _ _ _)
+  · exact (gc.1.add (gf.1.ite gk.1 (fun x => c x = true))).add (Dominated.const 3)
+  · exact (Dominated.refl _).max (gc.2.max (gf.2.ite gk.2 (fun x => c x = true)))
+
+theorem HasGrowth.iteProp {c : α → Prop} [DecidablePred c] {k : α → β}
+    {hc : Implementation (fun x => decide (c x))} {hf : Implementation f} {hk : Implementation k}
+    {tc pc tf pf tk pk : α → ℕ}
+    (gc : hc.HasGrowth tc pc) (gf : hf.HasGrowth tf pf) (gk : hk.HasGrowth tk pk) :
+    (hc.iteProp hf hk).HasGrowth
+      (fun x => tc x + (if c x then tf x else tk x) + 1)
+      (fun x => max ⌜x⌝ₜ.size (max (pc x) (if c x then pf x else pk x))) := by
+  simpa only [Implementation.iteProp, decide_eq_true_eq] using
+    (gc.ite gf gk).congr (by funext x; simp)
+
+end Complexity.TreeProgram.Source.Implementation
+
+namespace Complexity.TreeProgram.Source.Implementation
+
+@[source_growth] theorem hasGrowth_reverse {α : Type*} [UniqueEncoding Tree α] :
+    (reverse (α := α)).HasGrowth (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) := by
+  apply HasGrowth.of_bounds _ bounds_reverse
+  all_goals
+    dsimp only [reverseBounds]
+    simp only [Dominated.add_iff, Dominated.const_mul_left_iff, Nat.ofNat_pos]
+    repeat' apply And.intro
+  all_goals first
+    | exact Dominated.of_le length_le_codeSize
+    | exact Dominated.refl _
+    | exact Dominated.const_of_pos _ (fun _ => Tree.size_pos _)
+
+@[source_growth] theorem hasGrowth_increment : increment.HasGrowth
+    (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) := by
+  apply HasGrowth.of_bounds _ bounds_increment
+  · exact ((Dominated.of_le length_le_codeSize).const_mul_left _).add_same
+      (Dominated.const_of_pos _ fun _ => Tree.size_pos _)
+  · exact (Dominated.refl _).add_same (Dominated.const_of_pos _ fun _ => Tree.size_pos _)
+
+/-- Primitive specifications are saved once; calls retain their original implementations. -/
+@[source_growth] theorem hasGrowth_succ : succ.HasGrowth
+    (fun n => ⌜n⌝ₜ.size) (fun n => ⌜n⌝ₜ.size) := by
+  apply HasGrowth.of_bounds _ bounds_succ
+  · have h : Dominated (fun n : ℕ => n.bits.length) (fun n => ⌜n⌝ₜ.size) :=
+      Dominated.of_le fun n => length_le_codeSize n.bits
+    exact (h.const_mul_left 28).add_same (Dominated.const_of_pos 25 fun _ => Tree.size_pos _)
+  · exact (Dominated.refl _).add_same (Dominated.const_of_pos 5 fun _ => Tree.size_pos _)
+
+end Complexity.TreeProgram.Source.Implementation
+
+namespace Complexity.TreeProgram.Source
+
+/-- Fold callbacks share one growth coefficient across all environments and reachable states.
+The library charges each traversal step once and takes a peak, without multiplying space by
+list length. The caller supplies only its invariant and the callback size comparisons. -/
+theorem Implementation.HasGrowth.foldl_of_invariant
+    {α β ρ : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
+    {f : β → α → β} {hf : Implementation (Function.uncurry f)}
+    {t p : β × α → ℕ} (h : hf.HasGrowth t p)
+    (I : ρ → List α → β → Prop) (xs : ρ → List α) (initial : ρ → β)
+    (time peak : ρ → ℕ) (start : ∀ x, I x (xs x) (initial x))
+    (next : ∀ x a rest acc, I x (a :: rest) acc → I x rest (f acc a))
+    (hsize : Dominated
+      (fun z : {z : ρ × List α × β // I z.1 z.2.1 z.2.2} => ⌜(z.1.2.2, z.1.2.1)⌝ₜ.size)
+      (fun z => peak z.1.1))
+    (ht : Dominated
+      (fun z : {z : ρ × α × List α × β // I z.1 (z.2.1 :: z.2.2.1) z.2.2.2} =>
+        t (z.1.2.2.2, z.1.2.1)) (fun z => time z.1.1))
+    (hp : Dominated
+      (fun z : {z : ρ × α × List α × β // I z.1 (z.2.1 :: z.2.2.1) z.2.2.2} =>
+        p (z.1.2.2.2, z.1.2.1)) (fun z => peak z.1.1)) :
+    Dominated (fun x => hf.foldl.bounds.time (initial x, xs x))
+      (fun x => (xs x).length * time x + (xs x).length + 1) ∧
+    Dominated (fun x => hf.foldl.bounds.peak (initial x, xs x)) peak := by
+  let Z := {z : ρ × α × List α × β // I z.1 (z.2.1 :: z.2.2.1) z.2.2.2}
+  have hc := (h.1.comp (fun z : Z => (z.1.2.2.2, z.1.2.1))).trans ht
+  have hc' := (h.2.comp (fun z : Z => (z.1.2.2.2, z.1.2.1))).trans hp
+  obtain ⟨Ct, htime⟩ := dominated_iff.mp hc
+  obtain ⟨Cp, hpeak⟩ := dominated_iff.mp hc'
+  obtain ⟨Cs, hstate⟩ := dominated_iff.mp hsize
+  have bound (x : ρ) := foldlCost_le
+    (f := f) (b := fun a i => ⟨hf.bounds.time (a, i), hf.bounds.peak (a, i)⟩)
+    (I x) (fun rest _ => Ct * (rest.length * time x)) ((Cs + Cp) * peak x)
+    (xs x) (initial x) (start x)
+    (by
+      intro a rest acc hi
+      have ht' := htime ⟨(x, a, rest, acc), hi⟩
+      have hp' := hpeak ⟨(x, a, rest, acc), hi⟩
+      have hs' := hstate ⟨(x, a :: rest, acc), hi⟩
+      simp only [Function.comp_apply, Nat.nsmul_eq_mul] at ht' hp' hs'
+      refine ⟨next x a rest acc hi, ?_, ?_, ?_⟩
+      · simp only [List.length_cons, Nat.add_mul, Nat.one_mul, Nat.mul_add]
+        omega
+      · apply (show ⌜(acc, a)⌝ₜ.size ≤ ⌜(acc, a :: rest)⌝ₜ.size by
+          simp only [size_encode_prod, encode_list_cons]; omega).trans
+        exact hs'.trans (Nat.mul_le_mul_right _ (Nat.le_add_right _ _))
+      · exact hp'.trans (Nat.mul_le_mul_right _ (Nat.le_add_left _ _)))
+    (by
+      intro acc hi
+      have hs' := hstate ⟨(x, [], acc), hi⟩
+      simp only [Nat.nsmul_eq_mul] at hs'
+      exact (show ⌜acc⌝ₜ.size ≤ ⌜(acc, ([] : List α))⌝ₜ.size by
+        simp only [size_encode_prod]; omega).trans hs' |>.trans
+          (Nat.mul_le_mul_right _ (Nat.le_add_right _ _)))
+  have ht' : Dominated
+      (fun x => (foldlCost f (fun a i => ⟨hf.bounds.time (a, i), hf.bounds.peak (a, i)⟩)
+        (initial x) (xs x)).time) (fun x => (xs x).length * time x) :=
+    Dominated.of_le_mul Ct fun x => (bound x).2.1
+  have hp' : Dominated
+      (fun x => (foldlCost f (fun a i => ⟨hf.bounds.time (a, i), hf.bounds.peak (a, i)⟩)
+        (initial x) (xs x)).peak) peak :=
+    Dominated.of_le_mul (Cs + Cp) fun x => (bound x).2.2
+  constructor
+  · simpa only [Implementation.bounds_foldl, foldlSumBounds, Nat.mul_comm] using
+      (ht'.add ((Dominated.refl _).const_mul_left 13)).add (Dominated.const 10)
+  · simpa only [Implementation.bounds_foldl, foldlSumBounds, Function.comp_def] using
+      (hsize.comp (fun x => ⟨(x, xs x, initial x), start x⟩)).max_same hp'
+
+/-- A prepend fold reuses the invariant rule with one coefficient for the whole traversal. -/
+theorem Implementation.HasGrowth.foldl_prepend {α : Type*} [UniqueEncoding Tree α]
+    {hf : Implementation (Function.uncurry (fun acc : List α => fun x => x :: acc))}
+    (h : hf.HasGrowth (fun _ => 1) (fun x => ⌜x⌝ₜ.size)) :
+    hf.foldl.HasGrowth (fun x => x.2.length + 1) (fun x => ⌜x⌝ₜ.size) := by
+  have hg := h.foldl_of_invariant
+    (fun x : List α × List α => fun rest acc => ⌜(acc, rest)⌝ₜ.size ≤ ⌜x⌝ₜ.size)
+    Prod.snd Prod.fst (fun _ => 1) (fun x => ⌜x⌝ₜ.size) (fun _ => le_rfl)
+    (by intro x a rest acc hi; simpa only [size_encode_prod, encode_list_cons,
+      Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hi)
+    (Dominated.of_le fun z => z.2) (Dominated.refl _)
+    (Dominated.of_le fun z => (show ⌜(z.1.2.2.2, z.1.2.1)⌝ₜ.size ≤
+      ⌜(z.1.2.2.2, z.1.2.1 :: z.1.2.2.1)⌝ₜ.size by
+        simp only [size_encode_prod, encode_list_cons]; omega).trans z.2)
+  refine ⟨hg.1.trans ?_, hg.2⟩
+  simp only [Nat.mul_one, Dominated.add_iff]
+  exact ⟨⟨Dominated.of_le (fun _ => Nat.le_succ _),
+    Dominated.of_le (fun _ => Nat.le_succ _)⟩,
+    Dominated.const_of_pos _ (fun _ => Nat.succ_pos _)⟩
+
+end Complexity.TreeProgram.Source
+
+namespace Complexity.TreeProgram.Source.Implementation
+
+/-- A dependent traversal reuses one specification for its entire callback family. -/
+theorem HasGrowth.mapDependent {ρ β : Type*} {α : ρ → Type*}
+    [UniqueEncoding Tree ρ] [∀ e, UniqueEncoding Tree (α e)] [UniqueEncoding Tree β]
+    {f : (e : ρ) → α e → β} {hf : Implementation (fun x : Σ e, α e => f x.1 x.2)}
+    {t p : (Σ e, α e) → ℕ} (h : hf.HasGrowth t p) :
+    hf.mapDependent.HasGrowth
+      (fun x : Σ e, List (α e) => (x.2.map (fun a => t ⟨x.1, a⟩)).sum + x.2.length + 1)
+      (fun x : Σ e, List (α e) => max ⌜x⌝ₜ.size
+        (max (⌜x.2.map (f x.1)⌝ₜ.size + 1) (x.2.foldr (fun a s => max (p ⟨x.1, a⟩) s) 0))) := by
+  let u : (Σ x : Σ e, List (α e), α x.1) → Σ e, α e := fun z => ⟨z.1.1, z.2⟩
+  have ht := Dominated.sum_map (fun x : Σ e, List (α e) => x.2)
+    (a := fun x a => hf.bounds.time ⟨x.1, a⟩) (b := fun x a => t ⟨x.1, a⟩)
+    (by simpa only [Function.comp_def, u] using h.1.comp u)
+  have hp := Dominated.foldr_max (fun x : Σ e, List (α e) => x.2)
+    (a := fun x a => hf.bounds.peak ⟨x.1, a⟩) (b := fun x a => p ⟨x.1, a⟩)
+    (by simpa only [Function.comp_def, u] using h.2.comp u)
+  apply HasGrowth.of_bounds _ (bounds_mapDependent _)
+  · exact (ht.add ((Dominated.refl _).const_mul_left 27)).add (Dominated.const 17)
+  · exact (Dominated.refl _).max ((Dominated.refl _).max hp)
+
+/-- Captured traversals combine the preparation and uniform callback specifications directly. -/
+theorem HasGrowth.mapDependentWith {ρ β : Type*} {α : ρ → Type*}
+    [UniqueEncoding Tree ρ] [∀ e, UniqueEncoding Tree (α e)] [UniqueEncoding Tree β]
+    {f : (e : ρ) → α e → β} {xs : (e : ρ) → List (α e)}
+    {hi : Implementation (fun e => (⟨e, xs e⟩ : Σ e, List (α e)))}
+    {hf : Implementation (fun p : Σ e, α e => f p.1 p.2)}
+    {ti pi : ρ → ℕ} {tf pf : (Σ e, α e) → ℕ}
+    (gi : hi.HasGrowth ti pi) (gf : hf.HasGrowth tf pf) :
+    (hi.mapDependentWith hf).HasGrowth
+      (fun e => ti e + (((xs e).map (fun a => tf ⟨e, a⟩)).sum + (xs e).length + 1))
+      (fun e => max (pi e) (max ⌜(⟨e, xs e⟩ : Σ e, List (α e))⌝ₜ.size
+        (max (⌜(xs e).map (f e)⌝ₜ.size + 1) ((xs e).foldr (fun a s => max (pf ⟨e, a⟩) s) 0)))) :=
+  gi.comp gf.mapDependent
+
+theorem HasGrowth.mapWith {ρ α β : Type*}
+    [UniqueEncoding Tree ρ] [UniqueEncoding Tree α] [UniqueEncoding Tree β]
+    {f : ρ → α → β} {xs : ρ → List α}
+    {hi : Implementation (fun e => (e, xs e))}
+    {hf : Implementation (fun p : ρ × α => f p.1 p.2)}
+    {ti pi : ρ → ℕ} {tf pf : ρ × α → ℕ}
+    (gi : hi.HasGrowth ti pi) (gf : hf.HasGrowth tf pf) :
+    (hi.mapWith hf).HasGrowth
+      (fun e => ti e + (((xs e).map (fun a => tf (e, a))).sum + (xs e).length + 1))
+      (fun e => max (pi e) (max ⌜(e, xs e)⌝ₜ.size
+        (max (⌜(xs e).map (f e)⌝ₜ.size + 1) ((xs e).foldr (fun a s => max (pf (e, a)) s) 0)))) := by
+  simpa only [Implementation.mapWith, Function.comp_apply, Sigma.encode_mk] using
+    (gi.mapOutput (fun p => (⟨p.1, p.2⟩ : Σ _ : ρ, List α))
+      (fun p => @Sigma.encode_mk ρ (fun _ => List α) _ _ p.1 p.2)).mapDependentWith
+      (gf.mapInput (fun p : Σ _ : ρ, α => (p.1, p.2))
+        (fun p => (@Sigma.encode_mk ρ (fun _ => α) _ _ p.1 p.2).symm))
+
+end Complexity.TreeProgram.Source.Implementation

@@ -13,6 +13,15 @@ public import Complexity.Classes.Functions.Basic
 
 namespace Complexity
 
+/-- Equal output codes preserve the same size-indexed resource certificate. -/
+theorem TimeSpaceModel.ComputableWithSizeBudgets.of_encode {Data α β γ : Type*}
+    [Encoding Data α] [UniqueEncoding Data β] [UniqueEncoding Data γ]
+    {model : TimeSpaceModel Id Data} {f : α → β} {g : α → γ} {t s : ℕ → ℕ}
+    (h : model.ComputableWithSizeBudgets g t s)
+    (hfg : ∀ a, encode Data (f a) = encode Data (g a)) :
+    model.ComputableWithSizeBudgets f t s :=
+  TimeSpaceModel.ComputableWithCodeBudgets.of_encode h hfg
+
 /-- Equal output codes preserve simultaneous asymptotic bounds in the same model. -/
 theorem FTISP.of_encode {Data α β γ : Type*} [Encoding Data α]
     [UniqueEncoding Data β] [UniqueEncoding Data γ]
@@ -20,7 +29,7 @@ theorem FTISP.of_encode {Data α β γ : Type*} [Encoding Data α]
     (hg : g ∈ FTISP model T S)
     (hfg : ∀ x, encode Data (f x) = encode Data (g x)) : f ∈ FTISP model T S := by
   obtain ⟨t, s, h, ht, hs⟩ := hg
-  exact ⟨t, s, h.of_encode hfg, ht, hs⟩
+  exact (h.of_encode hfg).mem_ftisp_of_dominated ht hs
 
 namespace FP
 
@@ -35,10 +44,9 @@ theorem of_encode {Data α β : Type*} [UniqueEncoding Data α] [UniqueEncoding 
   obtain ⟨d, t, ⟨s, R, hR, hm⟩, ht⟩ := mem_iff_exists_ftime.mp hf
   apply mem_iff_exists_ftime.mpr
   refine ⟨d, t, ⟨s, R, hR, ?_⟩, ht⟩
-  apply Encoding.Computes.iff_of_uniqueEncoding.mpr
+  rw [Encoding.Computes.iff_of_uniqueEncoding] at hm ⊢
   intro a
-  have hh := Encoding.Computes.iff_of_uniqueEncoding.mp hm (encode Data a)
-  simpa only [UniqueEncoding.refl_encode, id_eq, h] using hh
+  simpa only [UniqueEncoding.refl_encode, id_eq, h] using hm (encode Data a)
 
 end FP
 

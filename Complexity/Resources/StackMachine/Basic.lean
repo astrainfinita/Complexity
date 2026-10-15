@@ -22,24 +22,28 @@ namespace Complexity.StackMachine
 
 variable {α β : Type*} [Encoding (RawWord Bool) α] [Encoding (RawWord Bool) β]
 
-/-- One stack machine computes the function on every valid bit-string encoding. -/
-def Computes {κ Q : Type*} [Fintype κ] (M : StackMachine Id κ Bool Q)
-    (f : α → β) (t s : ℕ → ℕ) : Prop :=
-  Encoding.Computes (fun xs ys ↦ M.ComputesInTimeAndSpace xs.toList ys.toList) RawWord.length f t s
-
 /-- Finite stack machines with transition time and peak work-stack space. -/
 def _root_.Complexity.TimeSpaceModel.stack : TimeSpaceModel Id (RawWord Bool) where
   inputSize := RawWord.length
   behaviors := {R | ∃ (κ : Type) (_ : Fintype κ) (Q : Type) (_ : Finite Q)
       (M : StackMachine Id κ Bool Q),
-      R = fun xs result ↦ M.ComputesInTimeAndSpace xs.toList result.run.toList}
+      R = fun xs result ↦ M.ComputesWithin xs.toList result.run.toList}
   budget_mono := by
     rintro R ⟨κ, hκ, Q, hQ, M, rfl⟩ x y t s t' s' h ht hs
     exact h.mono ht hs
 
-/-- Recover the single finite machine realizing the abstract resource behavior. -/
-theorem computableInTimeAndSpace_iff {f : α → β} {t s : ℕ → ℕ} :
-    TimeSpaceModel.stack.ComputableInTimeAndSpace f t s ↔
+section InputBudgets
+
+variable {α β : Type*} [Encoding (RawWord Bool) α] [Encoding (RawWord Bool) β]
+
+/-- One stack machine with budgets depending on its input value. -/
+def Computes {κ Q : Type*} [Fintype κ] (M : StackMachine Id κ Bool Q)
+    (f : α → β) (t s : α → ℕ) : Prop :=
+  Encoding.Computes f fun value (input output : RawWord Bool) =>
+    M.ComputesWithin input.toList output.toList (t value) (s value)
+
+theorem computableWithin_iff {f : α → β} {t s : α → ℕ} :
+    TimeSpaceModel.stack.ComputableWithin f t s ↔
       ∃ (κ : Type) (_ : Fintype κ) (Q : Type) (_ : Finite Q)
         (M : StackMachine Id κ Bool Q), Computes M f t s := by
   constructor
@@ -49,13 +53,15 @@ theorem computableInTimeAndSpace_iff {f : α → β} {t s : ℕ → ℕ} :
     exact ⟨_, ⟨κ, hκ, Q, hQ, M, rfl⟩, h⟩
 
 theorem Computes.mono {κ Q : Type*} [Fintype κ] {M : StackMachine Id κ Bool Q}
-    {f : α → β} {t s t' s' : ℕ → ℕ} (h : Computes M f t s)
-    (ht : ∀ n, t n ≤ t' n) (hs : ∀ n, s n ≤ s' n) : Computes M f t' s' :=
-  Encoding.Computes.mono h (fun h ht hs ↦ h.mono ht hs) ht hs
+    {f : α → β} {t s t' s' : α → ℕ} (h : Computes M f t s)
+    (ht : ∀ a, t a ≤ t' a) (hs : ∀ a, s a ≤ s' a) : Computes M f t' s' :=
+  Encoding.Computes.mono h (fun hc => hc.mono (ht _) (hs _))
 
-theorem Computes.computableInTimeAndSpace {κ Q : Type} [Fintype κ] [Finite Q]
-    {M : StackMachine Id κ Bool Q} {f : α → β} {t s : ℕ → ℕ}
-    (h : Computes M f t s) : TimeSpaceModel.stack.ComputableInTimeAndSpace f t s :=
-  computableInTimeAndSpace_iff.mpr ⟨κ, inferInstance, Q, inferInstance, M, h⟩
+theorem Computes.computableWithin {κ Q : Type} [Fintype κ] [Finite Q]
+    {M : StackMachine Id κ Bool Q} {f : α → β} {t s : α → ℕ}
+    (h : Computes M f t s) : TimeSpaceModel.stack.ComputableWithin f t s :=
+  computableWithin_iff.mpr ⟨κ, inferInstance, Q, inferInstance, M, h⟩
+
+end InputBudgets
 
 end Complexity.StackMachine

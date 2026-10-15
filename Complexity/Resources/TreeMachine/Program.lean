@@ -16,15 +16,15 @@ namespace Complexity.TreeProgram.Code
 
 /-- A uniform source proof for an ordinary Lean function supplies one finite machine for all
 inputs. The public complexity interface hides the generated control graph and register layout. -/
-theorem computableInTimeAndSpace {α β : Type*}
+theorem computableWithin {α β : Type*}
     [UniqueEncoding Tree α] [UniqueEncoding Tree β] (p : Code Value) (f : α → β)
-    (time space : ℕ → ℕ)
+    (time space : α → ℕ)
     (h : ∀ a, p.Bounded 1 (Function.update (fun _ ↦ Tree.nil) 0 (encode Tree a))
-      (time (encode Tree a).size) (space (encode Tree a).size)
+      (time a) (space a)
       (fun v s ↦ v.eval s = encode Tree (f a)))
-    (hx : ∀ a : α, (encode Tree a).size ≤ space (encode Tree a).size) :
-    TimeSpaceModel.tree.ComputableInTimeAndSpace f (fun n ↦ time n + 4)
-      (fun n ↦ p.registers * (space n + 2)) := by
+    (hx : ∀ a : α, (encode Tree a).size ≤ space a) :
+    TimeSpaceModel.tree.ComputableWithin f (fun a ↦ time a + 4)
+      (fun a ↦ p.registers * (space a + 2)) := by
   refine ⟨_, ⟨p.registers, inferInstance, _, inferInstance, p.compile, rfl⟩, ?_⟩
   exact Encoding.Computes.iff_of_uniqueEncoding.mpr fun a ↦ (h a).compile (hx a)
 

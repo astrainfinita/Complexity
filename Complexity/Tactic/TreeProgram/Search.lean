@@ -40,7 +40,6 @@ def recursionMessage (name : Name) : MessageData :=
 inductive FailureStage where
   | structure
   | specification
-  | budget
   deriving BEq
 
 /-- A rejected candidate retains its source path independently of message formatting. -/
@@ -119,10 +118,6 @@ def Session.discharge (session : Session) (path : Array Expr)
       trace[source.translation] "rejected structure: {ex.toMessageData}"
       session.reject path ex.toMessageData
       return none
-    if ex.toMessageData.kind == `sourceBudgetFailure then
-      trace[source.translation] "rejected budget: {ex.toMessageData}"
-      session.reject path ex.toMessageData .budget
-      return none
     throw ex
 
 /-- Restore failed attempts without refunding their search steps. -/
@@ -170,7 +165,11 @@ def isFallback (env : Environment) (rule : FunctionTheorem) : Bool :=
 /-- Mathlib supplies rule indexing and theorem application; only attempts are transactional. -/
 def lambdaRules (decl : FunPropDecl) (kind : LambdaTheoremType) (goal : Expr)
     (functions : Option (Expr × Expr) := none) : FunPropM (Option Result) := do
-  for thm in ← getLambdaTheorems decl.funPropName kind do
+  let saved := sourceSavedImplementationExt.getState (← getEnv)
+  let thms ← getLambdaTheorems decl.funPropName kind
+  let thms := thms.filter (fun thm => saved.contains thm.thmName) ++
+    thms.filter (fun thm => !saved.contains thm.thmName)
+  for thm in thms do
     let hints ← match thm.thmArgs, functions with
       | .comp i j, some (f, g) => pure #[(i, f), (j, g)]
       | .comp .., none => throwError "missing composition arguments"

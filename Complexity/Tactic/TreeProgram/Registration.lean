@@ -28,5 +28,3 @@ run_elab do
   let path ← DiscrTree.mkPath (mkAppN property args)
   modifyEnv fun env => funPropDeclsExt.addEntry env
     { funPropName := property.constName!, path, funArgId }
-
-attribute [fun_prop] Complexity.TreeProgram.Source.Realizes

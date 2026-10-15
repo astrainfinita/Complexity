@@ -45,42 +45,42 @@ def UsesSpace [Fintype κ] (M : TM Id κ Γ Q) (xs : List Γ) (s : ℕ) : Prop :
   ∀ t, (M.runHistory (Cfg κ Γ Q xs.toArray) xs t).space ≤ s
 
 /-- Compute with unit action time and visited-cell space on one execution history. -/
-def ComputesInTimeAndSpace [Fintype κ] (M : TM Id κ Γ Q) (xs ys : List Γ)
+def ComputesWithin [Fintype κ] (M : TM Id κ Γ Q) (xs ys : List Γ)
     (t s : ℕ) : Prop :=
   M.ComputesWith (Config := Cfg κ Γ Q xs.toArray)
     Controller.History.length Controller.History.space xs ys t s
 
-theorem ComputesInTimeAndSpace.mono [Fintype κ] {M : TM Id κ Γ Q}
+theorem ComputesWithin.mono [Fintype κ] {M : TM Id κ Γ Q}
     {xs ys : List Γ} {t s t' s' : ℕ}
-    (h : M.ComputesInTimeAndSpace xs ys t s) (ht : t ≤ t') (hs : s ≤ s') :
-    M.ComputesInTimeAndSpace xs ys t' s' :=
+    (h : M.ComputesWithin xs ys t s) (ht : t ≤ t') (hs : s ≤ s') :
+    M.ComputesWithin xs ys t' s' :=
   Controller.computesWith_mono h ht hs
 
 /-- Unit-time computation visits at most one new cell per tape per transition. -/
-theorem ComputesInTimeAndSpace.space_of_time [Fintype κ] {M : TM Id κ Γ Q}
-    {xs ys : List Γ} {t s : ℕ} (h : M.ComputesInTimeAndSpace xs ys t s) :
-    M.ComputesInTimeAndSpace xs ys t (Fintype.card κ * (t + 1)) := by
+theorem ComputesWithin.space_of_time [Fintype κ] {M : TM Id κ Γ Q}
+    {xs ys : List Γ} {t s : ℕ} (h : M.ComputesWithin xs ys t s) :
+    M.ComputesWithin xs ys t (Fintype.card κ * (t + 1)) := by
   obtain ⟨n, hh, ho, ht, _⟩ := h
   exact ⟨n, hh, ho, ht, (Controller.History.space_le_length _).trans
     (Nat.mul_le_mul_left _ (Nat.succ_le_succ ht))⟩
 
 /-- Read the ordinary run's result without carrying its visitation history. -/
-theorem ComputesInTimeAndSpace.run_spec [Fintype κ] {M : TM Id κ Γ Q}
-    {xs ys : List Γ} {t s : ℕ} (h : M.ComputesInTimeAndSpace xs ys t s) :
+theorem ComputesWithin.run_spec [Fintype κ] {M : TM Id κ Γ Q}
+    {xs ys : List Γ} {t s : ℕ} (h : M.ComputesWithin xs ys t s) :
     M.Halted (M.run (Cfg κ Γ Q xs.toArray) xs t) ∧
       (M.run (Cfg κ Γ Q xs.toArray) xs t).output = ys.toArray := by
   have ⟨hh, ho, _⟩ := Controller.computesWith_unit_iff.mp h
   simpa only [rawExecution_hasOutput] using And.intro hh ho
 
-theorem ComputesInTimeAndSpace.terminates [Fintype κ] {M : TM Id κ Γ Q}
+theorem ComputesWithin.terminates [Fintype κ] {M : TM Id κ Γ Q}
     {xs ys : List Γ} {t s : ℕ}
-    (h : M.ComputesInTimeAndSpace xs ys t s) : M.Terminates xs :=
+    (h : M.ComputesWithin xs ys t s) : M.Terminates xs :=
   ⟨t, h.run_spec.1⟩
 
 /-- A terminating bounded computation controls space along the entire infinite padded run. -/
-theorem ComputesInTimeAndSpace.usesSpace [Fintype κ] {M : TM Id κ Γ Q}
+theorem ComputesWithin.usesSpace [Fintype κ] {M : TM Id κ Γ Q}
     {xs ys : List Γ} {t s : ℕ}
-    (h : M.ComputesInTimeAndSpace xs ys t s) : M.UsesSpace xs s :=
+    (h : M.ComputesWithin xs ys t s) : M.UsesSpace xs s :=
   fun u ↦ Controller.computesWith_space_le h (M.runHistoryFrom_space_mono _) u
 
 end Complexity.TM

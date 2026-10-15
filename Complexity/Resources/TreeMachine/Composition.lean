@@ -10,9 +10,10 @@ public import Complexity.Models.TreeMachine.Composition
 
 /-! # Composition of encoded tree computations
 
-The intermediate code need not be unique. Its size is bounded by the first
-machine's initial mass and time cost, so a monotone time bound for the second
-machine gives a bound in terms of the original input size.
+Both machines receive value-indexed budgets on every valid code. Composition
+therefore uses the second budget at the intermediate value, without imposing
+monotonicity or choosing an intermediate representation. Peak space is the larger
+of the two phase budgets after padding their register files.
 -/
 
 @[expose] public section
@@ -22,29 +23,35 @@ namespace Complexity.TreeMachine
 variable {α β γ : Type*} [Encoding Tree α] [Encoding Tree β] [Encoding Tree γ]
   {k l : ℕ} [NeZero k] [NeZero l] {Q Q' : Type*}
 
-/-- Time cost for composition: a fixed clearing pass and the second computation
-on an intermediate code bounded by the first computation's time budget. -/
-def compTimeBound (k l : ℕ) (t u : ℕ → ℕ) (n : ℕ) : ℕ :=
-  t n + max k l + u (n + k + t n)
-
-/-- Compose finite computations on all valid codes, allowing any valid
-intermediate representation of the computed value. -/
+/-- Compose computations on all valid codes, allowing any valid intermediate
+representation of the computed value. The clearing pass costs a fixed number of
+instructions, and the two phases share their work registers. -/
 theorem Computes.comp {M : TreeMachine Id k Q} {N : TreeMachine Id l Q'}
-    {f : α → β} {g : β → γ}
-    {t s u v : ℕ → ℕ} (hg : Computes N g u v) (hf : Computes M f t s)
-    (hu : Monotone u) :
+    {f : α → β} {g : β → γ} {t s : α → ℕ} {u v : β → ℕ}
+    (hg : Computes N g u v) (hf : Computes M f t s) :
     Computes (M.comp N) (g ∘ f)
-      (compTimeBound k l t u)
-      (fun n => n + (max k l + 1) + compTimeBound k l t u n) := by
-  intro a x ha
-  obtain ⟨b, hb, hm⟩ := hf a x ha
-  obtain ⟨c, hc, hn⟩ := hg b (f x) hb
-  have hb' := hm.output_size_le
-  have ht : t a.size + max k l + u b.size ≤ compTimeBound k l t u a.size := by
-    have := hu hb'
-    unfold compTimeBound
-    omega
-  have hcomp := comp_computesInTimeAndSpace M N hm hn
-  exact ⟨c, hc, hcomp.space_of_time.mono ht (Nat.add_le_add_left ht _)⟩
+      (fun x => t x + max k l + u (f x))
+      (fun x => max (s x + (max k l + 1 - k)) (v (f x) + (max k l + 1 - l))) := by
+  intro a src hsrc
+  obtain ⟨mid, hmid, hm⟩ := hf a src hsrc
+  obtain ⟨dst, hdst, hn⟩ := hg (f a) mid hmid
+  exact ⟨dst, hdst, comp_computesWithin M N hm hn⟩
+
+/-- Compose growth specifications of two fixed machines. The clearing pass and
+register padding remain in the bound, including when either component has zero
+time. All valid codes of an intermediate value share its resource specification. -/
+theorem comp_computesWithGrowth {M : TreeMachine Id k Q} {N : TreeMachine Id l Q'}
+    {f : α → β} {g : β → γ} {T S : α → ℕ} {U V : β → ℕ}
+    (hg : ∃ u v, Computes N g u v ∧ Dominated u U ∧ Dominated v V)
+    (hf : ∃ t s, Computes M f t s ∧ Dominated t T ∧ Dominated s S) :
+    ∃ t s, Computes (M.comp N) (g ∘ f) t s ∧
+      Dominated t (fun x => T x + max k l + U (f x)) ∧
+      Dominated s
+        (fun x => max (S x + (max k l + 1 - k)) (V (f x) + (max k l + 1 - l))) := by
+  obtain ⟨u, v, hg, hu, hv⟩ := hg
+  obtain ⟨t, s, hf, ht, hs⟩ := hf
+  exact ⟨_, _, hg.comp hf,
+    (ht.add (Dominated.refl _)).add (hu.comp f),
+    (hs.add (Dominated.refl _)).max ((hv.comp f).add (Dominated.refl _))⟩
 
 end Complexity.TreeMachine

@@ -125,7 +125,7 @@ def timeBound (k N t : ℕ) : ℕ :=
 
 /-- The complete simulator preserves output and an independent source-space bound. -/
 theorem Program.spec_program (M : TreeMachine Id k Q)
-    {x a : Tree} {t s : ℕ} (h : M.ComputesInTimeAndSpace x a t s) :
+    {x a : Tree} {t s : ℕ} (h : M.ComputesWithin x a t s) :
     Triple ((program M 0 0).verify (historySemantics (BitList.encodeTree x).toArray))
       (fun c b ↦ c = History.nil ((StackMachine.execution (BitList.encodeTree x)).init ()) ∧
         timeBound k x.size t ≤ b)
@@ -159,10 +159,10 @@ theorem Program.spec_program (M : TreeMachine Id k Q)
 def compiler (M : TreeMachine Id k Q) := StackMachine.Program.compile (program M 0 0)
 
 /-- Both time and space have linear simulation bounds. -/
-theorem computesInTimeAndSpace (M : TreeMachine Id k Q)
-    {x a : Tree} {t s : ℕ} (h : M.ComputesInTimeAndSpace x a t s) :
-    (compiler M).ComputesInTimeAndSpace (BitList.encodeTree x) (BitList.encodeTree a)
+theorem computesWithin (M : TreeMachine Id k Q)
+    {x a : Tree} {t s : ℕ} (h : M.ComputesWithin x a t s) :
+    (compiler M).ComputesWithin (BitList.encodeTree x) (BitList.encodeTree a)
       (timeBound k x.size t) (spaceBound k s) :=
-  StackMachine.Program.computesInTimeAndSpace_history (Program.spec_program M h)
+  StackMachine.Program.computesWithin_history (Program.spec_program M h)
 
 end Complexity.TreeMachine.Simulation

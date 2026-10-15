@@ -211,10 +211,10 @@ theorem run_toStack (M : TM Id κ (Option Bool) Q) (xs : List Bool) (n : ℕ) :
   exact hi
 
 /-- Boolean-stack simulation preserves time and bounds space by twice the source visits. -/
-theorem ComputesInTimeAndSpace.toStack [Fintype κ] {M : TM Id κ (Option Bool) Q}
+theorem ComputesWithin.toStack [Fintype κ] {M : TM Id κ (Option Bool) Q}
     {xs ys : List Bool} {t s : ℕ}
-    (h : M.ComputesInTimeAndSpace (xs.map some) (ys.map some) t s) :
-    M.toStack.ComputesInTimeAndSpace xs ys t (2 * s) := by
+    (h : M.ComputesWithin (xs.map some) (ys.map some) t s) :
+    M.toStack.ComputesWithin xs ys t (2 * s) := by
   obtain ⟨hh, ho⟩ := h.run_spec
   have hr := M.run_toStack xs t
   apply Controller.computesWith_unit_iff.mpr

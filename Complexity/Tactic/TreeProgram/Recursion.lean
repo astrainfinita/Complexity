@@ -309,6 +309,75 @@ theorem cost_step (bc bs : Bounds α) (bd : Bounds {x // r.test x = false})
   simp only [h, ↓reduceDIte]
 
 omit [∀ x, UniqueEncoding Tree (β x)] in
+/-- One coefficient covers every callback and is fixed before induction on the recursion. -/
+theorem cost_le_mul
+    {bc bs bc' bs' : Bounds α} {bd bd' : Bounds {x // r.test x = false}}
+    {br br' : Bounds r.Return} (C : ℕ) (hC : 1 ≤ C)
+    (hc : ∀ x, bc.time x ≤ C * bc'.time x ∧ bc.peak x ≤ C * bc'.peak x)
+    (hs : ∀ x, bs.time x ≤ C * bs'.time x ∧ bs.peak x ≤ C * bs'.peak x)
+    (hd : ∀ x, bd.time x ≤ C * bd'.time x ∧ bd.peak x ≤ C * bd'.peak x)
+    (hr : ∀ x, br.time x ≤ C * br'.time x ∧ br.peak x ≤ C * br'.peak x)
+    (x : α) :
+    (r.cost bc bs bd br x).time ≤ C * (r.cost bc' bs' bd' br' x).time ∧
+    (r.cost bc bs bd br x).peak ≤ C * (r.cost bc' bs' bd' br' x).peak := by
+  have scale (n : ℕ) : n ≤ C * n := by simpa using Nat.mul_le_mul_right n hC
+  induction hm : r.measure x using Nat.strong_induction_on generalizing x with
+  | h n ih =>
+    cases ht : r.test x with
+    | false =>
+      rw [r.cost_stop _ _ _ _ x ht, r.cost_stop _ _ _ _ x ht]
+      dsimp only
+      rw [Nat.mul_add, mul_max, mul_max]
+      exact ⟨Nat.add_le_add (hd ⟨x, ht⟩).1 (scale 2),
+        max_le_max (scale _) (max_le_max (hc x).2 (hd ⟨x, ht⟩).2)⟩
+    | true =>
+      have hi := ih (r.measure (r.next x)) (by have := r.decreases x ht; omega)
+        (r.next x) rfl
+      rw [r.cost_step _ _ _ _ x ht, r.cost_step _ _ _ _ x ht]
+      dsimp only
+      simp only [Nat.mul_add, mul_max]
+      exact ⟨Nat.add_le_add (Nat.add_le_add (Nat.add_le_add
+        (Nat.add_le_add (hs x).1 (hc (r.next x)).1) (hr ⟨⟨x, ht⟩, f (r.next x)⟩).1)
+        (scale 16)) hi.1,
+        max_le_max (scale _) (max_le_max (hc x).2 (max_le_max (hs x).2
+          (max_le_max (hr ⟨⟨x, ht⟩, f (r.next x)⟩).2
+            (Nat.add_le_add (Nat.add_le_add hi.2 (scale _)) (scale 1)))))⟩
+
+omit [∀ x, UniqueEncoding Tree (β x)] in
+/-- Replace callback allowances in the existing cost expression, without changing its
+additions, controller costs, unique terminal call, or accumulated stack space. -/
+theorem dominated_cost_congr
+    {bc bs bc' bs' : Bounds α} {bd bd' : Bounds {x // r.test x = false}}
+    {br br' : Bounds r.Return}
+    (hc : Dominated bc.time bc'.time ∧ Dominated bc.peak bc'.peak)
+    (hs : Dominated bs.time bs'.time ∧ Dominated bs.peak bs'.peak)
+    (hd : Dominated bd.time bd'.time ∧ Dominated bd.peak bd'.peak)
+    (hr : Dominated br.time br'.time ∧ Dominated br.peak br'.peak) :
+    Dominated (fun x => (r.cost bc bs bd br x).time)
+      (fun x => (r.cost bc' bs' bd' br' x).time) ∧
+    Dominated (fun x => (r.cost bc bs bd br x).peak)
+      (fun x => (r.cost bc' bs' bd' br' x).peak) := by
+  obtain ⟨C₁, h₁⟩ := dominated_iff.mp hc.1
+  obtain ⟨C₂, h₂⟩ := dominated_iff.mp hc.2
+  obtain ⟨C₃, h₃⟩ := dominated_iff.mp hs.1
+  obtain ⟨C₄, h₄⟩ := dominated_iff.mp hs.2
+  obtain ⟨C₅, h₅⟩ := dominated_iff.mp hd.1
+  obtain ⟨C₆, h₆⟩ := dominated_iff.mp hd.2
+  obtain ⟨C₇, h₇⟩ := dominated_iff.mp hr.1
+  obtain ⟨C₈, h₈⟩ := dominated_iff.mp hr.2
+  simp only [Nat.nsmul_eq_mul] at h₁ h₂ h₃ h₄ h₅ h₆ h₇ h₈
+  let C := C₁ + C₂ + C₃ + C₄ + C₅ + C₆ + C₇ + C₈ + 1
+  have lift {a b c : ℕ} (hc : c ≤ C) (h : a ≤ c * b) : a ≤ C * b :=
+    h.trans (Nat.mul_le_mul_right b hc)
+  have h := r.cost_le_mul C (by dsimp [C]; omega)
+    (fun x => ⟨lift (by dsimp [C]; omega) (h₁ x), lift (by dsimp [C]; omega) (h₂ x)⟩)
+    (fun x => ⟨lift (by dsimp [C]; omega) (h₃ x), lift (by dsimp [C]; omega) (h₄ x)⟩)
+    (fun x => ⟨lift (by dsimp [C]; omega) (h₅ x), lift (by dsimp [C]; omega) (h₆ x)⟩)
+    (fun x => ⟨lift (by dsimp [C]; omega) (h₇ x), lift (by dsimp [C]; omega) (h₈ x)⟩)
+  exact ⟨Dominated.of_le_mul C (fun x => (h x).1),
+    Dominated.of_le_mul C (fun x => (h x).2)⟩
+
+omit [∀ x, UniqueEncoding Tree (β x)] in
 /-- Bound a recursive evaluation with separate terminal and per-round allowances.
 The final term explicitly pays for every saved caller in the stack. -/
 theorem cost_le_of_steps
@@ -352,31 +421,12 @@ theorem cost_le_of_steps
         (repeat' apply And.intro) <;> nlinarith [hc.2]
 
 
-omit [∀ x, UniqueEncoding Tree (β x)] in
-/-- Bound a recursive evaluation using a source invariant and uniform local allowances.
-The final term explicitly pays for every saved caller in the stack. -/
-theorem cost_le_of_invariant
-    (bc bs : Bounds α) (bd : Bounds {x // r.test x = false}) (br : Bounds r.Return)
-    (I : α → Prop) (size time peak : ℕ)
-    (hsize : ∀ x, I x → ⌜x⌝ₜ.size ≤ size)
-    (hcheck : ∀ x, I x → bc.peak x ≤ peak)
-    (hstop : ∀ x (h : r.test x = false), I x →
-      bd.time ⟨x, h⟩ + 2 ≤ time ∧ bd.peak ⟨x, h⟩ ≤ peak)
-    (hstep : ∀ x (h : r.test x = true), I x →
-      I (r.next x) ∧ bs.peak x ≤ peak ∧
-      br.peak ⟨⟨x, h⟩, f (r.next x)⟩ ≤ peak ∧
-      bs.time x + bc.time (r.next x) + br.time ⟨⟨x, h⟩, f (r.next x)⟩ + 16 ≤ time)
-    (x : α) (hx : I x) :
-    (r.cost bc bs bd br x).time ≤ (r.measure x + 1) * time ∧
-      (r.cost bc bs bd br x).peak ≤ peak + (r.measure x + 1) * (size + 1) := by
-  have h := r.cost_le_of_steps bc bs bd br I size time time peak
-    hsize hcheck hstop hstep x hx
-  simpa only [Nat.add_mul, Nat.one_mul] using h
-
 @[simps] def bounds (bc bs : Bounds α) (bd : Bounds {x // r.test x = false})
     (br : Bounds r.Return) : Bounds α :=
   ⟨fun x => bc.time x + 3 * (r.cost bc bs bd br x).time + 10,
     fun x => (r.cost bc bs bd br x).peak + 1⟩
+
+attribute [source_bounds] bounds_time bounds_peak
 
 /-- Callback certificates and the source recursion equation determine one certified program. -/
 def implementation (hc : Implementation r.test) (hs : Implementation r.next)
@@ -413,3 +463,196 @@ def implementation (hc : Implementation r.test) (hs : Implementation r.next)
 
 end Recursion
 end Complexity.TreeProgram.Source
+
+namespace Complexity.TreeProgram.Source.Recursion
+
+variable {α ρ : Type*} {β : α → Type*} [UniqueEncoding Tree α]
+  {f : (x : α) → β x} (r : Recursion f)
+
+/-- A round excludes the recursive tail and the unique terminal computation. -/
+def roundTime (bc bs : Bounds α) (br : Bounds r.Return) (x : α) : ℕ :=
+  if h : r.test x = true then
+    bs.time x + bc.time (r.next x) + br.time ⟨⟨x, h⟩, f (r.next x)⟩ + 16
+  else 0
+
+def stopTime (bd : Bounds {x // r.test x = false}) (x : α) : ℕ :=
+  if h : r.test x = false then bd.time ⟨x, h⟩ + 2 else 0
+
+def localPeak (bc bs : Bounds α) (bd : Bounds {x // r.test x = false})
+    (br : Bounds r.Return) (x : α) : ℕ :=
+  if h : r.test x = true then
+    max (bc.peak x) (max (bs.peak x) (br.peak ⟨⟨x, h⟩, f (r.next x)⟩))
+  else max (bc.peak x) (bd.peak ⟨x, by simpa using h⟩)
+
+/-- Every reachable state of every outer input belongs to one family. The witnesses in the
+four estimates are uniform across that entire family, not chosen inside the recursion. -/
+theorem dominated_cost (bc bs : Bounds α) (bd : Bounds {x // r.test x = false})
+    (br : Bounds r.Return) (I : ρ → α → Prop) (start : ρ → α)
+    (size stop step peak : ρ → ℕ)
+    (initial : ∀ a, I a (start a))
+    (next : ∀ a x, I a x → r.test x = true → I a (r.next x))
+    (hsize : Dominated (fun z : {p : ρ × α // I p.1 p.2} => ⌜z.1.2⌝ₜ.size)
+      (fun z => size z.1.1))
+    (hpeak : Dominated (fun z : {p : ρ × α // I p.1 p.2} =>
+      r.localPeak bc bs bd br z.1.2) (fun z => peak z.1.1))
+    (hstop : Dominated (fun z : {p : ρ × α // I p.1 p.2} => r.stopTime bd z.1.2)
+      (fun z => stop z.1.1))
+    (hstep : Dominated (fun z : {p : ρ × α // I p.1 p.2} => r.roundTime bc bs br z.1.2)
+      (fun z => step z.1.1)) :
+    Dominated (fun a => (r.cost bc bs bd br (start a)).time)
+      (fun a => r.measure (start a) * step a + stop a) ∧
+    Dominated (fun a => (r.cost bc bs bd br (start a)).peak)
+      (fun a => peak a + (r.measure (start a) + 1) * (size a + 1)) := by
+  obtain ⟨Cs, hs⟩ := dominated_iff.mp hsize
+  obtain ⟨Cp, hp⟩ := dominated_iff.mp hpeak
+  obtain ⟨Ct, ht⟩ := dominated_iff.mp hstop
+  obtain ⟨Cr, hr⟩ := dominated_iff.mp hstep
+  simp only [Nat.nsmul_eq_mul] at hs hp ht hr
+  have bound (a : ρ) := r.cost_le_of_steps bc bs bd br (I a)
+    (Cs * size a) (Ct * stop a) (Cr * step a) (Cp * peak a)
+    (fun x hx => hs ⟨(a, x), hx⟩)
+    (by
+      intro x hx
+      have h := hp ⟨(a, x), hx⟩
+      unfold localPeak at h
+      split at h <;> exact (Nat.le_max_left _ _).trans h)
+    (by
+      intro x hx hi
+      have ht' := ht ⟨(a, x), hi⟩
+      have hp' := hp ⟨(a, x), hi⟩
+      simp only [stopTime, localPeak, hx, Bool.false_eq_true, ↓reduceDIte,
+        Nat.max_le] at ht' hp'
+      exact ⟨ht', hp'.2⟩)
+    (by
+      intro x hx hi
+      have hp' := hp ⟨(a, x), hi⟩
+      have hr' := hr ⟨(a, x), hi⟩
+      simp only [localPeak, roundTime, hx, ↓reduceDIte, Nat.max_le] at hp' hr'
+      exact ⟨next a x hi hx, hp'.2.1, hp'.2.2, hr'⟩)
+    (start a) (initial a)
+  constructor
+  · refine dominated_iff.mpr ⟨Cr + Ct, fun a => ?_⟩
+    have h := (bound a).1
+    simp only [Nat.nsmul_eq_mul]
+    apply h.trans
+    calc
+      _ = Cr * (r.measure (start a) * step a) + Ct * stop a := by ring
+      _ ≤ (Cr + Ct) * (r.measure (start a) * step a) + (Cr + Ct) * stop a :=
+        Nat.add_le_add (Nat.mul_le_mul_right _ (by omega))
+          (Nat.mul_le_mul_right _ (by omega))
+      _ = _ := by ring
+  · refine dominated_iff.mpr ⟨Cp + Cs + 1, fun a => ?_⟩
+    have h := (bound a).2
+    simp only [Nat.nsmul_eq_mul]
+    apply h.trans
+    have hs' : Cs * size a + 1 ≤ (Cp + Cs + 1) * (size a + 1) := by
+      rw [Nat.mul_add, Nat.mul_one]
+      exact Nat.add_le_add (Nat.mul_le_mul_right _ (by omega)) (by omega)
+    calc
+      _ ≤ (Cp + Cs + 1) * peak a +
+          (r.measure (start a) + 1) * ((Cp + Cs + 1) * (size a + 1)) :=
+        Nat.add_le_add (Nat.mul_le_mul_right _ (by omega)) (Nat.mul_le_mul_left _ hs')
+      _ = _ := by ring
+
+/-- Separate callback estimates are combined by the original recursion cost theorem.
+Branch restrictions and controller constants are discharged here, with one coefficient
+for the entire invariant family. The terminal allowance is paid once. -/
+theorem dominated_cost_of_bounds
+    (bc bs : Bounds α) (bd : Bounds {x // r.test x = false}) (br : Bounds r.Return)
+    (I : ρ → α → Prop) (start : ρ → α) (size stop step peak : ρ → ℕ)
+    (initial : ∀ a, I a (start a))
+    (next : ∀ a x, I a x → r.test x = true → I a (r.next x))
+    (hsize : Dominated (fun z : {p : ρ × α // I p.1 p.2} => ⌜z.1.2⌝ₜ.size)
+      (fun z => size z.1.1))
+    (hcpeak : Dominated (fun z : {p : ρ × α // I p.1 p.2} => bc.peak z.1.2)
+      (fun z => peak z.1.1))
+    (hspeak : Dominated (fun z : {p : ρ × α // I p.1 p.2} => bs.peak z.1.2)
+      (fun z => peak z.1.1))
+    (hdpeak : Dominated (fun z : {p : {p : ρ × α // I p.1 p.2} //
+        r.test p.1.2 = false} => bd.peak ⟨z.1.1.2, z.2⟩) (fun z => peak z.1.1.1))
+    (hrpeak : Dominated (fun z : {p : {p : ρ × α // I p.1 p.2} //
+        r.test p.1.2 = true} => br.peak ⟨⟨z.1.1.2, z.2⟩, f (r.next z.1.1.2)⟩)
+      (fun z => peak z.1.1.1))
+    (hdtime : Dominated (fun z : {p : {p : ρ × α // I p.1 p.2} //
+        r.test p.1.2 = false} => bd.time ⟨z.1.1.2, z.2⟩) (fun z => stop z.1.1.1))
+    (hstime : Dominated (fun z : {p : ρ × α // I p.1 p.2} => bs.time z.1.2)
+      (fun z => step z.1.1))
+    (hctime : Dominated (fun z : {p : ρ × α // I p.1 p.2} => bc.time (r.next z.1.2))
+      (fun z => step z.1.1))
+    (hrtime : Dominated (fun z : {p : {p : ρ × α // I p.1 p.2} //
+        r.test p.1.2 = true} => br.time ⟨⟨z.1.1.2, z.2⟩, f (r.next z.1.1.2)⟩)
+      (fun z => step z.1.1.1))
+    (stop_pos : ∀ a, 0 < stop a) (step_pos : ∀ a, 0 < step a) :
+    Dominated (fun a => (r.cost bc bs bd br (start a)).time)
+      (fun a => r.measure (start a) * step a + stop a) ∧
+    Dominated (fun a => (r.cost bc bs bd br (start a)).peak)
+      (fun a => peak a + (r.measure (start a) + 1) * (size a + 1)) := by
+  let Z := {p : ρ × α // I p.1 p.2}
+  apply r.dominated_cost bc bs bd br I start size stop step peak initial next hsize
+  · apply Dominated.of_cases (fun z : Z => r.test z.1.2 = true)
+    · apply ((hcpeak.comp Subtype.val).max_same
+        ((hspeak.comp Subtype.val).max_same hrpeak)).mono_left
+      intro z
+      simp only [localPeak, z.2, ↓reduceDIte, Function.comp_apply, le_refl]
+    · let u (z : {z : Z // ¬r.test z.1.2 = true}) : {z : Z // r.test z.1.2 = false} :=
+        ⟨z.1, by simpa using z.2⟩
+      apply ((hcpeak.comp Subtype.val).max_same (hdpeak.comp u)).mono_left
+      intro z
+      simp only [localPeak, z.2, Function.comp_apply]
+      exact le_rfl
+  · apply Dominated.of_cases (fun z : Z => r.test z.1.2 = false)
+    · apply (hdtime.add_same (Dominated.const_of_pos 2 fun z => stop_pos z.1.1.1)).mono_left
+      intro z
+      simp only [stopTime, z.2, ↓reduceDIte, Function.comp_apply, le_refl]
+    · apply Dominated.of_le
+      intro z
+      simp only [stopTime, z.2, ↓reduceDIte, Function.comp_apply, Bool.true_eq_false, Nat.zero_le]
+  · apply Dominated.of_cases (fun z : Z => r.test z.1.2 = true)
+    · apply ((((hstime.comp Subtype.val).add_same (hctime.comp Subtype.val)).add_same
+        hrtime).add_same (Dominated.const_of_pos 16 fun z => step_pos z.1.1.1)).mono_left
+      intro z
+      simp only [roundTime, z.2, ↓reduceDIte, Function.comp_apply, le_refl]
+    · apply Dominated.of_le
+      intro z
+      simp only [roundTime, z.2, ↓reduceDIte, Function.comp_apply, Bool.false_eq_true, Nat.zero_le]
+
+variable [∀ x, UniqueEncoding Tree (β x)]
+
+/-- Compile a recursive cost estimate while hiding the fixed controller coefficients. -/
+theorem hasGrowth
+    (hc : Implementation r.test) (hs : Implementation r.next)
+    (hd : Implementation (fun x => ⌜r.finish x⌝ₜ))
+    (hr : Implementation (fun x : r.Return => ⌜r.resume x.1 x.2⌝ₜ))
+    {t p : α → ℕ}
+    (h : Dominated (fun x => (r.cost hc.bounds hs.bounds hd.bounds hr.bounds x).time) t ∧
+      Dominated (fun x => (r.cost hc.bounds hs.bounds hd.bounds hr.bounds x).peak) p) :
+    (r.implementation hc hs hd hr).HasGrowth
+      (fun x => hc.bounds.time x + t x + 1) (fun x => p x + 1) := by
+  unfold Implementation.HasGrowth
+  rw [bounds_implementation]
+  exact ⟨((Dominated.refl hc.bounds.time).add (h.1.const_mul_left 3)).add
+      (Dominated.const 10), h.2.add (Dominated.const 1)⟩
+
+/-- Callback growth specifications determine the recursive estimate for the same
+selected implementations. The supplied cost expression retains the terminal call
+and stack accumulation; coefficient selection stays outside the recursion. -/
+theorem hasGrowth_of_growth
+    {hc : Implementation r.test} {hs : Implementation r.next}
+    {hd : Implementation (fun x => ⌜r.finish x⌝ₜ)}
+    {hr : Implementation (fun x : r.Return => ⌜r.resume x.1 x.2⌝ₜ)}
+    {tc pc ts ps : α → ℕ} {td pd : {x // r.test x = false} → ℕ}
+    {tr pr : r.Return → ℕ} {t p : α → ℕ}
+    (gc : hc.HasGrowth tc pc) (gs : hs.HasGrowth ts ps)
+    (gd : hd.HasGrowth td pd) (gr : hr.HasGrowth tr pr)
+    (h : Dominated (fun x => (r.cost ⟨tc, pc⟩ ⟨ts, ps⟩ ⟨td, pd⟩ ⟨tr, pr⟩ x).time) t ∧
+      Dominated (fun x => (r.cost ⟨tc, pc⟩ ⟨ts, ps⟩ ⟨td, pd⟩ ⟨tr, pr⟩ x).peak) p) :
+    (r.implementation hc hs hd hr).HasGrowth
+      (fun x => tc x + t x + 1) (fun x => p x + 1) := by
+  have hg := r.dominated_cost_congr
+    (bc := hc.bounds) (bs := hs.bounds) (bd := hd.bounds) (br := hr.bounds)
+    (bc' := ⟨tc, pc⟩) (bs' := ⟨ts, ps⟩) (bd' := ⟨td, pd⟩) (br' := ⟨tr, pr⟩)
+    gc gs gd gr
+  exact (r.hasGrowth hc hs hd hr ⟨hg.1.trans h.1, hg.2.trans h.2⟩).mono
+    ((gc.1.add (Dominated.refl _)).add (Dominated.refl _)) (Dominated.refl _)
+
+end Complexity.TreeProgram.Source.Recursion
