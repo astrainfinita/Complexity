@@ -16,8 +16,9 @@ summand is compared with the target pointwise after destructuring the input, spl
 source cases, expanding encoded sizes and adding size facts for `omega`; powers and products are
 compared through their bases. Maxima over lists and sums over tables are compared entry by entry.
 The coefficient is a hidden witness. Hints name definitions to unfold or equations to use; facts
-that are genuine properties of the source function are given as `Dominated` hypotheses. Summands
-that cannot be proved are left as goals.
+that are genuine properties of the source function are `Dominated` hypotheses, matched
+reducibly. Every comparison is settled once per call. Summands that cannot be proved are left as
+goals.
 -/
 
 public meta section
@@ -99,9 +100,10 @@ def addSizeFacts : TacticM Unit := withMainContext do
 /-- Add size facts for the encoded sizes, list lengths and positive powers in the goal. -/
 elab (name := sizeFacts) "size_facts" : tactic => addSizeFacts
 
-/-- For powers `a ^ d` and `b ^ e` in the goal with `d ≤ e`, add `a ^ d ≤ b ^ e` whenever `omega`
-proves `a ≤ b` and `0 < b`; for a product `a * b` in a hypothesis and a power `c ^ e` with
-`2 ≤ e`, add `a * b ≤ c ^ e` whenever `omega` proves `a ≤ c`, `b ≤ c` and `0 < c`. -/
+/-- For powers `a ^ d` and `b ^ e` in the goal with `d ≤ e`, add `a ^ d ≤ k ^ d * b ^ e` whenever
+`a` is `b` or `omega` proves `a ≤ k * b`, and `omega` proves `0 < b`; for a product `a * b` and a
+power `c ^ e` with `2 ≤ e`, add `a * b ≤ k * l * c ^ e` whenever `omega` proves `a ≤ k * c`,
+`b ≤ l * c` and `0 < c`. The coefficients are 1, 2, 4 or 8. -/
 def addPowerFacts : TacticM Unit := withMainContext do
   let goal ← getMainGoal
   let target ← instantiateMVars (← goal.getType)
@@ -146,8 +148,11 @@ def addPowerFacts : TacticM Unit := withMainContext do
   let mut facts := #[]
   for (a, d) in powers do
     for (b, e) in powers do
-      if d > e || a == b then continue
+      if d > e || (a == b && d == e) then continue
       let some hb ← pos b | continue
+      if a == b then
+        facts := facts.push (← powLe hb d e)
+        continue
       if let some hab ← le a b then
         facts := facts.push (← mkAppM ``le_trans
           #[← mkAppM ``Nat.pow_le_pow_left #[hab, mkNatLit d], ← powLe hb d e])
@@ -163,15 +168,19 @@ def addPowerFacts : TacticM Unit := withMainContext do
           ← mkAppM ``HMul.hMul #[mkNatLit (k ^ d), ← mkAppM ``HPow.hPow #[b, mkNatLit e]]]
         facts := facts.push (← mkExpectedTypeHint h type)
         break
+  -- The least of the coefficients 1, 2, 4, 8 with `a ≤ k * c`, with its proof.
+  let coefficient (a c : Lean.Expr) : TacticM (Option Lean.Expr) := do
+    for k in [1, 2, 4, 8] do
+      if let some h ← le a (← mkAppM ``HMul.hMul #[mkNatLit k, c]) then return some h
+    return none
   for (a, b) in products.toList.eraseDups do
     for (c, e) in powers do
       if e < 2 then continue
-      let some hac ← le a c | continue
-      let some hbc ← le b c | continue
       let some hc ← pos c | continue
-      let square ← mkAppM ``Eq.le #[← mkAppM ``Eq.symm #[← mkAppM ``pow_two #[c]]]
-      facts := facts.push (← mkAppM ``le_trans #[← mkAppM ``Nat.mul_le_mul #[hac, hbc],
-        ← mkAppM ``le_trans #[square, ← powLe hc 2 e]])
+      let some hac ← coefficient a c | continue
+      let some hbc ← coefficient b c | continue
+      let he ← mkDecideProof (← mkAppM ``LE.le #[mkNatLit 2, mkNatLit e])
+      facts := facts.push (← mkAppM ``mul_le_mul_pow_of_le_mul #[hac, hbc, he, hc])
   let mut goal := goal
   for h in facts do
     let (_, g) ← (← goal.assert `power_fact (← inferType h) h).intro1P
@@ -325,6 +334,20 @@ def normalizeVariableEncodings : TacticM Unit := do
 /-- State encodings at the inferred types of the encoded values. -/
 elab (name := normalizeEncodings) "normalize_encodings" : tactic => normalizeVariableEncodings
 
+/-- Clear the hypotheses that pointwise arithmetic cannot use: `Dominated` facts and quantified
+or conditional propositions. Each of them would otherwise be rewritten by every `simp … at *`. -/
+def clearUnusable : TacticM Unit := withMainContext do
+  let mut fvars := #[]
+  for decl in ← getLCtx do
+    if decl.isImplementationDetail || !(← isProp decl.type) then continue
+    let type := (← instantiateMVars decl.type).consumeMData
+    if type.isAppOf ``Dominated || type.isForall then
+      fvars := fvars.push decl.fvarId
+  replaceMainGoal [← (← getMainGoal).tryClearMany fvars]
+
+/-- Clear hypotheses that pointwise arithmetic cannot use. -/
+elab (name := clearUnusableTac) "clear_unusable" : tactic => clearUnusable
+
 /-- Pointwise size arithmetic: destructure the input, split its cases, expand encoded sizes and
 use the size facts with `omega`. -/
 syntax (name := sizeOmega) "size_omega" (" [" Lean.Parser.Tactic.simpLemma,* "]")? : tactic
@@ -333,6 +356,7 @@ macro_rules
   | `(tactic| size_omega $[[$hints,*]]?) => do
     let hints := hints.map (·.getElems) |>.getD #[]
     `(tactic| (
+      try clear_unusable
       try destruct_inputs
       try dsimp only
       repeat' (first | (split <;> try dsimp only) | (cases_on_variable <;> try dsimp only))
@@ -363,51 +387,241 @@ macro_rules
              try simp only [size_encode_prod, size_encode_reverse, List.length_reverse] at *
              omega)))
 
-/-- A summand bounded by the target without using hypotheses: the target itself, a constant,
-or a pointwise bound. The coefficient is a hidden witness; any large enough one serves, so a
-single one, `2 ^ 40`, is tried. -/
-syntax (name := dominatedBase) "dominated_base" (" [" Lean.Parser.Tactic.simpLemma,* "]")? : tactic
+/-! ### The solver
 
-macro_rules
-  | `(tactic| dominated_base $[[$hints,*]]?) => do
-    let hints := hints.map (·.getElems) |>.getD #[]
-    `(tactic| first
-      | with_reducible exact Dominated.refl _
-      | with_reducible exact Dominated.zero
-      | (with_reducible apply Dominated.const_of_pos; assumption)
-      | (apply Dominated.const_of_pos; intro x; size_omega [$hints,*])
-      | (apply Dominated.of_le_mul 1099511627776; intro x; size_omega [$hints,*]))
+`dominated` follows the structure of `positivity` and `fun_prop`: a recursive function builds
+proof terms, with the facts of the call in a reader context and the settled comparisons in a
+cache. The pointwise step `size_omega` plays the part of a discharger. -/
 
-/-- One summand against the target: `dominated_base`, a hypothesis, or a hypothesis followed by
-`dominated_base`; a maximum over a list, possibly of dependent elements, is compared element by
-element, and a table sum against a power of a scale bounds its length and entries by the scale. -/
-syntax (name := dominatedLeaf) "dominated_leaf" (" [" Lean.Parser.Tactic.simpLemma,* "]")? : tactic
+/-- The facts and hints of one `dominated` call. -/
+structure Context where
+  /-- Simp arguments for the pointwise step. -/
+  hints : Array (TSyntax ``Lean.Parser.Tactic.simpLemma)
+  /-- `Dominated` facts with their types, compositions unfolded. -/
+  facts : Array (Lean.Expr × Lean.Expr)
+  /-- Expansion of encoded sizes on the left side. -/
+  sizes : Simp.Context
+  /-- The same, also distributing the table length over an entry. -/
+  sizesMul : Simp.Context
 
-macro_rules
-  | `(tactic| dominated_leaf $[[$hints,*]]?) => do
-    let hints := hints.map (·.getElems) |>.getD #[]
-    `(tactic| first
-      | assumption
-      | dominated_base [$hints,*]
-      | exact Dominated.trans (by assumption) (by dominated_base [$hints,*])
-      | (with_reducible (apply Dominated.list_foldr_max_le); dominated_leaf [$hints,*])
-      | (with_reducible (apply Dominated.foldr_max_le); dominated_leaf [$hints,*])
-      | (with_reducible (apply Dominated.sum_finRange_pow (by decide))) <;>
-          first | dominated_leaf [$hints,*] | (intro x; size_omega [$hints,*]))
+/-- Comparisons settled during one call, and the summands left to the user. -/
+structure State where
+  /-- Settled `Dominated` goals and positivity propositions: a proof, or `none` for a failure. -/
+  cache : Std.HashMap Lean.Expr (Option Lean.Expr) := {}
+  /-- Summands left as goals, by type. -/
+  left : Array (Lean.Expr × MVarId) := #[]
+
+/-- The solver monad: one context and one cache per `dominated` call. -/
+abbrev DominatedM := ReaderT Context (StateRefT State TacticM)
+
+/-- Settle `p` once per call. A proof that still has metavariables is not kept, since a later
+backtracking step could unassign them. -/
+def memo (p : Lean.Expr) (k : DominatedM (Option Lean.Expr)) : DominatedM (Option Lean.Expr) := do
+  let p ← instantiateMVars p
+  if let some r := (← get).cache[p]? then return r
+  let r ← match ← k with
+    | some proof => pure (some (← instantiateMVars proof))
+    | none => pure none
+  unless r.any (·.hasMVar) do modify fun s => { s with cache := s.cache.insert p r }
+  return r
+
+/-- Run a rule; an exception counts as a failure and leaves no trace. -/
+def attempt (k : DominatedM (Option Lean.Expr)) : DominatedM (Option Lean.Expr) := do
+  let saved ← show TacticM _ from saveState
+  try k catch _ =>
+    saved.restore
+    return none
+
+/-- Run `tac` on `goal`; keep its assignments only if it closes the goal. -/
+def closes (goal : MVarId) (tac : TacticM Unit) : TacticM Bool := do
+  let saved ← saveState
+  let goals ← getGoals
+  try
+    setGoals [goal]
+    tac
+    if (← getGoals).isEmpty then
+      setGoals goals
+      return true
+  catch _ => pure ()
+  saved.restore
+  return false
+
+/-- Prove `type` by applying `rule` reducibly and settling each new goal with `prove`. -/
+def viaRule (rule : Name) (type : Lean.Expr)
+    (prove : Lean.Expr → DominatedM (Option Lean.Expr)) : DominatedM (Option Lean.Expr) :=
+  attempt do
+    let goal ← mkFreshExprSyntheticOpaqueMVar type
+    for sub in ← withReducible (goal.mvarId!.apply (← mkConstWithFreshMVarLevels rule)) do
+      let some proof ← prove (← instantiateMVars (← sub.getType)) | throwError "no proof"
+      sub.assign proof
+    return some (← instantiateMVars goal)
+
+/-- The domain of a function. -/
+def domainOf (f : Lean.Expr) : MetaM Lean.Expr := do
+  return (← whnf (← inferType f)).bindingDomain!
+
+/-- Prove `∀ x, p x` with `size_omega`, where `p x` relates `f x` and `g x`. -/
+def bySizeOmega (f : Lean.Expr) (p : Lean.Expr → MetaM Lean.Expr) :
+    DominatedM (Option Lean.Expr) := do
+  let type ← withLocalDeclD `x (← domainOf f) fun x => do mkForallFVars #[x] (← p x)
+  let h ← mkFreshExprSyntheticOpaqueMVar type
+  let hints := (← read).hints
+  if ← closes h.mvarId! (evalTactic (← `(tactic| (intro x; size_omega [$hints,*])))) then
+    return some h
+  return none
+
+/-- `Dominated f g` pointwise, with the hidden coefficient `2 ^ 40`. -/
+def pointwise (f g : Lean.Expr) : DominatedM (Option Lean.Expr) := do
+  let C := mkNatLit 1099511627776
+  let some h ← bySizeOmega f fun x => do
+      mkAppM ``LE.le #[(mkApp f x).headBeta, ← mkAppM ``HMul.hMul #[C, (mkApp g x).headBeta]]
+    | return none
+  return some (← mkAppM ``Dominated.of_le_mul #[C, h])
+
+/-- `∀ x, 0 < g x`, from a hypothesis or pointwise. -/
+def positive (g : Lean.Expr) : DominatedM (Option Lean.Expr) := do
+  let p ← withLocalDeclD `x (← domainOf g) fun x => do
+    mkForallFVars #[x] (← mkAppM ``LT.lt #[mkNatLit 0, (mkApp g x).headBeta])
+  memo p do
+    for decl in ← getLCtx do
+      if !decl.isImplementationDetail && (← withReducible (isDefEq decl.type p)) then
+        return some decl.toExpr
+    bySizeOmega g fun x => mkAppM ``LT.lt #[mkNatLit 0, (mkApp g x).headBeta]
+
+/-- `Dominated f g` without facts: the target itself, a constant, or a pointwise bound. A
+constant is recognized syntactically, after the left side is normalized: recognizing one by
+unfolding definitions would leave a costly definitional equality in the proof. -/
+def proveBase (f g : Lean.Expr) : DominatedM (Option Lean.Expr) := do
+  if ← withReducible (isDefEq f g) then return some (← mkAppM ``Dominated.refl #[g])
+  if let .lam _ _ body _ := f then
+    if !body.hasLooseBVars then
+      if let some h ← positive g then
+        return some (← mkAppM ``Dominated.const_of_pos #[body, h])
+  pointwise f g
+
+/-- Unfold compositions, so that matching a fact is reducible and cheap to fail. -/
+def unfoldComp (e : Lean.Expr) : MetaM Lean.Expr := Meta.transform e (post := fun t => do
+  if t.isAppOfArity ``Function.comp 5 then
+    let args := t.getAppArgs
+    return .done (← withLocalDeclD `x args[0]! fun x => do
+      mkLambdaFVars #[x] (mkApp args[3]! (mkApp args[4]! x).headBeta).headBeta)
+  return .continue)
+
+/-- `Dominated f g` through a fact `Dominated f g'`: directly when `g'` is `g`, otherwise with
+`Dominated g' g` from `proveBase`, so facts are never chained. On the element domain of a
+traversal, a fact about the outer input is used along the projection to that input. -/
+def viaFacts (f g : Lean.Expr) : DominatedM (Option Lean.Expr) := do
+  let domain ← whnfR (← domainOf f)
+  let projection? : Option Lean.Expr ←
+    if domain.isAppOf ``Sigma then
+      some <$> withLocalDeclD `z domain fun z => do
+        mkLambdaFVars #[z] (← mkAppM ``Sigma.fst #[z])
+    else if domain.isAppOf ``Subtype then
+      (observing? (withLocalDeclD `z domain fun z => do
+        mkLambdaFVars #[z] (← mkAppM ``Prod.fst #[← mkAppM ``Subtype.val #[z]])) : MetaM _)
+    else pure none
+  for (h, type) in (← read).facts do
+    let mut candidates := #[(h, type)]
+    if let some projection := projection? then
+      if let some h' ← (observing? (mkAppM ``Dominated.comp #[h, projection]) : MetaM _) then
+        let lam (k : Lean.Expr) := withLocalDeclD `z domain fun z => do
+          mkLambdaFVars #[z] (mkApp k (mkApp projection z)).headBeta
+        let composed ← mkAppM ``Dominated #[← lam type.appFn!.appArg!, ← lam type.appArg!]
+        candidates := candidates.push (← mkExpectedTypeHint h' composed, composed)
+    for (h, type) in candidates do
+      unless ← withReducible (isDefEq type.appFn!.appArg! f) do continue
+      let g' := type.appArg!
+      if ← withReducible (isDefEq g' g) then return some h
+      if let some rest ← memo (← mkAppM ``Dominated #[g', g]) (attempt (proveBase g' g)) then
+        return some (← mkAppM ``Dominated.trans #[h, rest])
+  return none
+
+/-- Expand encoded sizes in `f` with `ctx` and split its sums, maxima and zeros; `leaf` proves
+`Dominated a g` for the remaining summands `a`. The right side `g` is not rewritten. -/
+partial def split (f g : Lean.Expr) (ctx : Simp.Context)
+    (leaf : Lean.Expr → Lean.Expr → DominatedM (Option Lean.Expr)) :
+    DominatedM (Option Lean.Expr) := do
+  let (r, _) ← simp f ctx
+  let rec go (f : Lean.Expr) : DominatedM (Option Lean.Expr) := do
+    let .lam n α body bi := f | leaf f g
+    let part (e : Lean.Expr) := Lean.Expr.lam n α e bi
+    if body.isAppOfArity ``HAdd.hAdd 6 || body.isAppOfArity ``Max.max 4 then
+      let some pa ← go (part body.appFn!.appArg!) | return none
+      let some pb ← go (part body.appArg!) | return none
+      let combine := if body.isAppOfArity ``HAdd.hAdd 6 then ``Dominated.add_same
+        else ``Dominated.max_same
+      return some (← mkAppM combine #[pa, pb])
+    if body.nat? == some 0 then
+      let zero ← mkFreshExprSyntheticOpaqueMVar (← mkAppM ``Dominated #[f, g])
+      let _ ← zero.mvarId!.apply (← mkConstWithFreshMVarLevels ``Dominated.zero)
+      return some (← instantiateMVars zero)
+    leaf f g
+  let some proof ← go r.expr | return none
+  let some eq := r.proof? | return some proof
+  let motive ← withLocalDeclD `F (← inferType f) fun F => do
+    mkLambdaFVars #[F] (← mkAppM ``Dominated #[F, g])
+  return some (← mkEqMPR (← mkCongrArg motive eq) proof)
+
+/-- One summand against the target: a fact, the base rules, or a traversal rule; a maximum over
+a list, possibly of dependent elements, is compared element by element, and a table sum entry
+by entry after multiplying each entry by the table length. Traversal rules read the target on
+the element domain and split the element, which must be proved completely. -/
+partial def prove (f g : Lean.Expr) : DominatedM (Option Lean.Expr) := do
+  memo (← mkAppM ``Dominated #[f, g]) do
+    if let some h ← attempt (viaFacts f g) then return some h
+    let element (ctx : Simp.Context) (type : Lean.Expr) : DominatedM (Option Lean.Expr) := do
+      let type := type.consumeMData
+      unless type.isAppOf ``Dominated do return none
+      split type.appFn!.appArg! type.appArg! ctx prove
+    let type ← mkAppM ``Dominated #[f, g]
+    let ctx ← read
+    for rule in [``Dominated.list_foldr_max_le, ``Dominated.foldr_max_le] do
+      if let some h ← viaRule rule type (element ctx.sizes) then return some h
+    if let some h ← viaRule ``Dominated.sum_finRange_of_mul type (element ctx.sizesMul) then
+      return some h
+    attempt (proveBase f g)
+
+/-- Prove a summand, or leave it as a goal; equal summands share one goal. -/
+def proveOrLeave (f g : Lean.Expr) : DominatedM (Option Lean.Expr) := do
+  if let some h ← prove f g then return some h
+  let type ← instantiateMVars (← mkAppM ``Dominated #[f, g])
+  if let some (_, goal) := (← get).left.find? (·.1 == type) then return some (mkMVar goal)
+  let goal ← mkFreshExprSyntheticOpaqueMVar type
+  modify fun s => { s with left := s.left.push (type, goal.mvarId!) }
+  return some goal
+
+/-- A simp context with the given lemmas only. -/
+def simpContext (names : Array Name) : MetaM Simp.Context := do
+  let mut thms : SimpTheorems := {}
+  for name in names do thms ← thms.addConst name
+  Simp.mkContext (simpTheorems := #[thms]) (congrTheorems := ← getSimpCongrTheorems)
 
 /-- Close a growth comparison `Dominated f g` whose two sides are given, splitting sums and
-maxima of the left side. Hints are definitions to unfold or equations to use pointwise.
-Leaves that cannot be proved are left as goals. -/
+maxima of the left side; equal summands are proved once. Local `Dominated` hypotheses are used
+as facts; the list gives definitions to unfold or equations to use pointwise. Summands that
+cannot be proved are left as goals. -/
 syntax (name := dominated) "dominated" (" [" Lean.Parser.Tactic.simpLemma,* "]")? : tactic
 
-macro_rules
-  | `(tactic| dominated $[[$hints,*]]?) => do
-    let hints := hints.map (·.getElems) |>.getD #[]
-    `(tactic| (
-      try simp only [Dominated.add_iff, Dominated.max_iff, Dominated.zero, true_and, and_true,
-        size_encode_prod, Sigma.encode_mk, size_encode_unit, size_encode_reverse,
-        List.length_reverse]
-      repeat' apply And.intro
-      all_goals try dominated_leaf [$hints,*]))
+elab_rules : tactic
+  | `(tactic| dominated $[[$args,*]]?) => withMainContext do
+    let hints := args.map (·.getElems) |>.getD #[]
+    let goal ← getMainGoal
+    let target := (← instantiateMVars (← goal.getType)).consumeMData
+    unless target.isAppOf ``Dominated do throwError "dominated: expected a `Dominated` goal"
+    let mut facts := #[]
+    for decl in ← getLCtx do
+      if decl.isImplementationDetail then continue
+      let type := (← instantiateMVars decl.type).consumeMData
+      if type.isAppOf ``Dominated then facts := facts.push (decl.toExpr, ← unfoldComp type)
+    let sizeLemmas := #[``size_encode_prod, ``Sigma.encode_mk, ``size_encode_unit,
+      ``size_encode_reverse, ``List.length_reverse]
+    let sizes ← simpContext sizeLemmas
+    let sizesMul ← simpContext (sizeLemmas ++ #[``Nat.mul_add, ``Nat.mul_one, ``Nat.mul_zero])
+    let ctx : Context := { hints := hints, facts := facts, sizes := sizes, sizesMul := sizesMul }
+    let (proof, state) ← (split target.appFn!.appArg! target.appArg! ctx.sizes proveOrLeave
+      |>.run ctx).run {}
+    let some proof := proof | throwError "dominated: no proof"
+    goal.assign (← mkExpectedTypeHint proof target)
+    replaceMainGoal (state.left.map (·.2)).toList
 
 end Complexity.TreeProgram.Source.Growth

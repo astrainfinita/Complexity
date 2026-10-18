@@ -33,16 +33,20 @@ instance {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β] :
     (by rintro ⟨a, b⟩ (_ | ⟨_, l, r⟩) <;>
       simp [Part.mem_bind_iff, Part.mem_map_iff, UniqueEncoding.mem_decode_iff])
 
-theorem encode_unit : ⌜()⌝ₜ = .nil := rfl
+/- Lemmas about a unit value are stated for every value, as `PUnit.mul_eq` and `PUnit.max_eq` are:
+a lemma rewriting a unit value to `()` would have a variable as its left side and cannot be used
+by `simp`. -/
+
+theorem encode_unit (u : Unit) : ⌜u⌝ₜ = .nil := rfl
 theorem encode_prod {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
     (a : α) (b : β) : ⌜(a, b)⌝ₜ = .pair ⌜a⌝ₜ ⌜b⌝ₜ := rfl
 
-@[simp] theorem root_encode_unit : ⌜()⌝ₜ.root = false := rfl
-@[simp] theorem left_encode_unit : ⌜()⌝ₜ.left = ⌜()⌝ₜ := rfl
-@[simp] theorem right_encode_unit : ⌜()⌝ₜ.right = ⌜()⌝ₜ := rfl
-@[simp] theorem size_encode_unit : ⌜()⌝ₜ.size = 1 := rfl
-@[simp] theorem eq_encode_unit (t : Tree) : t = ⌜()⌝ₜ ↔ t = .nil := Iff.rfl
-@[simp] theorem encode_unit_eq (t : Tree) : ⌜()⌝ₜ = t ↔ .nil = t := Iff.rfl
+@[simp] theorem root_encode_unit (u : Unit) : ⌜u⌝ₜ.root = false := rfl
+@[simp] theorem left_encode_unit (u : Unit) : ⌜u⌝ₜ.left = ⌜()⌝ₜ := rfl
+@[simp] theorem right_encode_unit (u : Unit) : ⌜u⌝ₜ.right = ⌜()⌝ₜ := rfl
+@[simp] theorem size_encode_unit (u : Unit) : ⌜u⌝ₜ.size = 1 := rfl
+@[simp] theorem eq_encode_unit (u : Unit) (t : Tree) : t = ⌜u⌝ₜ ↔ t = .nil := Iff.rfl
+@[simp] theorem encode_unit_eq (u : Unit) (t : Tree) : ⌜u⌝ₜ = t ↔ .nil = t := Iff.rfl
 
 variable {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
 

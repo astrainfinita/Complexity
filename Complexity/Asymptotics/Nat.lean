@@ -113,13 +113,24 @@ theorem sum_finRange {n : α → ℕ} {a : (x : α) → Fin (n x) → ℕ} {b : 
   simpa only [List.map_const', List.sum_replicate, List.length_finRange,
     Nat.nsmul_eq_mul, Nat.mul_left_comm] using hs
 
-/-- A table sum is bounded by a power of a scale that bounds both its length and its entries. -/
-theorem sum_finRange_pow {n : α → ℕ} {a : (x : α) → Fin (n x) → ℕ} {S : α → ℕ} {e : ℕ}
-    (he : 2 ≤ e) (hS : ∀ x, 0 < S x) (hn : Dominated n S)
-    (h : Dominated (fun z : Σ x, Fin (n x) => a z.1 z.2) (fun z => S z.1)) :
-    Dominated (fun x => ((List.finRange (n x)).map (a x)).sum) (fun x => S x ^ e) :=
-  (sum_finRange h).trans ((hn.mul (Dominated.refl S)).trans
-    (Dominated.of_le fun x => by rw [← pow_two]; exact Nat.pow_le_pow_right (hS x) he))
+/-- A table sum is bounded by its target when every entry, multiplied by the table length, is
+bounded by the same target. -/
+theorem sum_finRange_of_mul {n : α → ℕ} {a : (x : α) → Fin (n x) → ℕ} {g : α → ℕ}
+    (h : Dominated (fun z : Σ x, Fin (n x) => n z.1 * a z.1 z.2) (fun z => g z.1)) :
+    Dominated (fun x => ((List.finRange (n x)).map (a x)).sum) g := by
+  obtain ⟨C, hc⟩ := dominated_iff.mp h
+  refine of_le_mul C fun x => ?_
+  rcases Nat.eq_zero_or_pos (n x) with h0 | hpos
+  · have hnil : List.finRange (n x) = [] := List.eq_nil_of_length_eq_zero (by simp [h0])
+    simp [hnil]
+  · have hs := List.sum_le_sum (l := List.finRange (n x)) (f := fun i => n x * a x i)
+      (g := fun _ => C * g x) (fun i _ => by simpa only [Nat.nsmul_eq_mul] using hc ⟨x, i⟩)
+    have hmul (l : List (Fin (n x))) :
+        (l.map fun i => n x * a x i).sum = n x * (l.map (a x)).sum := by
+      induction l <;> simp [*, Nat.mul_add]
+    simp only [hmul, List.map_const', List.sum_replicate, List.length_finRange,
+      Nat.nsmul_eq_mul] at hs
+    exact Nat.le_of_mul_le_mul_left hs hpos
 
 /-- Dependent traversal uses one coefficient for all environments and callback arguments. -/
 theorem sum_map {ι : α → Type*} (xs : (x : α) → List (ι x))

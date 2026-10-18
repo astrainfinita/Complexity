@@ -25,6 +25,13 @@ namespace Complexity.TreeProgram.Source
 
 open TreeProgram
 
+/-- A product of two quantities, each within a multiple of `c`, is within a multiple of `c ^ e`. -/
+theorem mul_le_mul_pow_of_le_mul {a b c ka kb e : ℕ} (ha : a ≤ ka * c) (hb : b ≤ kb * c)
+    (he : 2 ≤ e) (hc : 0 < c) : a * b ≤ ka * kb * c ^ e :=
+  (Nat.mul_le_mul ha hb).trans (by
+    rw [Nat.mul_mul_mul_comm, ← pow_two]
+    exact Nat.mul_le_mul_left _ (Nat.pow_le_pow_right hc he))
+
 /-- A positive cost paid from a potential drop leaves the rest of the potential for later
 rounds; a drop that is not real would make the cost zero. -/
 theorem add_mul_le_mul_of_le_mul_tsub {a C P Q : ℕ} (ha : 0 < a) (h : a ≤ C * (P - Q)) :
