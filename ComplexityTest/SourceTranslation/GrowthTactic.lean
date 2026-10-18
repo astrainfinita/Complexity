@@ -30,6 +30,40 @@ example : Implementation advance chunkWork (fun x => ⌜x⌝ₜ.size + 10) := by
   source_fun_prop
   all_goals dominated [chunkWork]
 
+-- A statement in the list is instantiated at the matching terms of the pointwise comparison.
+example (f : List Bool → List Bool) (hf : ∀ xs, ⌜f xs⌝ₜ.size ≤ 3 * ⌜xs⌝ₜ.size) :
+    Dominated (fun xs : List Bool => ⌜f xs⌝ₜ.size + 1) (fun xs => ⌜xs⌝ₜ.size) := by
+  dominated [hf]
+
+-- An equation in the list rewrites the pointwise goals.
+example (f : List Bool → List Bool) (hf : ∀ xs, ⌜f xs⌝ₜ.size = ⌜xs⌝ₜ.size + 1) :
+    Dominated (fun xs : List Bool => ⌜f xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) := by
+  dominated [hf]
+
+def twice (xs : List Bool) : List Bool := xs ++ xs
+
+theorem size_encode_twice_le (xs : List Bool) : ⌜twice xs⌝ₜ.size ≤ 2 * ⌜xs⌝ₜ.size := by
+  have := size_encode_list_append xs xs
+  simp only [twice]
+  omega
+
+-- Without the statement, the size of `twice xs` is unknown.
+example : Dominated (fun xs : List Bool => ⌜twice xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) := by
+  dominated
+  exact .of_le_mul 2 size_encode_twice_le
+
+attribute [local dominated] size_encode_twice_le in
+-- A statement registered with `@[dominated]` is used without being named.
+example : Dominated (fun xs : List Bool => ⌜twice xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) := by
+  dominated
+
+-- A list entry that is neither a definition nor a statement `a ≤ b` or `a = b` is an error.
+example : True := by
+  fail_if_success
+    have : Dominated (fun xs : List Bool => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) := by
+      dominated [True.intro]
+  trivial
+
 -- A genuine fact about the source function is supplied as a hypothesis and composed.
 example (f : List Bool → List Bool)
     (hf : Dominated (fun xs => ⌜f xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size)) :
