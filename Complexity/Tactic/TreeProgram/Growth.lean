@@ -7,6 +7,7 @@ module
 
 public import Complexity.Tactic.TreeProgram.Rules
 public import Complexity.Encoding.TreeSize
+public meta import Lean.Elab.Tactic.Omega.Frontend
 
 /-! # Closing growth comparisons
 
@@ -15,10 +16,12 @@ public import Complexity.Encoding.TreeSize
 summand is compared with the target pointwise after destructuring the input, splitting the
 source cases, expanding encoded sizes and adding size facts for `omega`; powers and products are
 compared through their bases. Maxima over lists and sums over tables are compared entry by entry.
-The coefficient is a hidden witness. Hints name definitions to unfold or equations to use; facts
-that are genuine properties of the source function are `Dominated` hypotheses, matched
-reducibly. Every comparison is settled once per call. Summands that cannot be proved are left as
-goals.
+The coefficient is a hidden witness. The list names definitions to unfold in the pointwise
+goals, and statements `a ≤ b` or `a = b` to instantiate at matching terms there, as for those
+registered with `@[dominated]`; facts that are genuine properties of the source function are
+`Dominated` hypotheses, matched reducibly. Like `omega`, the pointwise step reads the other
+hypotheses without changing them. Every comparison is settled once per call.
+Summands that cannot be proved are left as goals.
 -/
 
 public meta section
@@ -27,10 +30,33 @@ open Lean Meta Elab Tactic
 
 namespace Complexity.TreeProgram.Source.Growth
 
-/-- Facts about every encoded size, list length and positive power occurring in the goal. -/
-def addSizeFacts : TacticM Unit := withMainContext do
-  let goal ← getMainGoal
+/-- The left side of a statement `l ≤ r` or `l = r`. -/
+def lhs? (e : Lean.Expr) : Option Lean.Expr :=
+  if e.isAppOfArity ``LE.le 4 || e.isAppOfArity ``Eq 3 then some e.appFn!.appArg! else none
+
+/-- The instance of the statement `e : ∀ xs, l ≤ r` (or `l = r`) whose left side is `t`, stated
+with `t` itself. -/
+def instanceAt (e t : Lean.Expr) : MetaM (Option Lean.Expr) := withoutModifyingState do
+  let (xs, bis, body) ← forallMetaTelescopeReducing (← inferType e)
+  let some l := lhs? body | return none
+  unless ← withReducible (isDefEq l t) do return none
+  for x in xs, bi in bis do
+    if bi.isInstImplicit && !(← x.mvarId!.isAssigned) then
+      let some i ← synthInstance? (← inferType x) | return none
+      x.mvarId!.assign i
+  let h ← instantiateMVars (mkAppN e xs)
+  if h.hasMVar then return none
+  let body ← instantiateMVars body
+  return some (← mkExpectedTypeHint h (mkApp2 body.appFn!.appFn! t body.appArg!))
+
+/-- Facts about every encoded size, list length and positive power occurring in the goal, and the
+instances of the given statements and those registered with `@[dominated]` at matching terms. -/
+def addSizeFacts (lemmas : Array Lean.Expr) (goal : MVarId) : MetaM MVarId := goal.withContext do
   let target ← instantiateMVars (← goal.getType)
+  let mut tree : DiscrTree Lean.Expr := {}
+  for e in lemmas ++ (← (dominatedAttr.getState (← getEnv)).mapM (mkConstWithFreshMVarLevels ·)) do
+    let (_, _, body) ← forallMetaTelescopeReducing (← inferType e)
+    if let some l := lhs? body then tree ← tree.insert l e
   let visit (e : Lean.Expr) : StateT (Array Lean.Expr × Array Lean.Expr × Array (Lean.Expr × Nat) ×
       Array (Lean.Expr × Lean.Expr)) MetaM Unit := do
     if e.hasLooseBVars then return
@@ -68,14 +94,6 @@ def addSizeFacts : TacticM Unit := withMainContext do
             (← whnfR type.bindingBody!).isAppOfArity ``Fin 1 then
           if let some h ← observing? (mkAppM ``size_encode_fin_table_le #[v]) then
             facts := facts.push h
-      if v.isAppOfArity ``List.range 1 then
-        facts := facts.push (← mkAppM ``size_encode_range_le #[v.appArg!])
-      if v.isAppOfArity ``Function.comp 5 then
-        if let some h ← observing? (mkAppM ``size_encode_fin_comp_le #[v.appArg!, v.appFn!.appArg!])
-        then facts := facts.push h
-      if v.isAppOfArity ``HAdd.hAdd 6 && v.appArg!.nat? == some 1 then
-        if let some h ← observing? (mkAppM ``size_encode_nat_succ_le #[v.appFn!.appArg!]) then
-          facts := facts.push h
   for l in lengths.toList.eraseDups do
     if let some h ← observing? (mkAppM ``length_le_codeSize #[l]) then facts := facts.push h
   for (b, k) in powers.toList.eraseDups do
@@ -91,21 +109,23 @@ def addSizeFacts : TacticM Unit := withMainContext do
     if type.isAppOfArity ``Membership.mem 5 then
       if let some h ← observing? (mkAppM ``size_encode_le_list_of_mem #[decl.toExpr]) then
         facts := facts.push h
+  let (_, terms) ← (target.forEach' fun e => do
+      if e.isApp && !e.hasLooseBVars then modify (·.push e)
+      return true : StateT (Array Lean.Expr) MetaM Unit).run #[]
+  for t in terms.toList.eraseDups do
+    for e in ← tree.getMatch t do
+      if let some h ← instanceAt e t then facts := facts.push h
   let mut goal := goal
   for h in facts do
     let (_, g) ← (← goal.assert `size_fact (← inferType h) h).intro1P
     goal := g
-  replaceMainGoal [goal]
-
-/-- Add size facts for the encoded sizes, list lengths and positive powers in the goal. -/
-elab (name := sizeFacts) "size_facts" : tactic => addSizeFacts
+  return goal
 
 /-- For powers `a ^ d` and `b ^ e` in the goal with `d ≤ e`, add `a ^ d ≤ k ^ d * b ^ e` whenever
 `a` is `b` or `omega` proves `a ≤ k * b`, and `omega` proves `0 < b`; for a product `a * b` and a
 power `c ^ e` with `2 ≤ e`, add `a * b ≤ k * l * c ^ e` whenever `omega` proves `a ≤ k * c`,
 `b ≤ l * c` and `0 < c`. The coefficients are 1, 2, 4 or 8. -/
-def addPowerFacts : TacticM Unit := withMainContext do
-  let goal ← getMainGoal
+def addPowerFacts (goal : MVarId) : TacticM MVarId := goal.withContext do
   let target ← instantiateMVars (← goal.getType)
   let visit (e : Lean.Expr) : StateT (Array (Lean.Expr × Nat) × Array (Lean.Expr × Lean.Expr))
       MetaM Unit := do
@@ -134,8 +154,7 @@ def addPowerFacts : TacticM Unit := withMainContext do
     let saved ← saveState
     try
       setGoals [m.mvarId!]
-      evalTactic (← `(tactic| omega))
-      setGoals [goal]
+      Omega.omegaDefault
       return some (← instantiateMVars m)
     catch _ =>
       saved.restore
@@ -185,43 +204,69 @@ def addPowerFacts : TacticM Unit := withMainContext do
   for h in facts do
     let (_, g) ← (← goal.assert `power_fact (← inferType h) h).intro1P
     goal := g
-  replaceMainGoal [goal]
+  return goal
 
-/-- Add comparisons between the powers in the goal that follow from comparisons of their bases. -/
-elab (name := powerFacts) "power_facts" : tactic => addPowerFacts
+/-! ### Rewriting in the pointwise step
+
+The pointwise step introduces the input, destructures it and splits its cases. As with `omega` and
+`linarith`, the hypotheses it finds are read but not changed: only the goal and the hypotheses it
+introduces are rewritten. The input is new, so no other hypothesis can mention it. -/
+
+/-- A simp context with the given lemmas and definitions to unfold only. -/
+def simpContext (names : Array Name) (unfolds : Array Name := #[]) : MetaM Simp.Context := do
+  let mut thms : SimpTheorems := {}
+  for name in names do thms ← thms.addConst name
+  for name in unfolds do thms ← thms.addDeclToUnfold name
+  Simp.mkContext (simpTheorems := #[thms]) (congrTheorems := ← getSimpCongrTheorems)
+
+/-- The hypotheses of `goal` introduced by the pointwise step, that is, not among `outer`. -/
+def ownHyps (outer : FVarIdSet) (goal : MVarId) : MetaM (Array FVarId) :=
+  return (← goal.getNondepPropHyps).filter (!outer.contains ·)
+
+/-- Simplify the goal and the hypotheses introduced by the pointwise step; `none` if the goal is
+closed. A simplification that fails or changes nothing keeps the goal. -/
+def simpOwn (outer : FVarIdSet) (ctx : Simp.Context) (goal : MVarId)
+    (simprocs : Simp.SimprocsArray := #[]) : MetaM (Option MVarId) := do
+  try
+    let (r, _) ← simpGoal goal ctx simprocs (fvarIdsToSimp := ← ownHyps outer goal)
+    return r.map (·.2)
+  catch _ => return some goal
+
+/-- `dsimp` the goal, and the hypotheses introduced by the pointwise step when `outer` is given;
+`none` if the goal is closed. -/
+def dsimpOwn (ctx : Simp.Context) (goal : MVarId) (outer : Option FVarIdSet := none) :
+    MetaM (Option MVarId) := do
+  try
+    let fvars ← match outer with | some outer => ownHyps outer goal | none => pure #[]
+    return (← dsimpGoal goal ctx (fvarIdsToSimp := fvars)).1
+  catch _ => return some goal
 
 /-- Use the equations left by splitting a `match`: an equation between constructor applications
 is substituted, and the goal is closed when `cases` on an equation leaves no cases, as for a
 branch that contradicts the test selecting it. -/
-partial def casesEquations : TacticM Unit := withMainContext do
+partial def casesEquations (outer : FVarIdSet) (goal : MVarId) : MetaM (Array MVarId) :=
+  goal.withContext do
   for decl in ← getLCtx do
     let type ← instantiateMVars decl.type
-    if decl.isImplementationDetail || !type.isAppOfArity ``Eq 3 then continue
+    if decl.isImplementationDetail || outer.contains decl.fvarId || !type.isAppOfArity ``Eq 3 then
+      continue
     let constructor (e : Lean.Expr) : MetaM Bool := do
       let some name := (← whnfR e).getAppFn.constName? | return false
       return (← getEnv).find? name |>.any (·.isCtor)
     let injective := (← constructor type.appFn!.appArg!) && (← constructor type.appArg!)
     let saved ← saveState
     try
-      let goals ← (← getMainGoal).cases decl.fvarId
-      if goals.isEmpty then
-        replaceMainGoal []
-        return
-      if let #[goal] := goals then
-        if injective then
-          replaceMainGoal [goal.mvarId]
-          casesEquations
-          return
+      let goals ← goal.cases decl.fvarId
+      if goals.isEmpty then return #[]
+      if let #[g] := goals then
+        if injective then return ← casesEquations outer g.mvarId
     catch _ => pure ()
     saved.restore
+  return #[goal]
 
-/-- Substitute equations between constructor applications and close goals whose equations have no
-cases. -/
-elab (name := casesEquationsTac) "cases_equations" : tactic => casesEquations
-
-/-- Split a `casesOn` or `rec` application whose major premise is a local variable. -/
-def splitCasesOnVariable : TacticM Unit := withMainContext do
-  let target ← instantiateMVars (← getMainTarget)
+/-- Split the first `casesOn` or `rec` application on a local variable in the goal. -/
+def casesOnVariable (goal : MVarId) : MetaM (Option (Array MVarId)) := goal.withContext do
+  let target ← instantiateMVars (← goal.getType)
   let collect (e : Lean.Expr) : StateT (Array (Name × Lean.Expr)) MetaM Bool := do
     if let .const name _ := e.getAppFn then
       if name.isStr && (name.getString! == "casesOn" || name.getString! == "rec") then
@@ -232,63 +277,58 @@ def splitCasesOnVariable : TacticM Unit := withMainContext do
   for (family, major) in candidates do
     let type ← whnfR (← inferType major)
     unless type.getAppFn.isConstOf family do continue
-    let goals ← (← getMainGoal).cases major.fvarId!
-    replaceMainGoal (goals.map fun g => g.mvarId).toList
-    return
-  throwError "no casesOn on a variable"
+    return some ((← goal.cases major.fvarId!).map (·.mvarId))
+  return none
 
-/-- Split the first `casesOn` or `rec` application on a local variable in the goal. -/
-elab (name := casesOnVariable) "cases_on_variable" : tactic => splitCasesOnVariable
+/-- Split the `match`, `if`, `casesOn` and `rec` applications of the goal, `dsimp`ing each case. -/
+partial def splitAll (goal : MVarId) : MetaM (Array MVarId) := do
+  let split? ← try splitTarget? goal catch _ => pure none
+  let goals? ← match split? with
+    | some goals => pure (some goals.toArray)
+    | none => casesOnVariable goal
+  let some goals := goals? | return #[goal]
+  let plain ← simpContext #[]
+  let mut out := #[]
+  for g in goals do
+    if let some g ← dsimpOwn plain g then out := out ++ (← splitAll g)
+  return out
 
-/-- Split every local variable whose type is, up to reducible unfolding, a product, dependent
-pair, subtype, unit, or a structure with a derived tree encoding; the latter's encoding is
-rewritten to the encoding of its fields. -/
-partial def splitStructures : TacticM Unit := withMainContext do
+/-- Split the variables introduced by the pointwise step whose type is, up to reducible
+unfolding, a product, dependent pair, subtype, unit, or a structure with a derived tree
+encoding. -/
+partial def destructure (outer : FVarIdSet) (goal : MVarId) : MetaM (Array MVarId) :=
+  goal.withContext do
   for decl in ← getLCtx do
-    if decl.isImplementationDetail then continue
+    if decl.isImplementationDetail || outer.contains decl.fvarId then continue
     let type ← whnfR decl.type
     let encodeMk := type.getAppFn.constName? |>.map (· ++ `encode_mk)
     let derived := encodeMk.any (← getEnv).contains
-    let structural := derived || [``Prod, ``Sigma, ``PSigma, ``Subtype, ``PProd, ``PUnit].any
-      type.getAppFn.isConstOf
-    if structural then
-      let goals ← (← getMainGoal).cases decl.fvarId
-      let goals := (goals.map fun g => g.mvarId).toList
-      let mut remaining := []
-      for g in goals do
-        setGoals [g]
-        splitStructures
-        remaining := remaining ++ (← getGoals)
-      setGoals remaining
-      return
-
-/-- Split local variables of product, dependent pair, subtype, unit and derived structure
-types. -/
-elab (name := destructInputs) "destruct_inputs" : tactic => splitStructures
+    if derived || [``Prod, ``Sigma, ``PSigma, ``Subtype, ``PProd, ``PUnit].any
+        type.getAppFn.isConstOf then
+      let mut out := #[]
+      for g in ← goal.cases decl.fvarId do out := out ++ (← destructure outer g.mvarId)
+      return out
+  return #[goal]
 
 /-- Rewrite the encoding of every constructor application of a type with a derived tree encoding
 to the encoding of its fields. -/
-def expandDerivedEncodings : TacticM Unit := withMainContext do
+def encodeFields (outer : FVarIdSet) (goal : MVarId) : MetaM (Option MVarId) := goal.withContext do
   let env ← getEnv
-  let mut exprs := #[← instantiateMVars (← getMainTarget)]
-  for decl in ← getLCtx do
-    unless decl.isImplementationDetail do exprs := exprs.push (← instantiateMVars decl.type)
+  let mut exprs := #[← instantiateMVars (← goal.getType)]
+  for fvarId in ← ownHyps outer goal do exprs := exprs.push (← instantiateMVars (← fvarId.getType))
   let names := exprs.foldl (init := #[]) fun acc e => e.foldConsts acc fun c acc =>
     let encodeCtor := c.getPrefix ++ .mkSimple s!"encode_{c.getString!}"
     if c.isStr && (env.find? c).any (·.isCtor) && env.contains encodeCtor &&
         !acc.contains encodeCtor then
       acc.push encodeCtor else acc
-  unless names.isEmpty do
-    let lemmas ← names.mapM fun n => `(Lean.Parser.Tactic.simpLemma| $(mkIdent n):ident)
-    evalTactic (← `(tactic| try simp only [size_encode_prod, $lemmas,*] at *))
+  if names.isEmpty then return some goal
+  simpOwn outer (← simpContext (#[``size_encode_prod] ++ names)) goal
 
-/-- Rewrite encodings of constructor applications of derived types to the encodings of their
-fields. -/
-elab (name := encodeFields) "encode_fields" : tactic => expandDerivedEncodings
-
-/-- Reduce natural-number projections in the types of local variables, as in the indices of a
-recursive result's type. -/
-def reduceVariableTypes : TacticM Unit := withMainContext do
+/-- Reduce natural-number projections in the types of the variables introduced by the pointwise
+step, as in the indices of a recursive result's type, and state each encoding at the inferred
+type of the encoded value, so that the size of a dependent recursive result is one `omega` atom
+and its pairs expand, however its type was reached. -/
+def normalizeEncodings (outer : FVarIdSet) (goal : MVarId) : MetaM MVarId := goal.withContext do
   let isProjection (t : Lean.Expr) : MetaM Bool := do
     if t.isProj then return true
     let some name := t.getAppFn.constName? | return false
@@ -301,19 +341,6 @@ def reduceVariableTypes : TacticM Unit := withMainContext do
         let r ← whnf t
         unless ← isProjection r do return .done r
       return .continue)
-  let mut goal ← getMainGoal
-  for decl in ← getLCtx do
-    if decl.isImplementationDetail || (← isProp decl.type) then continue
-    let type ← reduce decl.type
-    if type != decl.type then goal ← goal.replaceLocalDeclDefEq decl.fvarId type
-  replaceMainGoal [goal]
-
-/-- State each encoding at the inferred type of the encoded value, so that the size of a
-dependent recursive result is one `omega` atom and its pairs expand, however its type was
-reached. -/
-def normalizeVariableEncodings : TacticM Unit := do
-  reduceVariableTypes
-  withMainContext do
   let normalize (e : Lean.Expr) : MetaM Lean.Expr := do
     Meta.transform (← instantiateMVars e) (post := fun t => do
       if t.isAppOfArity ``UniqueEncoding.encode 4 && !t.hasLooseBVars then
@@ -323,86 +350,38 @@ def normalizeVariableEncodings : TacticM Unit := do
           if let some inst ← synthInstance? (← mkAppM ``UniqueEncoding #[args[0]!, type]) then
             return .done (mkAppN t.getAppFn #[args[0]!, type, inst, args[3]!])
       return .continue)
-  let mut goal ← getMainGoal
+  let mut goal := goal
   for decl in ← getLCtx do
-    if decl.isImplementationDetail then continue
-    let type ← normalize decl.type
+    if decl.isImplementationDetail || outer.contains decl.fvarId || (← isProp decl.type) then
+      continue
+    let type ← reduce decl.type
     if type != decl.type then goal ← goal.replaceLocalDeclDefEq decl.fvarId type
-  goal ← goal.replaceTargetDefEq (← normalize (← goal.getType))
-  replaceMainGoal [goal]
-
-/-- State encodings at the inferred types of the encoded values. -/
-elab (name := normalizeEncodings) "normalize_encodings" : tactic => normalizeVariableEncodings
-
-/-- Clear the hypotheses that pointwise arithmetic cannot use: `Dominated` facts and quantified
-or conditional propositions. Each of them would otherwise be rewritten by every `simp … at *`. -/
-def clearUnusable : TacticM Unit := withMainContext do
-  let mut fvars := #[]
-  for decl in ← getLCtx do
-    if decl.isImplementationDetail || !(← isProp decl.type) then continue
-    let type := (← instantiateMVars decl.type).consumeMData
-    if type.isAppOf ``Dominated || type.isForall then
-      fvars := fvars.push decl.fvarId
-  replaceMainGoal [← (← getMainGoal).tryClearMany fvars]
-
-/-- Clear hypotheses that pointwise arithmetic cannot use. -/
-elab (name := clearUnusableTac) "clear_unusable" : tactic => clearUnusable
-
-/-- Pointwise size arithmetic: destructure the input, split its cases, expand encoded sizes and
-use the size facts with `omega`. -/
-syntax (name := sizeOmega) "size_omega" (" [" Lean.Parser.Tactic.simpLemma,* "]")? : tactic
-
-macro_rules
-  | `(tactic| size_omega $[[$hints,*]]?) => do
-    let hints := hints.map (·.getElems) |>.getD #[]
-    `(tactic| (
-      try clear_unusable
-      try destruct_inputs
-      try dsimp only
-      repeat' (first | (split <;> try dsimp only) | (cases_on_variable <;> try dsimp only))
-      all_goals
-        try encode_fields
-        try cases_equations
-        try dsimp only [id] at *
-        try normalize_encodings
-      all_goals
-        try simp only [size_encode_prod, Sigma.encode_mk, UniqueEncoding.encode_subtype,
-          encode_list_cons, encode_list_nil, size_encode_unit, encode_bool_true,
-          encode_bool_false, size_encode_reverse, List.length_reverse, List.length_cons,
-          List.length_nil, List.length_append, List.length_map, Tree.encode_self,
-          encode_option_some, encode_option_none, encode_fin, encode_fin_castSucc, Fin.val_last,
-          Function.comp_apply, max_le_iff, List.map_const', List.sum_replicate, smul_eq_mul,
-          pow_zero, $hints,*] at *
-        try encode_fields
-        try normalize_encodings
-        repeat' (first | (split <;> try dsimp only) | (cases_on_variable <;> try dsimp only))
-        all_goals
-          first
-          | (size_facts
-             try simp only [size_encode_prod, size_encode_reverse, List.length_reverse] at *
-             power_facts
-             omega)
-          | (try simp [size_encode_prod, $hints,*] at *
-             size_facts
-             try simp only [size_encode_prod, size_encode_reverse, List.length_reverse] at *
-             omega)))
+  for fvarId in ← goal.withContext (ownHyps outer goal) do
+    let old ← goal.withContext do instantiateMVars (← fvarId.getType)
+    let type ← goal.withContext do normalize old
+    if type != old then goal ← goal.replaceLocalDeclDefEq fvarId type
+  goal.replaceTargetDefEq (← goal.withContext do normalize (← goal.getType))
 
 /-! ### The solver
 
 `dominated` follows the structure of `positivity` and `fun_prop`: a recursive function builds
 proof terms, with the facts of the call in a reader context and the settled comparisons in a
-cache. The pointwise step `size_omega` plays the part of a discharger. -/
+cache. The pointwise step `sizeOmega` plays the part of a discharger. -/
 
-/-- The facts and hints of one `dominated` call. -/
+/-- The facts and the list of one `dominated` call. -/
 structure Context where
-  /-- Simp arguments for the pointwise step. -/
-  hints : Array (TSyntax ``Lean.Parser.Tactic.simpLemma)
+  /-- Statements `a ≤ b` or `a = b` to instantiate at matching terms in the pointwise step. -/
+  lemmas : Array Lean.Expr
   /-- `Dominated` facts with their types, compositions unfolded. -/
   facts : Array (Lean.Expr × Lean.Expr)
   /-- Expansion of encoded sizes on the left side. -/
   sizes : Simp.Context
   /-- The same, also distributing the table length over an entry. -/
   sizesMul : Simp.Context
+  /-- Expansion of encoded sizes in the pointwise step, unfolding the definitions of the list. -/
+  expand : Simp.Context
+  /-- The default simp set with the same definitions, tried when `expand` is not enough. -/
+  expandAll : Simp.Context
 
 /-- Comparisons settled during one call, and the summands left to the user. -/
 structure State where
@@ -460,14 +439,52 @@ def viaRule (rule : Name) (type : Lean.Expr)
 def domainOf (f : Lean.Expr) : MetaM Lean.Expr := do
   return (← whnf (← inferType f)).bindingDomain!
 
-/-- Prove `∀ x, p x` with `size_omega`, where `p x` relates `f x` and `g x`. -/
+/-- Close one case of the pointwise step by `omega` with the size and power facts, or else after
+simplifying with the default simp set. -/
+def closeCase (outer : FVarIdSet) (goal : MVarId) : DominatedM Bool := do
+  let ctx ← read
+  let finish (goal : Option MVarId) : TacticM Unit := do
+    setGoals goal.toList
+    unless goal.isNone do Omega.omegaDefault
+  if ← closes goal do
+      let some g ← simpOwn outer ctx.sizes (← addSizeFacts ctx.lemmas goal) | setGoals []
+      finish (some (← addPowerFacts g)) then
+    return true
+  closes goal do
+    let some g ← simpOwn outer ctx.expandAll goal #[← Simp.getSimprocs] | setGoals []
+    finish (← simpOwn outer ctx.sizes (← addSizeFacts ctx.lemmas g))
+
+/-- The pointwise step: prove `goal : ∀ x, p x` by destructuring `x`, splitting its cases,
+expanding encoded sizes and closing each case with `closeCase`. -/
+def sizeOmega (goal : MVarId) : DominatedM Bool := do
+  let ctx ← read
+  let outer ← goal.withContext do return (← getLCtx).foldl (·.insert ·.fvarId) {}
+  let plain ← simpContext #[]
+  let ids ← simpContext #[] #[``id]
+  let (_, goal) ← goal.intro1
+  let mut goals := #[]
+  for g in ← destructure outer goal do
+    if let some g ← dsimpOwn plain g then goals := goals ++ (← splitAll g)
+  for g in goals do
+    let some g ← encodeFields outer g | continue
+    for g in ← casesEquations outer g do
+      let some g ← dsimpOwn ids g outer | continue
+      let some g ← simpOwn outer ctx.expand (← normalizeEncodings outer g) | continue
+      let some g ← encodeFields outer g | continue
+      for g in ← splitAll (← normalizeEncodings outer g) do
+        unless ← closeCase outer g do return false
+  return true
+
+/-- Prove `∀ x, p x` with `sizeOmega`, where `p x` relates `f x` and `g x`. -/
 def bySizeOmega (f : Lean.Expr) (p : Lean.Expr → MetaM Lean.Expr) :
     DominatedM (Option Lean.Expr) := do
   let type ← withLocalDeclD `x (← domainOf f) fun x => do mkForallFVars #[x] (← p x)
   let h ← mkFreshExprSyntheticOpaqueMVar type
-  let hints := (← read).hints
-  if ← closes h.mvarId! (evalTactic (← `(tactic| (intro x; size_omega [$hints,*])))) then
-    return some h
+  let saved ← show TacticM _ from saveState
+  try
+    if ← sizeOmega h.mvarId! then return some h
+  catch _ => pure ()
+  saved.restore
   return none
 
 /-- `Dominated f g` pointwise, with the hidden coefficient `2 ^ 40`. -/
@@ -590,21 +607,28 @@ def proveOrLeave (f g : Lean.Expr) : DominatedM (Option Lean.Expr) := do
   modify fun s => { s with left := s.left.push (type, goal.mvarId!) }
   return some goal
 
-/-- A simp context with the given lemmas only. -/
-def simpContext (names : Array Name) : MetaM Simp.Context := do
-  let mut thms : SimpTheorems := {}
-  for name in names do thms ← thms.addConst name
-  Simp.mkContext (simpTheorems := #[thms]) (congrTheorems := ← getSimpCongrTheorems)
-
 /-- Close a growth comparison `Dominated f g` whose two sides are given, splitting sums and
 maxima of the left side; equal summands are proved once. Local `Dominated` hypotheses are used
-as facts; the list gives definitions to unfold or equations to use pointwise. Summands that
-cannot be proved are left as goals. -/
-syntax (name := dominated) "dominated" (" [" Lean.Parser.Tactic.simpLemma,* "]")? : tactic
+as facts. The list gives definitions to unfold when comparing pointwise, and statements `a ≤ b`
+or `a = b` to instantiate at matching terms there, as for those registered with `@[dominated]`.
+Summands that cannot be proved are left as goals. -/
+syntax (name := dominated) "dominated" (" [" term,* "]")? : tactic
 
 elab_rules : tactic
   | `(tactic| dominated $[[$args,*]]?) => withMainContext do
-    let hints := args.map (·.getElems) |>.getD #[]
+    let mut unfolds := #[]
+    let mut lemmas := #[]
+    for arg in args.map (·.getElems) |>.getD (#[] : Array Term) do
+      let e ← Term.withoutErrToSorry <| elabTermForApply arg
+      let type ← inferType e
+      if let some name := e.constName? then
+        unless ← isProp type do
+          unfolds := unfolds.push name
+          continue
+      let (_, _, body) ← forallMetaTelescopeReducing type
+      if (lhs? body).isNone then
+        throwErrorAt arg "dominated: expected a definition or a statement `a ≤ b` or `a = b`"
+      lemmas := lemmas.push e
     let goal ← getMainGoal
     let target := (← instantiateMVars (← goal.getType)).consumeMData
     unless target.isAppOf ``Dominated do throwError "dominated: expected a `Dominated` goal"
@@ -617,7 +641,18 @@ elab_rules : tactic
       ``size_encode_reverse, ``List.length_reverse]
     let sizes ← simpContext sizeLemmas
     let sizesMul ← simpContext (sizeLemmas ++ #[``Nat.mul_add, ``Nat.mul_one, ``Nat.mul_zero])
-    let ctx : Context := { hints := hints, facts := facts, sizes := sizes, sizesMul := sizesMul }
+    let expand ← simpContext (simpOnlyBuiltins.toArray ++ #[``size_encode_prod, ``Sigma.encode_mk,
+      ``UniqueEncoding.encode_subtype, ``encode_list_cons, ``encode_list_nil, ``size_encode_unit,
+      ``encode_bool_true, ``encode_bool_false, ``size_encode_reverse, ``List.length_reverse,
+      ``List.length_cons, ``List.length_nil, ``List.length_append, ``List.length_map,
+      ``Tree.encode_self, ``encode_option_some, ``encode_option_none, ``encode_fin,
+      ``encode_fin_castSucc, ``Fin.val_last, ``Function.comp_apply, ``max_le_iff,
+      ``List.map_const', ``List.sum_replicate, ``smul_eq_mul, ``pow_zero]) unfolds
+    let mut all ← (← getSimpTheorems).addConst ``size_encode_prod
+    for name in unfolds do all ← all.addDeclToUnfold name
+    let expandAll ←
+      Simp.mkContext (simpTheorems := #[all]) (congrTheorems := ← getSimpCongrTheorems)
+    let ctx : Context := { lemmas, facts, sizes, sizesMul, expand, expandAll }
     let (proof, state) ← (split target.appFn!.appArg! target.appArg! ctx.sizes proveOrLeave
       |>.run ctx).run {}
     let some proof := proof | throwError "dominated: no proof"

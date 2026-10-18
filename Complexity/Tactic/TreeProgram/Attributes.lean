@@ -21,4 +21,10 @@ initialize sourceFallbackAttr : Lean.LabelExtension ←
 Mathlib's lambda-rule registry does not retain theorem priorities. -/
 initialize sourceSavedImplementationExt : Lean.LabelExtension ← Lean.mkLabelExt
 
+/-- Statements `a ≤ b` or `a = b` about specific functions, such as the size of an encoding, that
+`dominated` instantiates at every matching term when comparing pointwise. -/
+initialize dominatedAttr : Lean.LabelExtension ←
+  Lean.registerLabelAttr `dominated
+    "instantiate this statement at matching terms when `dominated` compares pointwise"
+
 end Complexity.TreeProgram.Source

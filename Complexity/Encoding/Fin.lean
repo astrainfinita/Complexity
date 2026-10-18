@@ -9,6 +9,7 @@ public import Complexity.Encoding.Tree
 public import Mathlib.Data.Fin.Basic
 public import Mathlib.Data.List.OfFn
 public import Mathlib.Data.List.FinRange
+public import Complexity.Tactic.TreeProgram.Attributes
 
 /-! # Encodings of bounded indices and finite tuples -/
 
@@ -111,7 +112,7 @@ theorem size_encode_fin_function_le {α : Type*} [UniqueEncoding Tree α] {n : �
     (by simpa only [List.mem_ofFn, forall_exists_index, forall_apply_eq_imp_iff] using h)
 
 /-- A composed table stores one selected output for each entry of the first table. -/
-theorem size_encode_fin_comp_le {α : Type*} [UniqueEncoding Tree ℕ]
+@[dominated] theorem size_encode_fin_comp_le {α : Type*} [UniqueEncoding Tree ℕ]
     [UniqueEncoding Tree α] {n m : ℕ} (f : Fin n → Fin m) (g : Fin m → α) :
     ⌜g ∘ f⌝ₜ.size ≤ ⌜f⌝ₜ.size * (⌜g⌝ₜ.size + 1) + 1 :=
   (size_encode_fin_function_le (g ∘ f) ⌜g⌝ₜ.size

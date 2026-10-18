@@ -47,7 +47,7 @@ theorem size_encode_numeric_le {n m : ℕ} (c : Circuit .booleanAlgebra n m) :
     nlinarith
 
 /-- Adding the new input wire retains the old table and stores one additional index. -/
-theorem size_encode_liftInputs {n k : ℕ} (wires : Fin n → Fin k) :
+@[dominated] theorem size_encode_liftInputs {n k : ℕ} (wires : Fin n → Fin k) :
     ⌜liftInputs wires⌝ₜ.size = ⌜wires⌝ₜ.size + ⌜k⌝ₜ.size + 1 := by
   have ha := size_encode_list_append (List.ofFn (Fin.castSucc ∘ wires)) [Fin.last k]
   simp only [← encode_fin_function, encode_fin_castSucc, encode_list_cons, encode_list_nil,
@@ -181,7 +181,7 @@ def relabelCheck : Implementation relabelTest
 def relabelNext : Implementation relabelNextFn
     (fun x => ⌜x⌝ₜ.size ^ 3) (fun x => ⌜x⌝ₜ.size ^ 2) := by
   source_fun_prop
-  all_goals dominated [Circuit.size_encode_liftInputs]
+  all_goals dominated
 
 attribute [local fun_prop] Implementation.finComp in
 def relabelFinish : Implementation (fun x => ⌜relabelFinishFn x⌝ₜ)

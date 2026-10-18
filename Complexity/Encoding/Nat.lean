@@ -8,6 +8,7 @@ module
 public import Complexity.Encoding.Tree
 public import Complexity.Encoding.Composition
 public import Complexity.Data.BitList.Nat
+public import Complexity.Tactic.TreeProgram.Attributes
 
 /-! # Binary natural-number encodings
 
@@ -51,7 +52,7 @@ theorem size_encode_increment_le (xs : List Bool) :
   | cons b xs ih => cases b <;> simp_all <;> omega
 
 /-- Incrementing a natural-number code adds at most one binary digit. -/
-theorem size_encode_nat_succ_le (n : ℕ) : ⌜n + 1⌝ₜ.size ≤ ⌜n⌝ₜ.size + 4 := by
+@[dominated] theorem size_encode_nat_succ_le (n : ℕ) : ⌜n + 1⌝ₜ.size ≤ ⌜n⌝ₜ.size + 4 := by
   simpa only [BitList.increment_bits, ← encode_nat_tree] using size_encode_increment_le n.bits
 
 /-- A coarse numerical bound, useful when generating rather than merely reading indices. -/
@@ -60,7 +61,7 @@ theorem size_encode_nat_le (n : ℕ) : ⌜n⌝ₜ.size ≤ 4 * n + 1 := by
   | zero => simp
   | succ n ih => have := size_encode_nat_succ_le n; omega
 
-theorem size_encode_range_le (n : ℕ) : ⌜List.range n⌝ₜ.size ≤ 3 * (n + 1) ^ 2 := by
+@[dominated] theorem size_encode_range_le (n : ℕ) : ⌜List.range n⌝ₜ.size ≤ 3 * (n + 1) ^ 2 := by
   induction n with
   | zero => simp
   | succ n ih =>
