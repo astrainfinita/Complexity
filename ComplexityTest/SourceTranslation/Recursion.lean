@@ -37,7 +37,7 @@ theorem length_invert (xs : List Bool) : (invert xs).length = xs.length := by
 open TreeProgram.Source
 
 -- The measured entry exposes source equations, without a guessed exact allowance.
-noncomputable def invertImplementation : Implementation invert := by
+def invertImplementation := (by
   source_fun_prop using recursion
     (test := fun xs : List Bool => !xs.isEmpty) (next := List.tail)
     (finish := fun _ => []) (resume := invertResume)
@@ -53,7 +53,7 @@ noncomputable def invertImplementation : Implementation invert := by
     rintro ⟨xs, h⟩
     cases xs with
     | nil => cases h
-    | cons => rfl
+    | cons => rfl : Implementation invert _ _)
 
 def endPosition (xs : List Bool) : Fin (xs.length + 1) := Fin.last xs.length
 
@@ -63,7 +63,7 @@ def positionResume : (x : {xs : List Bool // (!xs.isEmpty) = true}) →
   | ⟨_ :: _, _⟩, result => result.succ
 
 -- A dependent result still uses the public encoding view; callbacks return ordinary Fin values.
-noncomputable def endPositionImplementation : Implementation (fun xs => ⌜endPosition xs⌝ₜ) := by
+def endPositionImplementation := (by
   source_fun_prop using recursion
     (test := fun xs : List Bool => !xs.isEmpty) (next := List.tail)
     (finish := fun _ => 0) (resume := positionResume)
@@ -79,10 +79,10 @@ noncomputable def endPositionImplementation : Implementation (fun xs => ⌜endPo
     rintro ⟨xs, h⟩
     cases xs with
     | nil => cases h
-    | cons => rfl
+    | cons => rfl : Implementation (fun xs => ⌜endPosition xs⌝ₜ) _ _)
 
 -- An unsupported callback fails before changing the selected source goal.
-noncomputable example : Implementation (id : List Bool → List Bool) := by
+example : Implementation (id : List Bool → List Bool) (fun _ => 0) (fun _ => 0) := by
   fail_if_success
     source_fun_prop using recursion
       (test := fun xs => !xs.isEmpty) (next := fun xs => invert xs.tail)
@@ -105,26 +105,18 @@ def drainRecursion : TreeProgram.Source.Recursion drain where
   measure := List.length
   decreases := by intro xs h; cases xs <;> simp_all
 
-noncomputable def drainFinish : Implementation (fun x => ⌜drainRecursion.finish x⌝ₜ) := by
+def drainFinish :
+    Implementation (fun x => ⌜drainRecursion.finish x⌝ₜ) (fun _ => 1) (fun _ => 1) := by
   source_fun_prop
+  all_goals dominated
 
-noncomputable def drainResume : Implementation
-    (fun x : drainRecursion.Return => ⌜drainRecursion.resume x.1 x.2⌝ₜ) := by source_fun_prop
-
-@[source_growth] theorem drainFinish_growth : drainFinish.HasGrowth (fun _ => 1) (fun _ => 1) := by
+def drainResume : Implementation
+    (fun x : drainRecursion.Return => ⌜drainRecursion.resume x.1 x.2⌝ₜ) (fun _ => 1)
+    (fun _ => 1) := by
   source_fun_prop
-  all_goals exact Dominated.const _
+  all_goals dominated
 
-@[source_growth] theorem drainResume_growth : drainResume.HasGrowth (fun _ => 1) (fun _ => 1) := by
-  source_fun_prop
-  all_goals exact Dominated.const _
-
-noncomputable def drainImplementation : Implementation drain :=
-  Implementation.ofEncode (g := fun xs => ⌜drain xs⌝ₜ) (fun _ => rfl)
-    (drainRecursion.implementation Implementation.listNonempty Implementation.listTail
-      drainFinish drainResume)
-
--- Callback allowances are already growth specifications. No coefficient is selected in induction.
+-- Callback growths enter the structural cost directly. No coefficient is selected in induction.
 private theorem drain_cost_growth :
     let bc : Bounds (List Bool) := ⟨fun _ => 1, fun xs => ⌜xs⌝ₜ.size⟩
     let bd : Bounds {xs // drainRecursion.test xs = false} := ⟨fun _ => 1, fun _ => 1⟩
@@ -151,30 +143,26 @@ private theorem drain_cost_growth :
       (fun _ => Nat.zero_lt_one) (fun _ => Nat.zero_lt_one)
 
 -- The terminal allowance appears once; the stack allowance grows with recursion depth.
-theorem drain_structural_growth : drainImplementation.HasGrowth
+def drainStructural : Implementation drain
     (fun xs => 1 + (xs.length + 1) + 1)
     (fun xs => (⌜xs⌝ₜ.size + (xs.length + 1) * (⌜xs⌝ₜ.size + 1)) + 1) :=
-  (drainRecursion.hasGrowth_of_growth Implementation.hasGrowth_listNonempty
-    Implementation.hasGrowth_listTail drainFinish_growth drainResume_growth
-    drain_cost_growth).ofEncode (fun _ => rfl)
+  (Implementation.ofEncode (f := drain) (g := fun xs => ⌜drain xs⌝ₜ) (fun _ => rfl)
+    (drainRecursion.implementation Implementation.listNonempty Implementation.listTail
+      drainFinish drainResume)).mono
+    (((Dominated.refl _).add drain_cost_growth.1).add (Dominated.refl _))
+    (drain_cost_growth.2.add (Dominated.refl _))
 
--- The automatic entry follows the same recursive program and saved callback specifications.
-example : drainImplementation.HasGrowth
-    (fun xs => 1 + (xs.length + 1) + 1)
-    (fun xs => (⌜xs⌝ₜ.size + (xs.length + 1) * (⌜xs⌝ₜ.size + 1)) + 1) := by
-  source_fun_prop
-  · exact ((Dominated.refl _).add drain_cost_growth.1).add (Dominated.refl _)
-  · exact drain_cost_growth.2.add (Dominated.refl _)
+-- The automatic entry builds the same recursive program from the same callbacks.
+example : (by
+    source_fun_prop using recursion
+      (test := fun xs : List Bool => !xs.isEmpty) (next := List.tail)
+      (finish := fun _ => ()) (resume := fun _ _ => ())
+      (measure := List.length)
+      (decreases := by intro xs h; cases xs <;> simp_all)
+    all_goals intros; exact Subsingleton.elim _ _ : Implementation drain _ _).program =
+    drainStructural.program := rfl
 
--- Before registering the recursive specification, failed comparison still cannot change programs.
-example : True := by
-  fail_if_success
-    have : drainImplementation.HasGrowth (fun _ => 0) (fun _ => 0) := by
-      source_fun_prop
-      all_goals exact Dominated.zero
-  trivial
-
-@[source_growth] theorem drain_growth : drainImplementation.HasGrowth
+@[source] def drainImplementation : Implementation drain
     (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size ^ 2) := by
   have hlen : Dominated (List.length : List Bool → ℕ) (fun xs => ⌜xs⌝ₜ.size) :=
     Dominated.of_le length_le_codeSize
@@ -182,16 +170,15 @@ example : True := by
   have hc : Dominated (fun _ : List Bool => 1) (fun xs => ⌜xs⌝ₜ.size) := Dominated.one hpos
   have hs := (hlen.add_same hc).mul ((Dominated.refl _).add_same hc)
   simp only [← pow_two] at hs
-  apply drain_structural_growth.mono
+  apply drainStructural.mono
   · simp only [Dominated.add_iff]
     exact ⟨⟨hc, hlen, hc⟩, hc⟩
   · simp only [Dominated.add_iff]
     exact ⟨⟨(Dominated.refl _).le_pow (by decide), hs⟩, hc.le_pow (by decide)⟩
 
-@[source] theorem drain_model : drain ∈ FTISP .tree (fun n => n ^ 1) (fun n => n ^ 2) :=
-  (by simpa only [pow_one] using drain_growth :
-    drainImplementation.HasGrowth (fun xs => ⌜xs⌝ₜ.size ^ 1)
-      (fun xs => ⌜xs⌝ₜ.size ^ 2)).mem_ftisp_pow (by decide)
+theorem drain_model : drain ∈ FTISP .tree (fun n => n ^ 1) (fun n => n ^ 2) := by
+  model_fun_prop
+  all_goals dominated
 
 -- A terminal callback is paid only in the stop equation, not at every recursive step.
 example (bc bs : Bounds (List Bool))
@@ -213,6 +200,6 @@ example (bc bs : Bounds (List Bool))
 example : drain ∈ FTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
   model_fun_prop via (fun _ : List Bool => ())
   case source_eq => funext xs; exact Subsingleton.elim _ _
-  all_goals exact Dominated.zero
+  all_goals dominated
 
 end ComplexityTest.SourceTranslation.Recursion

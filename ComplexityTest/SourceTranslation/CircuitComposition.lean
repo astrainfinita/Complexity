@@ -17,25 +17,25 @@ example : compImplementation.program =
 -- Recursive certification keeps the explicitly selected terminal callback.
 example : relabelImplementation.program =
     (relabelRecursion.implementation relabelCheck relabelNext relabelFinish relabelResume).program := rfl
-example : relabelFinish.HasGrowth
-    (fun x => ⌜x⌝ₜ.size ^ 3) (fun x => ⌜x⌝ₜ.size ^ 2) := relabelFinish_growth
+example : Implementation (fun x => ⌜relabelFinishFn x⌝ₜ)
+    (fun x => ⌜x⌝ₜ.size ^ 3) (fun x => ⌜x⌝ₜ.size ^ 2) := relabelFinish
 
 def rewire (x : RelabelInput) : Σ n, Σ m, Circuit .booleanAlgebra n m :=
-  ⟨x.2.2.1, x.2.1, x.2.2.2.1.relabel x.2.2.2.2⟩
-noncomputable example : Implementation rewire := by source_fun_prop
+  ⟨x.k, x.m, x.circuit.relabel x.wires⟩
+example := (by source_fun_prop : Implementation rewire _ _)
 
 def pipeline (x : CompInput) : Σ n, Σ m, Circuit .booleanAlgebra n m :=
-  ⟨x.1, x.2.2.1, x.2.2.2.1.comp x.2.2.2.2⟩
-noncomputable example : Implementation pipeline := by source_fun_prop
+  ⟨x.n, x.k, x.first.comp x.second⟩
+example := (by source_fun_prop : Implementation pipeline _ _)
 
 def preserve (x : Σ n, Σ m, Circuit .booleanAlgebra n m) :
     Σ n, Σ m, Circuit .booleanAlgebra n m := ⟨x.1, x.1 + x.2.1, x.2.2.keepInputs⟩
-noncomputable example : Implementation preserve := by source_fun_prop
+example := (by source_fun_prop : Implementation preserve _ _)
 
 def layers (x : Σ n, Circuit .booleanAlgebra (n + 1) n × ℕ) :
     Σ n, Σ m, Circuit .booleanAlgebra n m :=
   ⟨x.1 + x.2.2, x.1, x.2.1.unroll x.2.2⟩
-noncomputable example : Implementation layers := by source_fun_prop
+example := (by source_fun_prop : Implementation layers _ _)
 
 /-- Rewiring an already represented set of inputs, retaining the same input count. -/
 def rewireStored (x : Σ n, Σ m, Circuit .booleanAlgebra n m × (Fin n → Fin n)) :
@@ -43,10 +43,8 @@ def rewireStored (x : Σ n, Σ m, Circuit .booleanAlgebra n m × (Fin n → Fin 
 
 abbrev StoredRelabelInput := Σ n, Σ m, Circuit .booleanAlgebra n m × (Fin n → Fin n)
 
-noncomputable def rewireStoredImplementation : Implementation rewireStored := by source_fun_prop
-
-/-- Compose the saved specification; only the mathematical size relations remain. -/
-theorem rewireStored_growth : rewireStoredImplementation.HasGrowth
+/-- Compose the selected implementation; only the mathematical size relations remain. -/
+@[source] def rewireStoredImplementation : Implementation rewireStored
     (fun x => ⌜x⌝ₜ.size ^ 7) (fun x => ⌜x⌝ₜ.size ^ 4) := by
   let u (x : Σ n, Σ m, Circuit .booleanAlgebra n m × (Fin n → Fin n)) : RelabelInput :=
     ⟨x.1, x.2.1, x.1, x.2.2.1, x.2.2.2⟩
@@ -86,21 +84,19 @@ theorem rewireStored_growth : rewireStoredImplementation.HasGrowth
     apply hp.mono_left
     rintro ⟨n, m, c, w⟩
     dsimp only [S, o, u, Function.comp_apply, relabelFn]
-    simp only [Sigma.encode_mk, size_encode_prod, Tree.encode_self]
+    simp only [Sigma.encode_mk, RelabelInput.encode_mk, size_encode_prod, Tree.encode_self]
     omega
 
-@[source] theorem rewireStored_ftisp :
+theorem rewireStored_ftisp :
     rewireStored ∈ FTISP .tree (fun n => n ^ 7) (fun n => n ^ 4) :=
-  rewireStored_growth.mem_ftisp_pow (by decide)
+  rewireStoredImplementation.mem_ftisp_pow (by decide)
 
 /-- Unary storage makes the number of generated layers bounded by input size. -/
 def layersStored (x : Σ n, Circuit .booleanAlgebra (n + 1) n × List Unit) :
     Σ n, Σ m, Circuit .booleanAlgebra n m :=
   ⟨x.1 + x.2.2.length, x.1, x.2.1.unroll x.2.2.length⟩
 
-noncomputable def layersStoredImplementation : Implementation layersStored := by source_fun_prop
-
-theorem layersStored_growth : layersStoredImplementation.HasGrowth
+@[source] def layersStoredImplementation : Implementation layersStored
     (fun x => ⌜x⌝ₜ.size ^ 18) (fun x => ⌜x⌝ₜ.size ^ 8) := by
   let S (x : Σ n, Circuit .booleanAlgebra (n + 1) n × List Unit) := ⌜x⌝ₜ.size
   let u (x : Σ n, Circuit .booleanAlgebra (n + 1) n × List Unit) : UnrollInput :=
@@ -129,12 +125,12 @@ theorem layersStored_growth : layersStoredImplementation.HasGrowth
   have htime := hR.pow 9
   have hpeak := hR.pow 4
   simp only [← pow_mul, Function.comp_def, u] at htime hpeak
-  have hout := (Dominated.comp unroll_growth.size_encode u).trans
+  have hout := (Dominated.comp unrollImplementation.size_encode u).trans
     ((hu.le_pow (by decide : 0 < 8)).max_same hpeak)
   simp only [Tree.encode_self, Function.comp_def, u] at hout
   source_fun_prop
   all_goals
-    simp only [Function.comp_apply, Sigma.encode_mk, Tree.encode_self,
+    simp only [Sigma.encode_mk, Tree.encode_self,
       size_encode_prod, Dominated.add_iff, Dominated.max_iff]
     repeat' apply And.intro
   all_goals with_reducible first
@@ -143,8 +139,8 @@ theorem layersStored_growth : layersStoredImplementation.HasGrowth
     | exact Dominated.le_pow (g := S) (by first | assumption | exact Dominated.refl _) (by decide)
     | exact Dominated.mono_pow (hxs.pow 2) (by decide) hS
 
-@[source] theorem layersStored_ftisp :
+theorem layersStored_ftisp :
     layersStored ∈ FTISP .tree (fun n => n ^ 18) (fun n => n ^ 8) :=
-  layersStored_growth.mem_ftisp_pow (by decide)
+  layersStoredImplementation.mem_ftisp_pow (by decide)
 
 end ComplexityTest.SourceTranslation.CircuitComposition

@@ -13,7 +13,7 @@ open Complexity TreeProgram TreeProgram.Source
 namespace ComplexityTest.SourceTranslation.Encoding
 
 -- The input map need not cover all inputs of the original implementation.
-def trueOnly : Implementation (fun b : {b : Bool // b = true} => b.val) :=
+def trueOnly : Implementation (fun b : {b : Bool // b = true} => b.val) (fun _ => 0) (fun _ => 0) :=
   Implementation.identity.mapInput Subtype.val (fun _ => rfl)
 
 example : ¬Function.Surjective (Subtype.val : {b : Bool // b = true} → Bool) := by
@@ -23,28 +23,21 @@ example : ¬Function.Surjective (Subtype.val : {b : Bool // b = true} → Bool) 
 
 example : trueOnly.program = (Implementation.identity (α := Bool)).program := rfl
 
-example : (trueOnly.evaluate ⟨true, rfl⟩).value = true := rfl
-
-example : trueOnly.bounds = ⟨fun _ => 0, fun _ => 0⟩ := rfl
-
-def sigmaIdentity : Implementation (fun p : Bool × Unit => (⟨p.1, p.2⟩ : Σ _ : Bool, Unit)) :=
-  (Implementation.identity (α := Bool × Unit)).mapOutput
-    (fun p => (⟨p.1, p.2⟩ : Σ _ : Bool, Unit))
+def sigmaIdentity : Implementation (fun p : Bool × Unit => (⟨p.1, p.2⟩ : Σ _ : Bool, Unit))
+    (fun _ => 0) (fun _ => 0) :=
+  (Implementation.identity (α := Bool × Unit)).ofEncode
     (fun p => @Sigma.encode_mk Bool (fun _ => Unit) _ _ p.1 p.2)
 
 example : sigmaIdentity.program = (Implementation.identity (α := Bool × Unit)).program := rfl
-
-example : sigmaIdentity.bounds = ⟨fun _ => 0, fun _ => 0⟩ := by
-  simp only [sigmaIdentity, Implementation.bounds_mapOutput, Implementation.bounds_identity]
 
 -- Independent universes and arbitrary encoding instances remain supported.
 universe u v w
 
 example {α : Type u} {β : Type v} {γ : Type w}
     [UniqueEncoding Tree α] [UniqueEncoding Tree β] [UniqueEncoding Tree γ]
-    {f : α → β} (hf : Implementation f) (o : β → γ)
-    (ho : ∀ y, ⌜o y⌝ₜ = ⌜y⌝ₜ) (x : α) :
-    (hf.mapOutput o ho).evaluate x = Costed.bind (hf.evaluate x) (fun y => pure (o y)) := rfl
+    {f : α → β} {t p : α → ℕ} (hf : Implementation f t p) (o : β → γ)
+    (ho : ∀ y, ⌜o y⌝ₜ = ⌜y⌝ₜ) : Implementation (o ∘ f) t p :=
+  hf.ofEncode (g := f) (fun x => ho (f x))
 
 -- Adding a logical output certificate preserves the behavior and both exact budgets.
 example {Data α β : Type*} [Encoding Data α] [UniqueEncoding Data β]

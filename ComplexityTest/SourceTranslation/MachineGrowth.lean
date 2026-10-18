@@ -13,30 +13,17 @@ open Complexity TreeProgram Complexity.TreeProgram.Source
 namespace ComplexityTest.SourceTranslation.MachineGrowth
 
 -- The time budget depends on the value, without imposing a size envelope.
-@[source] theorem identity_machine : TimeSpaceModel.tree.ComputableWithGrowth
+theorem identity_machine : TimeSpaceModel.tree.ComputableWithGrowth
     (id : List Bool → List Bool) (fun xs => xs.length + 1) (fun xs => ⌜xs⌝ₜ.size) := by
   model_fun_prop
-  · exact Dominated.const_of_pos _ fun _ => Nat.succ_pos _
-  · simp only [Nat.max_zero, Dominated.add_iff]
-    exact ⟨Dominated.refl _, Dominated.const_of_pos _ fun _ => Tree.size_pos _⟩
+  all_goals dominated
 
--- Direct exits also retain the registered specification, even when their proof weakens it.
-@[source] theorem canonical_machine : TimeSpaceModel.tree.ComputableWithGrowth
-    (id : List Bool → List Bool) (fun _ => 1 + 4)
-      (fun xs => max ⌜xs⌝ₜ.size 1 + 2) :=
-  (identity_machine.hasGrowth_sourceImplementation.mono
-    (Dominated.zero : Dominated (fun _ : List Bool => 0) (fun _ => 1))
-    Dominated.zero).computableWithGrowth
-
--- A chosen implementation is reused even when another program computes the same function.
-example (hf : Implementation (id : List Bool → List Bool))
-    (hg : hf.HasGrowth (fun _ => 0) (fun _ => 0)) :
+-- A local implementation is used by the machine exit.
+example (_hf : Implementation (id : List Bool → List Bool) (fun _ => 0) (fun _ => 0)) :
     TimeSpaceModel.tree.ComputableWithGrowth (id : List Bool → List Bool)
       (fun _ => 1) (fun xs => ⌜xs⌝ₜ.size) := by
   model_fun_prop
-  · exact Dominated.const _
-  · simp only [Nat.max_zero, Dominated.add_iff]
-    exact ⟨Dominated.refl _, Dominated.const_of_pos _ fun _ => Tree.size_pos _⟩
+  all_goals dominated
 
 -- Loading and running still cost time: a zero machine allowance cannot replace the program.
 example : True := by
@@ -55,5 +42,20 @@ example : True := by
       model_fun_prop
       all_goals exact Dominated.zero
   trivial
+
+/-- A deliberately slower program for the identity, saved as the selected implementation. -/
+@[source] def selected : Implementation (id : List Bool → List Bool) (fun xs => ⌜xs⌝ₜ.size)
+    (fun xs => ⌜xs⌝ₜ.size) :=
+  ((Implementation.reverse.comp Implementation.reverse).congr (by funext xs; simp)).mono
+    (Dominated.of_le_mul 2 fun _ => by simp; omega) (Dominated.of_le fun _ => by simp)
+
+-- Direct exits keep the stated growth of the selected implementation.
+theorem canonical_machine : TimeSpaceModel.tree.ComputableWithGrowth
+    (id : List Bool → List Bool) (fun xs => ⌜xs⌝ₜ.size + 4)
+      (fun xs => max ⌜xs⌝ₜ.size ⌜xs⌝ₜ.size + 2) :=
+  selected.computableWithGrowth
+
+example : (by source_fun_prop : Implementation (id : List Bool → List Bool) _ _).program =
+    selected.program := rfl
 
 end ComplexityTest.SourceTranslation.MachineGrowth

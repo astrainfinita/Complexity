@@ -17,32 +17,22 @@ open Complexity.TreeProgram.Source
 
 namespace ComplexityTest.SourceTranslation.CircuitResources
 
--- A new algorithm uses ordinary functions and saves its interpretation with an equality.
+-- A new algorithm uses ordinary functions and saves an explicitly chosen implementation.
 -- Its model proof supplies clause count and output size, without internal certificates.
 def collect (input : CNF ℕ ×
     (Σ k, FirstOrder.Language.booleanAlgebra.Functions k × (Fin k → ℕ) × ℕ)) : CNF ℕ :=
   (gateClauses input.2).foldl (fun acc clause => clause :: acc) input.1
 
-@[local source] theorem collect_source : collect =
-    fun input => (gateClauses input.2).foldl (fun acc clause => clause :: acc) input.1 := rfl
-
 open Complexity.TreeProgram.Source in
-noncomputable def collectImplementation : Implementation collect :=
+@[local source] def collectImplementation :
+    Implementation collect (fun _ => 1) (fun input => ⌜input⌝ₜ.size) :=
   accumulateGateImpl.congr (by funext x; rfl)
 
-open Complexity.TreeProgram.Source in
-@[source_growth] theorem collect_growth : collectImplementation.HasGrowth
-    (fun _ => 1) (fun input => ⌜input⌝ₜ.size) := by
-  source_fun_prop
-  all_goals exact Dominated.refl _
+theorem collect_ftisp : collect ∈ FTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
+  model_fun_prop
+  all_goals dominated
 
-@[local source] theorem collect_ftisp : collect ∈ FTISP .tree
-    (fun n => n ^ 0) (fun n => n ^ 1) :=
-  (by simpa only [pow_zero, pow_one] using collect_growth :
-    collectImplementation.HasGrowth (fun x => ⌜x⌝ₜ.size ^ 0)
-      (fun x => ⌜x⌝ₜ.size ^ 1)).mem_ftisp_pow (by decide)
-
--- Pairing reuses the saved growth proof and needs only the genuine output-size relation.
+-- Pairing reuses the selected growth and needs only the genuine output-size relation.
 theorem collect_pair_ftisp : (fun input => (collect input, input.1)) ∈ FTISP .tree
     (fun n => n ^ 0) (fun n => n ^ 1) := by
   model_fun_prop
@@ -58,22 +48,22 @@ theorem collect_pair_ftisp : (fun input => (collect input, input.1)) ∈ FTISP .
     simp only [pow_one, size_encode_prod, max_le_iff] at *
     omega
 
--- Saving growth retains the explicitly chosen program; it does not rebudget it.
+-- The selected program is reused as chosen.
 open Complexity.TreeProgram.Source in
-example : (by source_fun_prop : Implementation collect).program =
+example : (by source_fun_prop : Implementation collect _ _).program =
     collectImplementation.program := rfl
 
 open Complexity.TreeProgram.Source in
-noncomputable def optionalCollectImplementation :
-    Implementation (fun input : Option (CNF ℕ ×
+example : True := by
+  have := (by source_fun_prop : Implementation (fun input : Option (CNF ℕ ×
       (Σ k, FirstOrder.Language.booleanAlgebra.Functions k × (Fin k → ℕ) × ℕ)) =>
-      match input with | none => [] | some x => collect x) := by
-  source_fun_prop
+      match input with | none => [] | some x => collect x) _ _)
+  trivial
 
 theorem copied_ftisp : collect ∈ FTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) :=
   collect_ftisp
 
-/-- error: `source` needs an equality or a direct growth-specification exit; it cannot recover a source program from an arbitrary model theorem -/
+/-- error: `source` expects a function equality or a named implementation -/
 #guard_msgs in
 attribute [local source] copied_ftisp
 
@@ -81,7 +71,7 @@ attribute [local source] copied_ftisp
 example : collect ∈ FTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
   model_fun_prop via accumulateGate
   case source_eq => rfl
-  all_goals simpa only [pow_zero, pow_one, Function.comp_def] using (Dominated.refl _)
+  all_goals dominated
 
 example : True := by
   fail_if_success
@@ -89,25 +79,23 @@ example : True := by
       model_fun_prop
   trivial
 
--- The peak simplification is an equality, including an empty fold, and does not relax space.
+-- The peak of prepending is the final list's size, including an empty fold.
 open Complexity.TreeProgram.Source in
-example (time : List Bool → Bool → ℕ) (acc xs : List Bool) :
-    (foldlCost (fun acc x => x :: acc)
-      (fun acc x => ⟨time acc x,
-        max (1 + ⌜acc⌝ₜ.size + ⌜x⌝ₜ.size) (1 + ⌜x⌝ₜ.size + ⌜acc⌝ₜ.size)⟩) acc xs).peak + 1 =
+example (acc xs : List Bool) :
+    foldlPeak (fun acc x => x :: acc) (fun z => ⌜z⌝ₜ.size) acc xs + 1 =
       ⌜xs⌝ₜ.size + ⌜acc⌝ₜ.size := by
-  rw [foldlCost_prepend_peak]
+  rw [foldlPeak_prepend]
   simpa using size_encode_list_append xs.reverse acc
 
 -- Ordinary nested calls use saved specifications without choosing a numerical coefficient.
 example : accumulateGate ∈ FTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
   model_fun_prop
-  all_goals simpa only [pow_zero, pow_one, Function.comp_def] using (Dominated.refl _)
+  all_goals dominated
 
 example {α : Type*} [UniqueEncoding Tree α] :
     (gateClauses (α := α)) ∈ FTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
   model_fun_prop
-  all_goals simpa only [pow_zero, pow_one, Function.comp_def] using (Dominated.refl _)
+  all_goals dominated
 
 -- Polynomial substitution combines growth, rather than expanding old million-sized budgets.
 example {s R : ℕ → ℕ} (hs : Dominated s (fun n => R n ^ 2))

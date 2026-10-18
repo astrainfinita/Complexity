@@ -12,22 +12,18 @@ namespace ComplexityTest.SourceTranslation.Search
 
 section Composition
 
--- Selected callbacks compose their structural costs without choosing new programs.
-example (f g : Bool → Bool) (hf : Implementation f) (hg : Implementation g) :
-    ∃ impl : Implementation (fun x => g (f x)),
-      ∀ x, impl.bounds.time x = hf.bounds.time x + hg.bounds.time (f x) := by
-  refine ⟨by source_fun_prop, ?_⟩
-  intro x
-  simp [source_bounds]
+-- Selected callbacks compose their growths without choosing new programs.
+example (f g : Bool → Bool) {t p u q : Bool → ℕ} (_hf : Implementation f t p)
+    (_hg : Implementation g u q) :
+    Implementation (fun x => g (f x)) (fun x => t x + u (f x)) (fun x => max (p x) (q (f x))) := by
+  source_fun_prop
 
 -- Let sharing keeps the input and pays for the callback once.
-example (f : Bool → Bool) (g : Bool × Bool → Bool)
-    (hf : Implementation f) (hg : Implementation g) :
-    ∃ impl : Implementation (fun x => let y := f x; g (x, y)),
-      ∀ x, impl.bounds.time x = hf.bounds.time x + 1 + hg.bounds.time (x, f x) := by
-  refine ⟨by source_fun_prop, ?_⟩
-  intro x
-  simp [source_bounds]
+example (f : Bool → Bool) (g : Bool × Bool → Bool) {t p : Bool → ℕ} {u q : Bool × Bool → ℕ}
+    (_hf : Implementation f t p) (_hg : Implementation g u q) :
+    Implementation (fun x => let y := f x; g (x, y)) (fun x => 0 + (t x + 1) + u (x, f x))
+      (fun x => max (max 0 (max (p x) ⌜(x, f x)⌝ₜ.size)) (q (x, f x))) := by
+  source_fun_prop
 
 end Composition
 
@@ -39,15 +35,18 @@ private def unsupported : List Bool → List Bool
 
 private def chosen (xs : List Bool) := xs.reverse
 
-private def availableImplementation : Implementation chosen := Implementation.reverse
+private def availableImplementation :
+    Implementation chosen (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) :=
+  Implementation.reverse
 
-private def needsRecursive (_h : Implementation unsupported) : Implementation chosen :=
+private def needsRecursive (_h : Implementation unsupported (fun _ => 1) (fun _ => 1)) :
+    Implementation chosen (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) :=
   availableImplementation
 
 -- A failed implementation premise is rolled back before another implementation rule is tried.
 attribute [local fun_prop] availableImplementation needsRecursive
 
-example : (show Implementation chosen from by source_fun_prop).program =
+example : (by source_fun_prop : Implementation chosen _ _).program =
     availableImplementation.program := rfl
 
 end CandidateFailure
@@ -62,43 +61,52 @@ error: source translation: `ComplexityTest.SourceTranslation.Search.uncertified`
 source path: fun xs => encode Complexity.Tree (uncertified xs) → fun xs => uncertified xs
 -/
 #guard_msgs in
-example : Implementation (fun xs => ⌜uncertified xs⌝ₜ) := by source_fun_prop
+example : Implementation (fun xs => ⌜uncertified xs⌝ₜ) (fun _ => 1) (fun _ => 1) := by
+  source_fun_prop
 
 section LocalPriority
 
 -- A uniform chosen implementation is reusable at each runtime iteration.
-example (f : Bool → Bool) (callback : Implementation f) :
-    Implementation (fun x : ℕ × Bool => f^[x.1] x.2) := by source_fun_prop
+example (f : Bool → Bool) {t p : Bool → ℕ} (_callback : Implementation f t p) :
+    Implementation (fun x : ℕ × Bool => f^[x.1] x.2) (fun x => iterateTime f t x.1 x.2 + 1)
+      (fun x => iteratePeak f p x.1 x.2) := by source_fun_prop
 
 -- Local selection takes precedence over a registered default.
-example (h : Implementation (List.reverse : List Bool → List Bool)) :
-    (show Implementation (List.reverse : List Bool → List Bool) from by source_fun_prop) = h := rfl
+example {t p : List Bool → ℕ} (h : Implementation (List.reverse : List Bool → List Bool) t p) :
+    (by source_fun_prop : Implementation (List.reverse : List Bool → List Bool) t p) = h := rfl
 
 private def alternative (xs : List Bool) := xs.reverse
 
-@[local fun_prop] private def defaultImplementation : Implementation alternative :=
+@[local fun_prop] private def defaultImplementation :
+    Implementation alternative (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) :=
   Implementation.reverse.congr rfl
 
-example (selected : Implementation alternative) :
-    (show Implementation alternative from by source_fun_prop) = selected := rfl
+example {t p : List Bool → ℕ} (selected : Implementation alternative t p) :
+    (by source_fun_prop : Implementation alternative t p) = selected := rfl
 
-example (selected : Implementation (id : Bool → Bool)) :
-    (show Implementation (id : Bool → Bool) from by source_fun_prop) = selected := rfl
+example {t p : Bool → ℕ} (selected : Implementation (id : Bool → Bool) t p) :
+    (by source_fun_prop : Implementation (id : Bool → Bool) t p) = selected := rfl
 
-example (selected : Implementation (fun _ : Bool => ())) :
-    (show Implementation (fun _ : Bool => ()) from by source_fun_prop) = selected := rfl
+example {t p : Bool → ℕ} (selected : Implementation (fun _ : Bool => ()) t p) :
+    (by source_fun_prop : Implementation (fun _ : Bool => ()) t p) = selected := rfl
 
 private def doubleReverse (xs : List Bool) := xs.reverse.reverse
 
-@[local fun_prop] private def doubleReverseDefault : Implementation doubleReverse :=
+@[local fun_prop] private def doubleReverseDefault : Implementation doubleReverse
+    (fun xs => ⌜xs⌝ₜ.size + ⌜xs.reverse⌝ₜ.size) (fun xs => max ⌜xs⌝ₜ.size ⌜xs.reverse⌝ₜ.size) :=
   Implementation.reverse.comp Implementation.reverse
 
 -- A semantic equality can expressly select a faster program; growth search never does so.
-example : (show Implementation doubleReverse from by
-    let selected : Implementation doubleReverse := Implementation.identity.congr (by
-      funext xs
-      exact (List.reverse_reverse xs).symm)
-    source_fun_prop).bounds.time [] = 0 := rfl
+example : (by
+    let selected : Implementation doubleReverse (fun _ => 0) (fun _ => 0) :=
+      Implementation.identity.congr (by
+        funext xs
+        exact (List.reverse_reverse xs).symm)
+    source_fun_prop : Implementation doubleReverse _ _).program =
+      (Implementation.identity (α := List Bool)).program := rfl
+
+example : (by source_fun_prop : Implementation doubleReverse _ _).program =
+    doubleReverseDefault.program := rfl
 
 end LocalPriority
 
@@ -106,12 +114,15 @@ section RuleStages
 
 private def stored (x : Bool × Bool) : Bool := x.1
 
-private def rebuilt : Implementation stored :=
+private def rebuilt : Implementation stored (fun _ => 1 + (1 + 1) + 1)
+    (fun x => max (max ⌜x⌝ₜ.size (max ⌜x⌝ₜ.size ⌜(x.1, x.2)⌝ₜ.size)) ⌜(x.1, x.2)⌝ₜ.size) :=
   (Implementation.fst.pair Implementation.snd).comp Implementation.fst
 
-private def preferred : Implementation stored := rebuilt
-private def secondary : Implementation stored := Implementation.fst
-private def fallback : Implementation stored := Implementation.fst
+private def preferred := rebuilt
+private def secondary : Implementation stored (fun _ => 1) (fun x => ⌜x⌝ₜ.size) :=
+  Implementation.fst
+private def fallback : Implementation stored (fun _ => 1) (fun x => ⌜x⌝ₜ.size) :=
+  Implementation.fst
 
 attribute [local source_fallback] fallback
 
@@ -122,21 +133,17 @@ run_elab do
   addTheorem ``fallback .local 2000
 
 -- Ordinary registered rules precede structural projection, independent of their numeric cost.
-example : (show Implementation stored from by source_fun_prop).program = preferred.program := rfl
+example : (by source_fun_prop : Implementation stored _ _).program = preferred.program := rfl
 
 example : (preferred.program Value.input).build 1 |>.2.1 ≠
     ((secondary.program Value.input).build 1).2.1 := by decide
-
-example : (show Implementation stored from by source_fun_prop).bounds.time (false, false) = 4 := rfl
-
--- The selected implementation's semantic certificate stays attached to its own program.
-example : Implements preferred.program stored rebuilt.bounds := rebuilt.implements
 
 section
 attribute [local source_fallback] preferred secondary
 
 -- Fallback rules do not displace a structural projection.
-example : (show Implementation stored from by source_fun_prop).bounds.time (false, false) = 1 := rfl
+example : (by source_fun_prop : Implementation stored _ _).program =
+    (Implementation.fst (α := Bool) (β := Bool)).program := rfl
 end
 
 end RuleStages
@@ -148,29 +155,30 @@ private def branches (x : Bool × List Bool) : List Bool :=
 
 -- Branch callbacks share the outer translation's search budget.
 set_option source.maxSteps 5 in
-example : Implementation (fun xs => branches (false, xs)) := by source_fun_prop
+example := (by source_fun_prop : Implementation (fun xs => branches (false, xs)) _ _)
 
 set_option source.maxSteps 5 in
-example : Implementation (fun xs => branches (true, xs)) := by source_fun_prop
+example := (by source_fun_prop : Implementation (fun xs => branches (true, xs)) _ _)
 
 /-- error: source translation: maximum number (5) of search steps exceeded -/
 #guard_msgs in
 set_option source.maxSteps 5 in
-example : Implementation branches := by source_calls
+example : Implementation branches (fun _ => 1) (fun _ => 1) := by source_calls
 
-example : Implementation branches := by source_calls
+example := (by source_calls : Implementation branches _ _)
 
 private opaque unavailable : Bool → Bool
 private def twice (x : Bool) := unavailable (unavailable x)
 
 @[local fun_prop] private def localScope
-    (_h : ∀ _ : Implementation unavailable,
-      Implementation (fun x => unavailable (unavailable x)))
-    (g : Implementation (fun x => unavailable (unavailable x))) : Implementation twice := g
+    (_h : ∀ _ : Implementation unavailable (fun _ => 1) (fun _ => 1),
+      Implementation (fun x => unavailable (unavailable x)) (fun _ => 1) (fun _ => 1))
+    (g : Implementation (fun x => unavailable (unavailable x)) (fun _ => 1) (fun _ => 1)) :
+    Implementation twice (fun _ => 1) (fun _ => 1) := g
 
 -- A temporary local callback cannot populate a sibling premise's cache.
 example : True := by
-  fail_if_success have : Implementation twice := by source_fun_prop
+  fail_if_success have := (by source_fun_prop : Implementation twice _ _)
   trivial
 
 open Lean Meta Elab Tactic in

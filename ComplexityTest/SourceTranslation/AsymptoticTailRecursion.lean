@@ -15,7 +15,9 @@ namespace ComplexityTest.SourceTranslation.AsymptoticTailRecursion
 
 def drain (_ : List Bool) : List Bool := []
 
-noncomputable def drainImplementation : Implementation drain := by
+-- Neither callback budgets nor a chosen credit coefficient occur in this proof.
+@[source] def drainImplementation : Implementation drain
+    (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) := by
   source_fun_prop using loop (test := fun xs : List Bool => !xs.isEmpty)
     (next := List.tail) (finish := id)
     (invariant := fun xs ys : List Bool => ys.length ≤ xs.length ∧ ⌜ys⌝ₜ.size ≤ ⌜xs⌝ₜ.size)
@@ -35,24 +37,18 @@ noncomputable def drainImplementation : Implementation drain := by
   case step_time => exact Dominated.refl _
   case check_time => exact Dominated.refl _
   case stop_time => exact Dominated.of_le fun _ => Nat.zero_le _
+  case time =>
+    apply Dominated.of_le_mul 4
+    intro xs
+    have := length_le_codeSize xs
+    have := Tree.size_pos ⌜xs⌝ₜ
+    simp
+    omega
   all_goals intro; decide
 
--- Neither callback budgets nor a chosen credit coefficient occur in this proof.
-@[source_growth] theorem drain_growth : drainImplementation.HasGrowth
-    (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) := by
-  source_fun_prop
-  · simp only [Nat.mul_one, Dominated.add_iff]
-    have h : Dominated (List.length : List Bool → ℕ) (fun xs => ⌜xs⌝ₜ.size) :=
-      Dominated.of_le length_le_codeSize
-    have hc (n : ℕ) : Dominated (fun _ : List Bool => n) (fun xs => ⌜xs⌝ₜ.size) :=
-      Dominated.const_of_pos n fun _ => Tree.size_pos _
-    exact ⟨⟨hc 1, ⟨h, hc 1⟩⟩, hc 4⟩
-  · exact Dominated.refl _
-
-@[source] theorem drain_ftisp : drain ∈ FTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) :=
-  (by simpa only [pow_one] using drain_growth :
-    drainImplementation.HasGrowth (fun xs => ⌜xs⌝ₜ.size ^ 1) (fun xs => ⌜xs⌝ₜ.size ^ 1)).mem_ftisp_pow
-      (by decide)
+theorem drain_ftisp : drain ∈ FTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by
+  model_fun_prop
+  all_goals dominated
 
 -- The program is determined by the callbacks; tail-loop space has no stack multiplier.
 example : drainImplementation.program =

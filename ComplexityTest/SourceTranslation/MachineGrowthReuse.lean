@@ -12,30 +12,30 @@ public import ComplexityTest.SourceTranslation.MachineGrowth
 open Complexity TreeProgram Complexity.TreeProgram.Source
 namespace ComplexityTest.SourceTranslation.MachineGrowthReuse
 
-noncomputable def selected : Implementation (id : List Bool → List Bool) := by source_fun_prop
-
--- The widened machine exit has not overwritten the original zero-resource source spec.
-example : selected.HasGrowth (fun _ => 0) (fun _ => 0) :=
-  MachineGrowth.identity_machine.hasGrowth_sourceImplementation
-
--- Separate saved aliases retain the same program and specification; their private records
--- need not be definitionally equal after import.
-example : ∃ hf : Implementation (id : List Bool → List Bool),
-    hf.program = selected.program ∧ hf.HasGrowth (fun _ => 0) (fun _ => 0) := by
-  refine ⟨_, ?_, MachineGrowth.canonical_machine.hasGrowth_sourceImplementation⟩
-  simp only [selected, MachineGrowth.canonical_machine.program_sourceImplementation]
-
-example : (selected.comp selected).HasGrowth (fun _ => 0 + 0) (fun _ => max 0 0) := by
-  source_fun_prop
-  all_goals exact Dominated.refl _
+-- The imported selection, with its own growth, is reused by ordinary calls.
+example : (by source_fun_prop : Implementation (id : List Bool → List Bool) _ _).program =
+    MachineGrowth.selected.program := rfl
 
 def nested (xs : List Bool) := id (id xs)
 
-@[source] theorem nested_machine : TimeSpaceModel.tree.ComputableWithGrowth nested
-    (fun _ => 1) (fun xs => ⌜xs⌝ₜ.size) := by
+theorem nested_machine : TimeSpaceModel.tree.ComputableWithGrowth nested
+    (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) := by
   model_fun_prop
-  · exact Dominated.const _
-  · simp only [Nat.max_zero, Dominated.add_iff]
-    exact ⟨Dominated.refl _, Dominated.const_of_pos _ fun _ => Tree.size_pos _⟩
+  all_goals dominated
+
+-- The selected linear program, not the zero-cost identity, runs inside the nested calls.
+example : True := by
+  fail_if_success
+    have : TimeSpaceModel.tree.ComputableWithGrowth nested
+        (fun _ => 1) (fun xs => ⌜xs⌝ₜ.size) := by
+      model_fun_prop
+      all_goals
+        simp only [Dominated.add_iff, Dominated.max_iff]
+        repeat' apply And.intro
+      all_goals first
+        | exact Dominated.refl _
+        | exact Dominated.const _
+        | exact Dominated.const_of_pos _ fun _ => Tree.size_pos _
+  trivial
 
 end ComplexityTest.SourceTranslation.MachineGrowthReuse
