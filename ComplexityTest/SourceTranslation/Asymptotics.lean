@@ -174,7 +174,7 @@ theorem finiteIdentity_ftisp :
     simp only [Nat.zero_mul]
     apply sizeEnvelope_le
     intro x hx
-    have hs : ⌜x⌝ₜ.size = 1 := by cases x; exact size_encode_unit
+    have hs : ⌜x⌝ₜ.size = 1 := size_encode_unit x
     omega
 
 -- The selected all-input callback has positive cost even though its final size class is zero.

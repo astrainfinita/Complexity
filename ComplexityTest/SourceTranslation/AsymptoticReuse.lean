@@ -56,7 +56,7 @@ def drainTwice (xs : List Bool) : List Bool := drain (drain xs)
 theorem drainTwice_ftisp :
     drainTwice ∈ FTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by
   model_fun_prop
-  all_goals dominated
+  all_goals dominated [drain]
 
 -- A zero atTop conclusion on a finite type retains the positive selected callback.
 example : (by source_fun_prop : Implementation Bool.not _ _).program =

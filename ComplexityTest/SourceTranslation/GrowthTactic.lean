@@ -38,6 +38,13 @@ example (f : List Bool → List Bool)
     hf.comp Prod.snd
   dominated
 
+-- A hypothesis about the outer input is used for the elements of a traversal.
+example (f : List Bool → ℕ) (hf : Dominated f (fun xs => ⌜xs⌝ₜ.size)) :
+    Dominated (fun xs : List Bool =>
+      (List.finRange xs.length).foldr (fun i s => max (f xs + ⌜i.val⌝ₜ.size) s) 0)
+      (fun xs => ⌜xs⌝ₜ.size) := by
+  dominated
+
 -- A maximum over a list is compared element by element, using membership.
 example : Dominated (fun x : Bool × List Unit =>
     x.2.foldr (fun y s => max (1 + ⌜x⌝ₜ.size + ⌜y⌝ₜ.size) s) 0) (fun x => ⌜x⌝ₜ.size) := by
@@ -58,6 +65,13 @@ example (g : List Bool → ℕ) (hg : ∀ xs, 0 < g xs) (hle : ∀ xs, xs.length
   guard_target = Dominated (fun xs : List Bool => xs.length) g
   exact Dominated.of_le hle
 
+-- The right side is not rewritten, even where its encoded sizes could be expanded.
+example (f : List Bool → ℕ) (hf : ∀ xs, f xs ≤ ⌜(xs, xs)⌝ₜ.size) :
+    Dominated (fun xs : List Bool => 1 + f xs) (fun xs => ⌜(xs, xs)⌝ₜ.size) := by
+  dominated
+  guard_target = Dominated (fun xs : List Bool => f xs) (fun xs => ⌜(xs, xs)⌝ₜ.size)
+  exact Dominated.of_le hf
+
 -- Powers are compared through their bases, with a coefficient on the base.
 example : Dominated (fun x : ℕ × ℕ => (2 * x.1 + x.2 + 1) ^ 3) (fun x => (x.1 + x.2 + 1) ^ 3) := by
   dominated
@@ -74,7 +88,7 @@ structure Pair where
 example : Dominated (fun x : Pair => ⌜x.first⌝ₜ.size + x.second.length) (fun x => ⌜x⌝ₜ.size) := by
   dominated
 
--- A table sum is bounded entry by entry against a power of a scale.
+-- A table sum is bounded entry by entry, each entry multiplied by the table length.
 example : Dominated (fun n : ℕ => ((List.finRange n).map fun i : Fin n => ⌜(i : ℕ)⌝ₜ.size).sum)
     (fun n => (n + 1) ^ 2) := by
   dominated
