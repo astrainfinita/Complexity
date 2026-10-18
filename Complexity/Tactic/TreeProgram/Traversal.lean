@@ -8,213 +8,177 @@ module
 public import Complexity.Tactic.TreeProgram.Implementation
 public import Complexity.Models.TreeMachine.Language.List
 
-/-! # Certified traversal with joint source values and resources -/
+/-! # Certified list folds
+
+`foldlTime` and `foldlPeak` follow the source fold: callback costs are charged at the actual
+intermediate accumulators, and every stored state contributes to the peak.
+-/
 
 @[expose] public section
 
 open Complexity TreeProgram TreeProgram.Code
 namespace Complexity.TreeProgram.Source
 
-namespace Costed
-universe u v
-variable {α : Type u} {β : Type v}
+section Cost
 
-/-- Callback costs and the intermediate accumulator share one ordinary monadic fold. -/
-def foldl [UniqueEncoding Tree α] [UniqueEncoding Tree β]
-    (f : β → α → Costed β) (a : β) (xs : List α) : Costed β :=
-  (xs.foldlM (fun a x => (ofValue a ⟨0, ⌜(a, x)⌝ₜ.size⟩).bind (fun a => f a x)) a).bind
-    (fun a => ofValue a ⟨0, ⌜a⌝ₜ.size⟩)
+variable {α β : Type*} (f : β → α → β)
 
-@[simp] theorem foldl_nil [UniqueEncoding Tree α] [UniqueEncoding Tree β]
-    (f : β → α → Costed β) (a : β) : foldl f a [] = ofValue a ⟨0, ⌜a⌝ₜ.size⟩ := rfl
+/-- Callback time along a source fold, at the actual intermediate accumulators. -/
+def foldlTime (t : β × α → ℕ) : β → List α → ℕ
+  | _, [] => 0
+  | a, x :: xs => t (a, x) + foldlTime t (f a x) xs
 
-theorem foldl_cons [UniqueEncoding Tree α] [UniqueEncoding Tree β]
-    (f : β → α → Costed β) (a : β) (x : α) (xs : List α) :
-    foldl f a (x :: xs) =
-      (ofValue a ⟨0, ⌜(a, x)⌝ₜ.size⟩).bind fun a => (f a x).bind fun a => foldl f a xs := by
-  simp only [foldl, List.foldlM_cons]
-  simp only [← bindM_eq_bind, bind_assoc]
+variable {f} in
+@[simp] theorem foldlTime_nil (t : β × α → ℕ) (a : β) : foldlTime f t a [] = 0 := rfl
 
-@[simp] theorem value_foldl [UniqueEncoding Tree α] [UniqueEncoding Tree β]
-    (f : β → α → Costed β) (a : β) (xs : List α) :
-    (foldl f a xs).value = xs.foldl (fun a x => (f a x).value) a := by
-  induction xs generalizing a <;> simp [foldl_cons, *]
+variable {f} in
+@[simp] theorem foldlTime_cons (t : β × α → ℕ) (a : β) (x : α) (xs : List α) :
+    foldlTime f t a (x :: xs) = t (a, x) + foldlTime f t (f a x) xs := rfl
 
-@[simp] theorem time_foldl_cons [UniqueEncoding Tree α] [UniqueEncoding Tree β]
-    (f : β → α → Costed β) (a : β) (x : α) (xs : List α) :
-    (foldl f a (x :: xs)).cost.time = (f a x).cost.time + (foldl f (f a x).value xs).cost.time := by
-  simp [foldl_cons]
-
-@[simp] theorem peak_foldl_cons [UniqueEncoding Tree α] [UniqueEncoding Tree β]
-    (f : β → α → Costed β) (a : β) (x : α) (xs : List α) :
-    (foldl f a (x :: xs)).cost.peak =
-      max ⌜(a, x)⌝ₜ.size (max (f a x).cost.peak (foldl f (f a x).value xs).cost.peak) := by
-  simp [foldl_cons]
-
-/-- If callback time ignores the accumulator, each element contributes exactly its own budget. -/
-theorem time_foldl_eq_sum {α β : Type*}
-    [UniqueEncoding Tree α] [UniqueEncoding Tree β]
-    (f : β → α → Costed β) (time : α → ℕ) (a : β) (xs : List α)
-    (h : ∀ a x, (f a x).cost.time = time x) :
-    (Costed.foldl f a xs).cost.time = (xs.map time).sum := by
+variable {f} in
+/-- Accumulator-independent callback times add once per element. -/
+@[simp] theorem foldlTime_eq_sum (t : α → ℕ) (a : β) (xs : List α) :
+    foldlTime f (fun z => t z.2) a xs = (xs.map t).sum := by
   induction xs generalizing a <;> simp [*]
 
-theorem size_le_foldl [UniqueEncoding Tree α] [UniqueEncoding Tree β]
-    (f : β → α → Costed β) (a : β) (xs : List α) :
-    ⌜a⌝ₜ.size ≤ (foldl f a xs).cost.peak := by
+variable {f} in
+/-- Callback times bounded by their current elements add at most once per element. -/
+theorem foldlTime_le_sum {t : β × α → ℕ} (u : α → ℕ) (h : ∀ z, t z ≤ u z.2) (a : β)
+    (xs : List α) : foldlTime f t a xs ≤ (xs.map u).sum := by
+  induction xs generalizing a with
+  | nil => simp
+  | cons x xs ih => simpa using Nat.add_le_add (h (a, x)) (ih (f a x))
+
+variable {f} in
+/-- One coefficient for the callback family bounds the whole fold. -/
+theorem _root_.Complexity.Dominated.foldlTime {t u : β × α → ℕ} (h : Dominated t u) :
+    Dominated (fun x : β × List α => foldlTime f t x.1 x.2)
+      (fun x => foldlTime f u x.1 x.2) := by
+  obtain ⟨C, hC⟩ := dominated_iff.mp h
+  refine Dominated.of_le_mul C fun ⟨a, xs⟩ => ?_
+  induction xs generalizing a with
+  | nil => simp
+  | cons x xs ih =>
+    have := hC (a, x)
+    have := ih (f a x)
+    simp only [smul_eq_mul, foldlTime_cons, Nat.mul_add] at *
+    omega
+
+variable {f} in
+/-- A unit charge per callback adds the list length. -/
+theorem foldlTime_add_one (t : β × α → ℕ) (a : β) (xs : List α) :
+    foldlTime f (fun z => t z + 1) a xs = foldlTime f t a xs + xs.length := by
+  induction xs generalizing a with
+  | nil => rfl
+  | cons x xs ih => simp only [foldlTime_cons, ih, List.length_cons]; omega
+
+/-- A fold whose state also carries a fixed environment charges the same callbacks. -/
+theorem foldlTime_lift {ρ : Type*} (g : ρ → β → α → β) (t : (ρ × β) × α → ℕ) (e : ρ) (a : β)
+    (xs : List α) :
+    foldlTime (fun (ea : ρ × β) x => (ea.1, g ea.1 ea.2 x)) t (e, a) xs =
+      foldlTime (g e) (fun z => t ((e, z.1), z.2)) a xs := by
+  induction xs generalizing a with
+  | nil => rfl
+  | cons x xs ih => simp only [foldlTime_cons, ih]
+
+variable [UniqueEncoding Tree α] [UniqueEncoding Tree β]
+
+/-- The largest stored state or callback peak along a source fold. -/
+def foldlPeak (p : β × α → ℕ) : β → List α → ℕ
+  | a, [] => ⌜a⌝ₜ.size
+  | a, x :: xs => max ⌜(a, x)⌝ₜ.size (max (p (a, x)) (foldlPeak p (f a x) xs))
+
+variable {f}
+
+@[simp] theorem foldlPeak_nil (p : β × α → ℕ) (a : β) : foldlPeak f p a [] = ⌜a⌝ₜ.size := rfl
+
+@[simp] theorem foldlPeak_cons (p : β × α → ℕ) (a : β) (x : α) (xs : List α) :
+    foldlPeak f p a (x :: xs) =
+      max ⌜(a, x)⌝ₜ.size (max (p (a, x)) (foldlPeak f p (f a x) xs)) := rfl
+
+theorem size_le_foldlPeak (p : β × α → ℕ) (a : β) (xs : List α) :
+    ⌜a⌝ₜ.size ≤ foldlPeak f p a xs := by
   cases xs <;> simp
   omega
 
-/-- One invariant proves the reached value and both resource bounds. -/
-theorem foldl_spec [UniqueEncoding Tree α] [UniqueEncoding Tree β]
-    (f : β → α → Costed β) (I : List α → β → Prop) (remaining : List α → β → ℕ)
-    (space : ℕ) (xs : List α) (a : β) (initial : I xs a)
-    (step : ∀ x rest a, I (x :: rest) a →
-      I rest (f a x).value ∧
-      (f a x).cost.time + remaining rest (f a x).value ≤ remaining (x :: rest) a ∧
-      ⌜(a, x)⌝ₜ.size ≤ space ∧ (f a x).cost.peak ≤ space)
+theorem size_foldl_le_foldlPeak (p : β × α → ℕ) (a : β) (xs : List α) :
+    ⌜xs.foldl f a⌝ₜ.size ≤ foldlPeak f p a xs := by
+  induction xs generalizing a with
+  | nil => simp
+  | cons x xs ih => exact (ih (f a x)).trans ((Nat.le_max_right _ _).trans (Nat.le_max_right _ _))
+
+/-- A fold whose state carries a fixed environment stores it once more in every state. -/
+theorem foldlPeak_lift_le {ρ : Type*} [UniqueEncoding Tree ρ] (g : ρ → β → α → β)
+    (p : (ρ × β) × α → ℕ) (e : ρ) (a : β) (xs : List α) :
+    foldlPeak (fun (ea : ρ × β) x => (ea.1, g ea.1 ea.2 x)) p (e, a) xs ≤
+      ⌜e⌝ₜ.size + 1 + foldlPeak (g e) (fun z => p ((e, z.1), z.2)) a xs := by
+  induction xs generalizing a with
+  | nil => simp only [foldlPeak_nil, size_encode_prod]; omega
+  | cons x xs ih =>
+    have := ih (g e a x)
+    simp only [foldlPeak_cons, size_encode_prod, max_le_iff] at this ⊢
+    omega
+
+/-- One source invariant bounds the remaining callback time and every stored state. -/
+theorem foldl_le_of_invariant {t p : β × α → ℕ} (I : List α → β → Prop)
+    (remaining : List α → β → ℕ) (space : ℕ) (xs : List α) (a : β) (initial : I xs a)
+    (step : ∀ x rest a, I (x :: rest) a → I rest (f a x) ∧
+      t (a, x) + remaining rest (f a x) ≤ remaining (x :: rest) a ∧
+      ⌜(a, x)⌝ₜ.size ≤ space ∧ p (a, x) ≤ space)
     (stop : ∀ a, I [] a → ⌜a⌝ₜ.size ≤ space) :
-    I [] (foldl f a xs).value ∧
-    (foldl f a xs).cost.time ≤ remaining xs a ∧ (foldl f a xs).cost.peak ≤ space := by
+    I [] (xs.foldl f a) ∧ foldlTime f t a xs ≤ remaining xs a ∧ foldlPeak f p a xs ≤ space := by
   induction xs generalizing a with
   | nil => simpa using And.intro initial (stop a initial)
   | cons x xs ih =>
     obtain ⟨hi, ht, hs, hp⟩ := step x xs a initial
-    obtain ⟨hi', ht', hs'⟩ := ih (f a x).value hi
-    rw [foldl_cons]
-    simp only [value_bind, value_ofValue, cost_bind, cost_ofValue, Cost.mul_time,
-      Cost.mul_peak, Nat.zero_add, max_le_iff]
-    exact ⟨hi', (Nat.add_le_add_left ht' _).trans ht, hs, hp, hs'⟩
-
-/-- Include list-traversal overhead and the initial input in a fold evaluation. -/
-def evaluateFold [UniqueEncoding Tree α] [UniqueEncoding Tree β]
-    (f : β → α → Costed β) (a : β) (xs : List α) : Costed β :=
-  let run := foldl f a xs
-  ofValue run.value ⟨run.cost.time + 13 * xs.length + 10, max ⌜(a, xs)⌝ₜ.size run.cost.peak⟩
-
-@[simp] theorem value_mapM (f : α → Costed β) (xs : List α) :
-    (xs.mapM f).value = xs.map (fun x => (f x).value) := by
-  induction xs <;> simp [*]
-
-@[simp] theorem time_mapM (f : α → Costed β) (xs : List α) :
-    (xs.mapM f).cost.time = (xs.map (fun x => (f x).cost.time)).sum := by
-  induction xs <;> simp [*]
-
-@[simp] theorem peak_mapM (f : α → Costed β) (xs : List α) :
-    (xs.mapM f).cost.peak = xs.foldr (fun x s => max (f x).cost.peak s) 0 := by
-  induction xs <;> simp [*]
-
-/-- The standard map traversal keeps its input and produced output in addition to callback peaks. -/
-def evaluateMap [UniqueEncoding Tree β] (f : α → Costed β) (xs : List α)
-    (overhead inputSize : ℕ) : Costed (List β) :=
-  let run := xs.mapM f
-  ofValue run.value
-    ⟨run.cost.time + overhead, max inputSize (max (⌜run.value⌝ₜ.size + 1) run.cost.peak)⟩
-
-@[simp] theorem value_evaluateMap [UniqueEncoding Tree β]
-    (f : α → Costed β) (xs : List α) (overhead inputSize : ℕ) :
-    (evaluateMap f xs overhead inputSize).value = xs.map (fun x => (f x).value) := by
-  simp [evaluateMap]
-
-@[simp] theorem time_evaluateMap [UniqueEncoding Tree β]
-    (f : α → Costed β) (xs : List α) (overhead inputSize : ℕ) :
-    (evaluateMap f xs overhead inputSize).cost.time =
-      (xs.map (fun x => (f x).cost.time)).sum + overhead := by
-  simp [evaluateMap]
-
-@[simp] theorem peak_evaluateMap [UniqueEncoding Tree β]
-    (f : α → Costed β) (xs : List α) (overhead inputSize : ℕ) :
-    (evaluateMap f xs overhead inputSize).cost.peak =
-      max inputSize (max (⌜xs.map (fun x => (f x).value)⌝ₜ.size + 1)
-        (xs.foldr (fun x s => max (f x).cost.peak s) 0)) := by
-  simp [evaluateMap]
-
-
-end Costed
-
-/-- Source-level projection of the joint fold: sum callback times and retain every peak. -/
-def foldlCost {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
-    (f : β → α → β) (b : β → α → Cost) (a : β) (xs : List α) : Cost :=
-  (Costed.foldl (fun a x => Costed.ofValue (f a x) (b a x)) a xs).cost
-
-@[simp] theorem foldlCost_nil {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
-    (f : β → α → β) (b : β → α → Cost) (a : β) :
-    foldlCost f b a [] = ⟨0, ⌜a⌝ₜ.size⟩ := rfl
-
-@[simp] theorem foldlCost_cons {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
-    (f : β → α → β) (b : β → α → Cost) (a : β) (x : α) (xs : List α) :
-    foldlCost f b a (x :: xs) =
-      ⟨(b a x).time + (foldlCost f b (f a x) xs).time,
-        max ⌜(a, x)⌝ₜ.size (max (b a x).peak (foldlCost f b (f a x) xs).peak)⟩ := by
-  ext <;> simp [foldlCost]
-
-/-- Source invariants discharge both fold budgets without referring to generated code. -/
-theorem foldlCost_le {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
-    {f : β → α → β} {b : β → α → Cost} (I : List α → β → Prop)
-    (remaining : List α → β → ℕ) (space : ℕ) (xs : List α) (a : β)
-    (initial : I xs a)
-    (step : ∀ x rest a, I (x :: rest) a → I rest (f a x) ∧
-      (b a x).time + remaining rest (f a x) ≤ remaining (x :: rest) a ∧
-      ⌜(a, x)⌝ₜ.size ≤ space ∧ (b a x).peak ≤ space)
-    (stop : ∀ a, I [] a → ⌜a⌝ₜ.size ≤ space) :
-    I [] (xs.foldl f a) ∧ (foldlCost f b a xs).time ≤ remaining xs a ∧
-      (foldlCost f b a xs).peak ≤ space := by
-  simpa only [Costed.value_ofValue, Costed.cost_ofValue, Costed.value_foldl, foldlCost] using
-    Costed.foldl_spec (fun a x => Costed.ofValue (f a x) (b a x))
-      I remaining space xs a initial step stop
-
-/-- Accumulator-independent callback times add once per element. -/
-@[simp] theorem foldlCost_time_sum {α β : Type*}
-    [UniqueEncoding Tree α] [UniqueEncoding Tree β]
-    (f : β → α → β) (time : α → ℕ) (peak : β → α → ℕ) (a : β) (xs : List α) :
-    (foldlCost f (fun a x => ⟨time x, peak a x⟩) a xs).time = (xs.map time).sum :=
-  Costed.time_foldl_eq_sum _ time a xs (by intros; rfl)
+    obtain ⟨hi', ht', hs'⟩ := ih (f a x) hi
+    simp only [List.foldl_cons, foldlTime_cons, foldlPeak_cons, max_le_iff]
+    exact ⟨hi', by omega, hs, hp, hs'⟩
 
 /-- A fold that adds at most its current element needs only the initial accumulator and list. -/
-theorem foldlCost_peak_le {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
-    {f : β → α → β} {b : β → α → Cost} (a : β) (xs : List α)
-    (result : ∀ a x, ⌜f a x⌝ₜ.size ≤ ⌜(a, x)⌝ₜ.size)
-    (peak : ∀ a x, (b a x).peak ≤ ⌜(a, x)⌝ₜ.size) :
-    (foldlCost f b a xs).peak ≤ ⌜a⌝ₜ.size + ⌜xs⌝ₜ.size := by
-  have h := foldlCost_le (f := f) (b := b)
-    (fun rest acc => ⌜acc⌝ₜ.size + ⌜rest⌝ₜ.size ≤ ⌜a⌝ₜ.size + ⌜xs⌝ₜ.size)
-    (fun rest acc => (foldlCost f b acc rest).time)
-    (⌜a⌝ₜ.size + ⌜xs⌝ₜ.size) xs a le_rfl ?_ ?_
-  · exact h.2.2
-  · intro x rest acc hi
-    have hr := result acc x
-    have hp := peak acc x
-    simp only [foldlCost_cons, encode_list_cons, size_encode_prod] at hi hr hp ⊢
-    exact ⟨by omega, le_rfl, by omega, by omega⟩
-  · intro acc hi
+theorem foldlPeak_le_of_size {p : β × α → ℕ} (a : β) (xs : List α)
+    (result : ∀ a x, ⌜f a x⌝ₜ.size ≤ ⌜(a, x)⌝ₜ.size) (peak : ∀ a x, p (a, x) ≤ ⌜(a, x)⌝ₜ.size) :
+    foldlPeak f p a xs ≤ ⌜a⌝ₜ.size + ⌜xs⌝ₜ.size := by
+  induction xs generalizing a with
+  | nil => simp
+  | cons x xs ih =>
+    have hr := result a x
+    have hp := peak a x
+    have := ih (f a x)
+    simp only [foldlPeak_cons, encode_list_cons, size_encode_prod, max_le_iff] at hr hp this ⊢
     omega
 
-/-- Prepending retains exactly the final list's size as its peak, including the empty fold.
-The two sizes are the input and output of the structural cons callback. -/
-@[simp] theorem foldlCost_prepend_peak {α : Type*} [UniqueEncoding Tree α]
-    (time : List α → α → ℕ) (acc xs : List α) :
-    (foldlCost (fun acc x => x :: acc)
-      (fun acc x => ⟨time acc x,
-        max (1 + ⌜acc⌝ₜ.size + ⌜x⌝ₜ.size) (1 + ⌜x⌝ₜ.size + ⌜acc⌝ₜ.size)⟩) acc xs).peak =
-      ⌜xs.reverse ++ acc⌝ₜ.size := by
+/-- Prepending retains exactly the final list's size as its peak, including the empty fold. -/
+@[simp] theorem foldlPeak_prepend {α : Type*} [UniqueEncoding Tree α] (acc xs : List α) :
+    foldlPeak (fun acc x => x :: acc) (fun z => ⌜z⌝ₜ.size) acc xs = ⌜xs.reverse ++ acc⌝ₜ.size := by
   induction xs generalizing acc with
   | nil => simp
   | cons x xs ih =>
-    rw [foldlCost_cons]
-    change max _ (max _ _) = _
-    rw [ih]
+    rw [foldlPeak_cons, ih]
     simp only [List.reverse_cons, List.append_assoc, List.singleton_append, size_encode_prod]
     have := size_encode_list_append xs.reverse (x :: acc)
     simp only [encode_list_cons, size_encode_prod] at this
     have := Tree.size_pos ⌜xs.reverse⌝ₜ
     omega
 
-/-- Fold bounds written solely in terms of the source callback and its input-dependent bounds. -/
-@[simps] def foldlSumBounds {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
-    (f : β → α → β) (b : Bounds (β × α)) : Bounds (β × List α) :=
-  let b' a x : Cost := ⟨b.time (a, x), b.peak (a, x)⟩
-  ⟨fun x => (foldlCost f b' x.1 x.2).time + 13 * x.2.length + 10,
-    fun x => max ⌜x⌝ₜ.size (foldlCost f b' x.1 x.2).peak⟩
+theorem _root_.Complexity.Dominated.foldlPeak {p q : β × α → ℕ} (h : Dominated p q) :
+    Dominated (fun x : β × List α => foldlPeak f p x.1 x.2)
+      (fun x => foldlPeak f q x.1 x.2) := by
+  obtain ⟨C, hC⟩ := dominated_iff.mp h
+  refine Dominated.of_le_mul (C + 1) fun ⟨a, xs⟩ => ?_
+  induction xs generalizing a with
+  | nil => exact Nat.le_mul_of_pos_left _ (Nat.succ_pos C)
+  | cons x xs ih =>
+    have hx := hC (a, x)
+    have hr := ih (f a x)
+    simp only [smul_eq_mul] at hx
+    simp only [foldlPeak_cons, mul_max, max_le_iff]
+    refine ⟨(Nat.le_mul_of_pos_left _ (Nat.succ_pos C)).trans (Nat.le_max_left _ _), ?_, ?_⟩
+    · exact (hx.trans (Nat.mul_le_mul_right _ (Nat.le_succ C))).trans
+        ((Nat.le_max_left _ _).trans (Nat.le_max_right _ _))
+    · exact hr.trans ((Nat.le_max_right _ _).trans (Nat.le_max_right _ _))
+
+end Cost
 
 namespace Traversal
 
@@ -358,14 +322,12 @@ def foldProgram (p : Value → Code Value) (v : Value) : Code Value := do
 end Traversal
 
 theorem Implements.foldl {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
-    {p : Value → Code Value} {run : β → α → Costed β}
-    (hf : Implements p (fun x => (run x.1 x.2).value)
-      (Costed.bounds (fun x : β × α => run x.1 x.2))) :
-    Implements (Traversal.foldProgram p)
-      (fun x : β × List α => (Costed.evaluateFold run x.1 x.2).value)
-      (Costed.bounds (fun x : β × List α => Costed.evaluateFold run x.1 x.2)) := by
+    {p : Value → Code Value} {f : β → α → β} {b : Bounds (β × α)}
+    (hf : Implements p (Function.uncurry f) b) :
+    Implements (Traversal.foldProgram p) (fun x : β × List α => x.2.foldl f x.1)
+      ⟨fun x => foldlTime f b.time x.1 x.2 + 13 * x.2.length + 10,
+        fun x => max ⌜x⌝ₜ.size (foldlPeak f b.peak x.1 x.2)⟩ := by
   obtain ⟨hpFresh, hp⟩ := hf
-  let f (a : β) (x : α) := (run a x).value
   let q (a x : Value) := do p (← a.pair x)
   have hqFresh : ∀ a v n, a.expression.bound ≤ n → v.expression.bound ≤ n →
       n ≤ ((q a v).build n).2.1 := by
@@ -381,10 +343,9 @@ theorem Implements.foldl {α β : Type*} [UniqueEncoding Tree α] [UniqueEncodin
         ((p (.var (n + 7))).build (n + 8)).2.1 + 2
     omega
   · intro v n s ⟨a, xs⟩ hv hx
-    let budget as c := (Costed.foldl run c as).cost.time + 13 * as.length
-    let space := max ⌜(a, xs)⌝ₜ.size (Costed.foldl run a xs).cost.peak
-    let I (as : List α) (c : β) := ⌜as⌝ₜ.size ≤ space ∧
-      (Costed.foldl run c as).cost.peak ≤ space
+    let budget as c := foldlTime f b.time c as + 13 * as.length
+    let space := max ⌜(a, xs)⌝ₜ.size (foldlPeak f b.peak a xs)
+    let I (as : List α) (c : β) := ⌜as⌝ₜ.size ≤ space ∧ foldlPeak f b.peak c as ≤ space
     have hx' := (v.eval_update_of_bound_le hv s ⌜a⌝ₜ).trans hx
     have hs : ⌜(a, xs)⌝ₜ.size ≤ space := Nat.le_max_left _ _
     change (Traversal.foldProgram p v).Bounded n s (budget xs a + 10) space _
@@ -392,27 +353,27 @@ theorem Implements.foldl {α β : Type*} [UniqueEncoding Tree α] [UniqueEncodin
     simp only [bounded_left_bind_iff, hx, encode_prod, Tree.left_pair,
       bounded_right_bind_iff, hx', Tree.right_pair]
     refine ⟨by omega, hs, by omega, hs, ?_⟩
-    apply (Traversal.foldl_budget_bounded f q hqFresh (fun c x => (run c x).cost.time + 1)
+    apply (Traversal.foldl_budget_bounded f q hqFresh (fun c x => b.time (c, x) + 1)
       budget I xs a (.var n) (.var (n + 1))
       (n + 2) _ ?_ ?_ ?_ ?_ ?_ (by change n + 1 + 1 ≤ n + 2; omega)
       (by simp) (by simp)).mono (by simp) le_rfl
     · intro w t ⟨hw, hf⟩
-      refine ⟨by simpa [Costed.evaluateFold, Costed.value_foldl, f] using hw, ?_⟩
+      refine ⟨hw, ?_⟩
       intro j hj
       simpa (disch := omega) using hf j (by omega)
     · refine ⟨?_, Nat.le_max_right _ _⟩
       simp only [size_encode_prod] at hs; omega
     · rintro x as c ⟨hs, hp⟩
-      simp only [Costed.peak_foldl_cons, Nat.max_le] at hp
+      simp only [foldlPeak_cons, Nat.max_le] at hp
       refine ⟨?_, hp.2.2⟩
       simp only [encode_list_cons, size_encode_prod] at hs; omega
     · intro x as c _
-      simp only [budget, Costed.time_foldl_cons, f, List.length_cons, Nat.mul_add, Nat.mul_one]
+      simp only [budget, foldlTime_cons, List.length_cons, Nat.mul_add, Nat.mul_one]
       omega
     · rintro as c ⟨hs, hc⟩
-      exact ⟨hs, (Costed.size_le_foldl run c as).trans hc⟩
+      exact ⟨hs, (size_le_foldlPeak b.peak c as).trans hc⟩
     · rintro x as c ⟨_, hs⟩ a v n s _ _ ha hv hc hx
-      simp only [Costed.peak_foldl_cons, Nat.max_le] at hs
+      simp only [foldlPeak_cons, Nat.max_le] at hs
       simp only [q, bounded_pair_bind_iff]
       refine ⟨by omega, ?_, ?_⟩
       · simpa only [hc, hx, ← encode_prod] using hs.1
@@ -423,28 +384,17 @@ theorem Implements.foldl {α β : Type*} [UniqueEncoding Tree α] [UniqueEncodin
         intro j hj
         simpa (disch := omega) using hf j (by omega)
 
-
-/-- Fold a certified callback while jointly evaluating source values and resources. -/
-@[simps program evaluate] def Implementation.foldl {α β : Type*}
-    [UniqueEncoding Tree α] [UniqueEncoding Tree β] {f : β → α → β}
-    (hf : Implementation (Function.uncurry f)) :
-    Implementation (fun x : β × List α => x.2.foldl f x.1) where
+/-- Fold a callback; its growth is charged at every actual intermediate accumulator. -/
+def Implementation.foldl {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
+    {f : β → α → β} {t p : β × α → ℕ} (hf : Implementation (Function.uncurry f) t p) :
+    Implementation (fun x : β × List α => x.2.foldl f x.1)
+      (fun x => foldlTime f t x.1 x.2 + x.2.length + 1)
+      (fun x => max ⌜x⌝ₜ.size (foldlPeak f p x.1 x.2)) where
   program := Traversal.foldProgram hf.program
-  evaluate x := Costed.evaluateFold (fun a x => hf.evaluate (a, x)) x.1 x.2
-  value_eq x := by simp [Costed.evaluateFold, hf.value_eq, Function.uncurry_def]
-  sound := hf.sound.foldl
-
-@[simp, source_bounds↓] theorem Implementation.bounds_foldl {α β : Type*}
-    [UniqueEncoding Tree α] [UniqueEncoding Tree β] {f : β → α → β}
-    (hf : Implementation (Function.uncurry f)) :
-    hf.foldl.bounds = foldlSumBounds f hf.bounds := by
-  have callback : (fun a x => hf.evaluate (a, x)) =
-      fun a x => Costed.ofValue (f a x) ⟨hf.bounds.time (a, x), hf.bounds.peak (a, x)⟩ := by
-    funext a x
-    have hv : (hf.evaluate (a, x)).value = f a x := hf.value_eq (a, x)
-    rw [← hv]
-    rfl
-  simp only [Implementation.bounds, Costed.bounds, Implementation.foldl_evaluate,
-    Costed.evaluateFold, callback, foldlSumBounds, foldlCost, Costed.cost_ofValue]
+  sound := by
+    obtain ⟨b, h, hbt, hbp⟩ := hf.sound
+    exact ⟨_, h.foldl, ((hbt.foldlTime (f := f)).add
+      ((Dominated.refl _).const_mul_left 13)).add (Dominated.const 10),
+      (Dominated.refl _).max (hbp.foldlPeak (f := f))⟩
 
 end Complexity.TreeProgram.Source

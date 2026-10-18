@@ -113,6 +113,14 @@ theorem sum_finRange {n : α → ℕ} {a : (x : α) → Fin (n x) → ℕ} {b : 
   simpa only [List.map_const', List.sum_replicate, List.length_finRange,
     Nat.nsmul_eq_mul, Nat.mul_left_comm] using hs
 
+/-- A table sum is bounded by a power of a scale that bounds both its length and its entries. -/
+theorem sum_finRange_pow {n : α → ℕ} {a : (x : α) → Fin (n x) → ℕ} {S : α → ℕ} {e : ℕ}
+    (he : 2 ≤ e) (hS : ∀ x, 0 < S x) (hn : Dominated n S)
+    (h : Dominated (fun z : Σ x, Fin (n x) => a z.1 z.2) (fun z => S z.1)) :
+    Dominated (fun x => ((List.finRange (n x)).map (a x)).sum) (fun x => S x ^ e) :=
+  (sum_finRange h).trans ((hn.mul (Dominated.refl S)).trans
+    (Dominated.of_le fun x => by rw [← pow_two]; exact Nat.pow_le_pow_right (hS x) he))
+
 /-- Dependent traversal uses one coefficient for all environments and callback arguments. -/
 theorem sum_map {ι : α → Type*} (xs : (x : α) → List (ι x))
     {a b : (x : α) → ι x → ℕ}

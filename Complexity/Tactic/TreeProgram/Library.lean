@@ -21,11 +21,8 @@ def lookupContinues {α : Type*} (x : ℕ × List α) : Bool :=
 
 def lookupStep {α : Type*} (x : ℕ × List α) := (x.1.pred, x.2.tail)
 
-@[source_bounds↓] noncomputable def lookupCheckImplementation {α : Type*}
-    [UniqueEncoding Tree α] : Implementation (lookupContinues (α := α)) := by source_fun_prop
-
-@[source_growth] theorem lookupCheck_growth {α : Type*} [UniqueEncoding Tree α] :
-    (lookupCheckImplementation (α := α)).HasGrowth (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
+def lookupCheckImplementation {α : Type*} [UniqueEncoding Tree α] :
+    Implementation (lookupContinues (α := α)) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   source_fun_prop
   all_goals
     apply Dominated.of_cover (fun n : ℕ => (n, []))
@@ -43,28 +40,21 @@ def lookupStep {α : Type*} (x : ℕ × List α) := (x.1.pred, x.2.tail)
       all_goals first
       | exact Dominated.const _
       | exact Dominated.of_le (fun _ => by omega)
-      | exact Dominated.const_of_pos _ (fun _ => by omega)
-      | exact Implementation.hasGrowth_boolNot.1.comp _
-      | apply (Implementation.hasGrowth_boolNot.2.comp _).trans
-        exact (Dominated.const_of_pos 3 (fun _ => by omega)).mono_left
-          fun _ => size_encode_bool_le _
       | apply (Dominated.const_of_pos 3 (fun _ => by omega)).mono_left
         intro x
         exact size_encode_bool_le _
 
-@[source_bounds↓] noncomputable def lookupStepImplementation {α : Type*}
-    [UniqueEncoding Tree α] : Implementation (lookupStep (α := α)) := by source_fun_prop
-
-@[source_growth] theorem lookupStep_growth {α : Type*} [UniqueEncoding Tree α] :
-    (lookupStepImplementation (α := α)).HasGrowth
-      (fun x => ⌜x.1⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
+def lookupStepImplementation {α : Type*} [UniqueEncoding Tree α] :
+    Implementation (lookupStep (α := α)) (fun x => ⌜x.1⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
   source_fun_prop
-  · simp only [Dominated.add_iff]
+  case time =>
+    simp only [Dominated.add_iff]
     repeat' apply And.intro
     all_goals first
       | exact Dominated.refl _
       | exact Dominated.const_of_pos _ (fun x => Tree.size_pos ⌜x.1⌝ₜ)
-  · have hp := Implementation.hasGrowth_pred.size_encode
+  case peak =>
+    have hp := Implementation.pred.size_encode
     have hpred := hp.comp (fun x : ℕ × List α => x.1)
     have hinput : Dominated (fun x : ℕ × List α => ⌜x.1⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) :=
       Dominated.of_le size_encode_fst_le
@@ -80,17 +70,10 @@ def lookupStep {α : Type*} (x : ℕ × List α) := (x.1.pred, x.2.tail)
       | exact hpred.trans (hinput.max_same hinput)
       | exact Dominated.const_of_pos _ (fun _ => Tree.size_pos _)
 
-@[source_bounds↓] noncomputable def lookupFinishImplementation {α : Type*}
-    [UniqueEncoding Tree α] : Implementation (fun x : ℕ × List α => x.2.head?) := by source_fun_prop
-
-@[source_growth] theorem lookupFinish_growth {α : Type*} [UniqueEncoding Tree α] :
-    (lookupFinishImplementation (α := α)).HasGrowth (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
+def lookupFinishImplementation {α : Type*} [UniqueEncoding Tree α] :
+    Implementation (fun x : ℕ × List α => x.2.head?) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   source_fun_prop
-  · exact Dominated.const _
-  · apply Dominated.of_le
-    rintro ⟨n, xs⟩
-    cases xs <;> simp only [size_encode_prod, encode_list_nil, encode_list_cons,
-      encode_option_none, encode_option_some, size_encode_unit] <;> omega
+  all_goals dominated
 
 def lookupInvariant {α : Type*} [UniqueEncoding Tree α] (x y : ℕ × List α) :=
   y.1.bits.length ≤ x.1.bits.length ∧ ⌜y.2⌝ₜ.size ≤ ⌜x.2⌝ₜ.size ∧ y.2[y.1]? = x.2[x.1]?
@@ -110,15 +93,14 @@ theorem lookup_size {α : Type*} [UniqueEncoding Tree α] :
   omega
 
 /-- Indexed lookup uses selected callbacks and one invariant-family growth specification. -/
-@[source_bounds↓] noncomputable def Implementation.lookup {α : Type*}
-    [UniqueEncoding Tree α] : Implementation (fun x : ℕ × List α => x.2[x.1]?) := by
-  refine Implementation.tailLoop lookupCheckImplementation lookupStepImplementation
-    lookupFinishImplementation ⟨fun _ => 1, fun x => ⌜x⌝ₜ.size⟩
-    ⟨fun x => ⌜x.1⌝ₜ.size, fun x => ⌜x⌝ₜ.size⟩ ⟨fun _ => 1, fun x => ⌜x⌝ₜ.size⟩
-    lookupCheck_growth lookupStep_growth lookupFinish_growth lookupInvariant
+def Implementation.lookup {α : Type*} [UniqueEncoding Tree α] :
+    Implementation (fun x : ℕ × List α => x.2[x.1]?) (fun x => ⌜x⌝ₜ.size ^ 2)
+      (fun x => ⌜x⌝ₜ.size) := by
+  refine (Implementation.tailLoop lookupCheckImplementation lookupStepImplementation
+    lookupFinishImplementation lookupInvariant
     (fun x => x.2.length) (fun x => ⌜x⌝ₜ.size) (fun _ => 1) (fun x => ⌜x⌝ₜ.size)
     ?equation ?initial ?next_state ?decreases ?input_size ?check_peak ?step_peak ?stop_peak
-    ?step_time ?check_time ?stop_time ?step_pos ?stop_pos
+    ?step_time ?check_time ?stop_time ?step_pos ?stop_pos).mono ?time (Dominated.refl _)
   case equation =>
     rintro ⟨n, xs⟩
     cases xs with
@@ -153,12 +135,8 @@ theorem lookup_size {α : Type*} [UniqueEncoding Tree α] :
   case stop_time => exact Dominated.refl _
   case step_pos => exact fun _ => Tree.size_pos _
   case stop_pos => exact fun _ => Nat.zero_lt_one
-
-@[source_growth] theorem Implementation.hasGrowth_lookup {α : Type*} [UniqueEncoding Tree α] :
-    (Implementation.lookup (α := α)).HasGrowth
-      (fun x => ⌜x⌝ₜ.size ^ 2) (fun x => ⌜x⌝ₜ.size) := by
-  source_fun_prop
-  · have hlen : Dominated (fun x : ℕ × List α => x.2.length) (fun x => ⌜x⌝ₜ.size) :=
+  case time =>
+    have hlen : Dominated (fun x : ℕ × List α => x.2.length) (fun x => ⌜x⌝ₜ.size) :=
       Dominated.of_le fun x => (length_le_codeSize x.2).trans (size_encode_snd_le x)
     have hmul := hlen.mul (Dominated.refl (fun x : ℕ × List α => ⌜x⌝ₜ.size))
     simp only [Dominated.add_iff]
@@ -166,81 +144,50 @@ theorem lookup_size {α : Type*} [UniqueEncoding Tree α] :
     all_goals first
       | exact hmul.mono fun _ => by rw [pow_two]
       | exact Dominated.const_of_pos _ (fun _ => Nat.pow_pos (Tree.size_pos _))
-  · exact Dominated.refl _
 
-@[source_bounds↓] noncomputable def Implementation.getElem? {α β : Type*}
-    [UniqueEncoding Tree α] [UniqueEncoding Tree β]
-    {f : α → List β} {i : α → ℕ} (hf : Implementation f) (hi : Implementation i) :
-    Implementation (fun x => (f x)[i x]?) := (hi.pair hf).comp Implementation.lookup
+def Implementation.getElem? {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
+    {f : α → List β} {i : α → ℕ} {tf pf ti pi : α → ℕ} (hf : Implementation f tf pf)
+    (hi : Implementation i ti pi) :
+    Implementation (fun x => (f x)[i x]?) (fun x => ti x + (tf x + 1) + ⌜(i x, f x)⌝ₜ.size ^ 2)
+      (fun x => max (max (pi x) (max (pf x) ⌜(i x, f x)⌝ₜ.size)) ⌜(i x, f x)⌝ₜ.size) :=
+  (hi.pair hf).comp Implementation.lookup
 
 attribute [scoped fun_prop] Implementation.getElem?
 
-@[source_bounds↓] def Implementation.encodeTree {α : Type*} [UniqueEncoding Tree α] :
-    Implementation (encode Tree : α → Tree) :=
+def Implementation.encodeTree {α : Type*} [UniqueEncoding Tree α] :
+    Implementation (encode Tree : α → Tree) (fun _ => 0) (fun _ => 0) :=
   .ofEncode (g := id) (fun _ => rfl) Implementation.identity
 
 attribute [scoped fun_prop] Implementation.encodeTree
 
 /-- Reading a represented table reuses its code; construction remains a separate premise. -/
-@[source_bounds↓] def Implementation.ofFn {α β : Type*}
-    [UniqueEncoding Tree α] [UniqueEncoding Tree β]
-    {n : α → ℕ} {f : (x : α) → Fin (n x) → β}
-    (hf : Implementation (fun x => ⌜f x⌝ₜ)) : Implementation (fun x => List.ofFn (f x)) :=
+def Implementation.ofFn {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
+    {n : α → ℕ} {f : (x : α) → Fin (n x) → β} {t p : α → ℕ}
+    (hf : Implementation (fun x => ⌜f x⌝ₜ) t p) :
+    Implementation (fun x => List.ofFn (f x)) t p :=
   .ofEncode (g := fun x => ⌜f x⌝ₜ) (fun _ => rfl) hf
 
 attribute [scoped fun_prop] Implementation.ofFn
 
-/-- Remove a successful optional result while retaining the selected computation. -/
-@[source_bounds↓] noncomputable def Implementation.ofSome {α β : Type*}
-    [UniqueEncoding Tree α] [UniqueEncoding Tree β]
-    {f : α → β} {g : α → Option β} (hg : Implementation g)
-    (hfg : ∀ x, g x = some (f x)) : Implementation f := by
-  let hc : Implementation
-      (fun x : Option β => match x with | none => (.nil : Tree) | some a => ⌜a⌝ₜ) := by
-    source_fun_prop
-  exact .ofEncode (fun x => by simp [hfg]) (hg.comp hc)
+/-- Read the value of a known successful optional result. -/
+def Implementation.someValue {β : Type*} [UniqueEncoding Tree β] :
+    Implementation (fun x : Option β => match x with | none => (.nil : Tree) | some a => ⌜a⌝ₜ)
+      (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
+  source_fun_prop
+  apply Dominated.of_le
+  intro x
+  cases x <;> simp
 
 /-- Removing a known successful result adds one fixed operation and retains the selected call. -/
-theorem Implementation.HasGrowth.ofSome {α β : Type*}
-    [UniqueEncoding Tree α] [UniqueEncoding Tree β]
-    {f : α → β} {g : α → Option β} {hg : Implementation g} {t p : α → ℕ}
-    (h : hg.HasGrowth t p) (hfg : ∀ x, g x = some (f x)) :
-    (hg.ofSome hfg).HasGrowth (fun x => t x + 1)
-      (fun x => max (p x) ⌜g x⌝ₜ.size) := by
-  let hc : Implementation
-      (fun x : Option β => match x with | none => (.nil : Tree) | some a => ⌜a⌝ₜ) := by
-    source_fun_prop
-  have hgc : hc.HasGrowth (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
-    source_fun_prop
-    · exact Dominated.const _
-    · apply (Dominated.refl _).max_same
-      apply Dominated.of_le
-      intro x
-      cases x <;> simp
-  exact (h.comp hgc).ofEncode (fun x => by simp [hfg])
+def Implementation.ofSome {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
+    {f : α → β} {g : α → Option β} {t p : α → ℕ} (hg : Implementation g t p)
+    (hfg : ∀ x, g x = some (f x)) :
+    Implementation f (fun x => t x + 1) (fun x => max (p x) ⌜g x⌝ₜ.size) :=
+  .ofEncode (fun x => by simp [hfg]) (hg.comp Implementation.someValue)
 
-@[source_bounds↓] noncomputable def Implementation.finApply {α : Type*} [UniqueEncoding Tree α] :
-    Implementation (fun x : Σ n, (Fin n → α) × Fin n => x.2.1 x.2.2) :=
-  .ofSome (by source_fun_prop : Implementation (fun x : Σ n, (Fin n → α) × Fin n =>
-    (List.ofFn x.2.1)[x.2.2.val]?)) (by rintro ⟨n, f, i⟩; simp)
-
-@[source_bounds↓] noncomputable def Implementation.finApplyFixed {α : Type*}
-    [UniqueEncoding Tree α] (n : ℕ) : Implementation (fun x : (Fin n → α) × Fin n => x.1 x.2) :=
-  .ofSome (by source_fun_prop : Implementation (fun x : (Fin n → α) × Fin n =>
-    (List.ofFn x.1)[x.2.val]?)) (by rintro ⟨f, i⟩; simp)
-
-@[source_bounds↓] noncomputable def Implementation.finValApplyPacked :
-    Implementation (fun x : Σ n, Σ k, (Fin n → Fin k) × Fin n => (x.2.2.1 x.2.2.2).val) :=
-  .ofSome (by source_fun_prop : Implementation
-    (fun x : Σ n, Σ k, (Fin n → Fin k) × Fin n =>
-      (List.ofFn (Fin.val ∘ x.2.2.1))[x.2.2.2.val]?)) (by rintro ⟨n, k, f, i⟩; simp)
-
-attribute [scoped fun_prop] Implementation.finApply Implementation.finApplyFixed
-  Implementation.finValApplyPacked
-
-@[source_growth] theorem Implementation.hasGrowth_finApply {α : Type*} [UniqueEncoding Tree α] :
-    (Implementation.finApply (α := α)).HasGrowth
-      (fun x => ⌜x⌝ₜ.size ^ 2) (fun x => ⌜x⌝ₜ.size) := by
+def Implementation.finApply {α : Type*} [UniqueEncoding Tree α] :
+    Implementation (fun x : Σ n, (Fin n → α) × Fin n => x.2.1 x.2.2) (fun x => ⌜x⌝ₜ.size ^ 2)
+      (fun x => ⌜x⌝ₜ.size) := by
   have hget : Dominated
       (fun x : Σ n, (Fin n → α) × Fin n => ⌜(List.ofFn x.2.1)[x.2.2.val]?⌝ₜ.size)
       (fun x => ⌜x⌝ₜ.size) := by
@@ -252,9 +199,10 @@ attribute [scoped fun_prop] Implementation.finApply Implementation.finApplyFixed
     have hn := Tree.size_pos ⌜n⌝ₜ
     have hi := Tree.size_pos ⌜i⌝ₜ
     omega
-  unfold Implementation.finApply
-  refine (Implementation.HasGrowth.ofSome
-    (t := fun x => ⌜x⌝ₜ.size ^ 2) (p := fun x => ⌜x⌝ₜ.size) ?_ _).mono ?_ ?_
+  refine (Implementation.ofSome
+    (g := fun x : Σ n, (Fin n → α) × Fin n => (List.ofFn x.2.1)[x.2.2.val]?)
+    (t := fun x => ⌜x⌝ₜ.size ^ 2) (p := fun x => ⌜x⌝ₜ.size) ?_ (by rintro ⟨n, f, i⟩; simp)).mono
+    ?_ ?_
   · source_fun_prop
     all_goals
       simp only [Dominated.add_iff, Dominated.max_iff]
@@ -276,13 +224,52 @@ attribute [scoped fun_prop] Implementation.finApply Implementation.finApplyFixed
       (Dominated.const_of_pos _ fun _ => Nat.pow_pos (Tree.size_pos _))
   · exact (Dominated.refl _).max_same hget
 
-@[source] theorem finApply_ftisp {α : Type*} [UniqueEncoding Tree α] :
+/-- A table whose length is fixed by the type is read like a runtime-length table. -/
+def Implementation.finApplyFixed {α : Type*} [UniqueEncoding Tree α] (n : ℕ) :
+    Implementation (fun x : (Fin n → α) × Fin n => x.1 x.2) (fun x => ⌜x⌝ₜ.size ^ 2)
+      (fun x => ⌜x⌝ₜ.size) := by
+  have hget : Dominated
+      (fun x : (Fin n → α) × Fin n => ⌜(List.ofFn x.1)[x.2.val]?⌝ₜ.size)
+      (fun x => ⌜x⌝ₜ.size) := by
+    apply Dominated.of_le
+    rintro ⟨f, i⟩
+    have hsize := size_encode_fin_apply_le f i
+    have he : (List.ofFn f)[i.val]? = some (f i) := by simp
+    simp only [he, encode_option_some, size_encode_prod, size_encode_unit]
+    have hi := Tree.size_pos ⌜i⌝ₜ
+    omega
+  refine (Implementation.ofSome
+    (g := fun x : (Fin n → α) × Fin n => (List.ofFn x.1)[x.2.val]?)
+    (t := fun x => ⌜x⌝ₜ.size ^ 2) (p := fun x => ⌜x⌝ₜ.size) ?_ (by rintro ⟨f, i⟩; simp)).mono
+    ?_ ?_
+  · source_fun_prop
+    all_goals
+      simp only [Dominated.add_iff, Dominated.max_iff]
+      repeat' apply And.intro
+      all_goals first
+      | exact Dominated.const_of_pos _ (fun _ => Nat.pow_pos (Tree.size_pos _))
+      | exact Dominated.const_of_pos _ (fun _ => Tree.size_pos _)
+      | exact Dominated.refl _
+      | apply Dominated.of_le
+        rintro ⟨f, i⟩
+        simp only [size_encode_prod, encode_fin, encode_fin_function]
+        omega
+      | apply Dominated.pow
+        apply Dominated.of_le
+        rintro ⟨f, i⟩
+        simp only [size_encode_prod, encode_fin, encode_fin_function]
+        omega
+  · exact (Dominated.refl _).add_same
+      (Dominated.const_of_pos _ fun _ => Nat.pow_pos (Tree.size_pos _))
+  · exact (Dominated.refl _).max_same hget
+
+attribute [scoped fun_prop] Implementation.finApply Implementation.finApplyFixed
+
+theorem finApply_ftisp {α : Type*} [UniqueEncoding Tree α] :
     (fun x : Σ n, (Fin n → α) × Fin n => x.2.1 x.2.2) ∈
       FTISP .tree (fun n => n ^ 2) (fun n => n ^ 1) :=
-  (by simpa only [pow_one] using Implementation.hasGrowth_finApply (α := α) :
-    Implementation.finApply.HasGrowth
-      (fun x => ⌜x⌝ₜ.size ^ 2) (fun x => ⌜x⌝ₜ.size ^ 1)).mem_ftisp_pow
-      (by decide)
+  (Implementation.finApply.mono (Dominated.refl _)
+    (Dominated.of_le fun _ => by rw [pow_one])).mem_ftisp_pow (by decide)
 
 def rangeContinues (x : ℕ × List ℕ) : Bool := !x.1.bits.isEmpty
 
@@ -290,32 +277,22 @@ def rangeStep (x : ℕ × List ℕ) : ℕ × List ℕ :=
   let n := x.1.pred
   (n, n :: x.2)
 
-@[source_bounds↓] noncomputable def rangeCheckImplementation :
-    Implementation rangeContinues := by source_fun_prop
-
-@[source_growth] theorem rangeCheck_growth : rangeCheckImplementation.HasGrowth
-    (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
-  constructor
-  · apply Dominated.of_le_mul 10
-    rintro ⟨n, xs⟩
-    cases h : n.bits <;> simp [rangeCheckImplementation, source_bounds]
-  · apply Dominated.of_le_mul 7
-    rintro ⟨n, xs⟩
-    have := Tree.size_pos ⌜n⌝ₜ
-    cases h : n.bits <;> simp [rangeCheckImplementation, source_bounds, h] <;> omega
-
-@[source_bounds↓] noncomputable def rangeStepImplementation :
-    Implementation rangeStep := by source_fun_prop
-
-@[source_growth] theorem rangeStep_growth : rangeStepImplementation.HasGrowth
-    (fun x => ⌜x.1⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
+def rangeCheckImplementation :
+    Implementation rangeContinues (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   source_fun_prop
-  · simp only [Dominated.add_iff]
+  all_goals dominated
+
+def rangeStepImplementation :
+    Implementation rangeStep (fun x => ⌜x.1⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
+  source_fun_prop
+  case time =>
+    simp only [Dominated.add_iff]
     repeat' apply And.intro
     all_goals first
       | exact Dominated.refl _
       | exact Dominated.const_of_pos _ (fun x => Tree.size_pos ⌜x.1⌝ₜ)
-  · have hp := Implementation.hasGrowth_pred.size_encode
+  case peak =>
+    have hp := Implementation.pred.size_encode
     have hpred := hp.comp (fun x : ℕ × List ℕ => x.1)
     have hinput : Dominated (fun x : ℕ × List ℕ => ⌜x.1⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) :=
       Dominated.of_le size_encode_fst_le
@@ -355,17 +332,13 @@ theorem range_size :
   simp only [size_encode_prod]
   nlinarith
 
-@[source_bounds↓] noncomputable def rangeLoopImplementation : Implementation rangeLoop := by
-  refine Implementation.tailLoop rangeCheckImplementation rangeStepImplementation
-    Implementation.snd ⟨fun _ => 1, fun x => ⌜x⌝ₜ.size⟩
-    ⟨fun x => ⌜x.1⌝ₜ.size, fun x => ⌜x⌝ₜ.size⟩ ⟨fun _ => 1, fun x => ⌜x⌝ₜ.size⟩
-    rangeCheck_growth rangeStep_growth
-    (Implementation.HasGrowth.of_bounds _ Implementation.bounds_snd
-      (Dominated.const 1) (Dominated.refl _))
-    rangeInvariant Prod.fst (fun x => x.1 + 1) (fun _ => 1)
+def rangeLoopImplementation : Implementation rangeLoop (fun x => (x.1 + 1) ^ 2)
+    (fun x => (x.1 + 1) ^ 2 + ⌜x.2⌝ₜ.size) := by
+  refine (Implementation.tailLoop rangeCheckImplementation rangeStepImplementation
+    Implementation.snd rangeInvariant Prod.fst (fun x => x.1 + 1) (fun _ => 1)
     (fun x => (x.1 + 1) ^ 2 + ⌜x.2⌝ₜ.size)
     ?equation ?initial ?next_state ?decreases ?input_size ?check_peak ?step_peak ?stop_peak
-    ?step_time ?check_time ?stop_time ?step_pos ?stop_pos
+    ?step_time ?check_time ?stop_time ?step_pos ?stop_pos).mono ?time (Dominated.refl _)
   case equation =>
     rintro ⟨n, xs⟩
     cases n with
@@ -400,28 +373,19 @@ theorem range_size :
   case stop_time => exact Dominated.refl _
   case step_pos => exact fun _ => Nat.succ_pos _
   case stop_pos => exact fun _ => Nat.zero_lt_one
-
-@[source_growth] theorem rangeLoop_growth : rangeLoopImplementation.HasGrowth
-    (fun x => (x.1 + 1) ^ 2) (fun x => (x.1 + 1) ^ 2 + ⌜x.2⌝ₜ.size) := by
-  source_fun_prop
-  · simp only [Dominated.add_iff]
+  case time =>
+    simp only [Dominated.add_iff]
     repeat' apply And.intro
     all_goals first
       | exact Dominated.of_le fun x => by nlinarith
       | exact Dominated.const_of_pos _ (fun x => Nat.pow_pos (Nat.succ_pos x.1))
-  · exact Dominated.refl _
 
 /-- Enumeration depends on the numerical length, not only its binary encoding size. -/
-@[source_bounds↓] noncomputable def Implementation.range : Implementation List.range := by
+def Implementation.range :
+    Implementation List.range (fun n => (n + 1) ^ 2) (fun n => (n + 1) ^ 2) := by
   let hr := rangeLoopImplementation
-  exact .ofEncode (by intro n; simp [rangeLoop])
-    (by source_fun_prop : Implementation (fun n => rangeLoop (n, [])))
-
-attribute [scoped fun_prop] Implementation.range
-
-@[source_growth] theorem Implementation.hasGrowth_range : Implementation.range.HasGrowth
-    (fun n => (n + 1) ^ 2) (fun n => (n + 1) ^ 2) := by
-  source_fun_prop
+  source_fun_prop via (fun n => rangeLoop (n, []))
+  case source_eq => funext n; simp [rangeLoop]
   all_goals
     simp only [Dominated.add_iff, Dominated.max_iff]
     repeat' apply And.intro
@@ -434,49 +398,22 @@ attribute [scoped fun_prop] Implementation.range
       try simp only [size_encode_prod, encode_list_nil, size_encode_unit] at *
       nlinarith
 
-@[source_bounds↓] noncomputable def lengthStepImplementation {α : Type*}
-    [UniqueEncoding Tree α] : Implementation (fun x : ℕ × α => x.1 + 1) := by source_fun_prop
+attribute [scoped fun_prop] Implementation.range
 
-@[source_growth] theorem lengthStep_growth {α : Type*} [UniqueEncoding Tree α] :
-    (lengthStepImplementation (α := α)).HasGrowth
-      (fun x => ⌜x.1⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
+def lengthStepImplementation {α : Type*} [UniqueEncoding Tree α] :
+    Implementation (fun x : ℕ × α => x.1 + 1) (fun x => ⌜x.1⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
   source_fun_prop
-  · exact (Dominated.const_of_pos 1 fun x : ℕ × α => Tree.size_pos ⌜x.1⌝ₜ).add_same
-      (Dominated.refl _)
-  · exact (Dominated.refl _).max_same (Dominated.of_le size_encode_fst_le)
+  all_goals dominated
 
-@[source_bounds↓] noncomputable def lengthInitialImplementation {α : Type*}
-    [UniqueEncoding Tree α] : Implementation (fun xs : List α => (0, xs)) := by source_fun_prop
-
-@[source_growth] theorem lengthInitial_growth {α : Type*} [UniqueEncoding Tree α] :
-    (lengthInitialImplementation (α := α)).HasGrowth
-      (fun _ => 1) (fun xs => ⌜xs⌝ₜ.size) := by
+def lengthInitialImplementation {α : Type*} [UniqueEncoding Tree α] :
+    Implementation (fun xs : List α => (0, xs)) (fun _ => 1) (fun xs => ⌜xs⌝ₜ.size) := by
   source_fun_prop
-  · exact Dominated.const _
-  · simp only [Dominated.max_iff, Dominated.add_iff, size_encode_prod]
-    repeat' apply And.intro
-    all_goals first
-      | exact Dominated.refl _
-      | exact Dominated.zero
-      | exact Dominated.const_of_pos _ (fun _ => Tree.size_pos _)
+  all_goals dominated
 
-/-- Count with the existing binary successor and retain its structural fold budget. -/
-noncomputable def Implementation.length {α : Type*} [UniqueEncoding Tree α] :
-    Implementation (List.length : List α → ℕ) :=
-  .ofEncode (by simp) (lengthInitialImplementation.comp
-    ((lengthStepImplementation (α := α)).foldl (f := fun n (_ : α) => n + 1)))
-
-@[simp, source_bounds↓] theorem Implementation.bounds_length {α : Type*} [UniqueEncoding Tree α] :
-    (Implementation.length (α := α)).bounds = compBounds (fun xs => (0, xs))
-      lengthInitialImplementation.bounds
-        ((lengthStepImplementation (α := α)).foldl (f := fun n (_ : α) => n + 1)).bounds := by
-  rw [Implementation.length, Implementation.bounds_ofEncode, Implementation.bounds_comp]
-
-attribute [scoped fun_prop] Implementation.length
-
-@[source_growth] theorem Implementation.hasGrowth_length {α : Type*} [UniqueEncoding Tree α] :
-    (Implementation.length (α := α)).HasGrowth
-      (fun xs => ⌜xs⌝ₜ.size ^ 2) (fun xs => ⌜xs⌝ₜ.size) := by
+/-- Count with the existing binary successor along a structural fold. -/
+def Implementation.length {α : Type*} [UniqueEncoding Tree α] :
+    Implementation (List.length : List α → ℕ) (fun xs => ⌜xs⌝ₜ.size ^ 2)
+      (fun xs => ⌜xs⌝ₜ.size) := by
   let I (xs rest : List α) (acc : ℕ) :=
     acc + rest.length ≤ xs.length ∧ ⌜rest⌝ₜ.size ≤ ⌜xs⌝ₜ.size
   have hs : Dominated (fun z : {z : List α × List α × ℕ // I z.1 z.2.1 z.2.2} =>
@@ -507,15 +444,16 @@ attribute [scoped fun_prop] Implementation.length
         I z.1 (z.2.1 :: z.2.2.1) z.2.2.2} =>
           ⟨(z.1.1, z.1.2.1 :: z.1.2.2.1, z.1.2.2.2), z.2⟩)).mono_left
       (fun z => by simp only [Function.comp_apply, size_encode_prod, encode_list_cons]; omega)
-  have hfold := (lengthStep_growth (α := α)).foldl_of_invariant
-    (f := fun n (_ : α) => n + 1) I id (fun _ => 0)
+  have hfold := Dominated.foldl_of_invariant (f := fun n (_ : α) => n + 1)
+    (t := fun x => ⌜x.1⌝ₜ.size) (p := fun x => ⌜x⌝ₜ.size) I id (fun _ => 0)
     (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) (fun _ => ⟨by simp, le_rfl⟩)
     (by
       intro xs a rest acc hi
       refine ⟨by have := hi.1; simp only [List.length_cons] at *; omega, ?_⟩
       exact (show ⌜rest⌝ₜ.size ≤ ⌜a :: rest⌝ₜ.size by simp).trans hi.2)
     hs ht hp
-  apply HasGrowth.of_bounds _ bounds_length
+  refine (Implementation.ofEncode (by simp) (lengthInitialImplementation.comp
+    ((lengthStepImplementation (α := α)).foldl (f := fun n (_ : α) => n + 1)))).mono ?_ ?_
   · have hN : Dominated (List.length : List α → ℕ) (fun xs => ⌜xs⌝ₜ.size) :=
       Dominated.of_le length_le_codeSize
     have htime : Dominated (fun xs : List α => xs.length * ⌜xs⌝ₜ.size + xs.length + 1)
@@ -523,34 +461,20 @@ attribute [scoped fun_prop] Implementation.length
       simp only [Dominated.add_iff]
       exact ⟨⟨(hN.mul (Dominated.refl _)).mono (fun _ => by rw [pow_two]),
         hN.le_pow (by decide)⟩, Dominated.const_of_pos _ fun _ => Nat.pow_pos (Tree.size_pos _)⟩
-    exact (lengthInitial_growth.1.trans
-      (Dominated.const_of_pos _ fun _ => Nat.pow_pos (Tree.size_pos _))).add_same
-      (hfold.1.trans htime)
-  · exact lengthInitial_growth.2.max_same hfold.2
+    exact (Dominated.const_of_pos _ fun _ => Nat.pow_pos (Tree.size_pos _)).add_same
+      ((hfold.1.add (Dominated.refl _)).add (Dominated.const 1) |>.trans htime)
+  · exact (Dominated.refl _).max_same hfold.2
 
-/-- Construct a represented tuple using one selected callback for every environment and index. -/
-@[source_bounds↓] noncomputable def Implementation.finFunction {ρ : Type*} {β : ρ → Type*}
-    [UniqueEncoding Tree ρ] [∀ e, UniqueEncoding Tree (β e)]
-    {n : ρ → ℕ} {f : (e : ρ) → Fin (n e) → β e}
-    (hn : Implementation n) (hf : Implementation (fun p : Σ e, Fin (n e) => ⌜f p.1 p.2⌝ₜ)) :
-    Implementation (fun e => ⌜f e⌝ₜ) := by
-  let he : Implementation (fun e => (⟨e, List.finRange (n e)⟩ : Σ e, List (Fin (n e)))) :=
-    .ofEncode (g := fun e => (e, List.range (n e)))
-      (fun e => by simp only [Sigma.encode_mk, encode_prod, encode_finRange])
-      (Implementation.identity.pair (hn.comp Implementation.range))
-  let hm := he.mapDependentWith (f := fun e i => ⌜f e i⌝ₜ) hf
-  exact .ofEncode (g := fun e => (List.finRange (n e)).map (fun i => ⌜f e i⌝ₜ))
-    (fun e => by rw [← List.ofFn_eq_map, Tree.encode_self, encode_fin_function_codes]) hm
+attribute [scoped fun_prop] Implementation.length
 
-/-- Tabulation combines selected enumeration and callback specifications before summing.
-The callback coefficient is shared by every environment and index. -/
-theorem Implementation.HasGrowth.finFunction {ρ : Type*} {β : ρ → Type*}
+/-- Construct a represented tuple using one selected callback for every environment and index.
+Tabulation sums the callback growth; one coefficient covers every environment and index. -/
+def Implementation.finFunction {ρ : Type*} {β : ρ → Type*}
     [UniqueEncoding Tree ρ] [∀ e, UniqueEncoding Tree (β e)]
-    {n : ρ → ℕ} {f : (e : ρ) → Fin (n e) → β e}
-    {hn : Implementation n} {hf : Implementation (fun p : Σ e, Fin (n e) => ⌜f p.1 p.2⌝ₜ)}
-    {tn pn : ρ → ℕ} {tf pf : (Σ e, Fin (n e)) → ℕ}
-    (gn : hn.HasGrowth tn pn) (gf : hf.HasGrowth tf pf) :
-    (Implementation.finFunction hn hf).HasGrowth
+    {n : ρ → ℕ} {f : (e : ρ) → Fin (n e) → β e} {tn pn : ρ → ℕ} {tf pf : (Σ e, Fin (n e)) → ℕ}
+    (hn : Implementation n tn pn)
+    (hf : Implementation (fun p : Σ e, Fin (n e) => ⌜f p.1 p.2⌝ₜ) tf pf) :
+    Implementation (fun e => ⌜f e⌝ₜ)
       (fun e => (tn e + (n e + 1) ^ 2 + 1) +
         (((List.finRange (n e)).map (fun i => tf ⟨e, i⟩)).sum + n e + 1))
       (fun e => max (max (pn e) ((n e + 1) ^ 2))
@@ -558,23 +482,20 @@ theorem Implementation.HasGrowth.finFunction {ρ : Type*} {β : ρ → Type*}
           ((List.finRange (n e)).foldr (fun i s => max (pf ⟨e, i⟩) s) 0)))) := by
   have heq (e : ρ) : ⌜(⟨e, List.finRange (n e)⟩ : Σ e, List (Fin (n e)))⌝ₜ =
       ⌜(e, List.range (n e))⌝ₜ := by simp only [Sigma.encode_mk, encode_prod, encode_finRange]
-  have hi := (Implementation.HasGrowth.refl (Implementation.identity (α := ρ))).pair
-    (gn.comp Implementation.hasGrowth_range)
-  have he := hi.ofEncode heq
-  have hm := he.mapDependentWith (gf := gf) (f := fun e i => ⌜f e i⌝ₜ)
-  apply (hm.ofEncode (fun e => by
-    rw [← List.ofFn_eq_map, Tree.encode_self, encode_fin_function_codes])).mono
+  let he := Implementation.ofEncode heq
+    (Implementation.identity.pair (hn.comp Implementation.range))
+  refine (Implementation.ofEncode (g := fun e => (List.finRange (n e)).map (fun i => ⌜f e i⌝ₜ))
+    (fun e => by rw [← List.ofFn_eq_map, Tree.encode_self, encode_fin_function_codes])
+    (he.mapDependentWith (f := fun e i => ⌜f e i⌝ₜ) hf)).mono ?_ ?_
   · apply Dominated.of_le
     intro e
-    simp only [Implementation.bounds_identity, Nat.zero_add, List.length_finRange]
+    simp only [Nat.zero_add, List.length_finRange]
     omega
   · apply Dominated.of_le
     intro e
-    simp only [Implementation.bounds_identity, Function.comp_apply,
-      Nat.zero_max, ← List.ofFn_eq_map,
+    simp only [Nat.zero_max, ← List.ofFn_eq_map,
       encode_fin_function_codes, heq, id_eq]
     omega
-
 
 end Complexity.TreeProgram.Source
 
@@ -592,29 +513,17 @@ end tabulate
 namespace Complexity.TreeProgram.Source
 
 /-- Evaluate the index and table once, then reuse the represented-list lookup. -/
-@[source_bounds↓] noncomputable def Implementation.finApplyEncoded {ρ : Type*} {β : ρ → Type*}
+def Implementation.finApplyEncoded {ρ : Type*} {β : ρ → Type*}
     [UniqueEncoding Tree ρ] [∀ e, UniqueEncoding Tree (β e)]
-    {n : ρ → ℕ} {f : (e : ρ) → Fin (n e) → β e} {i : (e : ρ) → Fin (n e)}
-    (hf : Implementation (fun e => ⌜f e⌝ₜ)) (hi : Implementation (fun e => (i e).val)) :
-    Implementation (fun e => ⌜f e (i e)⌝ₜ) := by
-  let ht : Implementation (fun e => List.ofFn (fun i => ⌜f e i⌝ₜ)) :=
-    .ofEncode (fun e => (encode_fin_function_codes _).trans (Tree.encode_self _).symm) hf
-  exact ((hi.pair ht).comp Implementation.lookup).ofSome (by intro e; simp)
-
-/-- A represented lookup combines the selected table and index calls with its saved lookup
-specification. Successful-result packaging is handled once by this rule. -/
-theorem Implementation.HasGrowth.finApplyEncoded {ρ : Type*} {β : ρ → Type*}
-    [UniqueEncoding Tree ρ] [∀ e, UniqueEncoding Tree (β e)]
-    {n : ρ → ℕ} {f : (e : ρ) → Fin (n e) → β e} {i : (e : ρ) → Fin (n e)}
-    {hf : Implementation (fun e => ⌜f e⌝ₜ)} {hi : Implementation (fun e => (i e).val)}
-    {tf pf ti pi : ρ → ℕ} (gf : hf.HasGrowth tf pf) (gi : hi.HasGrowth ti pi) :
-    (Implementation.finApplyEncoded hf hi).HasGrowth
+    {n : ρ → ℕ} {f : (e : ρ) → Fin (n e) → β e} {i : (e : ρ) → Fin (n e)} {tf pf ti pi : ρ → ℕ}
+    (hf : Implementation (fun e => ⌜f e⌝ₜ) tf pf)
+    (hi : Implementation (fun e => (i e).val) ti pi) :
+    Implementation (fun e => ⌜f e (i e)⌝ₜ)
       (fun e => ti e + (tf e + 1) + ⌜((i e).val, ⌜f e⌝ₜ)⌝ₜ.size ^ 2 + 1)
       (fun e => max (pi e) (max (pf e) ⌜((i e).val, ⌜f e⌝ₜ)⌝ₜ.size)) := by
-  have gt := gf.ofEncode (fun e =>
-    (encode_fin_function_codes _).trans (Tree.encode_self _).symm)
-  have gl := (gi.pair gt).comp Implementation.hasGrowth_lookup
-  apply (gl.ofSome (by intro e; simp)).mono
+  let ht : Implementation (fun e => List.ofFn (fun i => ⌜f e i⌝ₜ)) tf pf :=
+    .ofEncode (fun e => (encode_fin_function_codes _).trans (Tree.encode_self _).symm) hf
+  refine (((hi.pair ht).comp Implementation.lookup).ofSome (by intro e; simp)).mono ?_ ?_
   · apply Dominated.of_le
     intro e
     simp only [size_encode_prod, Tree.encode_self, encode_fin_function_codes]
@@ -628,54 +537,68 @@ theorem Implementation.HasGrowth.finApplyEncoded {ρ : Type*} {β : ρ → Type*
       encode_fin_function_codes]
     omega
 
-@[source_bounds↓] noncomputable def Implementation.finValApply {ρ : Type*} [UniqueEncoding Tree ρ]
+/-- Reading a finite-valued table retains the encoded lookup's selected program and growth. -/
+def Implementation.finValApply {ρ : Type*} [UniqueEncoding Tree ρ]
     {n k : ρ → ℕ} {f : (e : ρ) → Fin (n e) → Fin (k e)} {i : (e : ρ) → Fin (n e)}
-    (hf : Implementation (fun e => ⌜f e⌝ₜ)) (hi : Implementation (fun e => (i e).val)) :
-    Implementation (fun e => (f e (i e)).val) :=
+    {tf pf ti pi : ρ → ℕ} (hf : Implementation (fun e => ⌜f e⌝ₜ) tf pf)
+    (hi : Implementation (fun e => (i e).val) ti pi) :
+    Implementation (fun e => (f e (i e)).val)
+      (fun e => ti e + (tf e + 1) + ⌜((i e).val, ⌜f e⌝ₜ)⌝ₜ.size ^ 2 + 1)
+      (fun e => max (pi e) (max (pf e) ⌜((i e).val, ⌜f e⌝ₜ)⌝ₜ.size)) :=
   .ofEncode (fun _ => (encode_fin _).symm.trans (Tree.encode_self _).symm)
     (Implementation.finApplyEncoded hf hi)
 
-/-- Reading a finite-valued table retains the encoded lookup's selected program and budget. -/
-theorem Implementation.HasGrowth.finValApply {ρ : Type*} [UniqueEncoding Tree ρ]
-    {n k : ρ → ℕ} {f : (e : ρ) → Fin (n e) → Fin (k e)} {i : (e : ρ) → Fin (n e)}
-    {hf : Implementation (fun e => ⌜f e⌝ₜ)} {hi : Implementation (fun e => (i e).val)}
-    {tf pf ti pi : ρ → ℕ} (gf : hf.HasGrowth tf pf) (gi : hi.HasGrowth ti pi) :
-    (Implementation.finValApply hf hi).HasGrowth
-      (fun e => ti e + (tf e + 1) + ⌜((i e).val, ⌜f e⌝ₜ)⌝ₜ.size ^ 2 + 1)
-      (fun e => max (pi e) (max (pf e) ⌜((i e).val, ⌜f e⌝ₜ)⌝ₜ.size)) :=
-  (gf.finApplyEncoded gi).ofEncode
-    (fun _ => (encode_fin _).symm.trans (Tree.encode_self _).symm)
+/-- A one-element list of an encoded value. -/
+def Implementation.singleton : Implementation (fun t : Tree => [t]) (fun _ => 1)
+    (fun t => ⌜t⌝ₜ.size) := by
+  source_fun_prop
+  all_goals dominated
 
 /-- Extend a represented table without re-enumerating its indices. -/
-@[source_bounds↓] noncomputable def Implementation.finSnoc {ρ : Type*} {α : ρ → Type*}
+def Implementation.finSnoc {ρ : Type*} {α : ρ → Type*}
     [UniqueEncoding Tree ρ] [∀ e, UniqueEncoding Tree (α e)]
-    {n : ρ → ℕ} {f : (e : ρ) → Fin (n e) → α e} {a : (e : ρ) → α e}
-    (hf : Implementation (fun e => ⌜f e⌝ₜ)) (ha : Implementation (fun e => ⌜a e⌝ₜ)) :
-    Implementation (fun e => ⌜Fin.snoc (α := fun _ => α e) (f e) (a e)⌝ₜ) := by
-  let ht : Implementation (fun e => List.ofFn (fun i => ⌜f e i⌝ₜ)) :=
+    {n : ρ → ℕ} {f : (e : ρ) → Fin (n e) → α e} {a : (e : ρ) → α e} {tf pf ta pa : ρ → ℕ}
+    (hf : Implementation (fun e => ⌜f e⌝ₜ) tf pf) (ha : Implementation (fun e => ⌜a e⌝ₜ) ta pa) :
+    Implementation (fun e => ⌜Fin.snoc (α := fun _ => α e) (f e) (a e)⌝ₜ)
+      (fun e => tf e + ta e + n e + 1)
+      (fun e => max (pf e) (max (pa e) (⌜f e⌝ₜ.size + ⌜a e⌝ₜ.size))) := by
+  let ht : Implementation (fun e => List.ofFn (fun i => ⌜f e i⌝ₜ)) tf pf :=
     .ofEncode (fun e => (encode_fin_function_codes _).trans (Tree.encode_self _).symm) hf
-  let hs : Implementation (fun t : Tree => [t]) := by source_fun_prop
-  refine .ofEncode ?_ (ht.append (ha.comp hs))
-  intro e
-  rw [Tree.encode_self, encode_fin_snoc]
-  simpa only [List.map_append, List.map_cons, List.map_nil, List.map_ofFn, Function.comp_def] using
-    (encode_list_map_of_encode (encode Tree) (fun _ => Tree.encode_self _)
-      (List.ofFn (f e) ++ [a e])).symm
+  refine (Implementation.ofEncode ?_ (ht.append (ha.comp Implementation.singleton))).mono ?_ ?_
+  · intro e
+    rw [Tree.encode_self, encode_fin_snoc]
+    simpa only [List.map_append, List.map_cons, List.map_nil, List.map_ofFn,
+      Function.comp_def] using
+      (encode_list_map_of_encode (encode Tree) (fun _ => Tree.encode_self _)
+        (List.ofFn (f e) ++ [a e])).symm
+  · apply Dominated.of_le_mul 2
+    intro e
+    simp only [List.length_ofFn]
+    omega
+  · apply Dominated.of_le_mul 3
+    intro e
+    have := Tree.size_pos ⌜f e⌝ₜ
+    have := Tree.size_pos ⌜a e⌝ₜ
+    simp only [Function.comp_apply, Tree.encode_self, encode_fin_function_codes,
+      encode_list_cons, encode_list_nil, size_encode_prod, size_encode_unit, max_le_iff]
+    omega
 
 /-- Concatenate represented tables using the existing list append implementation. -/
-@[source_bounds↓] def Implementation.finAppend {ρ : Type*} {α : ρ → Type*}
+def Implementation.finAppend {ρ : Type*} {α : ρ → Type*}
     [UniqueEncoding Tree ρ] [∀ e, UniqueEncoding Tree (α e)]
     {n m : ρ → ℕ} {f : (e : ρ) → Fin (n e) → α e}
-    {g : (e : ρ) → Fin (m e) → α e}
-    (hf : Implementation (fun e => ⌜f e⌝ₜ)) (hg : Implementation (fun e => ⌜g e⌝ₜ)) :
-    Implementation (fun e => ⌜Fin.append (f e) (g e)⌝ₜ) := by
-  let hf' : Implementation (fun e => List.ofFn (fun i => ⌜f e i⌝ₜ)) :=
+    {g : (e : ρ) → Fin (m e) → α e} {tf pf tg pg : ρ → ℕ}
+    (hf : Implementation (fun e => ⌜f e⌝ₜ) tf pf) (hg : Implementation (fun e => ⌜g e⌝ₜ) tg pg) :
+    Implementation (fun e => ⌜Fin.append (f e) (g e)⌝ₜ) (fun e => tf e + (tg e + (n e + 1)))
+      (fun e => max (pf e) (max (pg e) (⌜f e⌝ₜ.size + ⌜g e⌝ₜ.size))) := by
+  let hf' : Implementation (fun e => List.ofFn (fun i => ⌜f e i⌝ₜ)) tf pf :=
     .ofEncode (fun e => (encode_fin_function_codes _).trans (Tree.encode_self _).symm) hf
-  let hg' : Implementation (fun e => List.ofFn (fun i => ⌜g e i⌝ₜ)) :=
+  let hg' : Implementation (fun e => List.ofFn (fun i => ⌜g e i⌝ₜ)) tg pg :=
     .ofEncode (fun e => (encode_fin_function_codes _).trans (Tree.encode_self _).symm) hg
-  refine Implementation.ofEncode
+  refine (Implementation.ofEncode
     (g := fun e => List.ofFn (fun i => ⌜f e i⌝ₜ) ++ List.ofFn (fun i => ⌜g e i⌝ₜ))
-    ?_ (hf'.append hg')
+    ?_ (hf'.append hg')).mono (Dominated.of_le fun e => by simp only [List.length_ofFn, le_refl])
+      (Dominated.of_le fun e => by simp only [encode_fin_function_codes, le_refl])
   intro e
   rw [Tree.encode_self, encode_fin_function, List.ofFn_fin_append]
   simpa only [List.map_append, List.map_ofFn, Function.comp_def] using
@@ -694,25 +617,14 @@ run_elab do
 
 abbrev FinCompInput := Σ n, Σ k, Σ m, (Fin n → Fin k) × (Fin k → Fin m)
 
-@[source_bounds↓] noncomputable def finCompCountImplementation :
-    Implementation (fun x : FinCompInput => x.1) := by source_fun_prop
-
-@[source_growth] theorem finCompCount_growth : finCompCountImplementation.HasGrowth
-    (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
+def finCompCountImplementation :
+    Implementation (fun x : FinCompInput => x.1) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   source_fun_prop
-  · exact Dominated.const _
-  · apply (Dominated.refl _).max_same
-    apply Dominated.of_le
-    rintro ⟨n, k, m, f, g⟩
-    simp only [Sigma.encode_mk, size_encode_prod]
-    omega
+  all_goals dominated
 
-@[source_bounds↓] noncomputable def finCompStepImplementation :
-    Implementation (fun z : Σ x : FinCompInput, Fin x.1 =>
-      ⌜z.1.2.2.2.2 (z.1.2.2.2.1 z.2)⌝ₜ) := by source_fun_prop
-
-@[source_growth] theorem finCompStep_growth : finCompStepImplementation.HasGrowth
-    (fun z => ⌜z.1⌝ₜ.size ^ 2) (fun z => ⌜z.1⌝ₜ.size ^ 2) := by
+def finCompStepImplementation :
+    Implementation (fun z : Σ x : FinCompInput, Fin x.1 => ⌜z.1.2.2.2.2 (z.1.2.2.2.1 z.2)⌝ₜ)
+      (fun z => ⌜z.1⌝ₜ.size ^ 2) (fun z => ⌜z.1⌝ₜ.size ^ 2) := by
   have hsize : Dominated (fun z : Σ x : FinCompInput, Fin x.1 => ⌜z⌝ₜ.size)
       (fun z => ⌜z.1⌝ₜ.size) := by
     apply Dominated.of_le_mul 7
@@ -753,11 +665,7 @@ abbrev FinCompInput := Σ n, Σ k, Σ m, (Fin n → Fin k) × (Fin k → Fin m)
       omega
 
 /-- Stored table composition directly enumerates its selected lookup callback. -/
-@[source_bounds↓] noncomputable def finCompImplementation :
-    Implementation (fun x : FinCompInput => ⌜x.2.2.2.2 ∘ x.2.2.2.1⌝ₜ) :=
-  Implementation.finFunction finCompCountImplementation finCompStepImplementation
-
-@[source_growth] theorem finComp_growth : finCompImplementation.HasGrowth
+def finCompImplementation : Implementation (fun x : FinCompInput => ⌜x.2.2.2.2 ∘ x.2.2.2.1⌝ₜ)
     (fun x => ⌜x⌝ₜ.size ^ 3) (fun x => ⌜x⌝ₜ.size ^ 2) := by
   have hn : Dominated (fun x : FinCompInput => x.1) (fun x => ⌜x⌝ₜ.size) :=
     Dominated.of_le fun x => by
@@ -792,12 +700,9 @@ abbrev FinCompInput := Σ n, Σ k, Σ m, (Fin n → Fin k) × (Fin k → Fin m)
       ((Dominated.const_of_pos 1 fun _ => Nat.pow_pos (Tree.size_pos _)).add_same
         ((Dominated.refl (fun x : FinCompInput => ⌜x⌝ₜ.size)).le_pow (by decide))).add_same hr
   -- Fix the dependent codomain before elaborating the callback growth proof.
-  have growth := Implementation.HasGrowth.finFunction
-    (β := fun x : FinCompInput => Fin x.2.2.1) (n := fun x => x.1)
-    (f := fun x i => x.2.2.2.2 (x.2.2.2.1 i))
-    (hn := finCompCountImplementation) (hf := finCompStepImplementation)
-    finCompCount_growth finCompStep_growth
-  apply growth.mono
+  refine (Implementation.finFunction (β := fun x : FinCompInput => Fin x.2.2.1)
+    (n := fun x => x.1) (f := fun x i => x.2.2.2.2 (x.2.2.2.1 i))
+    finCompCountImplementation finCompStepImplementation).mono ?_ ?_
   all_goals
     simp only [Dominated.add_iff, Dominated.max_iff]
     repeat' apply And.intro
@@ -814,76 +719,51 @@ abbrev FinCompInput := Σ n, Σ k, Σ m, (Fin n → Fin k) × (Fin k → Fin m)
       exact Dominated.refl _
 
 /-- Reuse the existing table-composition backend while retaining the caller's program. -/
-@[source_bounds↓] noncomputable def Implementation.finComp {ρ : Type*} [UniqueEncoding Tree ρ]
+def Implementation.finComp {ρ : Type*} [UniqueEncoding Tree ρ]
     {n k m : ρ → ℕ} {f : (e : ρ) → Fin (n e) → Fin (k e)}
-    {g : (e : ρ) → Fin (k e) → Fin (m e)}
+    {g : (e : ρ) → Fin (k e) → Fin (m e)} {t p : ρ → ℕ}
     (h : Implementation (fun e => (⟨n e, k e, m e, f e, g e⟩ :
-      Σ n, Σ k, Σ m, (Fin n → Fin k) × (Fin k → Fin m)))) :
-    Implementation (fun e => ⌜g e ∘ f e⌝ₜ) :=
+      Σ n, Σ k, Σ m, (Fin n → Fin k) × (Fin k → Fin m))) t p) :
+    Implementation (fun e => ⌜g e ∘ f e⌝ₜ)
+      (fun e => t e + ⌜(⟨n e, k e, m e, f e, g e⟩ : FinCompInput)⌝ₜ.size ^ 3)
+      (fun e => max (p e) (⌜(⟨n e, k e, m e, f e, g e⟩ : FinCompInput)⌝ₜ.size ^ 2)) :=
   h.comp finCompImplementation
 
 namespace Implementation
 
-@[source_bounds↓] noncomputable def listNonempty {α : Type*} [UniqueEncoding Tree α] :
-    Implementation (fun xs : List α => !xs.isEmpty) := by source_fun_prop
+def listNonempty {α : Type*} [UniqueEncoding Tree α] :
+    Implementation (fun xs : List α => !xs.isEmpty) (fun _ => 1) (fun xs => ⌜xs⌝ₜ.size) := by
+  source_fun_prop
+  all_goals dominated
 
-@[source_bounds↓] noncomputable def listTail {α : Type*} [UniqueEncoding Tree α] :
-    Implementation (List.tail : List α → List α) := by source_fun_prop
-
-@[source_growth] theorem hasGrowth_listNonempty {α : Type*} [UniqueEncoding Tree α] :
-    (listNonempty (α := α)).HasGrowth (fun _ => 1) (fun xs => ⌜xs⌝ₜ.size) := by
-  constructor
-  · apply Dominated.of_le_mul 10
-    intro xs
-    cases xs <;> simp only [listNonempty, source_bounds] <;> omega
-  · apply Dominated.of_le_mul 10
-    intro xs
-    have := Tree.size_pos ⌜xs⌝ₜ
-    cases xs <;> simp only [listNonempty, source_bounds, encode_list_nil,
-      encode_list_cons, size_encode_prod, size_encode_unit, List.isEmpty_nil,
-      List.isEmpty_cons, encode_bool_true, encode_bool_false] at * <;> omega
-
-@[source_growth] theorem hasGrowth_listTail {α : Type*} [UniqueEncoding Tree α] :
-    (listTail (α := α)).HasGrowth (fun _ => 1) (fun xs => ⌜xs⌝ₜ.size) := by
-  constructor
-  · apply Dominated.of_le_mul 10
-    intro xs
-    cases xs <;> simp only [listTail, source_bounds] <;> omega
-  · apply Dominated.of_le_mul 10
-    intro xs
-    have := Tree.size_pos ⌜xs⌝ₜ
-    cases xs <;> simp only [listTail, source_bounds, encode_list_nil,
-      encode_list_cons, size_encode_prod, size_encode_unit] at * <;> omega
+def listTail {α : Type*} [UniqueEncoding Tree α] :
+    Implementation (List.tail : List α → List α) (fun _ => 1) (fun xs => ⌜xs⌝ₜ.size) := by
+  source_fun_prop
+  all_goals dominated
 
 end Implementation
 
 attribute [scoped fun_prop] Implementation.listNonempty Implementation.listTail
 
-
-end Complexity.TreeProgram.Source
-
-namespace Complexity.TreeProgram.Source
-
-noncomputable def Implementation.prepend {α : Type*} [UniqueEncoding Tree α] :
-    Implementation (Function.uncurry (fun acc : List α => fun x => x :: acc)) := by
+def Implementation.prepend {α : Type*} [UniqueEncoding Tree α] :
+    Implementation (Function.uncurry (fun acc : List α => fun x => x :: acc)) (fun _ => 1)
+      (fun x => ⌜x⌝ₜ.size) := by
   source_fun_prop
+  all_goals dominated
 
-@[source_growth] theorem prepend_growth {α : Type*} [UniqueEncoding Tree α] :
-    (Implementation.prepend (α := α)).HasGrowth (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
-  source_fun_prop
-  · exact Dominated.const_of_pos _ (fun _ => Nat.zero_lt_one)
-  · apply Dominated.of_le
-    rintro ⟨acc, x⟩
-    simp only [size_encode_prod]
-    omega
-
-@[scoped fun_prop] noncomputable def Implementation.prependFold {α : Type*}
-    [UniqueEncoding Tree α] :
-    Implementation (fun x : List α × List α => x.2.foldl (fun acc a => a :: acc) x.1) :=
-  Implementation.prepend.foldl
-
-@[source_growth] theorem prependFold_growth {α : Type*} [UniqueEncoding Tree α] :
-    (Implementation.prependFold (α := α)).HasGrowth
-      (fun x => x.2.length + 1) (fun x => ⌜x⌝ₜ.size) := prepend_growth.foldl_prepend
+/-- Prepending charges each element once and stores only the final list. -/
+@[scoped fun_prop] def Implementation.prependFold {α : Type*} [UniqueEncoding Tree α] :
+    Implementation (fun x : List α × List α => x.2.foldl (fun acc a => a :: acc) x.1)
+      (fun x => x.2.length + 1) (fun x => ⌜x⌝ₜ.size) :=
+  Implementation.prepend.foldl.mono
+    (Dominated.of_le_mul 2 fun x => by
+      simp only [foldlTime_eq_sum (t := fun _ : α => 1), List.map_const', List.sum_replicate,
+        smul_eq_mul, Nat.mul_one]
+      omega)
+    (Dominated.of_le fun x => by
+      rcases x with ⟨acc, xs⟩
+      have := size_encode_list_append xs.reverse acc
+      simp only [foldlPeak_prepend, size_encode_reverse, size_encode_prod, max_le_iff] at this ⊢
+      omega)
 
 end Complexity.TreeProgram.Source

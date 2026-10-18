@@ -27,21 +27,15 @@ theorem gateClauses_size_le {α : Type*} [UniqueEncoding Tree α]
   rcases x with ⟨k, op, args, out⟩
   exact CNF.size_encode_ofGate_le op args out
 
-noncomputable def gateClausesImpl {α : Type*} [UniqueEncoding Tree α] :
-    Implementation (gateClauses (α := α)) := by source_fun_prop
-
-@[source_growth] theorem gateClauses_growth {α : Type*} [UniqueEncoding Tree α] :
-    (gateClausesImpl (α := α)).HasGrowth (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
+@[source] def gateClausesImpl {α : Type*} [UniqueEncoding Tree α] :
+    Implementation (gateClauses (α := α)) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   source_fun_prop
-  · exact Dominated.const_of_pos _ (fun _ => Nat.zero_lt_one)
-  · change Dominated (fun x => max ⌜x⌝ₜ.size ⌜gateClauses x⌝ₜ.size) _
-    exact (Dominated.refl _).max_same (Dominated.of_le_mul _ gateClauses_size_le)
+  exact (Dominated.refl _).max_same (Dominated.of_le_mul _ gateClauses_size_le)
 
-@[source] theorem gateClauses_ftisp {α : Type*} [UniqueEncoding Tree α] :
-    gateClauses (α := α) ∈ FTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) :=
-  (by simpa only [pow_zero, pow_one] using gateClauses_growth :
-    gateClausesImpl.HasGrowth (fun x => ⌜x⌝ₜ.size ^ 0) (fun x => ⌜x⌝ₜ.size ^ 1)).mem_ftisp_pow
-      (by decide)
+theorem gateClauses_ftisp {α : Type*} [UniqueEncoding Tree α] :
+    gateClauses (α := α) ∈ FTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
+  model_fun_prop
+  all_goals dominated
 
 /-- Add a gate's clauses to the reversed clause accumulator. -/
 def accumulateGate
@@ -49,31 +43,29 @@ def accumulateGate
       (Σ k, FirstOrder.Language.booleanAlgebra.Functions k × (Fin k → ℕ) × ℕ)) : CNF ℕ :=
   (gateClauses input.2).foldl (fun acc clause => clause :: acc) input.1
 
-noncomputable def accumulateGateImpl : Implementation accumulateGate :=
-  ((by source_fun_prop : Implementation (fun input : CNF ℕ ×
-    (Σ k, FirstOrder.Language.booleanAlgebra.Functions k × (Fin k → ℕ) × ℕ) =>
-      (input.1, gateClauses input.2))).comp
-    Implementation.prependFold).congr (by funext x; rfl)
+/-- Inputs of `accumulateGate`: the clause accumulator and one gate. -/
+abbrev AccumulateInput := CNF ℕ ×
+  (Σ k, FirstOrder.Language.booleanAlgebra.Functions k × (Fin k → ℕ) × ℕ)
 
-@[source_growth] theorem accumulateGate_growth : accumulateGateImpl.HasGrowth
-    (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
-  let Input := CNF ℕ ×
-    (Σ k, FirstOrder.Language.booleanAlgebra.Functions k × (Fin k → ℕ) × ℕ)
-  have hg := Dominated.of_le_mul _ (fun x : Input => gateClauses_size_le x.2)
-  have hl : Dominated (fun x : Input => (gateClauses x.2).length) (fun _ => 1) :=
+@[source] def accumulateGateImpl :
+    Implementation accumulateGate (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
+  have hg := Dominated.of_le_mul _ (fun x : AccumulateInput => gateClauses_size_le x.2)
+  have hl : Dominated (fun x : AccumulateInput => (gateClauses x.2).length) (fun _ => 1) :=
     Dominated.of_le_mul 3 (fun x => by
       simpa only [gateClauses, Nat.mul_one] using
         CNF.length_ofGate_le x.2.2.1 x.2.2.2.1 x.2.2.2.2)
-  have hs : Dominated (fun x : Input => ⌜x.2⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) :=
+  have hs : Dominated (fun x : AccumulateInput => ⌜x.2⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) :=
     Dominated.of_le fun x => by
       change _ ≤ 1 + ⌜x.1⌝ₜ.size + ⌜x.2⌝ₜ.size
       omega
-  have ha : Dominated (fun x : Input => ⌜x.1⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) :=
+  have ha : Dominated (fun x : AccumulateInput => ⌜x.1⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) :=
     Dominated.of_le fun x => by
       change _ ≤ 1 + ⌜x.1⌝ₜ.size + ⌜x.2⌝ₜ.size
       omega
   have ho := hg.trans hs
-  source_fun_prop
+  refine (((?pair : Implementation (fun input : AccumulateInput => (input.1, gateClauses input.2))
+    ?pairTime ?pairPeak).comp Implementation.prependFold).congr (by funext x; rfl)).mono ?time ?peak
+  case pair => source_fun_prop
   all_goals
     simp only [size_encode_prod, Dominated.add_iff, Dominated.max_iff]
     repeat' apply And.intro
@@ -83,11 +75,10 @@ noncomputable def accumulateGateImpl : Implementation accumulateGate :=
     | exact Dominated.const_of_pos _ (fun _ => Nat.zero_lt_one)
     | exact Dominated.const_of_pos _ (fun _ => Tree.size_pos _)
 
-@[source] theorem accumulateGate_ftisp :
-    accumulateGate ∈ FTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) :=
-  (by simpa only [pow_zero, pow_one] using accumulateGate_growth :
-    accumulateGateImpl.HasGrowth (fun x => ⌜x⌝ₜ.size ^ 0) (fun x => ⌜x⌝ₜ.size ^ 1)).mem_ftisp_pow
-      (by decide)
+theorem accumulateGate_ftisp :
+    accumulateGate ∈ FTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
+  model_fun_prop
+  all_goals dominated
 
 /-- Output size is an ordinary property of the list fold, independent of its certification. -/
 theorem accumulateGate_size (input : CNF ℕ ×
@@ -111,96 +102,65 @@ def circuitStep (input : TseitinState) :
   | ⟨n, .gate (k := k) op args next⟩ =>
       (⟨n + 1, next⟩, accumulateGate (input.2, ⟨k, op, Fin.val ∘ args, n⟩))
 
-private abbrev OutputStateInput := Σ n, (Fin 1 → Fin n) × CNF ℕ
-private abbrev GateStateInput := Σ n, Σ k, FirstOrder.Language.booleanAlgebra.Functions k ×
+abbrev OutputStateInput := Σ n, (Fin 1 → Fin n) × CNF ℕ
+abbrev GateStateInput := Σ n, Σ k, FirstOrder.Language.booleanAlgebra.Functions k ×
   (Fin k → Fin n) × Circuit .booleanAlgebra (n + 1) 1 × CNF ℕ
 
-private def outputState (x : OutputStateInput) : TseitinState :=
+def outputState (x : OutputStateInput) : TseitinState :=
   (⟨x.1, .outputs x.2.1⟩, x.2.2)
 
-private def gateState (x : GateStateInput) : TseitinState :=
+def gateState (x : GateStateInput) : TseitinState :=
   (⟨x.1, .gate x.2.2.1 x.2.2.2.1 x.2.2.2.2.1⟩, x.2.2.2.2.2)
 
-private theorem circuitState_cover (x : TseitinState) :
+theorem circuitState_cover (x : TseitinState) :
     (∃ y, outputState y = x) ∨ ∃ z, gateState z = x := by
   rcases x with ⟨⟨n, c⟩, acc⟩
   cases c with
   | outputs s => exact Or.inl ⟨⟨n, s, acc⟩, rfl⟩
   | gate op args next => exact Or.inr ⟨⟨n, _, op, args, next, acc⟩, rfl⟩
 
-noncomputable def circuitStepImpl : Implementation circuitStep := by source_fun_prop
+/-- Gate input values keep the code of the gate's wire table. -/
+theorem size_encode_gate_input (n : ℕ) {k : ℕ} (op : FirstOrder.Language.booleanAlgebra.Functions k)
+    (args : Fin k → Fin n) :
+    ⌜(⟨k, op, Fin.val ∘ args, n⟩ :
+      Σ k, FirstOrder.Language.booleanAlgebra.Functions k × (Fin k → ℕ) × ℕ)⌝ₜ.size =
+      1 + ⌜k⌝ₜ.size + (1 + ⌜op⌝ₜ.size + (1 + ⌜args⌝ₜ.size + ⌜n⌝ₜ.size)) := by
+  have h := encode_fin_values args
+  simp only [Function.comp_def] at h
+  simp only [Sigma.encode_mk, size_encode_prod, encode_fin_function, Function.comp_def, h]
 
-@[source_growth] theorem circuitStep_growth : circuitStepImpl.HasGrowth
-    (fun x => ⌜x.1⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
+@[source] def circuitStepImpl :
+    Implementation circuitStep (fun x => ⌜x.1⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
   source_fun_prop
   all_goals
     apply Dominated.of_cover outputState gateState circuitState_cover
   all_goals
-    dsimp only [Function.comp_def, outputState, gateState]
-  case ht.hu => exact Dominated.const_of_pos _ (fun _ => Tree.size_pos _)
-  case ht.hv =>
-    source_fun_prop
-    simp only [Function.comp_apply, Dominated.add_iff]
-    repeat' apply And.intro
-    all_goals first
-      | exact Dominated.const_of_pos _ (fun _ => Tree.size_pos _)
-      | apply Dominated.of_le
-        intro x
-        simp only [Sigma.encode_mk, size_encode_prod]
-        omega
-  case hp.hu =>
-    apply Dominated.of_le
+    apply Dominated.of_le_mul 20
     intro x
-    simp only [Sigma.encode_mk, size_encode_prod, Circuit.encode_outputs, size_encode_unit]
-    omega
-  case hp.hv =>
-    let S (x : GateStateInput) := ⌜gateState x⌝ₜ.size
-    let a (x : GateStateInput) :=
-      (x.2.2.2.2.2, (⟨x.2.1, x.2.2.1, Fin.val ∘ x.2.2.2.1, x.1⟩ :
-        Σ k, FirstOrder.Language.booleanAlgebra.Functions k × (Fin k → ℕ) × ℕ))
-    have ha : Dominated (fun x => ⌜a x⌝ₜ.size) S := Dominated.of_le fun x => by
-      dsimp only [a, S, gateState]
+    dsimp only [Function.comp_def, outputState, gateState]
+  all_goals first
+    | rcases x with ⟨n, select, acc⟩
+      simp only [Sigma.encode_mk, size_encode_prod, Circuit.encode_outputs, size_encode_unit,
+        max_le_iff]
+      omega
+    | rcases x with ⟨n, k, op, args, next, acc⟩
+      have hsize := accumulateGate_size (acc, ⟨k, op, Fin.val ∘ args, n⟩)
+      have hclauses := gateClauses_size_le (⟨k, op, Fin.val ∘ args, n⟩ :
+        Σ k, FirstOrder.Language.booleanAlgebra.Functions k × (Fin k → ℕ) × ℕ)
+      have hgate := size_encode_gate_input n op args
+      have hsucc := size_encode_nat_succ_le n
+      have hvals : ⌜List.ofFn fun i => (args i).val⌝ₜ.size = ⌜List.ofFn args⌝ₜ.size := by
+        simpa only [Function.comp_def] using congrArg Tree.size (encode_fin_values args)
+      have htab : ⌜args⌝ₜ.size = ⌜List.ofFn args⌝ₜ.size := rfl
+      simp only [Function.comp_def] at hsize hclauses hgate
       simp only [Sigma.encode_mk, size_encode_prod, Circuit.encode_gate, size_encode_unit,
-        encode_fin_function, encode_fin_values]
+        Tree.encode_self, max_le_iff, encode_fin_function] at hsize ⊢
       omega
-    have hout := (Dominated.comp accumulateGate_growth.size_encode a).trans
-      (by simpa only [Function.comp_def, max_self] using ha)
-    simp only [Function.comp_def, a] at hout
-    have hn : Dominated (fun x : GateStateInput => ⌜x.1⌝ₜ.size) S :=
-        Dominated.of_le fun x => by
-      dsimp only [S, gateState]
-      simp only [Sigma.encode_mk, size_encode_prod]
-      omega
-    have hn1 : Dominated (fun x : GateStateInput => ⌜x.1 + 1⌝ₜ.size) S :=
-      (hn.add_same (Dominated.const_of_pos _ (fun _ => Tree.size_pos _))).mono_left
-        (fun x => size_encode_nat_succ_le x.1)
-    have hvalues (x : GateStateInput) :
-        ⌜List.ofFn (fun i => (x.2.2.2.1 i).val)⌝ₜ = ⌜List.ofFn x.2.2.2.1⌝ₜ := by
-      simpa only [Function.comp_def] using encode_fin_values x.2.2.2.1
-    source_fun_prop
-    change Dominated _ S
-    simp only [Function.comp_apply, Sigma.encode_mk, size_encode_prod, Tree.encode_self,
-      Circuit.encode_gate, size_encode_unit, encode_fin_function, hvalues,
-      Dominated.max_iff, Dominated.add_iff]
-    repeat' apply And.intro
-    all_goals first
-      | with_reducible exact hn1
-      | with_reducible exact hout
-      | with_reducible exact Dominated.const_of_pos _ (fun _ => Tree.size_pos _)
-      | apply Dominated.of_le
-        intro x
-        dsimp +instances only [S, gateState, GateStateInput, TseitinState]
-        simp only [Sigma.encode_mk, size_encode_prod, Circuit.encode_gate, size_encode_unit,
-          encode_fin_function]
-        omega
 
-@[source] theorem circuitStep_ftisp :
-    circuitStep ∈ FTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) :=
-  (show circuitStepImpl.HasGrowth (fun x => ⌜x⌝ₜ.size ^ 1) (fun x => ⌜x⌝ₜ.size ^ 1) from by
-    simpa only [pow_one] using (circuitStep_growth.mono
-      (Dominated.of_le fun x => by
-        rcases x with ⟨a, acc⟩; simp only [size_encode_prod]; omega)
-      (Dominated.refl _))).mem_ftisp_pow (by decide)
+theorem circuitStep_ftisp :
+    circuitStep ∈ FTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by
+  model_fun_prop
+  all_goals dominated
 
 /-- Whether the circuit still has a gate to process. -/
 def circuitContinues (input : TseitinState) : Bool :=
@@ -254,83 +214,25 @@ theorem tseitinLoop_state_size (x y : TseitinState)
   change ⌜((m, d), bs)⌝ₜ.size ≤ 10 * ⌜((n, c), acc)⌝ₜ.size ^ 2
   omega
 
-noncomputable def circuitContinuesImpl : Implementation circuitContinues := by source_fun_prop
-
-@[source_growth] theorem circuitContinues_growth : circuitContinuesImpl.HasGrowth
-    (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
+@[source] def circuitContinuesImpl :
+    Implementation circuitContinues (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   source_fun_prop
-  · exact Dominated.const_of_pos _ (fun _ => Nat.zero_lt_one)
-  · apply Dominated.of_le
-    rintro ⟨⟨n, c⟩, acc⟩
-    cases c <;> simp <;> omega
+  all_goals dominated
 
-@[source] theorem circuitContinues_ftisp :
-    circuitContinues ∈ FTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) :=
-  (by simpa only [pow_zero, pow_one] using circuitContinues_growth :
-    circuitContinuesImpl.HasGrowth (fun x => ⌜x⌝ₜ.size ^ 0)
-      (fun x => ⌜x⌝ₜ.size ^ 1)).mem_ftisp_pow (by decide)
+theorem circuitContinues_ftisp :
+    circuitContinues ∈ FTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
+  model_fun_prop
+  all_goals dominated
 
-noncomputable def circuitFinishImpl : Implementation circuitFinish := by source_fun_prop
-
-@[source_growth] theorem circuitFinish_growth : circuitFinishImpl.HasGrowth
-    (fun x => ⌜x⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
+@[source] def circuitFinishImpl :
+    Implementation circuitFinish (fun x => ⌜x⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
   source_fun_prop
-  all_goals apply Dominated.of_cover outputState gateState circuitState_cover
-  all_goals dsimp only [Function.comp_def, outputState, gateState]
-  case ht.hu =>
-    let S (x : OutputStateInput) := ⌜outputState x⌝ₜ.size
-    have hS x : 0 < S x := Tree.size_pos _
-    change Dominated _ S
-    source_fun_prop
-    simp only [Function.comp_apply, encode_list_cons, encode_list_nil, CNF.Literal.pos,
-      CNF.Literal.encode_mk, size_encode_prod, size_encode_unit, Dominated.add_iff]
-    repeat' apply And.intro
-    all_goals first
-      | exact Dominated.const_of_pos _ hS
-      | apply Dominated.of_le
-        intro x
-        have h := size_encode_fin_apply_le x.2.1 0
-        simp only [encode_fin] at h
-        dsimp only [S, outputState]
-        simp only [Sigma.encode_mk, size_encode_prod, Circuit.encode_outputs, size_encode_unit]
-        omega
-  case ht.hv => exact Dominated.const_of_pos _ (fun _ => Tree.size_pos _)
-  case hp.hu =>
-    let S (x : OutputStateInput) := ⌜outputState x⌝ₜ.size
-    have hS x : 0 < S x := Tree.size_pos _
-    have hval : Dominated (fun x : OutputStateInput => ⌜(x.2.1 0).val⌝ₜ.size) S :=
-      Dominated.of_le fun x => by
-        have h := size_encode_fin_apply_le x.2.1 0
-        simp only [encode_fin] at h
-        dsimp only [S, outputState]
-        simp only [Sigma.encode_mk, size_encode_prod, Circuit.encode_outputs, size_encode_unit]
-        omega
-    change Dominated _ S
-    source_fun_prop
-    simp only [Function.comp_apply, Sigma.encode_mk, size_encode_prod,
-      Circuit.encode_outputs, size_encode_unit,
-      encode_list_cons, encode_list_nil, CNF.Literal.pos, CNF.Literal.encode_mk,
-      Dominated.max_iff, Dominated.add_iff]
-    repeat' apply And.intro
-    all_goals with_reducible first
-      | exact hval
-      | exact Dominated.const_of_pos _ hS
-      | apply Dominated.of_le
-        intro x
-        dsimp only [S, outputState]
-        simp only [Sigma.encode_mk, size_encode_prod, Circuit.encode_outputs, size_encode_unit]
-        omega
-  case hp.hv =>
-    apply Dominated.of_le
-    intro x
-    simp only [Sigma.encode_mk, size_encode_prod, Circuit.encode_gate, size_encode_unit]
-    omega
+  all_goals dominated
 
-@[source] theorem circuitFinish_ftisp :
-    circuitFinish ∈ FTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) :=
-  (by simpa only [pow_one] using circuitFinish_growth :
-    circuitFinishImpl.HasGrowth (fun x => ⌜x⌝ₜ.size ^ 1)
-      (fun x => ⌜x⌝ₜ.size ^ 1)).mem_ftisp_pow (by decide)
+theorem circuitFinish_ftisp :
+    circuitFinish ∈ FTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by
+  model_fun_prop
+  all_goals dominated
 
 theorem circuitStep_circuit_size_lt
     (x : TseitinState) (ht : circuitContinues x = true) :
@@ -344,8 +246,13 @@ theorem circuitStep_circuit_size_lt
       Circuit.encode_gate, size_encode_unit]
     omega
 
-noncomputable def tseitinLoopImpl :
-    Implementation (fun x : TseitinState => tseitinLoop x.1 x.2) := by
+def tseitinLoopImpl : Implementation (fun x : TseitinState => tseitinLoop x.1 x.2)
+    (fun x => ⌜x⌝ₜ.size ^ 2) (fun x => ⌜x⌝ₜ.size ^ 2) := by
+  have hc : Dominated (fun x : TseitinState => ⌜x.1⌝ₜ.size)
+      (fun x => ⌜x⌝ₜ.size) := Dominated.of_le fun x => by
+    rcases x with ⟨a, acc⟩; simp only [size_encode_prod]; omega
+  have hm := hc.mul (Dominated.refl (fun x => ⌜x⌝ₜ.size))
+  simp only [← pow_two] at hm
   source_fun_prop using loop
     (test := circuitContinues) (next := circuitStep) (finish := circuitFinish)
     (invariant := fun x y => ⌜y.1⌝ₜ.size ≤ ⌜x.1⌝ₜ.size ∧
@@ -369,28 +276,21 @@ noncomputable def tseitinLoopImpl :
   case check_time => exact Dominated.const_of_pos _ (fun _ => Tree.size_pos _)
   case step_pos => exact fun _ => Tree.size_pos _
   case stop_pos => exact fun _ => Nat.pow_pos (Tree.size_pos _)
-  all_goals exact Dominated.of_le_mul _ (fun z => tseitinLoop_state_size z.1.1 z.1.2 z.2)
-
-@[source_growth] theorem tseitinLoop_growth : tseitinLoopImpl.HasGrowth
-    (fun x => ⌜x⌝ₜ.size ^ 2) (fun x => ⌜x⌝ₜ.size ^ 2) := by
-  have hc : Dominated (fun x : TseitinState => ⌜x.1⌝ₜ.size)
-      (fun x => ⌜x⌝ₜ.size) := Dominated.of_le fun x => by
-    rcases x with ⟨a, acc⟩; simp only [size_encode_prod]; omega
-  have hm := hc.mul (Dominated.refl (fun x => ⌜x⌝ₜ.size))
-  simp only [← pow_two] at hm
-  source_fun_prop
-  · simp only [Dominated.add_iff]
+  case time =>
+    simp only [Dominated.add_iff]
     repeat' apply And.intro
     all_goals first
       | exact hm
       | exact Dominated.refl _
       | exact Dominated.const_of_pos _ (fun _ => Nat.pow_pos (Tree.size_pos _))
-  · exact Dominated.refl _
+  all_goals exact Dominated.of_le_mul _ (fun z => tseitinLoop_state_size z.1.1 z.1.2 z.2)
 
-@[source] theorem tseitinLoop_ftisp :
+theorem tseitinLoop_ftisp :
     (fun x : TseitinState => tseitinLoop x.1 x.2) ∈
       FTISP .tree (fun n => n ^ 2) (fun n => n ^ 2) :=
-  tseitinLoop_growth.mem_ftisp_pow (by decide)
+  tseitinLoopImpl.mem_ftisp_pow (by decide)
+
+attribute [source] tseitinLoopImpl
 
 @[local source] theorem tseitin_source :
     (fun input : Σ n, Circuit .booleanAlgebra n 1 => input.2.tseitin) =

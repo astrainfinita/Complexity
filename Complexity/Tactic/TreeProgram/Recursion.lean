@@ -17,6 +17,13 @@ reachable inputs; the compiled program stores source arguments on a stack and er
 
 namespace Complexity.TreeProgram.Source
 
+/-- Sequential time and the maximum size of an intermediate tree. -/
+@[ext] structure Cost where
+  /-- Time spent by an evaluation. -/
+  time : ℕ
+  /-- Largest intermediate tree of an evaluation. -/
+  peak : ℕ
+
 /-- A source recursion equation, including the work performed after the recursive return. -/
 structure Recursion {α : Type*} {β : α → Type*} (f : (x : α) → β x) where
   test : α → Bool
@@ -421,45 +428,45 @@ theorem cost_le_of_steps
         (repeat' apply And.intro) <;> nlinarith [hc.2]
 
 
-@[simps] def bounds (bc bs : Bounds α) (bd : Bounds {x // r.test x = false})
-    (br : Bounds r.Return) : Bounds α :=
-  ⟨fun x => bc.time x + 3 * (r.cost bc bs bd br x).time + 10,
-    fun x => (r.cost bc bs bd br x).peak + 1⟩
+variable {tc pc ts ps : α → ℕ} {td pd : {x // r.test x = false} → ℕ} {tr pr : r.Return → ℕ}
 
-attribute [source_bounds] bounds_time bounds_peak
-
-/-- Callback certificates and the source recursion equation determine one certified program. -/
-def implementation (hc : Implementation r.test) (hs : Implementation r.next)
-    (hd : Implementation (fun x => ⌜r.finish x⌝ₜ))
-    (hr : Implementation (fun x : r.Return => ⌜r.resume x.1 x.2⌝ₜ)) :
-    Implementation (fun x => ⌜f x⌝ₜ) := by
-  refine .ofImplements (code hc.program hs.program hd.program hr.program)
-    (r.bounds hc.bounds hs.bounds hd.bounds hr.bounds) ?_
-  apply r.implements hc.implements hs.implements hd.implements hr.implements
-    ⟨fun x => (r.cost hc.bounds hs.bounds hd.bounds hr.bounds x).time,
-      fun x => (r.cost hc.bounds hs.bounds hd.bounds hr.bounds x).peak⟩
-  · intro x
-    cases h : r.test x <;>
-      simp only [cost_stop, cost_step, h, le_sup_left]
-  · intro x
-    cases h : r.test x <;>
-      simp only [cost_stop, cost_step, h] <;> omega
-  · intro x h
-    simp only [cost_stop, h]
-    exact ⟨le_rfl, (Nat.le_max_right _ _).trans (Nat.le_max_right _ _)⟩
-  · intro x h
-    simp only [cost_step, h]
-    exact ⟨(Nat.le_max_left _ _).trans ((Nat.le_max_right _ _).trans (Nat.le_max_right _ _)),
-      (Nat.le_max_left _ _).trans ((Nat.le_max_right _ _).trans
-        ((Nat.le_max_right _ _).trans (Nat.le_max_right _ _))),
-      (Nat.le_max_right _ _).trans ((Nat.le_max_right _ _).trans
-        ((Nat.le_max_right _ _).trans (Nat.le_max_right _ _))), le_rfl⟩
-
-@[simp, source_bounds↓] theorem bounds_implementation
-    (hc : Implementation r.test) (hs : Implementation r.next)
-    (hd : Implementation (fun x => ⌜r.finish x⌝ₜ))
-    (hr : Implementation (fun x : r.Return => ⌜r.resume x.1 x.2⌝ₜ)) :
-    (r.implementation hc hs hd hr).bounds = r.bounds hc.bounds hs.bounds hd.bounds hr.bounds := rfl
+/-- Callback implementations and the source recursion equation determine one program.
+Its growth is the structural recursion cost of the callback growths; controller constants
+and the factor for the descending and ascending passes are hidden. -/
+def implementation (hc : Implementation r.test tc pc) (hs : Implementation r.next ts ps)
+    (hd : Implementation (fun x => ⌜r.finish x⌝ₜ) td pd)
+    (hr : Implementation (fun x : r.Return => ⌜r.resume x.1 x.2⌝ₜ) tr pr) :
+    Implementation (fun x => ⌜f x⌝ₜ)
+      (fun x => tc x + (r.cost ⟨tc, pc⟩ ⟨ts, ps⟩ ⟨td, pd⟩ ⟨tr, pr⟩ x).time + 1)
+      (fun x => (r.cost ⟨tc, pc⟩ ⟨ts, ps⟩ ⟨td, pd⟩ ⟨tr, pr⟩ x).peak + 1) where
+  program := code hc.program hs.program hd.program hr.program
+  sound := by
+    obtain ⟨bc, hbc, hct, hcp⟩ := hc.sound
+    obtain ⟨bs, hbs, hst, hsp⟩ := hs.sound
+    obtain ⟨bd, hbd, hdt, hdp⟩ := hd.sound
+    obtain ⟨br, hbr, hrt, hrp⟩ := hr.sound
+    have hcost := r.dominated_cost_congr (bc' := ⟨tc, pc⟩) (bs' := ⟨ts, ps⟩)
+      (bd' := ⟨td, pd⟩) (br' := ⟨tr, pr⟩) ⟨hct, hcp⟩ ⟨hst, hsp⟩ ⟨hdt, hdp⟩ ⟨hrt, hrp⟩
+    refine ⟨_, r.implements hbc hbs hbd hbr
+      ⟨fun x => (r.cost bc bs bd br x).time, fun x => (r.cost bc bs bd br x).peak⟩
+      ?_ ?_ ?_ ?_, ((hct.add (hcost.1.const_mul_left 3)).add (Dominated.const 10)),
+      hcost.2.add (Dominated.refl _)⟩
+    · intro x
+      cases h : r.test x <;>
+        simp only [cost_stop, cost_step, h, le_sup_left]
+    · intro x
+      cases h : r.test x <;>
+        simp only [cost_stop, cost_step, h] <;> omega
+    · intro x h
+      simp only [cost_stop, h]
+      exact ⟨le_rfl, (Nat.le_max_right _ _).trans (Nat.le_max_right _ _)⟩
+    · intro x h
+      simp only [cost_step, h]
+      exact ⟨(Nat.le_max_left _ _).trans ((Nat.le_max_right _ _).trans (Nat.le_max_right _ _)),
+        (Nat.le_max_left _ _).trans ((Nat.le_max_right _ _).trans
+          ((Nat.le_max_right _ _).trans (Nat.le_max_right _ _))),
+        (Nat.le_max_right _ _).trans ((Nat.le_max_right _ _).trans
+          ((Nat.le_max_right _ _).trans (Nat.le_max_right _ _))), le_rfl⟩
 
 end Recursion
 end Complexity.TreeProgram.Source
@@ -577,8 +584,8 @@ theorem dominated_cost_of_bounds
         r.test p.1.2 = false} => bd.time ⟨z.1.1.2, z.2⟩) (fun z => stop z.1.1.1))
     (hstime : Dominated (fun z : {p : ρ × α // I p.1 p.2} => bs.time z.1.2)
       (fun z => step z.1.1))
-    (hctime : Dominated (fun z : {p : ρ × α // I p.1 p.2} => bc.time (r.next z.1.2))
-      (fun z => step z.1.1))
+    (hctime : Dominated (fun z : {p : {p : ρ × α // I p.1 p.2} //
+        r.test p.1.2 = true} => bc.time (r.next z.1.1.2)) (fun z => step z.1.1.1))
     (hrtime : Dominated (fun z : {p : {p : ρ × α // I p.1 p.2} //
         r.test p.1.2 = true} => br.time ⟨⟨z.1.1.2, z.2⟩, f (r.next z.1.1.2)⟩)
       (fun z => step z.1.1.1))
@@ -608,7 +615,7 @@ theorem dominated_cost_of_bounds
       intro z
       simp only [stopTime, z.2, ↓reduceDIte, Function.comp_apply, Bool.true_eq_false, Nat.zero_le]
   · apply Dominated.of_cases (fun z : Z => r.test z.1.2 = true)
-    · apply ((((hstime.comp Subtype.val).add_same (hctime.comp Subtype.val)).add_same
+    · apply ((((hstime.comp Subtype.val).add_same hctime).add_same
         hrtime).add_same (Dominated.const_of_pos 16 fun z => step_pos z.1.1.1)).mono_left
       intro z
       simp only [roundTime, z.2, ↓reduceDIte, Function.comp_apply, le_refl]
@@ -616,43 +623,100 @@ theorem dominated_cost_of_bounds
       intro z
       simp only [roundTime, z.2, ↓reduceDIte, Function.comp_apply, Bool.false_eq_true, Nat.zero_le]
 
+
+omit [UniqueEncoding Tree α] in
+private theorem dominated_pow_comp {γ δ : Type*} {g S : γ → ℕ} {T : δ → ℕ} (u : δ → γ) {d : ℕ}
+    (h : Dominated g (fun y => S y ^ d)) (hu : ∀ z, S (u z) ≤ T z) :
+    Dominated (fun z => g (u z)) (fun z => T z ^ d) :=
+  (h.comp u).trans (Dominated.of_le fun z => Nat.pow_le_pow_left (hu z) d)
+
+/-- A scale that does not grow along the recursion bounds every reachable state by the outer
+input. Each callback is bounded by a power of the scale of its source state: a round costs
+`S ^ a`, the terminal call `S ^ c`, every callback space `S ^ b`, and a saved input `S ^ e`. -/
+theorem dominated_cost_of_scale (bc bs : Bounds α) (bd : Bounds {x // r.test x = false})
+    (br : Bounds r.Return) (S : α → ℕ) (hS : ∀ x, 0 < S x)
+    (hnext : ∀ x, r.test x = true → S (r.next x) ≤ S x) {e a b c : ℕ}
+    (hsize : Dominated (fun x => ⌜x⌝ₜ.size) (fun x => S x ^ e))
+    (hc : Dominated bc.time (fun x => S x ^ a) ∧ Dominated bc.peak (fun x => S x ^ b))
+    (hs : Dominated bs.time (fun x => S x ^ a) ∧ Dominated bs.peak (fun x => S x ^ b))
+    (hd : Dominated bd.time (fun x => S x.1 ^ c) ∧ Dominated bd.peak (fun x => S x.1 ^ b))
+    (hr : Dominated (fun x : {x // r.test x = true} => br.time ⟨x, f (r.next x.1)⟩)
+        (fun x => S x.1 ^ a) ∧
+      Dominated (fun x : {x // r.test x = true} => br.peak ⟨x, f (r.next x.1)⟩)
+        (fun x => S x.1 ^ b)) :
+    Dominated (fun x => (r.cost bc bs bd br x).time)
+      (fun x => r.measure x * S x ^ a + S x ^ c) ∧
+    Dominated (fun x => (r.cost bc bs bd br x).peak)
+      (fun x => S x ^ b + (r.measure x + 1) * (S x ^ e + 1)) := by
+  let Z := {p : α × α // S p.2 ≤ S p.1}
+  let Stop := {z : Z // r.test z.1.2 = false}
+  let Step := {z : Z // r.test z.1.2 = true}
+  let S₀ (x : {x // r.test x = false}) := S x.1
+  let S₁ (x : {x // r.test x = true}) := S x.1
+  exact r.dominated_cost_of_bounds _ _ _ _ (fun a x => S x ≤ S a) (fun x => x)
+    (fun x => S x ^ e) (fun x => S x ^ c) (fun x => S x ^ a) (fun x => S x ^ b) (fun _ => le_rfl)
+    (fun _ x hx h => (hnext x h).trans hx)
+    (dominated_pow_comp (fun z : Z => z.1.2) hsize fun z => z.2 :)
+    (dominated_pow_comp (fun z : Z => z.1.2) hc.2 fun z => z.2 :)
+    (dominated_pow_comp (fun z : Z => z.1.2) hs.2 fun z => z.2 :)
+    (dominated_pow_comp (S := S₀) (fun z : Stop => ⟨z.1.1.2, z.2⟩) hd.2
+      fun z => z.1.2 :)
+    (dominated_pow_comp (S := S₁) (fun z : Step => ⟨z.1.1.2, z.2⟩) hr.2
+      fun z => z.1.2 :)
+    (dominated_pow_comp (S := S₀) (fun z : Stop => ⟨z.1.1.2, z.2⟩) hd.1
+      fun z => z.1.2 :)
+    (dominated_pow_comp (fun z : Z => z.1.2) hs.1 fun z => z.2 :)
+    (dominated_pow_comp (fun z : Step => r.next z.1.1.2) hc.1
+      fun z => (hnext _ z.2).trans z.1.2 :)
+    (dominated_pow_comp (S := S₁) (fun z : Step => ⟨z.1.1.2, z.2⟩) hr.1
+      fun z => z.1.2 :)
+    (fun x => Nat.pow_pos (hS x)) (fun x => Nat.pow_pos (hS x))
+
 variable [∀ x, UniqueEncoding Tree (β x)]
+  {tc pc ts ps : α → ℕ} {td pd : {x // r.test x = false} → ℕ} {tr pr : r.Return → ℕ}
 
-/-- Compile a recursive cost estimate while hiding the fixed controller coefficients. -/
-theorem hasGrowth
-    (hc : Implementation r.test) (hs : Implementation r.next)
-    (hd : Implementation (fun x => ⌜r.finish x⌝ₜ))
-    (hr : Implementation (fun x : r.Return => ⌜r.resume x.1 x.2⌝ₜ))
-    {t p : α → ℕ}
-    (h : Dominated (fun x => (r.cost hc.bounds hs.bounds hd.bounds hr.bounds x).time) t ∧
-      Dominated (fun x => (r.cost hc.bounds hs.bounds hd.bounds hr.bounds x).peak) p) :
-    (r.implementation hc hs hd hr).HasGrowth
-      (fun x => hc.bounds.time x + t x + 1) (fun x => p x + 1) := by
-  unfold Implementation.HasGrowth
-  rw [bounds_implementation]
-  exact ⟨((Dominated.refl hc.bounds.time).add (h.1.const_mul_left 3)).add
-      (Dominated.const 10), h.2.add (Dominated.const 1)⟩
+/-- The recursive program, with the growth of `dominated_cost_of_scale`. -/
+def implementationOfScale (hc : Implementation r.test tc pc) (hs : Implementation r.next ts ps)
+    (hd : Implementation (fun x => ⌜r.finish x⌝ₜ) td pd)
+    (hr : Implementation (fun x : r.Return => ⌜r.resume x.1 x.2⌝ₜ) tr pr)
+    (S : α → ℕ) (hS : ∀ x, 0 < S x)
+    (hnext : ∀ x, r.test x = true → S (r.next x) ≤ S x) {e a b c : ℕ}
+    (hsize : Dominated (fun x => ⌜x⌝ₜ.size) (fun x => S x ^ e))
+    (htc : Dominated tc (fun x => S x ^ a)) (hpc : Dominated pc (fun x => S x ^ b))
+    (hts : Dominated ts (fun x => S x ^ a)) (hps : Dominated ps (fun x => S x ^ b))
+    (htd : Dominated td (fun x => S x.1 ^ c)) (hpd : Dominated pd (fun x => S x.1 ^ b))
+    (htr : Dominated (fun x : {x // r.test x = true} => tr ⟨x, f (r.next x.1)⟩)
+      (fun x => S x.1 ^ a))
+    (hpr : Dominated (fun x : {x // r.test x = true} => pr ⟨x, f (r.next x.1)⟩)
+      (fun x => S x.1 ^ b)) :
+    Implementation (fun x => ⌜f x⌝ₜ) (fun x => (r.measure x + 1) * S x ^ a + S x ^ c)
+      (fun x => S x ^ b + (r.measure x + 1) * (S x ^ e + 1)) :=
+  have h := r.dominated_cost_of_scale ⟨tc, pc⟩ ⟨ts, ps⟩ ⟨td, pd⟩ ⟨tr, pr⟩ S hS hnext hsize
+    ⟨htc, hpc⟩ ⟨hts, hps⟩ ⟨htd, hpd⟩ ⟨htr, hpr⟩
+  have hpos x : 0 < (r.measure x + 1) * S x ^ a + S x ^ c :=
+    Nat.add_pos_right _ (Nat.pow_pos (hS x))
+  (r.implementation hc hs hd hr).mono
+    (((htc.trans (Dominated.of_le fun _ => (Nat.le_mul_of_pos_left _ (Nat.succ_pos _)).trans
+        (Nat.le_add_right _ _))).add_same (h.1.trans (Dominated.of_le fun _ =>
+          Nat.add_le_add_right (Nat.mul_le_mul_right _ (Nat.le_succ _)) _))).add_same
+      (Dominated.one hpos))
+    (h.2.add_same (Dominated.one fun x => Nat.add_pos_left (Nat.pow_pos (hS x)) _))
 
-/-- Callback growth specifications determine the recursive estimate for the same
-selected implementations. The supplied cost expression retains the terminal call
-and stack accumulation; coefficient selection stays outside the recursion. -/
-theorem hasGrowth_of_growth
-    {hc : Implementation r.test} {hs : Implementation r.next}
-    {hd : Implementation (fun x => ⌜r.finish x⌝ₜ)}
-    {hr : Implementation (fun x : r.Return => ⌜r.resume x.1 x.2⌝ₜ)}
-    {tc pc ts ps : α → ℕ} {td pd : {x // r.test x = false} → ℕ}
-    {tr pr : r.Return → ℕ} {t p : α → ℕ}
-    (gc : hc.HasGrowth tc pc) (gs : hs.HasGrowth ts ps)
-    (gd : hd.HasGrowth td pd) (gr : hr.HasGrowth tr pr)
-    (h : Dominated (fun x => (r.cost ⟨tc, pc⟩ ⟨ts, ps⟩ ⟨td, pd⟩ ⟨tr, pr⟩ x).time) t ∧
-      Dominated (fun x => (r.cost ⟨tc, pc⟩ ⟨ts, ps⟩ ⟨td, pd⟩ ⟨tr, pr⟩ x).peak) p) :
-    (r.implementation hc hs hd hr).HasGrowth
-      (fun x => tc x + t x + 1) (fun x => p x + 1) := by
-  have hg := r.dominated_cost_congr
-    (bc := hc.bounds) (bs := hs.bounds) (bd := hd.bounds) (br := hr.bounds)
-    (bc' := ⟨tc, pc⟩) (bs' := ⟨ts, ps⟩) (bd' := ⟨td, pd⟩) (br' := ⟨tr, pr⟩)
-    gc gs gd gr
-  exact (r.hasGrowth hc hs hd hr ⟨hg.1.trans h.1, hg.2.trans h.2⟩).mono
-    ((gc.1.add (Dominated.refl _)).add (Dominated.refl _)) (Dominated.refl _)
+/-- Bounds of a recursive result by the scale of its source state, for callbacks whose
+allowances are powers of their input sizes. -/
+theorem dominated_size_return (S : α → ℕ) (hS : ∀ x, 0 < S x)
+    (hnext : ∀ x, r.test x = true → S (r.next x) ≤ S x) {e : ℕ}
+    (hsize : Dominated (fun x => ⌜x⌝ₜ.size) (fun x => S x ^ e))
+    (hout : Dominated (fun x => ⌜f x⌝ₜ.size) (fun x => S x ^ e)) (d : ℕ) :
+    Dominated (fun x : {x // r.test x = true} => ⌜(⟨x, f (r.next x.1)⟩ : r.Return)⌝ₜ.size ^ d)
+      (fun x => S x.1 ^ (e * d)) := by
+  have h : Dominated (fun x : {x // r.test x = true} =>
+      1 + ⌜x.1⌝ₜ.size + ⌜f (r.next x.1)⌝ₜ.size) (fun x => S x.1 ^ e) :=
+    ((Dominated.one fun x => Nat.pow_pos (hS x.1)).add_same (hsize.comp Subtype.val)).add_same
+      (dominated_pow_comp (fun x : {x // r.test x = true} => r.next x.1) hout
+        fun x => hnext x.1 x.2)
+  have heq (x : {x // r.test x = true}) : ⌜(⟨x, f (r.next x.1)⟩ : r.Return)⌝ₜ.size =
+      1 + ⌜x.1⌝ₜ.size + ⌜f (r.next x.1)⌝ₜ.size := rfl
+  simpa only [pow_mul, heq] using h.pow d
 
 end Complexity.TreeProgram.Source.Recursion

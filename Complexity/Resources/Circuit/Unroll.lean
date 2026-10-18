@@ -72,14 +72,11 @@ theorem iterate_unrollStep (n : ℕ) (step : Circuit .booleanAlgebra (n + 1) n) 
   | zero => rfl
   | succ t ih => rw [Function.iterate_succ_apply', ih]; rfl
 
-noncomputable def unrollStepImpl : Implementation unrollStep := by source_fun_prop using tabulate
-
 def unrollStepScale (x : UnrollState) :=
   2 * x.1 + x.2.1 + x.2.2.1.size + x.2.2.2.size + 2
 
-@[source_growth] theorem unrollStep_growth : unrollStepImpl.HasGrowth
-    (fun x => unrollStepScale x ^ 8)
-    (fun x => unrollStepScale x ^ 4) := by
+def unrollStepImpl : Implementation unrollStep
+    (fun x => unrollStepScale x ^ 8) (fun x => unrollStepScale x ^ 4) := by
   let R := unrollStepScale
   have hR x : 0 < R x := by dsimp [R, unrollStepScale]; omega
   have linear {u : UnrollState → ℕ} (h : ∀ x, u x ≤ 4 * R x) : Dominated u R :=
@@ -94,9 +91,6 @@ def unrollStepScale (x : UnrollState) :=
       (hn : ∀ x, n x ≤ 4 * R x) (hm : ∀ x, m x ≤ 4 * R x) :
       Dominated (fun x => ⌜w x⌝ₜ.size) (fun x => R x ^ 2) :=
     Dominated.size_encode_fin_function w (linear hn) (linear hm) hR
-  have hvalues {n k : ℕ} (f : Fin n → Fin k) :
-      ⌜fun i => (f i).val⌝ₜ = ⌜f⌝ₜ := by
-    simpa only [encode_fin_function, Function.comp_def] using encode_fin_values f
   have hn : Dominated (fun x : UnrollState => x.1) R := linear (by
     intro x; dsimp [R, unrollStepScale]; omega)
   have ht : Dominated (fun x : UnrollState => x.2.1) R := linear (by
@@ -166,17 +160,15 @@ def unrollStepScale (x : UnrollState) :=
   have hrange2 : Dominated (fun x : UnrollState => ⌜List.range (x.1 + x.2.1)⌝ₜ.size)
       (fun x => R x ^ 2) :=
     ((hnt1.pow 2).const_mul_left 3).mono_left fun x => size_encode_range_le _
-  source_fun_prop
+  source_fun_prop using tabulate
   all_goals
     change Dominated _ (fun x => R x ^ _)
-    simp only [Function.comp_apply, id_eq, Sigma.encode_mk, size_encode_prod,
+    simp only [Sigma.encode_mk, size_encode_prod,
       Tree.encode_self, encode_fin, Fin.val_castAdd, Fin.val_last,
-      List.map_const', List.sum_replicate, List.length_finRange, List.length_ofFn,
-      encode_finRange, ← List.ofFn_eq_map, encode_fin_function_codes, hvalues,
-      encode_list_cons, encode_list_nil, size_encode_unit, relabelFn, keepFn, compFn,
-      Nat.nsmul_eq_mul, Nat.mul_one,
-      Dominated.add_iff, Dominated.max_iff, Dominated.const_mul_left_iff, Nat.ofNat_pos,
-      Dominated.zero, true_and]
+      List.map_const', List.sum_replicate, List.length_finRange,
+      ← List.ofFn_eq_map, Nat.nsmul_eq_mul, Nat.mul_one,
+      Dominated.add_iff, Dominated.max_iff,
+      Dominated.zero]
     repeat' apply And.intro
   all_goals with_reducible first
     | assumption
@@ -254,12 +246,8 @@ def unrollInitial (x : UnrollInput) : ℕ × UnrollState :=
 def unrollScale (x : UnrollInput) :=
   2 * x.1 + x.2.2 + (x.2.2 + 1) * x.2.1.size + 2
 
-noncomputable def unrollInitialImpl : Implementation unrollInitial := by
-  source_fun_prop using tabulate
-
-@[source_growth] theorem unrollInitial_growth : unrollInitialImpl.HasGrowth
-    (fun x => unrollScale x ^ 2)
-    (fun x => unrollScale x ^ 2) := by
+def unrollInitialImpl : Implementation unrollInitial
+    (fun x => unrollScale x ^ 2) (fun x => unrollScale x ^ 2) := by
   let R := unrollScale
   have hR x : 0 < R x := by dsimp [R, unrollScale]; omega
   have hn : Dominated (fun x : UnrollInput => x.1) R := Dominated.of_le fun x => by
@@ -291,7 +279,7 @@ noncomputable def unrollInitialImpl : Implementation unrollInitial := by
       | assumption
       | exact Dominated.const_of_pos _ (fun x => Nat.pow_pos (hR x))
       | exact Dominated.le_pow (g := R) (by assumption) (by decide)
-  source_fun_prop
+  source_fun_prop using tabulate
   all_goals
     change Dominated _ (fun x => R x ^ 2)
     simp only [id_eq, Sigma.encode_mk, size_encode_prod, size_encode_unit,
@@ -320,29 +308,15 @@ noncomputable def unrollInitialImpl : Implementation unrollInitial := by
       | exact Dominated.le_pow hci (by decide)
 
 /-- The result projection is selected independently of its eventual budget. -/
-noncomputable def unrollResultImpl : Implementation (fun x : UnrollState => ⌜x.2.2.2⌝ₜ) := by
-  source_fun_prop
-
-@[source_growth] theorem unrollResult_growth : unrollResultImpl.HasGrowth
+def unrollResultImpl : Implementation (fun x : UnrollState => ⌜x.2.2.2⌝ₜ)
     (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   source_fun_prop
-  · exact Dominated.const _
-  · apply (Dominated.refl _).max_same
-    apply Dominated.of_le
-    rintro ⟨n, t, step, current⟩
-    simp only [Sigma.encode_mk, size_encode_prod, Tree.encode_self]
-    omega
-
-noncomputable def unrollImplementation :
-    Implementation (fun x : UnrollInput => ⌜x.2.1.unroll x.2.2⌝ₜ) :=
-  (unrollInitialImpl.comp (unrollStepImpl.iterate.comp unrollResultImpl)).congr (by
-    funext x
-    dsimp only [Function.comp_def, unrollInitial]
-    rw [iterate_unrollStep])
+  all_goals dominated
 
 /-- The loop sums one step allowance per layer and retains a maximum space allowance. -/
-@[source_growth] theorem unroll_growth : unrollImplementation.HasGrowth
-    (fun x => unrollScale x ^ 9) (fun x => unrollScale x ^ 4) := by
+def unrollImplementation :
+    Implementation (fun x : UnrollInput => ⌜x.2.1.unroll x.2.2⌝ₜ)
+      (fun x => unrollScale x ^ 9) (fun x => unrollScale x ^ 4) := by
   let R := unrollScale
   have hR x : 0 < R x := by dsimp [R, unrollScale]; omega
   let I (x : UnrollInput) (r : ℕ) (y : UnrollState) :=
@@ -382,44 +356,46 @@ noncomputable def unrollImplementation :
       hcounter.le_pow (by decide)⟩, hstate.mono_pow (by decide) (fun z => hR z.1.1)⟩
   let active (z : {z : UnrollInput × ℕ × UnrollState // I z.1 (z.2.1 + 1) z.2.2}) : Z :=
     ⟨(z.1.1, z.1.2.1 + 1, z.1.2.2), z.2⟩
-  have htotal := unrollInitial_growth.iterate_comp
-    unrollStep_growth unrollResult_growth I
-    (fun x => R x ^ 8) (fun x => R x ^ 4) (fun _ => 1) (fun x => R x ^ 4)
+  have hiter := Dominated.iterate_of_invariant (f := unrollStep)
+    (t := fun y => unrollStepScale y ^ 8) (p := fun y => unrollStepScale y ^ 4) I
+    (fun x => (unrollInitial x).1) (fun x => (unrollInitial x).2)
+    (fun x => R x ^ 8) (fun x => R x ^ 4)
     (fun _ => ⟨0, by simp only [unrollInitial, Nat.zero_add], rfl⟩)
     (by rintro x r y ⟨i, hi, rfl⟩; exact ⟨i + 1, by omega, rfl⟩)
     (hcounter.le_pow (by decide)) hsize ((hscale.comp active).pow 8)
     ((hscale.comp active).pow 4)
-    (Dominated.refl _)
-    ((hsize.comp (fun z : {z : UnrollInput × UnrollState // I z.1 0 z.2} =>
-      ⟨(z.1.1, 0, z.1.2), z.2⟩)).mono_left
-      (fun z => size_encode_snd_le (0, z.1.2)))
-  unfold unrollImplementation
-  apply Implementation.HasGrowth.congr
-  apply htotal.mono
+  have hresult : Dominated (fun x : UnrollInput =>
+      ⌜unrollStep^[(unrollInitial x).1] (unrollInitial x).2⌝ₜ.size) (fun x => R x ^ 2) :=
+    Dominated.of_le_mul 256 fun x => by
+      rcases x with ⟨n, step, t⟩
+      dsimp only [unrollInitial]
+      rw [iterate_unrollStep]
+      exact size_unrollState_le n step t t le_rfl
+  refine ((unrollInitialImpl.comp (unrollStepImpl.iterate.comp unrollResultImpl)).congr ?_).mono
+    ?_ ?_
+  · funext x
+    dsimp only [Function.comp_def, unrollInitial]
+    rw [iterate_unrollStep]
   · have ht : Dominated (fun x : UnrollInput => x.2.2) R := Dominated.of_le fun x => by
       dsimp [R, unrollScale]; omega
     have rounds : Dominated (fun x : UnrollInput => x.2.2 * R x ^ 8)
         (fun x => R x ^ 9) := by
       simpa only [pow_succ', Nat.mul_comm] using ht.mul ((Dominated.refl R).pow 8)
     exact ((Dominated.refl R).pow 2 |>.mono_pow (by decide) hR).add_same
-      ((rounds.add_same (Dominated.const_of_pos 1 fun x => Nat.pow_pos (hR x))).add_same
+      (((hiter.1.trans rounds).add_same
+        (Dominated.const_of_pos 1 fun x => Nat.pow_pos (hR x))).add_same
         (Dominated.const_of_pos 1 fun x => Nat.pow_pos (hR x)))
   · exact ((Dominated.refl R).pow 2 |>.mono_pow (by decide) hR).max_same
-      ((Dominated.refl _).max_same (Dominated.refl _))
+      (hiter.2.max_same (hresult.mono_pow (by decide) hR))
 
-noncomputable def Implementation.unroll {ρ : Type} [UniqueEncoding Tree ρ]
-    {n t : ρ → ℕ} {step : (x : ρ) → Circuit .booleanAlgebra (n x + 1) (n x)}
-    (h : Implementation (fun x => (⟨n x, step x, t x⟩ : UnrollInput))) :
-    Implementation (fun x => ⌜(step x).unroll (t x)⌝ₜ) :=
+/-- Unroll a circuit computed by a selected implementation. -/
+def Implementation.unroll {ρ : Type} [UniqueEncoding Tree ρ]
+    {n t : ρ → ℕ} {step : (x : ρ) → Circuit .booleanAlgebra (n x + 1) (n x)} {u q : ρ → ℕ}
+    (h : Implementation (fun x => (⟨n x, step x, t x⟩ : UnrollInput)) u q) :
+    Implementation (fun x => ⌜(step x).unroll (t x)⌝ₜ)
+      (fun x => u x + unrollScale ⟨n x, step x, t x⟩ ^ 9)
+      (fun x => max (q x) (unrollScale ⟨n x, step x, t x⟩ ^ 4)) :=
   h.comp unrollImplementation
-
-@[simp, source_bounds↓] theorem Implementation.bounds_unroll {ρ : Type} [UniqueEncoding Tree ρ]
-    {n t : ρ → ℕ} {step : (x : ρ) → Circuit .booleanAlgebra (n x + 1) (n x)}
-    (h : Implementation (fun x => (⟨n x, step x, t x⟩ : UnrollInput))) :
-    (Implementation.unroll h).bounds =
-      compBounds (fun x => (⟨n x, step x, t x⟩ : UnrollInput))
-        h.bounds unrollImplementation.bounds :=
-  Implementation.bounds_comp _ _
 
 attribute [scoped fun_prop] Implementation.unroll
 
