@@ -225,27 +225,11 @@ def Iteration.stepImplementation {α : Type*} [UniqueEncoding Tree α] {f : α �
     {t p : α → ℕ} (hf : Implementation f t p) :
     Implementation (fun x : ℕ × α => (x.1.pred, f x.2)) (fun x => ⌜x.1⌝ₜ.size + t x.2)
       (fun x => max ⌜x⌝ₜ.size (p x.2)) := by
-  have hpred := (Implementation.pred.size_encode.comp (Prod.fst : ℕ × α → ℕ)).trans
-    (Dominated.of_le fun x => max_le (size_encode_fst_le x) (size_encode_fst_le x))
-  have hres := (hf.size_encode.comp (Prod.snd : ℕ × α → α)).trans
-    ((Dominated.of_le fun x => size_encode_snd_le x).max
-      (Dominated.refl (fun x : ℕ × α => p x.2)))
-  simp only [Function.comp_def] at hpred hres
+  have := Implementation.pred.size_encode.comp (Prod.fst : ℕ × α → ℕ)
+  have := hf.size_encode.comp (Prod.snd : ℕ × α → α)
   refine (((Implementation.fst (α := ℕ) (β := α)).comp Implementation.pred).pair
     ((Implementation.snd (α := ℕ) (β := α)).comp hf)).mono ?_ ?_
-  · apply Dominated.of_le_mul 4
-    intro x
-    have := Tree.size_pos ⌜x.1⌝ₜ
-    omega
-  · simp only [Function.comp_def, Dominated.max_iff, size_encode_prod, Dominated.add_iff]
-    repeat' apply And.intro
-    all_goals first
-      | exact Dominated.of_le fun x => le_max_left _ _
-      | exact Dominated.of_le fun x => le_max_right _ _
-      | exact Dominated.of_le fun x => (size_encode_fst_le x).trans (le_max_left _ _)
-      | exact Dominated.const_of_pos 1 fun x => (Tree.size_pos _).trans_le (le_max_left _ _)
-      | exact hpred.trans (Dominated.of_le fun x => le_max_left _ _)
-      | exact hres
+  all_goals dominated
 
 /-- Compile one callback for every count as a tail loop over the counter and the state. -/
 def Implementation.iterate {α : Type*} [UniqueEncoding Tree α] {f : α → α} {t p : α → ℕ}
@@ -306,18 +290,7 @@ def Implementation.iterateWith {ρ α : Type*} [UniqueEncoding Tree ρ] [UniqueE
   have hout := hs.size_encode
   let carry : Implementation (fun x : ρ × α => (x.1, f x.1 x.2)) (fun x => ts x + 1)
       (fun x => max ⌜x⌝ₜ.size (ps x)) :=
-    ((Implementation.fst (α := ρ) (β := α)).pair hs).mono
-      (Dominated.of_le_mul 2 fun x => by omega)
-      (by
-        simp only [Dominated.max_iff, size_encode_prod, Dominated.add_iff]
-        repeat' apply And.intro
-        all_goals first
-          | exact hout
-          | exact Dominated.of_le fun x => le_max_left _ _
-          | exact Dominated.of_le fun x => le_max_right _ _
-          | exact Dominated.of_le fun x => (size_encode_fst_le x).trans (le_max_left _ _)
-          | exact Dominated.const_of_pos 1 fun x => (Tree.size_pos _).trans_le
-              (le_max_left _ _))
+    ((Implementation.fst (α := ρ) (β := α)).pair hs).mono (by dominated) (by dominated)
   have hiter (n : ℕ) (e : ρ) (a : α) :
       (fun x : ρ × α => (x.1, f x.1 x.2))^[n] (e, a) = (e, (f e)^[n] a) :=
     (Function.Semiconj.iterate_right (f := fun a => (e, a)) (fun _ => rfl) n a).symm

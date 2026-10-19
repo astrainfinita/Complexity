@@ -15,3 +15,8 @@ A dependent pair stores both fields. Decoding the first field determines the typ
 public section
 
 attribute [tree_encoding] Sigma
+
+open Complexity in
+theorem Sigma.size_encode_eq {α : Type*} {β : α → Type*} [UniqueEncoding Tree α]
+    [∀ a, UniqueEncoding Tree (β a)] (x : Σ a, β a) :
+    ⌜x⌝ₜ.size = 1 + ⌜x.1⌝ₜ.size + ⌜x.2⌝ₜ.size := rfl

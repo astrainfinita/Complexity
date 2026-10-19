@@ -56,15 +56,7 @@ def borrowInvariant (x y : List Bool × List Bool) : Prop :=
 theorem borrowInvariant_size : Dominated
     (fun z : {p : (List Bool × List Bool) × (List Bool × List Bool) //
       borrowInvariant p.1 p.2} => ⌜z.1.2⌝ₜ.size) (fun z => ⌜z.1.1⌝ₜ.size) := by
-  apply Dominated.of_le_mul 4
-  rintro ⟨⟨⟨xs, acc⟩, ⟨ys, buf⟩⟩, h⟩
-  have h₁ : ⌜ys⌝ₜ.size ≤ 4 * ys.length + 1 := Tree.size_encodeBitList_le _
-  have h₂ : ⌜buf⌝ₜ.size ≤ 4 * buf.length + 1 := Tree.size_encodeBitList_le _
-  have hx₁ := length_le_codeSize xs
-  have hx₂ := length_le_codeSize acc
-  simp only [size_encode_prod] at *
-  change ys.length + buf.length ≤ xs.length + acc.length at h
-  omega
+  dominated [borrowInvariant, size_encode_list_bool_le]
 
 /-- The loop consumes callback growth specifications; no overall credit constant is supplied. -/
 def borrowImplementation : Implementation borrow (fun x => ⌜x⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
@@ -94,13 +86,7 @@ def borrowImplementation : Implementation borrow (fun x => ⌜x⌝ₜ.size) (fun
   case stop_time => exact borrowInvariant_size
   case step_pos => exact fun _ => Nat.zero_lt_one
   case stop_pos => exact fun _ => Tree.size_pos _
-  case time =>
-    simp only [Nat.mul_one, Dominated.add_iff]
-    have h : Dominated (fun x : List Bool × List Bool => x.1.length)
-        (fun x => ⌜x⌝ₜ.size) := Dominated.of_le fun x =>
-      (length_le_codeSize x.1).trans (size_encode_fst_le x)
-    exact ⟨⟨Dominated.const_of_pos _ (fun _ => Tree.size_pos _),
-      ⟨h, Dominated.refl _⟩⟩, Dominated.const_of_pos _ (fun _ => Tree.size_pos _)⟩
+  case time => dominated
 
 def Implementation.decrement :
     Implementation BitList.decrement (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) := by
@@ -230,27 +216,11 @@ attribute [local fun_prop] addFinishImplementation
 def addCount (x : Bool × List Bool × List Bool × List Bool) : ℕ :=
   x.2.1.length + x.2.2.1.length + x.2.2.2.length
 
-theorem addCount_size (x y : Bool × List Bool × List Bool × List Bool)
-    (h : addCount y ≤ addCount x) : ⌜y⌝ₜ.size ≤ 4 * ⌜x⌝ₜ.size + 10 := by
-  rcases x with ⟨c, xs, ys, acc⟩
-  rcases y with ⟨d, us, vs, buf⟩
-  have h₁ : ⌜us⌝ₜ.size ≤ 4 * us.length + 1 := Tree.size_encodeBitList_le _
-  have h₂ : ⌜vs⌝ₜ.size ≤ 4 * vs.length + 1 := Tree.size_encodeBitList_le _
-  have h₃ : ⌜buf⌝ₜ.size ≤ 4 * buf.length + 1 := Tree.size_encodeBitList_le _
-  have hx := length_le_codeSize xs
-  have hy := length_le_codeSize ys
-  have ha := length_le_codeSize acc
-  have hd := size_encode_bool_le d
-  simp only [addCount, size_encode_prod] at *
-  omega
-
 theorem addCount_size_growth : Dominated
     (fun z : {p : (Bool × List Bool × List Bool × List Bool) ×
       (Bool × List Bool × List Bool × List Bool) // addCount p.2 ≤ addCount p.1} => ⌜z.1.2⌝ₜ.size)
-    (fun z => ⌜z.1.1⌝ₜ.size) :=
-  (((Dominated.refl _).const_mul_left 4).add_same
-    (Dominated.const_of_pos 10 fun _ => Tree.size_pos _)).mono_left
-      fun z => addCount_size _ _ z.2
+    (fun z => ⌜z.1.1⌝ₜ.size) := by
+  dominated [addCount, size_encode_list_bool_le]
 
 def addResultImplementation :
     Implementation addResult (fun x => ⌜x⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
@@ -278,13 +248,7 @@ def addResultImplementation :
   case stop_time => exact addCount_size_growth
   case step_pos => exact fun _ => Nat.zero_lt_one
   case stop_pos => exact fun _ => Tree.size_pos _
-  case time =>
-    simp only [Nat.mul_one, Dominated.add_iff]
-    have h : Dominated (fun x : Bool × List Bool × List Bool × List Bool => x.2.1.length)
-        (fun x => ⌜x⌝ₜ.size) := Dominated.of_le fun x =>
-      (length_le_codeSize x.2.1).trans ((size_encode_fst_le x.2).trans (size_encode_snd_le x))
-    exact ⟨⟨Dominated.const_of_pos _ (fun _ => Tree.size_pos _),
-      ⟨h, Dominated.refl _⟩⟩, Dominated.const_of_pos _ (fun _ => Tree.size_pos _)⟩
+  case time => dominated
 
 def Implementation.add :
     Implementation (fun x : ℕ × ℕ => x.1 + x.2) (fun x => ⌜x⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
@@ -330,24 +294,10 @@ attribute [local fun_prop] leStepImplementation
 def compareCount (x : Bool × List Bool × List Bool) : ℕ :=
   x.2.1.length + x.2.2.length
 
-theorem compareCount_size (x y : Bool × List Bool × List Bool)
-    (h : compareCount y ≤ compareCount x) : ⌜y⌝ₜ.size ≤ 4 * ⌜x⌝ₜ.size + 10 := by
-  rcases x with ⟨c, xs, ys⟩
-  rcases y with ⟨d, us, vs⟩
-  have h₁ : ⌜us⌝ₜ.size ≤ 4 * us.length + 1 := Tree.size_encodeBitList_le _
-  have h₂ : ⌜vs⌝ₜ.size ≤ 4 * vs.length + 1 := Tree.size_encodeBitList_le _
-  have hx := length_le_codeSize xs
-  have hy := length_le_codeSize ys
-  have hd := size_encode_bool_le d
-  simp only [compareCount, size_encode_prod] at *
-  omega
-
 theorem compareCount_size_growth : Dominated
     (fun z : {p : (Bool × List Bool × List Bool) × (Bool × List Bool × List Bool) //
-      compareCount p.2 ≤ compareCount p.1} => ⌜z.1.2⌝ₜ.size) (fun z => ⌜z.1.1⌝ₜ.size) :=
-  (((Dominated.refl _).const_mul_left 4).add_same
-    (Dominated.const_of_pos 10 fun _ => Tree.size_pos _)).mono_left
-      fun z => compareCount_size _ _ z.2
+      compareCount p.2 ≤ compareCount p.1} => ⌜z.1.2⌝ₜ.size) (fun z => ⌜z.1.1⌝ₜ.size) := by
+  dominated [compareCount, size_encode_list_bool_le]
 
 def leResultImplementation :
     Implementation leResult (fun x => ⌜x⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
@@ -375,18 +325,7 @@ def leResultImplementation :
   case stop_time => exact Dominated.refl _
   case step_pos => exact fun _ => Nat.zero_lt_one
   case stop_pos => exact fun _ => Nat.zero_lt_one
-  case time =>
-    simp only [Nat.mul_one, Dominated.add_iff]
-    have h : Dominated compareCount (fun x => ⌜x⌝ₜ.size) := Dominated.of_le fun x => by
-      rcases x with ⟨c, xs, ys⟩
-      have := length_le_codeSize xs
-      have := length_le_codeSize ys
-      dsimp only [compareCount]
-      simp only [size_encode_prod]
-      omega
-    exact ⟨⟨Dominated.const_of_pos _ (fun _ => Tree.size_pos _),
-      ⟨h, Dominated.const_of_pos _ (fun _ => Tree.size_pos _)⟩⟩,
-      Dominated.const_of_pos _ (fun _ => Tree.size_pos _)⟩
+  case time => dominated [compareCount]
 
 def compareImplementation (c : Bool) :
     Implementation (fun x : ℕ × ℕ => leResult (c, x.1.bits, x.2.bits))
@@ -423,16 +362,7 @@ def Implementation.natBeq :
     funext ⟨m, n⟩
     apply Bool.eq_iff_iff.mpr
     simp [Nat.le_antisymm_iff]
-  all_goals
-    simp only [size_encode_prod, Dominated.add_iff, Dominated.max_iff]
-    repeat' apply And.intro
-    all_goals first
-      | exact Dominated.refl _
-      | exact Dominated.const_of_pos _ (fun _ => Tree.size_pos _)
-      | exact Dominated.of_le size_encode_fst_le
-      | exact Dominated.of_le size_encode_snd_le
-      | exact (Dominated.const_of_pos 3 fun _ => Tree.size_pos _).mono_left
-          fun x => size_encode_bool_le _
+  all_goals dominated
 
 attribute [scoped fun_prop] Implementation.natBeq
 

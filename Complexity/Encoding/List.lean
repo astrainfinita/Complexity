@@ -9,6 +9,7 @@ public import Complexity.Encoding.Prod
 public import Complexity.Data.Tree.List
 public import Mathlib.Algebra.Order.BigOperators.Group.List
 public import Mathlib.Algebra.Order.Group.Nat
+public import Complexity.Tactic.TreeProgram.Attributes
 
 /-! # Tree encodings of lists -/
 
@@ -73,6 +74,10 @@ theorem size_encode_list_append {α : Type*} [UniqueEncoding Tree α] (xs ys : L
     ⌜xs ++ ys⌝ₜ.size + 1 = ⌜xs⌝ₜ.size + ⌜ys⌝ₜ.size := by
   simp only [size_encode_list, List.map_append, List.sum_append, List.length_append]
   omega
+
+@[dominated] theorem size_encode_tail_le {α : Type*} [UniqueEncoding Tree α] (xs : List α) :
+    ⌜xs.tail⌝ₜ.size ≤ ⌜xs⌝ₜ.size := by
+  cases xs <;> simp [size_encode_prod]
 
 theorem size_encode_le_list_of_mem {α : Type*} [UniqueEncoding Tree α]
     {x : α} {xs : List α} (hx : x ∈ xs) : ⌜x⌝ₜ.size ≤ ⌜xs⌝ₜ.size := by

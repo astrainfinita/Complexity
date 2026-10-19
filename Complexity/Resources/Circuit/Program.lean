@@ -49,31 +49,14 @@ abbrev AccumulateInput := CNF ℕ ×
 
 @[source] def accumulateGateImpl :
     Implementation accumulateGate (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
-  have hg := Dominated.of_le_mul _ (fun x : AccumulateInput => gateClauses_size_le x.2)
-  have hl : Dominated (fun x : AccumulateInput => (gateClauses x.2).length) (fun _ => 1) :=
+  have : Dominated (fun x : AccumulateInput => (gateClauses x.2).length) (fun _ => 1) :=
     Dominated.of_le_mul 3 (fun x => by
       simpa only [gateClauses, Nat.mul_one] using
         CNF.length_ofGate_le x.2.2.1 x.2.2.2.1 x.2.2.2.2)
-  have hs : Dominated (fun x : AccumulateInput => ⌜x.2⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) :=
-    Dominated.of_le fun x => by
-      change _ ≤ 1 + ⌜x.1⌝ₜ.size + ⌜x.2⌝ₜ.size
-      omega
-  have ha : Dominated (fun x : AccumulateInput => ⌜x.1⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) :=
-    Dominated.of_le fun x => by
-      change _ ≤ 1 + ⌜x.1⌝ₜ.size + ⌜x.2⌝ₜ.size
-      omega
-  have ho := hg.trans hs
   refine (((?pair : Implementation (fun input : AccumulateInput => (input.1, gateClauses input.2))
     ?pairTime ?pairPeak).comp Implementation.prependFold).congr (by funext x; rfl)).mono ?time ?peak
   case pair => source_fun_prop
-  all_goals
-    simp only [size_encode_prod, Dominated.add_iff, Dominated.max_iff]
-    repeat' apply And.intro
-  all_goals with_reducible first
-    | assumption
-    | exact Dominated.refl _
-    | exact Dominated.const_of_pos _ (fun _ => Nat.zero_lt_one)
-    | exact Dominated.const_of_pos _ (fun _ => Tree.size_pos _)
+  all_goals dominated [gateClauses_size_le]
 
 theorem accumulateGate_ftisp :
     accumulateGate ∈ FTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
@@ -248,11 +231,6 @@ theorem circuitStep_circuit_size_lt
 
 def tseitinLoopImpl : Implementation (fun x : TseitinState => tseitinLoop x.1 x.2)
     (fun x => ⌜x⌝ₜ.size ^ 2) (fun x => ⌜x⌝ₜ.size ^ 2) := by
-  have hc : Dominated (fun x : TseitinState => ⌜x.1⌝ₜ.size)
-      (fun x => ⌜x⌝ₜ.size) := Dominated.of_le fun x => by
-    rcases x with ⟨a, acc⟩; simp only [size_encode_prod]; omega
-  have hm := hc.mul (Dominated.refl (fun x => ⌜x⌝ₜ.size))
-  simp only [← pow_two] at hm
   source_fun_prop using loop
     (test := circuitContinues) (next := circuitStep) (finish := circuitFinish)
     (invariant := fun x y => ⌜y.1⌝ₜ.size ≤ ⌜x.1⌝ₜ.size ∧
@@ -266,23 +244,11 @@ def tseitinLoopImpl : Implementation (fun x : TseitinState => tseitinLoop x.1 x.
     refine ⟨(circuitStep_circuit_size_lt y ht).le.trans hi.1, ?_⟩
     simpa only [tseitinLoop_step y, ht, ↓reduceIte] using hi.2
   case decreases => intro x y _ ht; exact circuitStep_circuit_size_lt y ht
-  case step_time =>
-    apply Dominated.of_le
-    intro z
-    refine z.2.1.trans ?_
-    rcases z.1.1 with ⟨a, acc⟩
-    simp only [size_encode_prod]
-    omega
+  case step_time => dominated
   case check_time => exact Dominated.const_of_pos _ (fun _ => Tree.size_pos _)
   case step_pos => exact fun _ => Tree.size_pos _
   case stop_pos => exact fun _ => Nat.pow_pos (Tree.size_pos _)
-  case time =>
-    simp only [Dominated.add_iff]
-    repeat' apply And.intro
-    all_goals first
-      | exact hm
-      | exact Dominated.refl _
-      | exact Dominated.const_of_pos _ (fun _ => Nat.pow_pos (Tree.size_pos _))
+  case time => dominated
   all_goals exact Dominated.of_le_mul _ (fun z => tseitinLoop_state_size z.1.1 z.1.2 z.2)
 
 theorem tseitinLoop_ftisp :
@@ -299,20 +265,7 @@ attribute [source] tseitinLoopImpl
 theorem _root_.Complexity.Circuit.tseitin_ftisp :
     (fun input : Σ n, Circuit .booleanAlgebra n 1 => input.2.tseitin) ∈
       FTISP .tree (fun n => n ^ 2) (fun n => n ^ 2) := by
-  have hp : Dominated
-      (fun x : Σ n, Circuit .booleanAlgebra n 1 => ⌜(x, ([] : CNF ℕ))⌝ₜ.size)
-      (fun x => ⌜x⌝ₜ.size) := by
-    simp only [size_encode_prod, encode_list_nil, size_encode_unit, Dominated.add_iff]
-    exact ⟨⟨Dominated.const_of_pos _ (fun _ => Tree.size_pos _), Dominated.refl _⟩,
-      Dominated.const_of_pos _ (fun _ => Tree.size_pos _)⟩
   model_fun_prop
-  all_goals
-    simp only [Dominated.add_iff, Dominated.max_iff]
-    repeat' apply And.intro
-  all_goals with_reducible first
-    | exact hp.pow 2
-    | exact hp.le_pow (by decide)
-    | exact Dominated.le_pow (Dominated.refl _) (by decide)
-    | exact Dominated.const_of_pos _ (fun _ => Nat.pow_pos (Tree.size_pos _))
+  all_goals dominated
 
 end Complexity.TreeProgram.Source

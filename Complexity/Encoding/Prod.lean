@@ -57,6 +57,8 @@ variable {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
 @[simp] theorem size_encode_prod (a : α) (b : β) :
     ⌜(a, b)⌝ₜ.size = 1 + ⌜a⌝ₜ.size + ⌜b⌝ₜ.size := rfl
 
+theorem Prod.size_encode_eq (x : α × β) : ⌜x⌝ₜ.size = 1 + ⌜x.1⌝ₜ.size + ⌜x.2⌝ₜ.size := rfl
+
 /-- Each field fits in the encoding of the whole pair, including an opaque pair input. -/
 theorem size_encode_fst_le (x : α × β) : ⌜x.1⌝ₜ.size ≤ ⌜x⌝ₜ.size := by
   rcases x with ⟨a, b⟩

@@ -59,6 +59,9 @@ instance {R α : Type*} [c : UniqueEncoding R (List α)] {n : ℕ} :
 @[simp] theorem encode_fin_function {R α : Type*} [UniqueEncoding R (List α)] {n : ℕ}
     (f : Fin n → α) : encode R f = encode R (List.ofFn f) := rfl
 
+@[dominated] theorem size_encode_ofFn {α : Type*} [UniqueEncoding Tree α] {n : ℕ}
+    (f : Fin n → α) : ⌜List.ofFn f⌝ₜ.size = ⌜f⌝ₜ.size := rfl
+
 /-- Appending a tuple entry uses the ordinary list representation. -/
 @[simp high] theorem encode_fin_snoc {α : Type*} [UniqueEncoding Tree α] {n : ℕ}
     (f : Fin n → α) (a : α) : ⌜Fin.snoc f a⌝ₜ = ⌜List.ofFn f ++ [a]⌝ₜ := by

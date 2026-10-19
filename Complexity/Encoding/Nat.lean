@@ -44,6 +44,14 @@ instance : UniqueEncoding Tree ℕ :=
 
 @[simp] theorem encode_nat_tree (n : ℕ) : ⌜n⌝ₜ = ⌜n.bits⌝ₜ := rfl
 
+@[dominated] theorem size_encode_bits (n : ℕ) : ⌜n.bits⌝ₜ.size = ⌜n⌝ₜ.size := rfl
+
+theorem size_encode_list_bool_le (bs : List Bool) : ⌜bs⌝ₜ.size ≤ 4 * bs.length + 1 :=
+  Tree.size_encodeBitList_le bs
+
+theorem size_encode_nat_le_length_bits (n : ℕ) : ⌜n⌝ₜ.size ≤ 4 * n.bits.length + 1 :=
+  size_encode_list_bool_le n.bits
+
 /-- Binary increment grows the encoded tree by at most one digit. -/
 theorem size_encode_increment_le (xs : List Bool) :
     ⌜BitList.increment xs⌝ₜ.size ≤ ⌜xs⌝ₜ.size + 4 := by

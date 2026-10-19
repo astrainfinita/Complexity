@@ -49,10 +49,18 @@ def instanceAt (e t : Lean.Expr) : MetaM (Option Lean.Expr) := withoutModifyingS
   let body ← instantiateMVars body
   return some (← mkExpectedTypeHint h (mkApp2 body.appFn!.appFn! t body.appArg!))
 
-/-- Facts about every encoded size, list length and positive power occurring in the goal, and the
-instances of the given statements and those registered with `@[dominated]` at matching terms. -/
-def addSizeFacts (lemmas : Array Lean.Expr) (goal : MVarId) : MetaM MVarId := goal.withContext do
+/-- The hypotheses of `goal` introduced by the pointwise step, that is, not among `outer`. -/
+def ownHyps (outer : FVarIdSet) (goal : MVarId) : MetaM (Array FVarId) :=
+  return (← goal.getNondepPropHyps).filter (!outer.contains ·)
+
+/-- Facts about every encoded size, list length and positive power occurring in the goal or in the
+hypotheses introduced by the pointwise step, and the instances of the given statements and those
+registered with `@[dominated]` at matching terms. -/
+def addSizeFacts (outer : FVarIdSet) (lemmas : Array Lean.Expr) (goal : MVarId) : MetaM MVarId :=
+  goal.withContext do
   let target ← instantiateMVars (← goal.getType)
+  let mut exprs := #[target]
+  for fvarId in ← ownHyps outer goal do exprs := exprs.push (← instantiateMVars (← fvarId.getType))
   let mut tree : DiscrTree Lean.Expr := {}
   for e in lemmas ++ (← (dominatedAttr.getState (← getEnv)).mapM (mkConstWithFreshMVarLevels ·)) do
     let (_, _, body) ← forallMetaTelescopeReducing (← inferType e)
@@ -72,7 +80,7 @@ def addSizeFacts (lemmas : Array Lean.Expr) (goal : MVarId) : MetaM MVarId := go
     else if e.isAppOfArity ``HPow.hPow 6 then
       if let some k := e.appArg!.nat? then
         if k > 0 then modify fun (s, l, p, a) => (s, l, p.push (e.getAppArgs[4]!, k), a)
-  let (_, (sizes, lengths, powers, appends)) ← (target.forEach' fun e => do
+  let (_, (sizes, lengths, powers, appends)) ← (exprs.forM fun e => e.forEach' fun e => do
       visit e; return true : StateT _ MetaM Unit).run (#[], #[], #[], #[])
   let mut facts : Array Lean.Expr := #[]
   for t in sizes.toList.eraseDups do
@@ -109,12 +117,25 @@ def addSizeFacts (lemmas : Array Lean.Expr) (goal : MVarId) : MetaM MVarId := go
     if type.isAppOfArity ``Membership.mem 5 then
       if let some h ← observing? (mkAppM ``size_encode_le_list_of_mem #[decl.toExpr]) then
         facts := facts.push h
-  let (_, terms) ← (target.forEach' fun e => do
-      if e.isApp && !e.hasLooseBVars then modify (·.push e)
-      return true : StateT (Array Lean.Expr) MetaM Unit).run #[]
-  for t in terms.toList.eraseDups do
-    for e in ← tree.getMatch t do
-      if let some h ← instanceAt e t then facts := facts.push h
+  -- The terms of the goal, then for a few rounds those of the instances found.
+  let subterms (e : Lean.Expr) : MetaM (Array Lean.Expr) := do
+    let (_, ts) ← (e.forEach' fun e => do
+        if e.isApp && !e.hasLooseBVars then modify (·.push e)
+        return true : StateT (Array Lean.Expr) MetaM Unit).run #[]
+    return ts
+  let mut seen : Std.HashSet Lean.Expr := {}
+  let mut pending := #[]
+  for e in exprs do pending := pending ++ (← subterms e)
+  for _ in [0:3] do
+    let mut found := #[]
+    for t in pending do
+      if seen.contains t then continue
+      seen := seen.insert t
+      for e in ← tree.getMatch t do
+        if let some h ← instanceAt e t then
+          facts := facts.push h
+          found := found ++ (← subterms (← inferType h))
+    pending := found
   let mut goal := goal
   for h in facts do
     let (_, g) ← (← goal.assert `size_fact (← inferType h) h).intro1P
@@ -124,7 +145,8 @@ def addSizeFacts (lemmas : Array Lean.Expr) (goal : MVarId) : MetaM MVarId := go
 /-- For powers `a ^ d` and `b ^ e` in the goal with `d ≤ e`, add `a ^ d ≤ k ^ d * b ^ e` whenever
 `a` is `b` or `omega` proves `a ≤ k * b`, and `omega` proves `0 < b`; for a product `a * b` and a
 power `c ^ e` with `2 ≤ e`, add `a * b ≤ k * l * c ^ e` whenever `omega` proves `a ≤ k * c`,
-`b ≤ l * c` and `0 < c`. The coefficients are 1, 2, 4 or 8. -/
+`0 < c`, and `b ≤ l * c` or `b ≤ l * c ^ d` for a power `c ^ d` of the goal with `d < e`. The
+coefficients are 1, 2, 4 or 8. -/
 def addPowerFacts (goal : MVarId) : TacticM MVarId := goal.withContext do
   let target ← instantiateMVars (← goal.getType)
   let visit (e : Lean.Expr) : StateT (Array (Lean.Expr × Nat) × Array (Lean.Expr × Lean.Expr))
@@ -197,9 +219,16 @@ def addPowerFacts (goal : MVarId) : TacticM MVarId := goal.withContext do
       if e < 2 then continue
       let some hc ← pos c | continue
       let some hac ← coefficient a c | continue
-      let some hbc ← coefficient b c | continue
-      let he ← mkDecideProof (← mkAppM ``LE.le #[mkNatLit 2, mkNatLit e])
-      facts := facts.push (← mkAppM ``mul_le_mul_pow_of_le_mul #[hac, hbc, he, hc])
+      if let some hbc ← coefficient b c then
+        let he ← mkDecideProof (← mkAppM ``LE.le #[mkNatLit 2, mkNatLit e])
+        facts := facts.push (← mkAppM ``mul_le_mul_pow_of_le_mul #[hac, hbc, he, hc])
+        continue
+      for (c', d) in powers do
+        unless c' == c && 1 < d && d < e do continue
+        let some hbc ← coefficient b (← mkAppM ``HPow.hPow #[c, mkNatLit d]) | continue
+        let he ← mkDecideProof (← mkAppM ``LE.le #[mkNatLit (d + 1), mkNatLit e])
+        facts := facts.push (← mkAppM ``mul_le_mul_pow_of_le_mul_pow #[hac, hbc, he, hc])
+        break
   let mut goal := goal
   for h in facts do
     let (_, g) ← (← goal.assert `power_fact (← inferType h) h).intro1P
@@ -218,10 +247,6 @@ def simpContext (names : Array Name) (unfolds : Array Name := #[]) : MetaM Simp.
   for name in names do thms ← thms.addConst name
   for name in unfolds do thms ← thms.addDeclToUnfold name
   Simp.mkContext (simpTheorems := #[thms]) (congrTheorems := ← getSimpCongrTheorems)
-
-/-- The hypotheses of `goal` introduced by the pointwise step, that is, not among `outer`. -/
-def ownHyps (outer : FVarIdSet) (goal : MVarId) : MetaM (Array FVarId) :=
-  return (← goal.getNondepPropHyps).filter (!outer.contains ·)
 
 /-- Simplify the goal and the hypotheses introduced by the pointwise step; `none` if the goal is
 closed. A simplification that fails or changes nothing keeps the goal. -/
@@ -380,6 +405,8 @@ structure Context where
   sizesMul : Simp.Context
   /-- Expansion of encoded sizes in the pointwise step, unfolding the definitions of the list. -/
   expand : Simp.Context
+  /-- Numeral arithmetic used with `expand`, so that exponents such as `2 * 3` become literals. -/
+  numerals : Simp.SimprocsArray
   /-- The default simp set with the same definitions, tried when `expand` is not enough. -/
   expandAll : Simp.Context
 
@@ -439,20 +466,21 @@ def viaRule (rule : Name) (type : Lean.Expr)
 def domainOf (f : Lean.Expr) : MetaM Lean.Expr := do
   return (← whnf (← inferType f)).bindingDomain!
 
-/-- Close one case of the pointwise step by `omega` with the size and power facts, or else after
-simplifying with the default simp set. -/
+/-- Close one case of the pointwise step by `omega` with the size and power facts, expanding the
+encoded sizes that splitting has exposed, or else after simplifying with the default simp set. -/
 def closeCase (outer : FVarIdSet) (goal : MVarId) : DominatedM Bool := do
   let ctx ← read
   let finish (goal : Option MVarId) : TacticM Unit := do
     setGoals goal.toList
     unless goal.isNone do Omega.omegaDefault
   if ← closes goal do
-      let some g ← simpOwn outer ctx.sizes (← addSizeFacts ctx.lemmas goal) | setGoals []
+      let some g ← simpOwn outer ctx.expand (← addSizeFacts outer ctx.lemmas goal) ctx.numerals
+        | setGoals []
       finish (some (← addPowerFacts g)) then
     return true
   closes goal do
     let some g ← simpOwn outer ctx.expandAll goal #[← Simp.getSimprocs] | setGoals []
-    finish (← simpOwn outer ctx.sizes (← addSizeFacts ctx.lemmas g))
+    finish (← simpOwn outer ctx.sizes (← addSizeFacts outer ctx.lemmas g))
 
 /-- The pointwise step: prove `goal : ∀ x, p x` by destructuring `x`, splitting its cases,
 expanding encoded sizes and closing each case with `closeCase`. -/
@@ -469,7 +497,8 @@ def sizeOmega (goal : MVarId) : DominatedM Bool := do
     let some g ← encodeFields outer g | continue
     for g in ← casesEquations outer g do
       let some g ← dsimpOwn ids g outer | continue
-      let some g ← simpOwn outer ctx.expand (← normalizeEncodings outer g) | continue
+      let some g ← simpOwn outer ctx.expand (← normalizeEncodings outer g) ctx.numerals
+        | continue
       let some g ← encodeFields outer g | continue
       for g in ← splitAll (← normalizeEncodings outer g) do
         unless ← closeCase outer g do return false
@@ -638,7 +667,8 @@ elab_rules : tactic
       let type := (← instantiateMVars decl.type).consumeMData
       if type.isAppOf ``Dominated then facts := facts.push (decl.toExpr, ← unfoldComp type)
     let sizeLemmas := #[``size_encode_prod, ``Sigma.encode_mk, ``size_encode_unit,
-      ``size_encode_reverse, ``List.length_reverse]
+      ``encode_list_cons, ``encode_list_nil, ``size_encode_reverse, ``List.length_reverse,
+      ``Function.comp_apply]
     let sizes ← simpContext sizeLemmas
     let sizesMul ← simpContext (sizeLemmas ++ #[``Nat.mul_add, ``Nat.mul_one, ``Nat.mul_zero])
     let expand ← simpContext (simpOnlyBuiltins.toArray ++ #[``size_encode_prod, ``Sigma.encode_mk,
@@ -652,7 +682,8 @@ elab_rules : tactic
     for name in unfolds do all ← all.addDeclToUnfold name
     let expandAll ←
       Simp.mkContext (simpTheorems := #[all]) (congrTheorems := ← getSimpCongrTheorems)
-    let ctx : Context := { lemmas, facts, sizes, sizesMul, expand, expandAll }
+    let numerals := #[← (← ({} : Simp.Simprocs).add ``Nat.reduceMul true).add ``Nat.reduceAdd true]
+    let ctx : Context := { lemmas, facts, sizes, sizesMul, expand, numerals, expandAll }
     let (proof, state) ← (split target.appFn!.appArg! target.appArg! ctx.sizes proveOrLeave
       |>.run ctx).run {}
     let some proof := proof | throwError "dominated: no proof"

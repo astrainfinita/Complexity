@@ -207,19 +207,7 @@ def relabelImplementation : Implementation (fun x => ⌜relabelFn x⌝ₜ)
   (relabelRecursion.implementationOfScale relabelCheck relabelNext relabelFinish relabelResume
     relabelScale relabelScale_pos (fun x _ => relabelScale_next_le x) hsize (hpow 3) (hpow 2)
     (hpow 3) (hpow 2) (hstop 3) (hstop 2) (hreturn 3) (hreturn 2)).mono
-    (Dominated.of_le_mul 2 fun x => by
-      have h : x.circuit.size + 1 ≤ relabelScale x := by dsimp [relabelScale]; omega
-      have := Nat.mul_le_mul_right (relabelScale x ^ 6) h
-      have := Nat.pow_le_pow_right (relabelScale_pos x) (by decide : 6 ≤ 7)
-      simp only [relabelRecursion, Nat.reduceMul, pow_succ] at *
-      nlinarith)
-    (Dominated.of_le_mul 3 fun x => by
-      have h : x.circuit.size + 1 ≤ relabelScale x := by dsimp [relabelScale]; omega
-      have h₃ := Nat.pow_le_pow_right (relabelScale_pos x) (by decide : 3 ≤ 4)
-      have h₁ := Nat.pow_le_pow_right (relabelScale_pos x) (by decide : 1 ≤ 4)
-      have := Nat.mul_le_mul_right (relabelScale x ^ 2 + 1) h
-      simp only [relabelRecursion, Nat.reduceMul]
-      nlinarith)
+    (by dominated [relabelScale, relabelRecursion]) (by dominated [relabelScale, relabelRecursion])
 
 /-- Relabel a circuit computed by a selected implementation. -/
 def Implementation.relabel {ρ : Type} [UniqueEncoding Tree ρ]
@@ -356,19 +344,7 @@ def compImplementation : Implementation (fun x => ⌜compFn x⌝ₜ)
     (Dominated.one fun x => hpos x.1)
     (by simpa only [pow_one] using
       hreturn.mono_pow (by decide : 2 * 1 ≤ 4) fun x => compScale_pos x.1)).mono
-    (Dominated.of_le_mul 2 fun x => by
-      have h : x.first.size + 1 ≤ compScale x := by dsimp [compScale]; omega
-      have := Nat.mul_le_mul_right (compScale x ^ 2) h
-      have := Nat.pow_le_pow_right (compScale_pos x) (by decide : 3 ≤ 7)
-      simp only [compRecursion, pow_succ] at *
-      nlinarith)
-    (Dominated.of_le_mul 3 fun x => by
-      have h : x.first.size + 1 ≤ compScale x := by dsimp [compScale]; omega
-      have h₃ := Nat.pow_le_pow_right (compScale_pos x) (by decide : 3 ≤ 4)
-      have h₁ := Nat.pow_le_pow_right (compScale_pos x) (by decide : 1 ≤ 4)
-      have := Nat.mul_le_mul_right (compScale x ^ 2 + 1) h
-      simp only [compRecursion]
-      nlinarith)
+    (by dominated [compScale, compRecursion]) (by dominated [compScale, compRecursion])
 
 /-- Compose circuits computed by a selected implementation. -/
 def Implementation.circuitComp {ρ : Type} [UniqueEncoding Tree ρ]
@@ -533,139 +509,31 @@ def keepGateScale (x : KeepGateInput) := x.1 + x.2.1 + x.2.2.2.2.2.size + 1
 
 def keepGateImplementation : Implementation keepGateFn
     (fun x => keepGateScale x ^ 7) (fun x => keepGateScale x ^ 4) := by
-  let R := keepGateScale
-  have hR x : 0 < R x := Nat.succ_pos _
-  have hn : Dominated (fun x : KeepGateInput => x.1) R :=
-    Dominated.of_le fun x => by dsimp [R, keepGateScale]; omega
-  have hm : Dominated (fun x : KeepGateInput => x.2.1) R :=
-    Dominated.of_le fun x => by dsimp [R, keepGateScale]; omega
-  have hk : Dominated (fun x : KeepGateInput => x.2.2.1) R :=
-    (Dominated.const_of_pos 2 hR).mono_left fun x => by
+  have hk : Dominated (fun x : KeepGateInput => x.2.2.1) keepGateScale :=
+    (Dominated.const_of_pos 2 fun _ => Nat.succ_pos _).mono_left fun x => by
       rcases x with ⟨n, m, k, op, args, result⟩
       cases op <;> dsimp <;> decide
-  have hop : Dominated (fun x : KeepGateInput => ⌜x.2.2.2.1⌝ₜ.size) R :=
-    (Dominated.const_of_pos 11 hR).mono_left fun x => by
+  have : Dominated (fun x : KeepGateInput => ⌜x.2.2.2.1⌝ₜ.size) keepGateScale :=
+    (Dominated.const_of_pos 11 fun _ => Nat.succ_pos _).mono_left fun x => by
       rcases x with ⟨n, m, k, op, args, result⟩
       cases op <;> simp [encode_unit]
-  have hn1 := hn.add_same (Dominated.one hR)
-  have hnm := hn.add_same hm
-  have hn1m := hn1.add_same hm
-  have hresult := Dominated.size_encode_circuit (fun x : KeepGateInput => x.2.2.2.2.2)
-    hn1 hn1m (Dominated.of_le fun x => by dsimp [R, keepGateScale]; omega) hR
-  have hargs := Dominated.size_encode_fin_function (fun x : KeepGateInput => x.2.2.2.2.1)
-    hk hn hR
-  let w₁ (x : KeepGateInput) (i : Fin x.1) := Fin.castAdd x.2.1 i.castSucc
-  let w₂ (x : KeepGateInput) : Fin x.2.1 → Fin (x.1 + 1 + x.2.1) :=
-    Fin.natAdd (x.1 + 1)
-  let w (x : KeepGateInput) := Fin.append (w₁ x) (w₂ x)
-  have hw₁ := Dominated.size_encode_fin_function w₁ hn hn1m hR
-  have hw₂ := Dominated.size_encode_fin_function w₂ hm hn1m hR
-  have hw := Dominated.size_encode_fin_function w hnm hn1m hR
-  have hmapped := Dominated.size_encode_circuit
-    (fun x : KeepGateInput => x.2.2.2.2.2.mapOutputs (w x)) hn1 hnm
-    (Dominated.of_le fun x => by
-      simp only [Circuit.size_mapOutputs]
-      dsimp [R, keepGateScale]
-      omega) hR
-  have hrn : Dominated (fun x : KeepGateInput => ⌜List.range x.1⌝ₜ.size)
-      (fun x => R x ^ 2) :=
-    ((hn1.pow 2).const_mul_left 3).mono_left fun x => size_encode_range_le _
-  have hrm : Dominated (fun x : KeepGateInput => ⌜List.range x.2.1⌝ₜ.size)
-      (fun x => R x ^ 2) :=
-    (((hm.add_same (Dominated.one hR)).pow 2).const_mul_left 3).mono_left
-      fun x => size_encode_range_le _
-  let u (x : KeepGateInput) : CompInput :=
-    ⟨x.1 + 1, x.1 + 1 + x.2.1, x.1 + x.2.1, x.2.2.2.2.2, .outputs (w x)⟩
-  have hu : Dominated (compScale ∘ u) R := Dominated.of_le_mul 3 fun x => by
-    dsimp [Function.comp_def, compScale, u, R, keepGateScale]
-    omega
-  have hcn := hn.size_encode_nat hR
-  have hcm := hm.size_encode_nat hR
-  have hck := hk.size_encode_nat hR
-  have hcn1 := Dominated.size_encode_nat hn1 hR
-  have hcnm := Dominated.size_encode_nat hnm hR
-  have hcn1m := Dominated.size_encode_nat hn1m hR
-  have hinput : Dominated (fun x : KeepGateInput => ⌜x⌝ₜ.size) (fun x => R x ^ 2) := by
-    rw [show (fun x : KeepGateInput => ⌜x⌝ₜ.size) =
-      (fun x => 1 + ⌜x.1⌝ₜ.size + (1 + ⌜x.2.1⌝ₜ.size + (1 + ⌜x.2.2.1⌝ₜ.size +
-        (1 + ⌜x.2.2.2.1⌝ₜ.size + (1 + ⌜x.2.2.2.2.1⌝ₜ.size + ⌜x.2.2.2.2.2⌝ₜ.size)))))
-      from by funext ⟨n, m, k, op, args, result⟩; rfl]
-    simp only [Dominated.add_iff]
-    repeat' apply And.intro
-    all_goals with_reducible first
-      | with_reducible assumption
-      | exact Dominated.const_of_pos _ (fun x => Nat.pow_pos (hR x))
-      | exact Dominated.le_pow (g := R) (by with_reducible assumption) (by decide)
-  have hcomp7 := hu.pow 7
-  have hcomp4 := hu.pow 4
-  simp only [Function.comp_apply, u, w, w₁, w₂] at hcomp7 hcomp4
-  have hnpow := hn1.pow 2
-  have hmpow := (hm.add_same (Dominated.one hR)).pow 2
+  have := Dominated.size_encode_fin_function (fun x : KeepGateInput => x.2.2.2.2.1) hk
+    (.of_le fun x => by dsimp [keepGateScale]; omega) fun _ => Nat.succ_pos _
+  have := Dominated.size_encode_circuit (fun x : KeepGateInput => x.2.2.2.2.2)
+    (R := keepGateScale) (.of_le_mul 2 fun x => by dsimp [keepGateScale]; omega)
+    (.of_le_mul 2 fun x => by dsimp [keepGateScale]; omega)
+    (.of_le fun x => by dsimp [keepGateScale]; omega) fun _ => Nat.succ_pos _
+  have := hk.size_encode_nat fun _ => Nat.succ_pos _
+  have := Dominated.size_encode_circuit (R := keepGateScale) (fun x : KeepGateInput =>
+      x.2.2.2.2.2.mapOutputs
+        (Fin.append (fun i : Fin x.1 => Fin.castAdd x.2.1 i.castSucc) (Fin.natAdd (x.1 + 1))))
+    (.of_le_mul 2 fun x => by dsimp [keepGateScale]; omega)
+    (.of_le fun x => by dsimp [keepGateScale]; omega)
+    (.of_le fun x => by simp only [Circuit.size_mapOutputs]; dsimp [keepGateScale]; omega)
+    fun _ => Nat.succ_pos _
   source_fun_prop using tabulate
-  all_goals
-    simp only [Sigma.encode_mk, Tree.encode_self,
-      size_encode_prod, size_encode_unit, Circuit.encode_outputs,
-      Dominated.add_iff, Dominated.max_iff, Dominated.zero,
-      true_and, List.map_const', List.sum_replicate,
-      List.length_finRange, ← List.ofFn_eq_map, Nat.nsmul_eq_mul, Nat.mul_one]
-    repeat' apply And.intro
-  all_goals with_reducible first
-    | with_reducible assumption
-    | exact Dominated.const_of_pos _ (fun x => Nat.pow_pos (hR x))
-    | exact Dominated.le_pow (g := R) (by with_reducible assumption) (by decide)
-    | exact Dominated.mono_pow (g := R) (d := 2) (by with_reducible assumption) (by decide) hR
-    | skip
-  · simp only [List.ofFn_eq_map]
-    have htotal : Dominated (fun x : KeepGateInput => x.2.1 * R x)
-        (fun x => R x ^ 2) := by
-      simpa only [pow_two] using hm.mul (Dominated.refl R)
-    refine (Dominated.sum_finRange (b := R) ?_).trans
-      (htotal.mono_pow (e := 7) (by decide) hR)
-    let Z := Σ x : KeepGateInput, Fin x.2.1
-    have hi : Dominated (fun z : Z => z.2.val) (fun z => R z.1) :=
-      (Dominated.comp hm Sigma.fst).mono_left fun z => z.2.isLt.le
-    have hci := Dominated.size_encode_nat hi (fun z => hR z.1)
-    have hc := Dominated.comp hcn (Sigma.fst : Z → KeepGateInput)
-    have hc1 := Dominated.comp hcn1 (Sigma.fst : Z → KeepGateInput)
-    simp only [Function.comp_def] at hc hc1
-    simp only [Dominated.add_iff, Dominated.zero, and_true]
-    repeat' apply And.intro
-    all_goals with_reducible first
-      | assumption
-      | exact Dominated.const_of_pos (g := fun z : Z => R z.1) _ (fun z => hR z.1)
-  · have hi : Dominated (fun z : Σ x : KeepGateInput, Fin x.1 => z.2.val)
-        (fun z => R z.1) := (Dominated.comp hn Sigma.fst).mono_left fun z => z.2.isLt.le
-    have hci := hi.size_encode_nat (fun z => hR z.1)
-    have hs := Dominated.comp hinput (Sigma.fst : (Σ x : KeepGateInput, Fin x.1) → _)
-    simp only [Function.comp_def] at hs
-    apply Dominated.foldr_max_le
-    simp only [encode_fin, Fin.val_castAdd, Fin.val_castSucc,
-      Dominated.max_iff, Dominated.add_iff]
-    repeat' apply And.intro
-    all_goals with_reducible first
-      | exact Dominated.const_of_pos _
-          (fun z : Σ x : KeepGateInput, Fin x.1 => Nat.pow_pos (hR z.1))
-      | exact Dominated.le_pow (g := fun z : Σ x : KeepGateInput, Fin x.1 => R z.1)
-          (by assumption) (by decide)
-      | exact Dominated.mono_pow (g := fun z : Σ x : KeepGateInput, Fin x.1 => R z.1) (d := 2)
-          (by assumption) (by decide) (fun z => hR z.1)
-  · have hi : Dominated (fun z : Σ x : KeepGateInput, Fin x.2.1 => z.2.val)
-        (fun z => R z.1) := (Dominated.comp hm Sigma.fst).mono_left fun z => z.2.isLt.le
-    have hci := hi.size_encode_nat (fun z => hR z.1)
-    have hs := Dominated.comp hinput (Sigma.fst : (Σ x : KeepGateInput, Fin x.2.1) → _)
-    have hc := Dominated.comp hcn (Sigma.fst : (Σ x : KeepGateInput, Fin x.2.1) → _)
-    have hc1 := Dominated.comp hcn1 (Sigma.fst : (Σ x : KeepGateInput, Fin x.2.1) → _)
-    simp only [Function.comp_def] at hs hc hc1
-    apply Dominated.foldr_max_le
-    simp only [encode_fin, Dominated.max_iff, Dominated.add_iff, Dominated.zero, and_true]
-    repeat' apply And.intro
-    all_goals with_reducible first
-      | exact Dominated.const_of_pos _
-          (fun z : Σ x : KeepGateInput, Fin x.2.1 => Nat.pow_pos (hR z.1))
-      | exact Dominated.le_pow (g := fun z : Σ x : KeepGateInput, Fin x.2.1 => R z.1)
-          (by assumption) (by decide)
-      | exact Dominated.mono_pow (g := fun z : Σ x : KeepGateInput, Fin x.2.1 => R z.1) (d := 2)
-          (by assumption) (by decide) (fun z => hR z.1)
+  all_goals try simp only [Sigma.size_encode_eq, Prod.size_encode_eq, Tree.encode_self]
+  all_goals dominated [keepGateScale, compScale, Circuit.size_mapOutputs, Circuit.size_outputs]
 
 def keepResumeInput : keepRecursion.Return → KeepGateInput
   | ⟨⟨⟨_, _, .outputs _⟩, h⟩, _⟩ => False.elim (by cases h)
@@ -726,19 +594,7 @@ def keepImplementation : Implementation (fun x => ⌜keepFn x⌝ₜ)
     (hsize.mono_pow (by decide : 2 ≤ 4) keepScale_pos) (Dominated.refl _)
     ((Dominated.refl _).mono_pow (by decide : 2 ≤ 4) fun x => keepScale_pos x.1) (hscale.pow 7)
     (hreturn.add_same (hscale.pow 4))).mono
-    (Dominated.of_le_mul 2 fun x => by
-      have h : x.circuit.size + 1 ≤ keepScale x := by dsimp [keepScale]; omega
-      have := Nat.mul_le_mul_right (keepScale x ^ 7) h
-      have := Nat.pow_le_pow_right (keepScale_pos x) (by decide : 2 ≤ 8)
-      simp only [keepRecursion, pow_succ] at *
-      nlinarith)
-    (Dominated.of_le_mul 3 fun x => by
-      have h : x.circuit.size + 1 ≤ keepScale x := by dsimp [keepScale]; omega
-      have h₃ := Nat.pow_le_pow_right (keepScale_pos x) (by decide : 3 ≤ 4)
-      have h₁ := Nat.pow_le_pow_right (keepScale_pos x) (by decide : 1 ≤ 4)
-      have := Nat.mul_le_mul_right (keepScale x ^ 2 + 1) h
-      simp only [keepRecursion]
-      nlinarith)
+    (by dominated [keepScale, keepRecursion]) (by dominated [keepScale, keepRecursion])
 
 /-- Keep the inputs of a circuit computed by a selected implementation. -/
 def Implementation.keepInputs {ρ : Type} [UniqueEncoding Tree ρ]
