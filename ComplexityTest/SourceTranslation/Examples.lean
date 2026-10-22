@@ -113,8 +113,8 @@ def optionalReverse {α : Type*} : Option (List α) → List α
   | none => []
   | some xs => xs.reverse
 
-example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop :
-    Implementation (optionalReverse (α := α)) _ _)
+def optionalReverseImplementation {α : Type*} [UniqueEncoding Tree α] :=
+  (by source_fun_prop : Implementation (optionalReverse (α := α)) _ _)
 
 theorem optionalReverse_ftisp {α : Type*} [UniqueEncoding Tree α] :
     optionalReverse (α := α) ∈ FTISP .tree (fun n => n) (fun n => n) := by
@@ -136,6 +136,8 @@ def indexedReverse (input : Σ n, Option (Fin n × List Bool)) : ℕ × List Boo
 
 example := (by source_fun_prop :
     Implementation indexedReverse _ _)
+
+attribute [local source] optionalReverseImplementation
 
 example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop :
     Implementation (fun x : Option (List α) => (optionalReverse x).reverse) _ _)
@@ -172,6 +174,10 @@ example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop :
 
 example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop :
     Implementation (fun xs : List α => let ys := xs.reverse; (ys, xs)) _ _)
+
+def helperImplementation := (by source_fun_prop : Implementation helper _ _)
+
+attribute [local source] helperImplementation
 
 -- A helper can be called only on a let-bound value, while the continuation retains its input.
 def helperInLet (xs : List Bool) :=
@@ -260,6 +266,10 @@ example {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
 
 def conditionalReverse {α : Type*} (x : Bool × List α) : List α :=
   if x.1 then x.2.reverse else x.2 ++ x.2
+
+def branchImplementation := (by source_fun_prop : Implementation branch _ _)
+
+attribute [local source] branchImplementation
 
 example := (by source_fun_prop :
     Implementation (List.map branch) _ _)

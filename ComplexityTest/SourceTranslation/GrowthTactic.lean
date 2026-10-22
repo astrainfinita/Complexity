@@ -40,6 +40,31 @@ example (f : List Bool → List Bool) (hf : ∀ xs, ⌜f xs⌝ₜ.size = ⌜xs�
     Dominated (fun xs : List Bool => ⌜f xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) := by
   dominated [hf]
 
+-- A strict inequality in the list is used like the others.
+example (f : List Bool → List Bool) (hf : ∀ xs, ⌜f xs⌝ₜ.size < ⌜xs⌝ₜ.size + 5) :
+    Dominated (fun xs : List Bool => ⌜f xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) := by
+  dominated [hf]
+
+-- A statement whose left side is an added literal is instantiated at the term it adds to.
+example (f : List Bool → List Bool) (hf : ∀ xs, ⌜f xs⌝ₜ.size + 1 = ⌜xs⌝ₜ.size) :
+    Dominated (fun xs : List Bool => ⌜f xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) := by
+  dominated [hf]
+
+-- A statement whose left side is a variable is instantiated at its right side.
+example (g : ℕ → List Bool) (hg : ∀ n, n ≤ ⌜g n⌝ₜ.size) :
+    Dominated (fun n : ℕ => n) (fun n => ⌜g n⌝ₜ.size) := by
+  dominated [hg]
+
+-- A statement whose left side adds a variable is instantiated at the whole sum.
+example (f g : ℕ → ℕ) (hf : ∀ x k, f x + k ≤ g x + k) :
+    Dominated (fun x => 2 * (f x + 3)) (fun x => g x + 3) := by
+  dominated [hf]
+
+-- A `match` under a binder is left to the traversal rules, not split pointwise.
+example : Dominated (fun x : Bool × List (Option Bool) => ⌜x.1⌝ₜ.size)
+    (fun x => ⌜x⌝ₜ.size + (x.2.map (fun y => match y with | some _ => 1 | none => 0)).sum) := by
+  dominated
+
 def twice (xs : List Bool) : List Bool := xs ++ xs
 
 theorem size_encode_twice_le (xs : List Bool) : ⌜twice xs⌝ₜ.size ≤ 2 * ⌜xs⌝ₜ.size := by
@@ -57,7 +82,8 @@ attribute [local dominated] size_encode_twice_le in
 example : Dominated (fun xs : List Bool => ⌜twice xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) := by
   dominated
 
--- A list entry that is neither a definition nor a statement `a ≤ b` or `a = b` is an error.
+-- A list entry that is neither a definition nor a statement `a ≤ b`, `a < b` or `a = b` is an
+-- error.
 example : True := by
   fail_if_success
     have : Dominated (fun xs : List Bool => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) := by

@@ -158,7 +158,16 @@ def aliasInLet (xs : List Bool) :=
   let ys := reverseAlias xs
   reverseAlias ys ++ xs
 
+-- Only the translated definition is unfolded; a called alias needs its own implementation.
+/-- error: source translation: `reverseAlias` needs a selected implementation -/
+#guard_msgs (substring := true) in
 example := (by source_fun_prop : Implementation aliasInLet _ _)
+
+section
+attribute [local source] reverseAliasImpl
+
+example := (by source_fun_prop : Implementation aliasInLet _ _)
+end
 
 -- Encoding proofs retain their source type even when both encodings reduce to `Tree.nil`.
 example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop : Implementation
