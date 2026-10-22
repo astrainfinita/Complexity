@@ -210,7 +210,7 @@ theorem circuitContinues_ftisp :
 @[source] def circuitFinishImpl :
     Implementation circuitFinish (fun x => ⌜x⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
   source_fun_prop
-  all_goals dominated
+  all_goals dominated [CNF.Literal.pos]
 
 theorem circuitFinish_ftisp :
     circuitFinish ∈ FTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by

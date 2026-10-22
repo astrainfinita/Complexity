@@ -7,7 +7,7 @@ module
 
 public import Complexity.Tactic.TreeProgram.TailRecursion
 
-/-! # Source specifications for Boolean and binary natural-number operations -/
+/-! # Source specifications for binary natural-number operations -/
 
 @[expose] public section
 
@@ -96,53 +96,12 @@ def Implementation.decrement :
   all_goals dominated
 
 def Implementation.pred : Implementation Nat.pred (fun n => ⌜n⌝ₜ.size) (fun n => ⌜n⌝ₜ.size) :=
-  (Implementation.ofEncode (by intro n; simp [Nat.pred_eq_sub_one])
+  (Implementation.ofEncode (by intro n; simp [Nat.pred_eq_sub_one, encode_nat_tree])
     (Implementation.bits.comp Implementation.decrement)).mono
-    (Dominated.of_le fun n => by simp)
-    (Dominated.of_le fun n => by simp)
-
-/-- A Boolean result has a constant-size code. -/
-theorem dominated_size_encode_bool {α : Type*} [UniqueEncoding Tree α] (f : α → Bool) :
-    Dominated (fun x => max ⌜x⌝ₜ.size ⌜f x⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) :=
-  (Dominated.refl _).max_same ((Dominated.const_of_pos 3 fun _ => Tree.size_pos _).mono_left
-    fun _ => size_encode_bool_le _)
-
-def Implementation.boolNot : Implementation Bool.not (fun _ => 1) (fun x => ⌜x⌝ₜ.size) :=
-  .ofEncode (by intro x; cases x <;> rfl)
-    (by source_cases; exact dominated_size_encode_bool _ :
-      Implementation (fun x => match x with | false => true | true => false)
-        (fun _ => 1) (fun x => ⌜x⌝ₜ.size))
-
-def Implementation.boolAnd :
-    Implementation (fun x : Bool × Bool => x.1 && x.2) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) :=
-  .ofEncode (by rintro ⟨a, b⟩; cases a <;> cases b <;> rfl)
-    (by source_cases; exact dominated_size_encode_bool _ :
-      Implementation (fun x : Bool × Bool => match x.1 with | false => false | true => x.2)
-        (fun _ => 1) (fun x => ⌜x⌝ₜ.size))
-
-def Implementation.boolOr :
-    Implementation (fun x : Bool × Bool => x.1 || x.2) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) :=
-  .ofEncode (by rintro ⟨a, b⟩; cases a <;> cases b <;> rfl)
-    (by source_cases; exact dominated_size_encode_bool _ :
-      Implementation (fun x : Bool × Bool => match x.1 with | false => x.2 | true => true)
-        (fun _ => 1) (fun x => ⌜x⌝ₜ.size))
-
-def Implementation.boolXor :
-    Implementation (fun x : Bool × Bool => xor x.1 x.2) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) :=
-  .ofEncode (by rintro ⟨a, b⟩; cases a <;> cases b <;> rfl)
-    (by source_cases; exact dominated_size_encode_bool _ :
-      Implementation (fun x : Bool × Bool => match x.1 with | false => x.2 | true => !x.2)
-        (fun _ => 1) (fun x => ⌜x⌝ₜ.size))
-
-def Implementation.boolBeq :
-    Implementation (fun x : Bool × Bool => x.1 == x.2) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) :=
-  (Implementation.ofEncode (by rintro ⟨a, b⟩; cases a <;> cases b <;> rfl)
-    (Implementation.boolXor.comp Implementation.boolNot)).mono (Dominated.const 2)
-    (dominated_size_encode_bool _)
+    (Dominated.of_le fun n => by simp [size_encode_bits])
+    (Dominated.of_le fun n => by simp [size_encode_bits])
 
 attribute [scoped fun_prop] Implementation.bits Implementation.decrement Implementation.pred
-  Implementation.boolNot Implementation.boolAnd Implementation.boolOr Implementation.boolXor
-  Implementation.boolBeq
 
 def addContinues (x : Bool × List Bool × List Bool × List Bool) : Bool :=
   !x.2.1.isEmpty && !x.2.2.1.isEmpty
@@ -255,7 +214,7 @@ def Implementation.add :
   let hadd := addResultImplementation
   refine Implementation.ofEncode
     (g := fun x : ℕ × ℕ => addResult (false, x.1.bits, x.2.bits, [])) ?_ ?_
-  · rintro ⟨m, n⟩; simp [addResult, BitList.addCarry_bits]
+  · rintro ⟨m, n⟩; simp [addResult, BitList.addCarry_bits, encode_nat_tree]
   source_fun_prop
   all_goals dominated
 

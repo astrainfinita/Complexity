@@ -15,8 +15,9 @@ public meta import Complexity.Models.TreeMachine.Language.Semantics
 public import Complexity.Resources.TreeMachine.Program
 public import Complexity.Classes.Functions.Basic
 public import Complexity.Encoding.TreeSize
-public meta import Lean.Meta.Match.MatcherApp.Basic
+public meta import Lean.Meta.Match.MatcherApp.Transform
 public meta import Lean.Meta.RecExt
+public meta import Complexity.Tactic.TreeProgram.FiniteCases
 
 /-! # Certified translation of Lean source functions
 
@@ -129,29 +130,6 @@ public meta section
 
 namespace Complexity.TreeProgram.Source
 
-namespace FiniteCases
-open Lean Meta
-
--- Instantiate structural pair equations explicitly, including opaque Sigma inputs.
--- Dependent field types can need more transparency than simp's matching allows.
-private def expandPair (e : Lean.Expr) : SimpM Simp.Step := withTransparency .default do
-  unless e.isAppOfArity ``UniqueEncoding.encode 4 do return .continue
-  let args := e.getAppArgs
-  let ty ← whnf args[1]!
-  let (name, equation) ← if ty.isAppOfArity ``Prod 2 then pure (``Prod, ``encode_prod)
-    else if ty.isAppOfArity ``Sigma 2 then pure (``Sigma, ``Sigma.encode_mk)
-    else return .continue
-  let value := args[3]!
-  let proof ← mkAppOptM equation #[some ty.getAppArgs[0]!, some ty.getAppArgs[1]!,
-    none, none, some (← mkAppM (name ++ `fst) #[value]), some (← mkAppM (name ++ `snd) #[value])]
-  let some (_, lhs, rhs) := (← inferType proof).eq? | return .continue
-  unless ← withTransparency .default (isDefEq lhs e) do return .continue
-  return .visit { expr := rhs, proof? := some proof }
-
-/-- Expose only product and dependent-pair structure when analyzing an encoded result. -/
-simproc_decl sourcePair (encode Tree _) := expandPair
-
-end FiniteCases
 open Lean Meta Elab Tactic in
 private partial def independentValue (x : FVarId) (value : Lean.Expr) : MetaM Lean.Expr := do
   let type ← inferType value
@@ -200,10 +178,6 @@ private partial def structuralResult (x : FVarId) (lhs : Lean.Expr) (dependentOn
       (← mkEq r.expr code) |
     throwError "the structural result changed its encoding"
   return (code, ← mkEqTrans (← r.getProof) proof)
-open Lean Meta in
-private def typedSourceProof (type proof : Lean.Expr) : MetaM Lean.Expr := do
-  if ← withReducible (isDefEq type (← inferType proof)) then return proof
-  mkAuxTheorem type proof
 open Lean Meta Elab Tactic in
 /-- Prove a structural encoding equation for a source function's result. -/
 elab (name := sourceEncoding) "source_encoding" : tactic => do
@@ -218,19 +192,6 @@ elab (name := sourceEncoding) "source_encoding" : tactic => do
       unless ← isDefEq a b do throwError "incompatible structural encoding"
     let proof ← typedSourceProof (← instantiateMVars (← goal.getType)) proof
     closeMainGoal `source_encoding proof
-open Lean Meta Elab Tactic in
-open Lean Meta Elab Tactic in
-private def sourceGoalArgs (goal : MVarId) : MetaM (Array Lean.Expr) := do
-  let target := (← instantiateMVars (← goal.getType)).consumeMData
-  unless target.isAppOfArity ``Implementation 7 do
-    throwError "source translation: expected Implementation, got {target}"
-  return target.getAppArgs
-open Lean Meta in
-/-- Assign a translation result, unifying the requested growth with the produced one. -/
-private def assignImplementation (goal : MVarId) (value : Lean.Expr) : MetaM Unit := do
-  unless ← isDefEq (← goal.getType) (← inferType value) do
-    Search.unsupported m!"source translation: the produced growth does not match the request"
-  goal.assign value
 open Lean Meta Elab Tactic in
 private def sourceDependent : TacticM Unit := withMainContext do
   let goal ← getMainGoal
@@ -255,529 +216,6 @@ syntax (name := sourceCalls) "source_calls" : tactic
 syntax (name := sourceFunProp) "source_fun_prop" (" using " ident)?
   (" via " term)? : tactic
 
-namespace FiniteCases
-open Lean Meta Elab Tactic
-
-private partial def projectionBase (e : Lean.Expr) : MetaM (Option FVarId) := do
-  match ← whnf e with
-  | .fvar id => return some id
-  | .proj _ _ e => projectionBase e
-  | .app f _ => projectionBase f
-  | _ => return none
-
-private def projectInput (path : List Bool) : TreeProgram.Expr Unit :=
-  path.foldl (fun e right => if right then .right e else .left e) (.var ())
-
-private def branchFunction (outer : LocalContext) (body : Lean.Expr) :
-    MetaM (Lean.Expr × Lean.Expr) := do
-  let body ← Environment.normalizeProjections body
-  let mut used := collectFVars {} body
-  for decl in (← getLCtx).foldl (fun ds d => d :: ds) [] do
-    if used.fvarSet.contains decl.fvarId then
-      used := collectFVars used (← Environment.normalizeProjections decl.type)
-  let xs := (← getLCtx).foldl (init := #[]) fun xs decl =>
-    if used.fvarSet.contains decl.fvarId && !outer.contains decl.fvarId then
-      xs.push decl.toExpr else xs
-  let packed ← Environment.packValues xs.toList
-  let value := packed.value
-  let type ← inferType value
-  withLocalDeclD `env type fun env => do
-    let function ← Environment.normalizeProjections (← mkLambdaFVars xs body)
-    let function ← mkLambdaFVars #[env] (function.beta (← packed.unpack env))
-    if (collectFVars {} function).fvarIds.any (!outer.contains ·) then
-      Search.unsupported "source calls: branch environment is not closed"
-    return (function, value)
-
--- Known roots select branches; all remaining subtrees are arbitrary encoded data.
-private partial def inputLayout (e : Lean.Expr) (path : List Bool := []) :
-    List (List Bool × Bool) × List (Lean.Expr × List Bool) :=
-  if e.isConstOf ``Tree.nil || e.isAppOfArity ``BinaryTree.nil 1 then ([(path, false)], [])
-  else if e.isAppOfArity ``Tree.pair 2 then
-    let (ls, lf) := inputLayout e.getAppArgs[0]! (path ++ [false])
-    let (rs, rf) := inputLayout e.getAppArgs[1]! (path ++ [true])
-    ((path, true) :: ls ++ rs, lf ++ rf)
-  else ([], [(e, path)])
-
-private partial def outputExpr (e : Lean.Expr) (fields : List (Lean.Expr × List Bool)) :
-    MetaM (TreeProgram.Expr Unit) := do
-  if e.isConstOf ``Tree.nil || e.isAppOfArity ``BinaryTree.nil 1 then return .nil
-  if e.isAppOfArity ``Tree.pair 2 then
-    return .pair (← outputExpr e.getAppArgs[0]! fields) (← outputExpr e.getAppArgs[1]! fields)
-  for (field, path) in fields do
-    if ← isDefEq field e then return projectInput path
-  Search.unsupported m!"source cases: output contains an operation needing its own certificate: {e}"
-
-private structure CompiledCase where
-  tests : List (List Bool × Bool)
-  result : TreeProgram.Expr Unit
-  goal : MVarId
-  sourceGoal : MVarId
-  inputCode : Lean.Expr
-  output : Lean.Expr
-
-private partial def caseDiscriminators (e : Lean.Expr) (fromMatcher := false) :
-    MetaM (Array Lean.Expr) := do
-  if let .proj _ _ base := e then return #[base]
-  if let some matcher ← matchMatcherApp? e (alsoCasesOn := true) then
-    -- The eliminator identifies the scrutinized input; other arguments may only be carried along.
-    let info ← getConstInfo matcher.matcherName
-    if info.value?.isSome then
-      let value ← instantiateValueLevelParams info matcher.matcherLevels.toList
-      let next ← whnf (value.beta e.getAppArgs)
-      if next != e then return ← caseDiscriminators next true
-    return matcher.discrs
-  let .const name _ := e.getAppFn | return #[]
-  let .recInfo info ← getConstInfo name | return #[]
-  let some major := e.getAppArgs[info.getMajorIdx]? | return #[]
-  if !fromMatcher && (← getConstInfoInduct info.getMajorInduct).isRec then return #[]
-  return #[major]
-
--- Prune immediate contradictions, without recursively searching stored data for emptiness.
-private def closeImpossibleCase (g : MVarId) : MetaM Bool :=
-  g.contradictionCore { searchFuel := 1, useDecide := false }
-
-private partial def visitCases {α : Type} (g : MVarId) (f : Lean.Expr) (inputName : Name)
-    (ctx : Simp.Context) (procs : Simp.SimprocsArray)
-    (leaf : MVarId → LocalDecl → Lean.Expr → Lean.Expr → MetaM α)
-    (requireBranch := false) (branched := false)
-    (record : MVarId → Option FVarId → Array CasesSubgoal → MetaM Unit := fun _ _ _ => pure ()) :
-    MetaM (Array α) :=
-    withIncRecDepth <| g.withContext do
-  if ← closeImpossibleCase g then
-    record g none #[]
-    return #[]
-  let some decl := (← getLCtx).findFromUserName? inputName | throwError "missing source input"
-  let some (_, _, inputCode) := decl.type.eq? | throwError "expected source input equation"
-  let input := inputCode.appArg!
-  -- A coded field is already present in the input; do not classify inside its encoder.
-  let out := f.beta #[input]
-  let out ← if out.isAppOfArity ``UniqueEncoding.encode 4 then pure out else
-    withCanUnfoldPred (fun cfg info => do
-      if info.name == ``UniqueEncoding.encode then return false
-      canUnfoldDefault cfg info) (whnf out)
-  let inspected ← if out.isAppOfArity ``UniqueEncoding.encode 4 then whnf out.appArg!
-    else pure out
-  let discrs ← caseDiscriminators inspected
-  unless discrs.isEmpty do
-    for discr in discrs.reverse do
-      let discr := (← simp discr ctx procs).1.expr
-      let ty ← whnf (← inferType discr)
-      let .const name _ := ty.getAppFn | continue
-      let .inductInfo _ ← getConstInfo name | continue
-      if let some major ← projectionBase discr then
-        let majorType ← whnf (← inferType (mkFVar major))
-        let .const majorName _ := majorType.getAppFn | continue
-        let .inductInfo _ ← getConstInfo majorName | continue
-        let mut result := #[]
-        let cases ← g.cases major
-        record g (some major) cases
-        for c in cases do
-          result := result ++ (← visitCases c.mvarId f inputName ctx procs leaf requireBranch
-            (branched || cases.size > 1) record)
-        return result
-    -- Computed tests stay in the branch callback, where ordinary source rules apply.
-  if requireBranch && !branched then
-    Search.unsupported "source calls: no runtime branch; repacking a structure cannot supply its \
-      implementation"
-  let out ← if out.isAppOfArity ``UniqueEncoding.encode 4 && (← isConstructorApp inspected) then
-    pure (mkAppN out.getAppFn (out.getAppArgs.set! 3 inspected)) else pure out
-  return #[← leaf g decl inputCode out]
-
-private def caseEquations (g : MVarId) (f outputType outputInst : Lean.Expr)
-    (decl : LocalDecl) (inputCode out : Lean.Expr)
-    (ctx : Simp.Context) (procs : Simp.SimprocsArray) :
-    MetaM (Lean.Expr × Lean.Expr × MVarId × Array Lean.Expr) := do
-  let input := inputCode.appArg!
-  let ri := (← simp inputCode ctx procs).1
-  let output ← mkAppOptM ``encode
-    #[some (mkConst ``Tree), some outputType, some outputInst, some out]
-  let ro := (← simp output ctx procs).1
-  let (hi, g) ← g.note `source_input_tree (← mkEqTrans (mkFVar decl.fvarId) (← ri.getProof))
-  let (hc, g) ← (← g.assert `source_input_code (← mkEq inputCode ri.expr) (← ri.getProof)).intro1
-  let sourceOutput ← mkAppOptM ``encode
-    #[some (mkConst ``Tree), some outputType, some outputInst, some (mkApp f input)]
-  let (ho, g) ← (← g.assert `source_output_tree
-    (← mkEq sourceOutput ro.expr) (← ro.getProof)).intro1
-  let g ← g.clear decl.fvarId
-  return (ri.expr, ro.expr, g, #[mkFVar hi, mkFVar hc, mkFVar ho])
-
-private def collectCases (g : MVarId) (f : Lean.Expr)
-    (outputType outputInst : Lean.Expr) (inputName : Name)
-    (ctx : Simp.Context) (procs : Simp.SimprocsArray)
-    (record : MVarId → Option FVarId → Array CasesSubgoal → MetaM Unit) :
-    MetaM (Array CompiledCase) :=
-    visitCases g f inputName ctx procs (record := record) fun g decl inputCode out => do
-  let sourceGoal := g
-  let (input, output, g, _) ← caseEquations g f outputType outputInst decl inputCode out ctx procs
-  let (tests, fields) := inputLayout input
-  return ⟨tests, ← outputExpr output fields, g, sourceGoal, inputCode, out⟩
-
-private inductive Dispatch (α : Type) where
-  | leaf (a : α)
-  | branch (test : TreeProgram.Expr Unit) (yes no : Dispatch α)
-
-private partial def dispatchCases {α : Type}
-    (choices : Array (List (List Bool × Bool) × α)) : MetaM (Dispatch α) := do
-  let some first := choices[0]? | Search.unsupported "source cases: no inhabited input cases"
-  if choices.size = 1 then return .leaf first.2
-  for (path, _) in first.1 do
-    let roots := choices.map fun c => c.1.lookup path
-    if roots.all (·.isSome) && roots.contains (some true) && roots.contains (some false) then
-      return .branch (projectInput path)
-        (← dispatchCases (choices.filter fun c => c.1.lookup path == some true))
-        (← dispatchCases (choices.filter fun c => c.1.lookup path == some false))
-  Search.unsupported "source cases: branch layouts cannot be distinguished by their known roots"
-
-private partial def exprSyntax (e : TreeProgram.Expr Unit) (v : Term) : TermElabM Term := do
-  match e with
-  | .nil => ``(TreeProgram.Expr.nil)
-  | .var _ => ``(Value.expression $v)
-  | .left e => ``(TreeProgram.Expr.left $(← exprSyntax e v))
-  | .right e => ``(TreeProgram.Expr.right $(← exprSyntax e v))
-  | .pair a b => ``(TreeProgram.Expr.pair $(← exprSyntax a v) $(← exprSyntax b v))
-
-private partial def compileCommand (p : Dispatch (TreeProgram.Expr Unit)) (v n : Term) :
-    TermElabM (Term × Nat) := do
-  match p with
-  | .leaf e => return (← ``(Cmd.assign $n $(← exprSyntax e v)), e.assignSteps)
-  | .branch e yes no =>
-    let (yes, a) ← compileCommand yes v n
-    let (no, b) ← compileCommand no v n
-    return (← ``(Cmd.branch $(← exprSyntax e v) $yes $no), e.steps + 1 + max a b)
-
-private structure CaseSplit where
-  goal : MVarId
-  major : Option FVarId
-  branches : Array CasesSubgoal
-
--- Replay the recorded case eliminations without analyzing source functions or layouts again.
-private def replayCases (splits : Array CaseSplit) (oldGoal newGoal : MVarId)
-    (initial : FVarSubst) : MetaM (Std.HashMap MVarId (MVarId × FVarSubst)) := do
-  let mut goals := ({} : Std.HashMap MVarId (MVarId × FVarSubst)).insert oldGoal (newGoal, initial)
-  for split in splits do
-    let some (goal, subst) := goals[split.goal]? | throwError "source calls: missing case goal"
-    let some major := split.major | do
-      unless ← closeImpossibleCase goal do
-        throwError "source calls: an impossible branch became inhabited"
-      continue
-    let major := subst.get major
-    unless major.isFVar do throwError "source calls: case variable became a computed value"
-    let branches ← goal.cases major.fvarId!
-    unless branches.size = split.branches.size do
-      throwError "source calls: incompatible case elimination"
-    for old in split.branches, next in branches do
-      unless old.ctorName == next.ctorName && old.fields.size == next.fields.size do
-        throwError "source calls: incompatible case constructor"
-      let mut translated := subst.append next.subst
-      for field in old.fields, value in next.fields do
-        if field.isFVar then translated := translated.insert field.fvarId! value
-      let context := (← next.mvarId.getDecl).lctx
-      translated := old.subst.map.foldl (init := translated) fun translated id value =>
-        let mapped := next.subst.apply (subst.get id)
-        -- Intermediate case variables and budget-only proofs have no replayed counterpart.
-        if value.isFVar && (collectFVars {} mapped).fvarIds.all context.contains then
-          translated.insert value.fvarId! mapped
-        else translated
-      goals := goals.insert old.mvarId (next.mvarId, translated)
-  return goals
-
-private def sourceCases : TacticM Unit := withMainContext do
-  let goal ← getMainGoal
-  let rest := (← getGoals).tail
-  let #[inputType, outputType, inputInst, outputInst, f, _, _] ← sourceGoalArgs goal |
-    throwError "source cases: invalid source arguments"
-  if let .const name _ := f.eta.getAppFn then
-    if ← isRecursiveDefinition name then
-      Search.unsupported (Search.recursionMessage name)
-  let program ← mkFreshExprMVar (← mkArrow (mkConst ``Value)
-    (← mkAppM ``Code #[mkConst ``Value]))
-  let bounds ← mkFreshExprMVar (← mkAppM ``Bounds #[inputType])
-  let type ← mkAppOptM ``Implements #[some inputType, some outputType, some inputInst,
-    some outputInst, some program, some f, some bounds]
-  let certificate ← mkFreshExprSyntheticOpaqueMVar type
-  setGoals [certificate.mvarId!]
-  evalTactic (← `(tactic| constructor))
-  let [freshGoal, correctGoal] ← getGoals | throwError "unexpected source goals"
-  let inputName ← mkFreshUserName `source_input
-  let (_, correctGoal) ← correctGoal.introN 6 [`v, `n, `s, `x, `hv, inputName]
-  let ctx ← mkSimpContext
-    (← `(tactic| simp [encode_unit, encode_prod, List.ofFn_succ, sourcePair])) false
-  let cases ← collectCases correctGoal f outputType outputInst inputName ctx.ctx ctx.simprocs
-    (fun _ _ _ => pure ())
-  let command ← dispatchCases (cases.map fun c => (c.tests, c.result))
-  let v := mkIdent (← mkFreshUserName `input)
-  let n := mkIdent (← mkFreshUserName `next)
-  let (body, time) ← compileCommand command v n
-  program.mvarId!.assign (← Term.elabTerm
-    (← `(fun $v => (⟨fun $n => (.var $n, $n + 1, [$body])⟩ : Code Value)))
-    (some (← inferType program)))
-  let time := mkNatLit time
-  let (timeFn, peak) ← withLocalDeclD `x inputType fun x => do
-    let input ← mkAppOptM ``encode
-      #[some (mkConst ``Tree), some inputType, some inputInst, some x]
-    let output ← mkAppOptM ``encode
-      #[some (mkConst ``Tree), some outputType, some outputInst, some (mkApp f x).headBeta]
-    let peak ← mkAppM ``max #[← mkAppM ``Tree.size #[input], ← mkAppM ``Tree.size #[output]]
-    return (← mkLambdaFVars #[x] time, ← mkLambdaFVars #[x] peak)
-  bounds.mvarId!.assign (← mkAppM ``Bounds.mk #[timeFn, peak])
-  setGoals [freshGoal]
-  evalTactic (← `(tactic| intro v n hv; exact ⟨Nat.le_succ _, le_rfl⟩))
-  setGoals (cases.toList.map (·.goal))
-  evalTactic (← `(tactic| all_goals
-    (simp +contextual (disch := omega) [Code.Bounded, Code.block, sourcePair, *] <;> omega)))
-  let proof ← typedSourceProof (← instantiateMVars type) (← instantiateMVars certificate)
-  let implementation ← mkAppOptM ``Implementation.ofImplements #[some inputType, some outputType,
-    some inputInst, some outputInst, some f, some program, some bounds, some proof]
-  -- The fixed number of controller steps is absorbed into the hidden coefficient.
-  let value ← mkAppM ``Implementation.mono #[implementation,
-    ← mkAppOptM ``Dominated.const #[some inputType, some time], ← mkAppM ``Dominated.refl #[peak]]
-  assignImplementation goal value
-  setGoals rest
-
-/-- Certify a finite source case split with structural branch results. -/
-syntax (name := sourceCasesTactic) "source_cases" : tactic
-private structure Call where
-  argument : TreeProgram.Expr Unit
-  implementation : Lean.Expr
-
-private structure CallCase where
-  tests : List (List Bool × Bool)
-  call : Call
-  goal : MVarId
-  value : Lean.Expr
-  inputCode : Lean.Expr
-  output : Lean.Expr
-  cost : Lean.Expr
-
-private partial def compileCalls (p : Dispatch Call) (v : Term) :
-    TermElabM (Term × Term) := do
-  match p with
-  | .leaf c =>
-    let h ← Term.exprToSyntax c.implementation
-    let e ← exprSyntax c.argument v
-    return (← `(callCode ($h).program $e), ← `(fun n => ($h).callCode_fresh $e n))
-  | .branch e yes no =>
-    let (yes, fresh) ← compileCalls yes v
-    let (no, _) ← compileCalls no v
-    let e ← exprSyntax e v
-    return (← `((⟨fun n => (.var n,
-      max (($yes).build n).2.1 (($no).build n).2.1,
-      [Cmd.branch $e (Code.block (($yes).build n).2.2)
-        (Code.block (($no).build n).2.2)])⟩ : Code Value)),
-      ← ``(fun n => Nat.le_trans (($fresh) n) (Nat.le_max_left _ _)))
-
-/-- Each branch is charged its callee's growth at the branch argument. The certificate scales
-all callees and fixed controller steps by one coefficient chosen after the callees'. -/
-private def sourceCalls (certify : Lean.Expr → MetaM Lean.Expr) :
-    TacticM Unit := withMainContext do
-  trace[source.translation] "analyze call branches"
-  let goal ← getMainGoal
-  let rest := (← getGoals).tail
-  let #[inputType, outputType, inputInst, outputInst, f, _, _] ← sourceGoalArgs goal |
-    throwError "source calls: invalid source arguments"
-  if let .const name _ := f.eta.getAppFn then
-    if ← isRecursiveDefinition name then
-      Search.unsupported (Search.recursionMessage name)
-  let outer ← getLCtx
-  let outerInstances ← getLocalInstances
-  let nat := mkConst ``Nat
-  let costs ← mkFreshExprMVar
-    (← mkArrow inputType (← mkAppM ``Prod #[nat, ← mkAppM ``Prod #[nat, nat]]))
-  let (x, budgetGoal) ← costs.mvarId!.intro1
-  let inputName ← mkFreshUserName `source_input
-  let ctx ← mkSimpContext
-    (← `(tactic| simp [encode_unit, encode_prod, List.ofFn_succ, sourcePair])) false
-  let splits ← IO.mkRef (#[] : Array CaseSplit)
-  let (budgetRoot, choices) ← budgetGoal.withContext do
-    let input ← mkAppOptM ``encode
-      #[some (mkConst ``Tree), some inputType, some inputInst, some (mkFVar x)]
-    let (_, budgetGoal) ← budgetGoal.note inputName (← mkEqRefl input)
-    let choices ← visitCases budgetGoal f inputName ctx.ctx ctx.simprocs (requireBranch := true)
-      (record := fun goal major branches => splits.modify (·.push ⟨goal, major, branches⟩))
-      fun g _ inputCode out => do
-      let input := inputCode.appArg!
-      let mut body := mkApp f input
-      if out.isAppOfArity ``UniqueEncoding.encode 4 then
-        let source ← whnf out.appArg!
-        if ← isConstructorApp source then
-          body := mkAppN out.getAppFn (out.getAppArgs.set! 3 source)
-      let (branch, value) ← branchFunction outer body
-      trace[source.translation] "certify branch callback"
-      let implementation ← withLCtx outer outerInstances (certify branch)
-      let specification ← inferType implementation
-      unless specification.isAppOfArity ``Implementation 7 do
-        throwError "source calls: expected a certified implementation"
-      let escapes := fun e : Lean.Expr =>
-        (collectFVars {} e).fvarIds.any (!outer.contains ·)
-      if escapes specification || escapes implementation then
-        for e in #[specification, implementation] do
-          for id in (collectFVars {} e).fvarSet do
-            unless outer.contains id do
-              trace[source.translation] "escaping variable: {mkFVar id} : {← inferType (mkFVar id)}"
-        Search.unsupported "source calls: branch certificate depends on runtime data"
-      let ri := (← simp inputCode ctx.ctx ctx.simprocs).1
-      trace[source.translation] "extract branch argument"
-      let code ← mkAppM ``encode #[mkConst ``Tree, value]
-      let rv := (← simp code ctx.ctx ctx.simprocs).1
-      let (tests, fields) := inputLayout ri.expr
-      let argument ← outputExpr rv.expr fields
-      -- The callee's growth is charged at its argument. Stored input and argument sizes are
-      -- kept apart from the callee's peak, which alone is scaled by the coefficient.
-      let time ← mkAppM ``HAdd.hAdd
-        #[(mkApp specification.getAppArgs[5]! value).headBeta, mkNatLit 1]
-      let storage ← mkAppM ``max #[← mkAppM ``Tree.size #[inputCode], ← mkAppM ``Tree.size #[code]]
-      let peak := (mkApp specification.getAppArgs[6]! value).headBeta
-      let cost ← mkAppM ``Prod.mk #[time, ← mkAppM ``Prod.mk #[storage, peak]]
-      g.assign cost
-      return (⟨tests, ⟨argument, implementation⟩, g, value, inputCode, out, cost⟩ : CallCase)
-    return (budgetGoal, choices)
-  let tree ← dispatchCases (choices.map fun c => (c.tests, c.call))
-  let v := mkIdent (← mkFreshUserName `input)
-  let (body, fresh) ← compileCalls tree v
-  let rec testTime : Dispatch Call → Nat
-    | .leaf _ => 0
-    | .branch e yes no => e.steps + 1 + max (testTime yes) (testTime no)
-  let overhead := testTime tree +
-    choices.foldl (fun n c => max n (c.call.argument.assignSteps + 2)) 0 + 1
-  let costs ← instantiateMVars costs
-  let (time, storage, calls) ← withLocalDeclD `x inputType fun x => do
-    let cost := (mkApp costs x).headBeta
-    let rest ← mkAppM ``Prod.snd #[cost]
-    return (← mkLambdaFVars #[x] (← mkAppM ``Prod.fst #[cost]),
-      ← mkLambdaFVars #[x] (← mkAppM ``Prod.fst #[rest]),
-      ← mkLambdaFVars #[x] (← mkAppM ``Prod.snd #[rest]))
-  let peak ← withLocalDeclD `x inputType fun x => do
-    mkLambdaFVars #[x] (← mkAppM ``max #[(mkApp storage x).headBeta, (mkApp calls x).headBeta])
-  let program ← Term.elabTerm (← `(fun $v : Value => $body)) none
-  let constructor ← mkAppOptM ``Implementation.mk #[some inputType, some outputType, some inputInst,
-    some outputInst, some f, some time, some peak, some program]
-  let soundGoal ← mkFreshExprSyntheticOpaqueMVar (← whnf (← inferType constructor)).bindingDomain!
-  -- One coefficient covers every callee and every fixed controller step.
-  let mut callees : Array (Lean.Expr × Ident) := #[]
-  for c in choices do
-    unless callees.any (·.1 == c.call.implementation) do
-      callees := callees.push (c.call.implementation, mkIdent (← mkFreshUserName `source_call))
-  let coefficients ← callees.mapM fun _ => return mkIdent (← mkFreshUserName `source_coeff)
-  setGoals [soundGoal.mvarId!]
-  let storageTerm ← Term.exprToSyntax storage
-  let callsTerm ← Term.exprToSyntax calls
-  evalTactic (← `(tactic|
-    refine Implementation.sound_of_mul_max (s := $storageTerm) (q := $callsTerm) ?_))
-  for (implementation, h) in callees, C in coefficients do
-    -- Eliminate the existential directly: `obtain` would re-elaborate the callee and
-    -- re-check the large program goal, which is very slow for dependent input types.
-    let type ← whnfR (← inferType implementation)
-    let coefficient ← mkAppOptM ``Implementation.exists_implements_mul
-      ((type.getAppArgs.push implementation).map some)
-    let some (_, predicate) := (← whnfR (← inferType coefficient)).app2? ``Exists |
-      throwError "source calls: unexpected callee coefficient {coefficient}"
-    let goal ← getMainGoal
-    let next ← goal.withContext do
-      let target ← goal.getType
-      let body ← withLocalDeclD C.getId (mkConst ``Nat) fun c => do
-        mkForallFVars #[c] (← mkArrow (predicate.beta #[c]) target)
-      let next ← mkFreshExprSyntheticOpaqueMVar body
-      goal.assign (← mkAppM ``Exists.elim #[coefficient, next])
-      return next.mvarId!
-    replaceMainGoal [next]
-    evalTactic (← `(tactic| intro $C:ident $h:ident))
-  let total ← coefficients.foldlM (fun s C => `($s + $C)) (quote overhead)
-  evalTactic (← `(tactic| refine ⟨$total, ?_⟩))
-  let certificate ← getMainGoal
-  let coefficient ← certificate.withContext do
-    let bounds := (← instantiateMVars (← certificate.getType)).appArg!
-    lambdaTelescope bounds.getAppArgs[1]! fun _ body => return body.getAppArgs[4]!
-  withMainContext do
-    evalTactic (← `(tactic| constructor))
-    let [freshGoal, correctGoal] ← getGoals | throwError "source calls: unexpected goals"
-    setGoals [freshGoal]
-    evalTactic (← `(tactic| intro $v n hv; exact ⟨(Nat.le_succ _).trans (($fresh) n), ($fresh) n⟩))
-    let (locals, correctGoal) ← correctGoal.introN 6 [`v, `n, `s, `x, `hv, inputName]
-    let replayed ← replayCases (← splits.get) budgetRoot correctGoal
-      (({} : FVarSubst).insert x (mkFVar locals[3]!))
-    let proofCases ← choices.mapM fun branch => do
-      let some (g, subst) := replayed[branch.goal]? |
-        throwError "source calls: missing branch proof"
-      g.withContext do
-        let inputCode := subst.apply branch.inputCode
-        let decl ← (subst.get locals[5]!).fvarId!.getDecl
-        trace[source.translation] "derive branch encoding equations"
-        let (_, _, g, equations) ← caseEquations g f outputType outputInst decl inputCode
-          (subst.apply branch.output) ctx.ctx ctx.simprocs
-        let selected := subst.apply (← instantiateMVars branch.cost)
-        let target ← instantiateMVars (← g.getType)
-        unless target.isAppOfArity ``Code.Bounded 7 do
-          throwError "source calls: expected a code verification goal"
-        let time ← mkAppM ``HMul.hMul #[coefficient, selected.getAppArgs[2]!]
-        let split := selected.getAppArgs[3]!
-        let space ← mkAppM ``max #[split.getAppArgs[2]!,
-          ← mkAppM ``HMul.hMul #[coefficient, split.getAppArgs[3]!]]
-        let target := mkAppN target.getAppFn
-          (target.getAppArgs.set! 4 time |>.set! 5 space)
-        let g ← g.replaceTargetDefEq target
-        let some (_, h) := callees.find? (·.1 == branch.call.implementation) |
-          throwError "source calls: missing callee certificate"
-        return (g, branch.call, h, subst.apply branch.value, space, inputCode, equations)
-    for (g, c, h, value, space, inputCode, equations) in proofCases do
-      setGoals [g]
-      tryCatch (withoutRecover <| withMainContext do
-        let v ← Term.exprToSyntax (mkFVar locals[0]!)
-        let e ← exprSyntax c.argument v
-        let n ← Term.exprToSyntax (mkFVar locals[1]!)
-        let s ← Term.exprToSyntax (mkFVar locals[2]!)
-        let value ← Term.exprToSyntax value
-        let space ← Term.exprToSyntax space
-        let inputCode ← Term.exprToSyntax inputCode
-        let coefficient ← Term.exprToSyntax coefficient
-        let outputEq ← Term.exprToSyntax equations[2]!
-        let equations ← equations.mapM fun equation => do
-          let term ← Term.exprToSyntax equation
-          `(Lean.Parser.Tactic.simpLemma| $term:term)
-        trace[source.translation] "verify compiled call branch"
-        -- Use the concrete encoding equations already obtained for this branch. Matching
-        -- the generic injection projection here can launch an expensive inverse-law discharge.
-        evalTactic (← `(tactic|
-          (have source_call := Implements.callCode_bounded ($h $coefficient (by omega))
-            $e $n $s $value (space := $space)
-            (by simp [-UniqueEncoding.ofLeftInjection_encode, -sup_of_le_left, -sup_of_le_right,
-              -Nat.max_eq_left, -Nat.max_eq_right, sourcePair, $equations,*] <;> rfl)
-            (by
-              apply le_trans (b := max ($inputCode).size (encode Tree $value).size)
-              · simp [-UniqueEncoding.ofLeftInjection_encode, -sup_of_le_left, -sup_of_le_right,
-                  -Nat.max_eq_left, -Nat.max_eq_right, sourcePair, $equations,*] <;> omega
-              · exact Nat.le_max_left _ _)
-            (Nat.le_max_right _ _))))
-        -- The selected callee certificate is in `source_call`; the others must not drive `simp`.
-        evalTactic (← `(tactic| clear $(callees.map (·.2)):ident*))
-        trace[source.translation] "simplify compiled call branch"
-        if choices.size == 1 then
-          let steps := quote c.argument.assignSteps
-          evalTactic (← `(tactic|
-            (have source_steps : ($e).assignSteps = $steps := by simp
-             apply source_call.mono (by simp only [Nat.mul_add, Nat.mul_one]; omega) le_rfl
-             intro z t h
-             refine ⟨Eq.trans ?_ ($outputEq).symm, h.2⟩
-             first
-             | exact h.1
-             | simpa [encode_unit, encode_prod, List.ofFn_succ, sourcePair] using h.1)))
-        else
-          evalTactic (← `(tactic|
-            (simp +contextual (disch := omega)
-               [-UniqueEncoding.ofLeftInjection_encode, -sup_of_le_left, -sup_of_le_right,
-                 -Nat.max_eq_left, -Nat.max_eq_right, Code.Bounded, Code.block, sourcePair,
-                 Nat.mul_add, Nat.mul_one, $equations,*]
-               at source_call ⊢
-             all_goals (repeat' apply And.intro)
-             all_goals (first
-               | exact source_call.mono (by omega) le_rfl (fun _ h => h)
-               | omega)))))
-        fun ex =>
-          Search.unsupported m!"source calls: branch verification failed: {ex.toMessageData}"
-      unless (← getGoals).isEmpty do throwError "source calls: failed to verify branch"
-  assignImplementation goal (mkApp constructor (← instantiateMVars soundGoal))
-  setGoals rest
-
-end FiniteCases
 open Lean Meta in
 /-- An implementation request whose growth is left to the selected rules. -/
 def implementationGoal (f : Lean.Expr) : MetaM Lean.Expr := do
@@ -797,9 +235,11 @@ def finishImplementation (goal : MVarId) (result : Lean.Expr) : MetaM (List MVar
   let mut comparisons := #[]
   for i in [5, 6], tag in [`time, `peak] do
     let requested := target.getAppArgs[i]!
-    -- Structural growth is shown with beta redexes and constructor projections reduced.
+    -- Structural growth is shown with beta redexes and constructor projections reduced, and
+    -- without encoding a tree again.
     let produced := (← dsimp actual.getAppArgs[i]! (← Simp.mkContext
-      (config := { zeta := false, zetaDelta := false, iota := false }))).1
+      (config := { zeta := false, zetaDelta := false, iota := false })
+      (simpTheorems := #[← ({} : SimpTheorems).addConst ``Tree.encode_self]))).1
     -- A named growth placeholder takes the produced growth, like an anonymous one.
     if let .mvar id := requested then
       unless ← id.isAssigned do id.assign produced
@@ -818,8 +258,9 @@ def finishImplementation (goal : MVarId) (result : Lean.Expr) : MetaM (List MVar
   return obligations
 
 open Lean Meta Elab Tactic in
-private def sourceCallsWith (query : Lean.Expr → MetaM (Option Lean.Expr)) : TacticM Unit :=
-  FiniteCases.sourceCalls fun f => do
+private def sourceCallsWith (roots : NameSet) (query : Lean.Expr → MetaM (Option Lean.Expr)) :
+    TacticM Unit :=
+  FiniteCases.sourceCalls roots fun f => do
     let some implementation ← query (← implementationGoal f) |
       Search.unsupported m!"source calls: no implementation for branch {f}"
     instantiateMVars implementation
@@ -835,8 +276,7 @@ private def sourceQuery (search : Lean.Expr → FunPropM (Option Result))
   return result.map (·.proof)
 
 open Lean Meta Mathlib.Meta.FunProp in
-private def localSourceCertificate (unfolded : IO.Ref (Array Name × Bool))
-    (goal : Lean.Expr) : FunPropM (Option Result) := do
+private def localSourceCertificate (goal : Lean.Expr) : FunPropM (Option Result) := do
   unless goal.isAppOfArity ``Implementation 7 do return none
   if goal.getAppArgs[4]!.hasExprMVar then return none
   let locals := (← getLCtx).foldl (fun ds d => d :: ds) []
@@ -844,7 +284,7 @@ private def localSourceCertificate (unfolded : IO.Ref (Array Name × Bool))
     if decl.kind == .auxDecl then continue
     let type ← instantiateMVars decl.type
     unless type.isAppOfArity ``Implementation 7 do continue
-    if let some result ← Search.attempt unfolded do
+    if let some result ← Search.attempt do
         if ← withReducible (isDefEq type goal) then return some ⟨decl.toExpr⟩
         return none then
       return some result
@@ -870,15 +310,18 @@ private def implementationKey (goal : Lean.Expr) : Lean.Expr :=
 open Lean Meta Elab Tactic Mathlib.Meta.FunProp in
 private partial def sourceSearch (session : Search.Session) (nested : Bool)
     (ancestors : Array Lean.Expr) (goal : Lean.Expr) : FunPropM (Option Result) := do
-  let unfolded := session.unfolded
   let goal ← instantiateMVars goal
   trace[source.translation] "implementation query: {goal}"
   session.step
   trace[Meta.Tactic.fun_prop] "source step {← session.steps.get}: {goal}"
-  if let some result ← localSourceCertificate unfolded goal then return some result
+  if let some result ← localSourceCertificate goal then return some result
   let key := implementationKey goal
   if let some { proof? := some proof, .. } := (← get).cache.find? key then
     if ← isDefEq goal (← inferType proof) then return some ⟨proof⟩
+  -- Auxiliary theorems of a failed attempt are rolled back; results using them are recomputed.
+  if let some proof := (← session.results.get)[(key, nested)]? then
+    if proof.getUsedConstants.all (← getEnv).contains then
+      if ← isDefEq goal (← inferType proof) then return some ⟨proof⟩
   -- Only requests with unconstrained growth are failures of the source function itself.
   let unconstrained := !goal.isAppOfArity ``Implementation 7 ||
     (goal.getAppArgs[5]!.isMVar && goal.getAppArgs[6]!.isMVar)
@@ -886,12 +329,12 @@ private partial def sourceSearch (session : Search.Session) (nested : Bool)
   if ancestors.contains key then return none
   let ancestors := ancestors.push key
   increaseSteps
-  let restore ← Search.checkpoint unfolded
+  let restore ← Search.checkpoint
   let search := sourceSearch session true ancestors
   let context ← read
   -- A branch has a different local context: only fuel, path and diagnostics cross this boundary.
   let query := sourceQuery search context
-  let structural : FunPropM (Option Result) := Search.attempt unfolded do
+  let structural : FunPropM (Option Result) := Search.attempt do
     -- A speculative lambda rule may leave an unencodable function-valued result.
     -- Such a premise cannot be compiled structurally, but another candidate may apply.
     for encoder in goal.getAppArgs.extract 2 4 do
@@ -905,14 +348,17 @@ private partial def sourceSearch (session : Search.Session) (nested : Bool)
         Search.unsupported "source translation: dependent result has no implementation"
       goal.assign proof
       replaceMainGoal []
-    for action in [FiniteCases.sourceCases, sourceDependent *> solve, sourceCallsWith query] do
+    for action in [FiniteCases.sourceCases, sourceDependent *> solve,
+        sourceCallsWith (← session.roots.get) query] do
       if let some proof ← session.discharge ancestors action goal then
-        unless nested do unfolded.modify fun (names, _) => (names, true)
         return some ⟨proof⟩
     return none
   let finish (result : Option Result) : FunPropM (Option Result) := do
     if let some r := result then
-      let proof ← typedSourceImplementation (← instantiateMVars goal) (← instantiateMVars r.proof)
+      let proof ← instantiateMVars
+        (← typedSourceImplementation (← instantiateMVars goal) (← instantiateMVars r.proof))
+      unless key.hasFVar || key.hasMVar || proof.hasFVar || proof.hasMVar do
+        session.results.modify (·.insert (key, nested) proof)
       return some (← cacheResult key { r with proof })
     restore
     if unconstrained then cacheFailure key
@@ -948,19 +394,19 @@ private partial def sourceSearch (session : Search.Session) (nested : Bool)
   -- Rules recursively use this driver, including callbacks; no preliminary scan is needed.
   let data ← getFunctionData? f defaultUnfoldPred
   let result ← match data with
-    | .lam f => Search.lambdaRules unfolded search decl .pi (goal.setArg decl.funArgId f)
-    | .letE f => Search.letRule unfolded search decl (goal.setArg decl.funArgId f) f
+    | .lam f => Search.lambdaRules search decl .pi (goal.setArg decl.funArgId f)
+    | .letE f => Search.letRule search decl (goal.setArg decl.funArgId f) f
     | .data d => withLCtx d.lctx d.insts do
       let target := goal.setArg decl.funArgId (← d.toExpr)
-      if d.isIdentityFun then return ← Search.lambdaRules unfolded search decl .id target
+      if d.isIdentityFun then return ← Search.lambdaRules search decl .id target
       if d.isConstantFun then
-        if let some r ← Search.lambdaRules unfolded search decl .const target then return some r
+        if let some r ← Search.lambdaRules search decl .const target then return some r
       let candidates ← Search.functionTheorems decl d
       let env ← getEnv
       let rules (fallback : Bool) : FunPropM (Option Result) := do
         for rule in candidates do
           if Search.isFallback env rule != fallback then continue
-          if let some result ← Search.functionRules unfolded search decl target d #[rule] then
+          if let some result ← Search.functionRules search decl target d #[rule] then
             return some result
         return none
       -- This driver owns every stage; queries and certificate adapters do not schedule work.
@@ -972,7 +418,7 @@ private partial def sourceSearch (session : Search.Session) (nested : Bool)
       -- Root constructors use their encoding equations; nested structural helpers remain atomic.
       if let .const name _ := d.fn then
         if !nested && (← getConstInfo name).isCtor then
-          if let some r ← Search.transitionRules unfolded search target then return some r
+          if let some r ← Search.transitionRules search target then return some r
       -- A nonmatching candidate must not block structural field extraction.
       if nested || !candidates.isEmpty then
         if let some r ← structural then return some r
@@ -989,9 +435,9 @@ private partial def sourceSearch (session : Search.Session) (nested : Bool)
       if let .failed := decomposition then
         if ← d.args.anyM fun arg => do
             return (← inferType arg.expr).containsFVar d.mainVar.fvarId! then
-          if let some r ← Search.attempt unfolded do
+          if let some r ← Search.attempt do
               let some (outer, inner) ← Environment.decomposition? (← d.toExpr) | return none
-              Search.lambdaRules unfolded search decl .comp target (some (outer, inner)) then
+              Search.lambdaRules search decl .comp target (some (outer, inner)) then
             return some r
       if let some f ← d.unfoldHeadFVar? then
         return ← sourceSearch session nested ancestors (target.setArg decl.funArgId f)
@@ -1000,13 +446,17 @@ private partial def sourceSearch (session : Search.Session) (nested : Bool)
           session.reject ancestors (Search.recursionMessage name) .specification (some name)
           return none
         unless (← getMatcherInfo? name).isSome do
-          if let some body ← unfoldDefinition? (Mor.mkAppN d.fn d.args) then
-            unfolded.modify (fun (names, structural) =>
-              (if names.contains name then names else names.push name, structural))
+          if let some body ← FiniteCases.unfoldSource? (← session.roots.get)
+              (Mor.mkAppN d.fn d.args) then
             return ← sourceSearch session nested ancestors
               (target.setArg decl.funArgId (← mkLambdaFVars #[d.mainVar] body))
+          if (← getConstInfo name).isDefinition then
+            session.reject ancestors m!"source translation: `{.ofConstName name}` needs a \
+              selected implementation (register one with `[source]`, or choose replacement \
+              source with `via`)" .specification (some name)
+            return none
       if let .comp outer inner := decomposition then
-        if let some r ← Search.lambdaRules unfolded search decl .comp target
+        if let some r ← Search.lambdaRules search decl .comp target
             (some (outer, inner)) then
           return some r
       return none
@@ -1032,6 +482,16 @@ private def sourceContext : MetaM Mathlib.Meta.FunProp.Context := do
   let config := { maxSteps := source.maxSteps.get (← getOptions) : Mathlib.Meta.FunProp.Config }
   return { disch := tacticToDischarge tactic, config }
 
+open Lean Meta in
+/-- Record the definition a source function translates: its head, also under binders and an
+encoder. -/
+def addSourceRoot (session : Search.Session) (f : Lean.Expr) : MetaM Unit := do
+  if let some name := f.eta.getAppFn.constName? then session.roots.modify (·.insert name)
+  let head ← lambdaTelescope f fun _ body => do
+    let body := if body.isAppOfArity ``UniqueEncoding.encode 4 then body.appArg! else body
+    return body.getAppFn.constName?
+  if let some name := head then session.roots.modify (·.insert name)
+
 open Lean Meta Elab Tactic Mathlib.Meta.FunProp in
 /-- Certify a callback named in a method syntax completely, sharing the method's session.
 The source rules in scope are those activated by `withSourceSpecs`. -/
@@ -1039,6 +499,7 @@ def certifyCallback (session : Search.Session) (method name : Name) (callback : 
     TacticM Lean.Expr := do
   if callback.hasExprMVar then
     throwError "source {method}: provide a concrete `{name}` callback"
+  addSourceRoot session callback
   session.failure.set none
   let some proof ← sourceQuery (sourceSearch session false #[]) (← sourceContext)
       (← implementationGoal callback) |
@@ -1078,6 +539,7 @@ private def proveSource (scope : Option Ident := none) (replacement : Option Ter
           throwError "provide a concrete source function after `via`"
         let h ← mkFreshExprSyntheticOpaqueMVar (← mkEq f g) (tag := `source_eq)
         pure (g, some h)
+    addSourceRoot session source
     let growth ← mkArrow original.getAppArgs[0]! (mkConst ``Nat)
     let target := (original.setArg 4 source).setArg 5 (← mkFreshExprMVar growth)
       |>.setArg 6 (← mkFreshExprMVar growth)
@@ -1191,8 +653,10 @@ elab_rules : tactic
     let session ← Search.Session.create
     let goal ← getMainGoal
     let target ← goal.getType
+    if target.isAppOfArity ``Implementation 7 then addSourceRoot session target.getAppArgs[4]!
     let query := sourceQuery (sourceSearch session true #[target]) (← sourceContext)
-    let some proof ← session.discharge #[target] (sourceCallsWith query) target | session.report
+    let some proof ← session.discharge #[target] (sourceCallsWith (← session.roots.get) query)
+      target | session.report
     goal.assign proof
     replaceMainGoal []
 open Lean Meta Elab Tactic in

@@ -172,7 +172,7 @@ def ofLeftInjection (c : UniqueEncoding R α) (f : β → α) (g : α → Part �
     intro b r
     simp [Part.mem_bind_iff, h, c.mem_decode_iff]
 
-@[simp] theorem ofLeftInjection_encode (c : UniqueEncoding R α) (f : β → α) (g : α → Part β)
+theorem ofLeftInjection_encode (c : UniqueEncoding R α) (f : β → α) (g : α → Part β)
     (h : ∀ a b, b ∈ g a ↔ f b = a) (b : β) :
     (c.ofLeftInjection f g h).encode b = c.encode (f b) := rfl
 

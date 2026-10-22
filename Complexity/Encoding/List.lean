@@ -38,10 +38,11 @@ instance {α : Type*} [UniqueEncoding Tree α] : UniqueEncoding Tree (List α) :
   UniqueEncoding.ofDecode (Tree.encodeList (encode Tree)) (Tree.decodeList (decode α))
     fun as t ↦ Tree.mem_decodeList_iff t as
 
-@[simp] theorem encode_list_nil {α : Type*} [UniqueEncoding Tree α] :
+@[simp, dominated_simp] theorem encode_list_nil {α : Type*} [UniqueEncoding Tree α] :
     ⌜([] : List α)⌝ₜ = ⌜()⌝ₜ := rfl
 
-@[simp] theorem encode_list_cons {α : Type*} [UniqueEncoding Tree α] (a : α) (as : List α) :
+@[simp, dominated_simp]
+theorem encode_list_cons {α : Type*} [UniqueEncoding Tree α] (a : α) (as : List α) :
     ⌜a :: as⌝ₜ = ⌜(a, as)⌝ₜ := rfl
 
 /-- Pointwise representation changes preserve the representation of a list. -/
@@ -70,7 +71,7 @@ theorem size_encode_list_le {α : Type*} [UniqueEncoding Tree α] (xs : List α)
   omega
 
 /-- Concatenation replaces the first list's final leaf with the second list. -/
-theorem size_encode_list_append {α : Type*} [UniqueEncoding Tree α] (xs ys : List α) :
+@[dominated] theorem size_encode_list_append {α : Type*} [UniqueEncoding Tree α] (xs ys : List α) :
     ⌜xs ++ ys⌝ₜ.size + 1 = ⌜xs⌝ₜ.size + ⌜ys⌝ₜ.size := by
   simp only [size_encode_list, List.map_append, List.sum_append, List.length_append]
   omega
@@ -79,7 +80,7 @@ theorem size_encode_list_append {α : Type*} [UniqueEncoding Tree α] (xs ys : L
     ⌜xs.tail⌝ₜ.size ≤ ⌜xs⌝ₜ.size := by
   cases xs <;> simp [size_encode_prod]
 
-theorem size_encode_le_list_of_mem {α : Type*} [UniqueEncoding Tree α]
+@[dominated_of] theorem size_encode_le_list_of_mem {α : Type*} [UniqueEncoding Tree α]
     {x : α} {xs : List α} (hx : x ∈ xs) : ⌜x⌝ₜ.size ≤ ⌜xs⌝ₜ.size := by
   have h := List.le_sum_of_mem (List.mem_map.mpr ⟨x, hx, rfl⟩ :
     ⌜x⌝ₜ.size ∈ xs.map (fun a => ⌜a⌝ₜ.size))

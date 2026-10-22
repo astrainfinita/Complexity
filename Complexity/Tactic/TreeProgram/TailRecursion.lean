@@ -5,7 +5,7 @@ Authors: Yuyang Zhao
 -/
 module
 
-public import Complexity.Tactic.TreeProgram.Translation
+public import Complexity.Tactic.TreeProgram.Primitives
 
 /-! # Source-guided tail loops
 

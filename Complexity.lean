@@ -148,10 +148,13 @@ public import Complexity.Resources.TuringMachine
 public import Complexity.Tactic.TreeProgram.Arithmetic
 public import Complexity.Tactic.TreeProgram.Attributes
 public import Complexity.Tactic.TreeProgram.Environment
+public import Complexity.Tactic.TreeProgram.FiniteCases
 public import Complexity.Tactic.TreeProgram.Growth
+public import Complexity.Tactic.TreeProgram.GrowthFacts
 public import Complexity.Tactic.TreeProgram.Implementation
 public import Complexity.Tactic.TreeProgram.Iteration
 public import Complexity.Tactic.TreeProgram.Library
+public import Complexity.Tactic.TreeProgram.Primitives
 public import Complexity.Tactic.TreeProgram.Recursion
 public import Complexity.Tactic.TreeProgram.Registration
 public import Complexity.Tactic.TreeProgram.Rules

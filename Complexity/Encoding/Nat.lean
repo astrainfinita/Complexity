@@ -42,7 +42,13 @@ instance : UniqueEncoding Tree ℕ :=
     Nat.bits (fun xs ↦ Part.ofOption (BitList.decodeNat xs)) fun xs n ↦ by
       simpa only [Part.mem_coe, Option.mem_def] using BitList.decodeNat_eq_some_iff xs n
 
-@[simp] theorem encode_nat_tree (n : ℕ) : ⌜n⌝ₜ = ⌜n.bits⌝ₜ := rfl
+theorem encode_nat_tree (n : ℕ) : ⌜n⌝ₜ = ⌜n.bits⌝ₜ := rfl
+
+/-- The code of the numeral `0`, so that finite source cases can output it as a constant. -/
+@[source_case_simp] theorem encode_nat_zero : ⌜(0 : ℕ)⌝ₜ = ⌜()⌝ₜ := rfl
+
+/-- The code of the numeral `1`, so that finite source cases can output it as a constant. -/
+@[source_case_simp] theorem encode_nat_one : ⌜(1 : ℕ)⌝ₜ = ⌜[true]⌝ₜ := rfl
 
 @[dominated] theorem size_encode_bits (n : ℕ) : ⌜n.bits⌝ₜ.size = ⌜n⌝ₜ.size := rfl
 
@@ -51,6 +57,9 @@ theorem size_encode_list_bool_le (bs : List Bool) : ⌜bs⌝ₜ.size ≤ 4 * bs.
 
 theorem size_encode_nat_le_length_bits (n : ℕ) : ⌜n⌝ₜ.size ≤ 4 * n.bits.length + 1 :=
   size_encode_list_bool_le n.bits
+
+theorem length_bits_le_size_encode (n : ℕ) : n.bits.length ≤ ⌜n⌝ₜ.size :=
+  Tree.length_le_size_encodeBitList n.bits
 
 /-- Binary increment grows the encoded tree by at most one digit. -/
 theorem size_encode_increment_le (xs : List Bool) :
@@ -64,9 +73,9 @@ theorem size_encode_increment_le (xs : List Bool) :
   simpa only [BitList.increment_bits, ← encode_nat_tree] using size_encode_increment_le n.bits
 
 /-- A coarse numerical bound, useful when generating rather than merely reading indices. -/
-theorem size_encode_nat_le (n : ℕ) : ⌜n⌝ₜ.size ≤ 4 * n + 1 := by
+@[dominated] theorem size_encode_nat_le (n : ℕ) : ⌜n⌝ₜ.size ≤ 4 * n + 1 := by
   induction n with
-  | zero => simp
+  | zero => exact le_of_eq rfl
   | succ n ih => have := size_encode_nat_succ_le n; omega
 
 @[dominated] theorem size_encode_range_le (n : ℕ) : ⌜List.range n⌝ₜ.size ≤ 3 * (n + 1) ^ 2 := by

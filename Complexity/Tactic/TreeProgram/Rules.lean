@@ -24,14 +24,15 @@ open Complexity TreeProgram
 
 namespace Complexity.TreeProgram.Source
 
-@[simp] theorem size_encode_reverse {α : Type*} [UniqueEncoding Tree α] (xs : List α) :
+@[simp, dominated_simp]
+theorem size_encode_reverse {α : Type*} [UniqueEncoding Tree α] (xs : List α) :
     (encode Tree xs.reverse).size = (encode Tree xs).size := by
   simpa using Tree.size_reverseAppend ⌜xs⌝ₜ ⌜([] : List α)⌝ₜ
 
 grind_pattern size_encode_list_append => ⌜xs ++ ys⌝ₜ.size
 grind_pattern size_encode_reverse => ⌜xs.reverse⌝ₜ.size
 
-theorem length_le_codeSize {α : Type*} [UniqueEncoding Tree α] (xs : List α) :
+@[dominated] theorem length_le_codeSize {α : Type*} [UniqueEncoding Tree α] (xs : List α) :
     xs.length ≤ (encode Tree xs).size := by
   rw [size_encode_list]
   omega
@@ -508,7 +509,8 @@ def Implementation.increment :
       omega⟩
 
 def Implementation.succ : Implementation Nat.succ (fun n => ⌜n⌝ₜ.size) (fun n => ⌜n⌝ₜ.size) :=
-  .ofEncode (by intro n; simp) (Implementation.increment.mapInput Nat.bits (fun _ => rfl))
+  .ofEncode (by intro n; simp [encode_nat_tree])
+    (Implementation.increment.mapInput Nat.bits (fun _ => rfl))
 
 def Implementation.addOne :
     Implementation (fun a : ℕ => a + 1) (fun n => ⌜n⌝ₜ.size) (fun n => ⌜n⌝ₜ.size) :=

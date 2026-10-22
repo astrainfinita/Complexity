@@ -49,21 +49,25 @@ structure Failure where
   declaration : Option Name
   message : MessageData
 
-/-- One user request shares fuel and diagnostics, but not caches across local contexts. -/
+/-- One user request shares fuel, diagnostics and its closed results. -/
 structure Session where
-  /-- Successfully unfolded definitions and whether structural compilation was used. -/
-  unfolded : IO.Ref (Array Name × Bool)
   /-- Attempts are charged even when their metavariable state is rolled back. -/
   steps : IO.Ref Nat
   /-- The most informative unsuccessful subgoal and its source path. -/
   failure : IO.Ref (Option Failure)
   /-- The limit is read once at the outer entry. -/
   maxSteps : Nat
+  /-- Results mentioning no local or metavariables, by request and whether it is nested.
+  They hold in every query of the request, including branch callbacks. -/
+  results : IO.Ref (Std.HashMap (Expr × Bool) Expr)
+  /-- The definitions this request translates: the source function and the callbacks of its
+  method. Any other definition needs its own selected implementation. -/
+  roots : IO.Ref NameSet
 
 /-- Start one translation request. -/
 def Session.create : MetaM Session :=
-  return ⟨← IO.mkRef (#[], false), ← IO.mkRef 0, ← IO.mkRef none,
-    source.maxSteps.get (← getOptions)⟩
+  return ⟨← IO.mkRef 0, ← IO.mkRef none, source.maxSteps.get (← getOptions), ← IO.mkRef {},
+    ← IO.mkRef {}⟩
 
 /-- Charge a source subgoal. This failure must not be treated as a rejected candidate. -/
 def Session.step (session : Session) : MetaM Unit := do
@@ -94,10 +98,6 @@ def Session.report {α : Type} (session : Session) : MetaM α := do
 def Session.discharge (session : Session) (path : Array Expr)
     (action : Elab.Tactic.TacticM Unit) (target : Expr) : MetaM (Option Expr) := do
   let saved ← saveState
-  let unfolded ← session.unfolded.get
-  let restore : MetaM Unit := do
-    saved.restore
-    session.unfolded.set unfolded
   try
     let goal ← mkFreshExprSyntheticOpaqueMVar target
     let run : Elab.TermElabM Unit := Elab.Term.withSynthesize (postpone := .no) do
@@ -109,11 +109,11 @@ def Session.discharge (session : Session) (path : Array Expr)
         metavariables={proof.hasExprMVar}, sorry={proof.hasSorry}"
       for mvar in ← getMVars proof do
         trace[source.translation] "remaining obligation: {← mvar.getType}"
-      restore
+      saved.restore
       return none
     return some proof
   catch ex =>
-    restore
+    saved.restore
     if ex.toMessageData.kind == `sourceCandidateFailure then
       trace[source.translation] "rejected structure: {ex.toMessageData}"
       session.reject path ex.toMessageData
@@ -121,20 +121,17 @@ def Session.discharge (session : Session) (path : Array Expr)
     throw ex
 
 /-- Restore failed attempts without refunding their search steps. -/
-def checkpoint (unfolded : IO.Ref (Array Name × Bool)) : FunPropM (FunPropM Unit) := do
+def checkpoint : FunPropM (FunPropM Unit) := do
   let saved ← Meta.saveState
   let state ← get
-  let names ← unfolded.get
   return do
     let numSteps := (← get).numSteps
     saved.restore
     set { state with numSteps }
-    unfolded.set names
 
 /-- Run a candidate, restoring search and metavariable state if it fails. -/
-def attempt (unfolded : IO.Ref (Array Name × Bool))
-    (action : FunPropM (Option Result)) : FunPropM (Option Result) := do
-  let restore ← checkpoint unfolded
+def attempt (action : FunPropM (Option Result)) : FunPropM (Option Result) := do
+  let restore ← checkpoint
   try
     let result ← action
     if result.isNone then restore
@@ -143,8 +140,7 @@ def attempt (unfolded : IO.Ref (Array Name × Bool))
     restore
     throw ex
 
-variable (unfolded : IO.Ref (Array Name × Bool))
-  (search : Expr → FunPropM (Option Result))
+variable (search : Expr → FunPropM (Option Result))
 
 /-- Query candidates without choosing a translation stage. Local certificates come first;
 registered priorities retain mathlib's specificity order for ties. -/
@@ -174,7 +170,7 @@ def lambdaRules (decl : FunPropDecl) (kind : LambdaTheoremType) (goal : Expr)
       | .comp i j, some (f, g) => pure #[(i, f), (j, g)]
       | .comp .., none => throwError "missing composition arguments"
       | _, _ => pure #[]
-    if let some result ← attempt unfolded <|
+    if let some result ← attempt <|
         tryTheoremWithHint? goal (.decl thm.thmName) hints search then
       return some result
   return none
@@ -182,37 +178,37 @@ def lambdaRules (decl : FunPropDecl) (kind : LambdaTheoremType) (goal : Expr)
 private def generalRules (goal : Expr) (thms : Array GeneralTheorem) :
     FunPropM (Option Result) := do
   for thm in thms do
-    if let some result ← attempt unfolded <| tryTheorem? goal (.decl thm.thmName) search then
+    if let some result ← attempt <| tryTheorem? goal (.decl thm.thmName) search then
       return some result
   return none
 
 /-- Try indexed transition rules within the transition-depth limit. -/
 def transitionRules (goal : Expr) : FunPropM (Option Result) :=
   withIncreasedTransitionDepth do
-    generalRules unfolded search goal (← getTransitionTheorems goal)
+    generalRules search goal (← getTransitionTheorems goal)
 
 private def removeArg (decl : FunPropDecl) (goal : Expr) (data : FunctionData) :
     FunPropM (Option Result) := do
   let some last := data.args.back? | return none
   if last.coe.isSome then
-    if let some result ← generalRules unfolded search goal (← getMorphismTheorems goal) then
+    if let some result ← generalRules search goal (← getMorphismTheorems goal) then
       return some result
     match ← data.isMorApplication with
-    | .underApplied => return ← lambdaRules unfolded search decl .pi goal
+    | .underApplied => return ← lambdaRules search decl .pi goal
     | .exact => return none
     | .none => throwError "invalid morphism application"
     | .overApplied => pure ()
   let .comp f g ← data.peeloffArgDecomposition | return none
-  lambdaRules unfolded search decl .comp goal (some (f, g))
+  lambdaRules search decl .comp goal (some (f, g))
 
 /-- The small routing part of mathlib's `tryTheorems`, using transactional lambda rules. -/
 def functionRules (decl : FunPropDecl) (goal : Expr) (data : FunctionData)
     (thms : Array FunctionTheorem) : FunPropM (Option Result) := do
   for thm in thms do
-    let result ← attempt unfolded do
+    let result ← attempt do
       match compare thm.appliedArgs data.args.size with
-      | .lt => removeArg unfolded search decl goal data
-      | .gt => lambdaRules unfolded search decl .pi goal
+      | .lt => removeArg search decl goal data
+      | .gt => lambdaRules search decl .pi goal
       | .eq =>
         if thm.form == .comp then return ← tryTheorem? goal thm.thmOrigin search
         let parts ← if thm.mainArgs.size == data.mainArgs.size then do
@@ -221,7 +217,7 @@ def functionRules (decl : FunPropDecl) (goal : Expr) (data : FunctionData)
             | _ => return ← tryTheorem? goal thm.thmOrigin search
           else data.decompositionOverArgs thm.mainArgs
         let some (f, g) := parts | return none
-        lambdaRules unfolded search decl .comp goal (some (f, g))
+        lambdaRules search decl .comp goal (some (f, g))
     if result.isSome then return result
   return none
 
@@ -245,6 +241,6 @@ def letRule (decl : FunPropDecl) (goal fn : Expr) : FunPropM (Option Result) := 
         (mkAppN (← mkConstWithFreshMVarLevels ``Prod.mk) #[xType, yType, .bvar 0, yValue]) default
       pure (f, g)
     else pure (.lam yName yType yBody default, .lam xName xType yValue default)
-  lambdaRules unfolded search decl .comp goal (some (f, g))
+  lambdaRules search decl .comp goal (some (f, g))
 
 end Complexity.TreeProgram.Source.Search

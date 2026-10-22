@@ -385,14 +385,14 @@ def Implementation.finApplyEncoded {ρ : Type*} {β : ρ → Type*}
     (hf : Implementation (fun e => ⌜f e⌝ₜ) tf pf)
     (hi : Implementation (fun e => (i e).val) ti pi) :
     Implementation (fun e => ⌜f e (i e)⌝ₜ)
-      (fun e => ti e + (tf e + 1) + ⌜((i e).val, ⌜f e⌝ₜ)⌝ₜ.size ^ 2 + 1)
-      (fun e => max (pi e) (max (pf e) ⌜((i e).val, ⌜f e⌝ₜ)⌝ₜ.size)) := by
+      (fun e => ti e + (tf e + 1) + ⌜(i e, f e)⌝ₜ.size ^ 2 + 1)
+      (fun e => max (pi e) (max (pf e) ⌜(i e, f e)⌝ₜ.size)) := by
   let ht : Implementation (fun e => List.ofFn (fun i => ⌜f e i⌝ₜ)) tf pf :=
     .ofEncode (fun e => (encode_fin_function_codes _).trans (Tree.encode_self _).symm) hf
   refine (((hi.pair ht).comp Implementation.lookup).ofSome (by intro e; simp)).mono ?_ ?_
   · apply Dominated.of_le
     intro e
-    simp only [size_encode_prod, Tree.encode_self, encode_fin_function_codes]
+    simp only [size_encode_prod, encode_fin_function_codes, encode_fin]
     exact le_rfl
   · apply Dominated.of_le
     intro e
@@ -400,7 +400,7 @@ def Implementation.finApplyEncoded {ρ : Type*} {β : ρ → Type*}
     have hi := Tree.size_pos ⌜(i e).val⌝ₜ
     simp only [Function.comp_apply, List.getElem?_ofFn, Fin.isLt, dite_true, Fin.eta,
       encode_option_some, size_encode_prod, Tree.encode_self, size_encode_unit,
-      encode_fin_function_codes]
+      encode_fin_function_codes, encode_fin]
     omega
 
 /-- Reading a finite-valued table retains the encoded lookup's selected program and growth. -/
@@ -409,8 +409,8 @@ def Implementation.finValApply {ρ : Type*} [UniqueEncoding Tree ρ]
     {tf pf ti pi : ρ → ℕ} (hf : Implementation (fun e => ⌜f e⌝ₜ) tf pf)
     (hi : Implementation (fun e => (i e).val) ti pi) :
     Implementation (fun e => (f e (i e)).val)
-      (fun e => ti e + (tf e + 1) + ⌜((i e).val, ⌜f e⌝ₜ)⌝ₜ.size ^ 2 + 1)
-      (fun e => max (pi e) (max (pf e) ⌜((i e).val, ⌜f e⌝ₜ)⌝ₜ.size)) :=
+      (fun e => ti e + (tf e + 1) + ⌜(i e, f e)⌝ₜ.size ^ 2 + 1)
+      (fun e => max (pi e) (max (pf e) ⌜(i e, f e)⌝ₜ.size)) :=
   .ofEncode (fun _ => (encode_fin _).symm.trans (Tree.encode_self _).symm)
     (Implementation.finApplyEncoded hf hi)
 
@@ -540,6 +540,6 @@ def Implementation.prepend {α : Type*} [UniqueEncoding Tree α] :
     Implementation (fun x : List α × List α => x.2.foldl (fun acc a => a :: acc) x.1)
       (fun x => x.2.length + 1) (fun x => ⌜x⌝ₜ.size) :=
   Implementation.prepend.foldl.mono (by dominated [foldlTime_eq_sum (t := fun _ : α => 1)])
-    (by dominated [foldlPeak_prepend, size_encode_list_append])
+    (by dominated [foldlPeak_prepend])
 
 end Complexity.TreeProgram.Source

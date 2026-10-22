@@ -7,6 +7,7 @@ module
 
 public import Complexity.Tactic.TreeProgram.Rules
 public import Complexity.Encoding.TreeSize
+public import Complexity.Tactic.TreeProgram.GrowthFacts
 public meta import Lean.Elab.Tactic.Omega.Frontend
 
 /-! # Closing growth comparisons
@@ -17,8 +18,12 @@ summand is compared with the target pointwise after destructuring the input, spl
 source cases, expanding encoded sizes and adding size facts for `omega`; powers and products are
 compared through their bases. Maxima over lists and sums over tables are compared entry by entry.
 The coefficient is a hidden witness. The list names definitions to unfold in the pointwise
-goals, and statements `a ≤ b` or `a = b` to instantiate at matching terms there, as for those
-registered with `@[dominated]`; facts that are genuine properties of the source function are
+goals, and statements `a ≤ b`, `a < b` or `a = b` to instantiate there, as for those registered
+with `@[dominated]`: each is instantiated at the matching terms it is about (its left side, or its
+right side when the left side is a variable or a literal), and the terms of its other side are
+looked at in the next round. Statements registered with `@[dominated_of]` are instantiated at
+matching hypotheses. Encoded sizes are normalized with `@[dominated_simp]` and expanded pointwise
+with `@[dominated_expand]`. Facts that are genuine properties of the source function are
 `Dominated` hypotheses, matched reducibly. Like `omega`, the pointwise step reads the other
 hypotheses without changing them. Every comparison is settled once per call.
 Summands that cannot be proved are left as goals.
@@ -30,16 +35,37 @@ open Lean Meta Elab Tactic
 
 namespace Complexity.TreeProgram.Source.Growth
 
-/-- The left side of a statement `l ≤ r` or `l = r`. -/
-def lhs? (e : Lean.Expr) : Option Lean.Expr :=
-  if e.isAppOfArity ``LE.le 4 || e.isAppOfArity ``Eq 3 then some e.appFn!.appArg! else none
+/-- The two sides of a statement `l ≤ r`, `l < r` or `l = r`. -/
+def sides? (e : Lean.Expr) : Option (Lean.Expr × Lean.Expr) :=
+  if e.isAppOfArity ``LE.le 4 || e.isAppOfArity ``LT.lt 4 || e.isAppOfArity ``Eq 3 then
+    some (e.appFn!.appArg!, e.appArg!)
+  else none
 
-/-- The instance of the statement `e : ∀ xs, l ≤ r` (or `l = r`) whose left side is `t`, stated
-with `t` itself. -/
-def instanceAt (e t : Lean.Expr) : MetaM (Option Lean.Expr) := withoutModifyingState do
+/-- Which side of a statement is the term it is about. -/
+inductive Side where
+  /-- The left side. -/
+  | left
+  /-- The left side without an added literal, as in `⌜f x⌝ₜ.size + 1 = …`. -/
+  | leftOfAdd
+  /-- The right side, when the left side is a variable or a literal, as in `n ≤ ⌜f⌝ₜ.size` or
+  `0 < t.size`. -/
+  | right
+
+/-- The term a statement `l ≤ r`, `l < r` or `l = r` is about, and which side it is. -/
+def key? (e : Lean.Expr) : Option (Lean.Expr × Side) := do
+  let (l, r) ← sides? e
+  let (l', side) := if l.isAppOfArity ``HAdd.hAdd 6 && l.appArg!.nat?.isSome then
+      (l.appFn!.appArg!, Side.leftOfAdd) else (l, .left)
+  if l'.isMVar || l'.nat?.isSome then some (r, .right) else some (l', side)
+
+/-- The instance of the statement `e : ∀ xs, l ≤ r` (or `<`, `=`) about the term `t`, stated with
+`t` itself, and the other side. -/
+def instanceAt (e t : Lean.Expr) : MetaM (Option (Lean.Expr × Lean.Expr)) :=
+    withoutModifyingState do
   let (xs, bis, body) ← forallMetaTelescopeReducing (← inferType e)
-  let some l := lhs? body | return none
-  unless ← withReducible (isDefEq l t) do return none
+  -- The side is read from the statement itself, not from its instance.
+  let some (k, side) := key? body | return none
+  unless ← withReducible (isDefEq k t) do return none
   for x in xs, bi in bis do
     if bi.isInstImplicit && !(← x.mvarId!.isAssigned) then
       let some i ← synthInstance? (← inferType x) | return none
@@ -47,95 +73,100 @@ def instanceAt (e t : Lean.Expr) : MetaM (Option Lean.Expr) := withoutModifyingS
   let h ← instantiateMVars (mkAppN e xs)
   if h.hasMVar then return none
   let body ← instantiateMVars body
-  return some (← mkExpectedTypeHint h (mkApp2 body.appFn!.appFn! t body.appArg!))
+  let some (l, r) := sides? body | return none
+  let rel := body.appFn!.appFn!
+  -- The key side is stated with `t` itself, so that `omega` sees one atom; the other side may
+  -- mention new terms, which the next round looks at.
+  let (stated, other) := match side with
+    | .left => (mkApp2 rel t r, r)
+    | .leftOfAdd => (mkApp2 rel (mkApp2 l.appFn!.appFn! t l.appArg!) r, r)
+    | .right => (mkApp2 rel l t, l)
+  return some (← mkExpectedTypeHint h stated, other)
+
+/-- The instance of the statement `e : ∀ xs, p → l ≤ r` (or `<`, `=`) at the hypothesis `h : p`,
+for the first explicit premise `p` of `e`. -/
+def instanceOf (e h : Lean.Expr) : MetaM (Option Lean.Expr) := withoutModifyingState do
+  let (xs, bis, body) ← forallMetaTelescopeReducing (← inferType e)
+  if (sides? body).isNone then return none
+  let some i ← (xs.zip bis).findIdxM? fun (x, bi) => do
+      return bi.isExplicit && (← isProp (← inferType x)) | return none
+  unless ← withReducible (isDefEq (← inferType xs[i]!) (← inferType h)) do return none
+  xs[i]!.mvarId!.assign h
+  for x in xs, bi in bis do
+    if bi.isInstImplicit && !(← x.mvarId!.isAssigned) then
+      let some inst ← synthInstance? (← inferType x) | return none
+      x.mvarId!.assign inst
+  let proof ← instantiateMVars (mkAppN e xs)
+  if proof.hasMVar then return none
+  return some proof
 
 /-- The hypotheses of `goal` introduced by the pointwise step, that is, not among `outer`. -/
 def ownHyps (outer : FVarIdSet) (goal : MVarId) : MetaM (Array FVarId) :=
   return (← goal.getNondepPropHyps).filter (!outer.contains ·)
 
-/-- Facts about every encoded size, list length and positive power occurring in the goal or in the
-hypotheses introduced by the pointwise step, and the instances of the given statements and those
-registered with `@[dominated]` at matching terms. -/
-def addSizeFacts (outer : FVarIdSet) (lemmas : Array Lean.Expr) (goal : MVarId) : MetaM MVarId :=
-  goal.withContext do
-  let target ← instantiateMVars (← goal.getType)
-  let mut exprs := #[target]
-  for fvarId in ← ownHyps outer goal do exprs := exprs.push (← instantiateMVars (← fvarId.getType))
+/-- The statements registered with `@[dominated_of]`, by their first explicit premise. -/
+def premiseTree : MetaM (DiscrTree Lean.Expr) := do
+  let mut tree : DiscrTree Lean.Expr := {}
+  for name in dominatedOfAttr.getState (← getEnv) do
+    let e ← mkConstWithFreshMVarLevels name
+    let (xs, bis, _) ← forallMetaTelescopeReducing (← inferType e)
+    let some i ← (xs.zip bis).findIdxM? fun (x, bi) => do
+        return bi.isExplicit && (← isProp (← inferType x)) | continue
+    tree ← tree.insert (← inferType xs[i]!) e
+  return tree
+
+/-- The given statements and those registered with `@[dominated]`, by the term each is about. -/
+def factTree (lemmas : Array Lean.Expr) : MetaM (DiscrTree Lean.Expr) := do
   let mut tree : DiscrTree Lean.Expr := {}
   for e in lemmas ++ (← (dominatedAttr.getState (← getEnv)).mapM (mkConstWithFreshMVarLevels ·)) do
     let (_, _, body) ← forallMetaTelescopeReducing (← inferType e)
-    if let some l := lhs? body then tree ← tree.insert l e
-  let visit (e : Lean.Expr) : StateT (Array Lean.Expr × Array Lean.Expr × Array (Lean.Expr × Nat) ×
-      Array (Lean.Expr × Lean.Expr)) MetaM Unit := do
-    if e.hasLooseBVars then return
-    if e.isAppOfArity ``Tree.size 1 then
-      modify fun (s, l, p, a) => (s.push e.appArg!, l, p, a)
-      let t := e.appArg!
-      if t.isAppOfArity ``UniqueEncoding.encode 4 then
-        let v := t.appArg!
-        if v.isAppOfArity ``HAppend.hAppend 6 then
-          modify fun (s, l, p, a) => (s, l, p, a.push (v.getAppArgs[4]!, v.getAppArgs[5]!))
-    else if e.isAppOfArity ``List.length 2 then
-      modify fun (s, l, p, a) => (s, l.push e.appArg!, p, a)
-    else if e.isAppOfArity ``HPow.hPow 6 then
+    if let some (k, _) := key? body then tree ← tree.insert k e
+  return tree
+
+/-- Facts about the positive powers occurring in the goal or in the hypotheses introduced by the
+pointwise step, and the instances of the statements of `tree` at matching terms there. The terms
+of the instances take part in the next round, for a few rounds. -/
+def addSizeFacts (outer : FVarIdSet) (tree premises : DiscrTree Lean.Expr) (goal : MVarId) :
+    MetaM MVarId :=
+  goal.withContext do
+  -- The facts about one term by its shape, and the instances of the statements matching it.
+  let about (e : Lean.Expr) : MetaM (Array Lean.Expr × Array (Lean.Expr × Lean.Expr)) := do
+    let mut facts := #[]
+    if e.isAppOfArity ``HPow.hPow 6 then
       if let some k := e.appArg!.nat? then
-        if k > 0 then modify fun (s, l, p, a) => (s, l, p.push (e.getAppArgs[4]!, k), a)
-  let (_, (sizes, lengths, powers, appends)) ← (exprs.forM fun e => e.forEach' fun e => do
-      visit e; return true : StateT _ MetaM Unit).run (#[], #[], #[], #[])
-  let mut facts : Array Lean.Expr := #[]
-  for t in sizes.toList.eraseDups do
-    facts := facts.push (← mkAppM ``Tree.size_pos #[t])
-    if t.isAppOfArity ``UniqueEncoding.encode 4 then
-      if ← isDefEq (← inferType t.appArg!) (mkConst ``Bool) then
-        facts := facts.push (← mkAppM ``size_encode_bool_le #[t.appArg!])
-  for t in sizes.toList.eraseDups do
-    if t.isAppOfArity ``UniqueEncoding.encode 4 then
-      if let some h ← observing? (mkAppM ``card_le_size_encode_fin_function #[t.appArg!]) then
-        facts := facts.push h
-      let v := t.appArg!
-      let type ← whnfR (← inferType v)
-      if type.isConstOf ``Nat && v.nat?.isNone then
-        facts := facts.push (← mkAppM ``size_encode_nat_le #[v])
-        if v.isAppOfArity ``Fin.val 2 then facts := facts.push (← mkAppM ``Fin.isLt #[v.appArg!])
-      if type.isForall && !type.bindingBody!.hasLooseBVars then
-        if (← whnfR type.bindingDomain!).isAppOfArity ``Fin 1 &&
-            (← whnfR type.bindingBody!).isAppOfArity ``Fin 1 then
-          if let some h ← observing? (mkAppM ``size_encode_fin_table_le #[v]) then
+        if k > 0 then
+          let hk ← mkDecideProof (← mkAppM ``Ne #[mkNatLit k, mkNatLit 0])
+          let base := e.getAppArgs[4]!
+          if let some h ← observing? (mkAppOptM ``Nat.le_self_pow #[mkNatLit k, hk, base]) then
             facts := facts.push h
-  for l in lengths.toList.eraseDups do
-    if let some h ← observing? (mkAppM ``length_le_codeSize #[l]) then facts := facts.push h
-  for (b, k) in powers.toList.eraseDups do
-    let hk ← mkDecideProof (← mkAppM ``Ne #[mkNatLit k, mkNatLit 0])
-    if let some h ← observing? (mkAppOptM ``Nat.le_self_pow #[mkNatLit k, hk, b]) then
-      facts := facts.push h
-  for (xs, ys) in appends.toList.eraseDups do
-    if let some h ← observing? (mkAppM ``size_encode_list_append #[xs, ys]) then
-      facts := facts.push h
-  for decl in ← getLCtx do
-    if decl.isImplementationDetail then continue
-    let type ← instantiateMVars decl.type
-    if type.isAppOfArity ``Membership.mem 5 then
-      if let some h ← observing? (mkAppM ``size_encode_le_list_of_mem #[decl.toExpr]) then
-        facts := facts.push h
-  -- The terms of the goal, then for a few rounds those of the instances found.
+    let mut instances := #[]
+    for l in ← tree.getMatch e do
+      if let some h ← instanceAt l e then instances := instances.push h
+    return (facts, instances)
   let subterms (e : Lean.Expr) : MetaM (Array Lean.Expr) := do
     let (_, ts) ← (e.forEach' fun e => do
         if e.isApp && !e.hasLooseBVars then modify (·.push e)
         return true : StateT (Array Lean.Expr) MetaM Unit).run #[]
     return ts
+  let mut pending ← subterms (← instantiateMVars (← goal.getType))
+  for fvarId in ← ownHyps outer goal do
+    pending := pending ++ (← subterms (← instantiateMVars (← fvarId.getType)))
+  let mut facts : Array Lean.Expr := #[]
   let mut seen : Std.HashSet Lean.Expr := {}
-  let mut pending := #[]
-  for e in exprs do pending := pending ++ (← subterms e)
   for _ in [0:3] do
-    let mut found := #[]
-    for t in pending do
-      if seen.contains t then continue
-      seen := seen.insert t
-      for e in ← tree.getMatch t do
-        if let some h ← instanceAt e t then
-          facts := facts.push h
-          found := found ++ (← subterms (← inferType h))
-    pending := found
+    let mut next := #[]
+    for e in pending do
+      if seen.contains e then continue
+      seen := seen.insert e
+      let (shaped, instances) ← about e
+      facts := facts ++ shaped ++ instances.map (·.1)
+      for (_, other) in instances do next := next ++ (← subterms other)
+    pending := next
+  -- Statements registered with `@[dominated_of]`, at each hypothesis matching their premise.
+  for decl in ← getLCtx do
+    if decl.isImplementationDetail then continue
+    for e in ← premises.getMatch decl.type do
+      if let some h ← instanceOf e decl.toExpr then facts := facts.push h
   let mut goal := goal
   for h in facts do
     let (_, g) ← (← goal.assert `size_fact (← inferType h) h).intro1P
@@ -223,6 +254,17 @@ def addPowerFacts (goal : MVarId) : TacticM MVarId := goal.withContext do
         let he ← mkDecideProof (← mkAppM ``LE.le #[mkNatLit 2, mkNatLit e])
         facts := facts.push (← mkAppM ``mul_le_mul_pow_of_le_mul #[hac, hbc, he, hc])
         continue
+      -- A factor `x ^ d` with `x ≤ k * c` is within `k ^ d * c ^ d`.
+      if b.isAppOfArity ``HPow.hPow 6 then
+        if let some d := b.appArg!.nat? then
+          if 1 < d && d < e then
+            if let some hx ← coefficient b.getAppArgs[4]! c then
+              let hp ← mkAppM ``Nat.pow_le_pow_left #[hx, mkNatLit d]
+              let hbc ← mkAppM ``le_of_le_of_eq #[hp, ← mkAppM ``Nat.mul_pow
+                #[(← inferType hx).appArg!.appFn!.appArg!, c, mkNatLit d]]
+              let he ← mkDecideProof (← mkAppM ``LE.le #[mkNatLit (d + 1), mkNatLit e])
+              facts := facts.push (← mkAppM ``mul_le_mul_pow_of_le_mul_pow #[hac, hbc, he, hc])
+              continue
       for (c', d) in powers do
         unless c' == c && 1 < d && d < e do continue
         let some hbc ← coefficient b (← mkAppM ``HPow.hPow #[c, mkNatLit d]) | continue
@@ -241,11 +283,23 @@ The pointwise step introduces the input, destructures it and splits its cases. A
 `linarith`, the hypotheses it finds are read but not changed: only the goal and the hypotheses it
 introduces are rewritten. The input is new, so no other hypothesis can mention it. -/
 
-/-- A simp context with the given lemmas and definitions to unfold only. -/
-def simpContext (names : Array Name) (unfolds : Array Name := #[]) : MetaM Simp.Context := do
+/-- The declarations registered with a simp attribute, with their direction. -/
+def attrDecls (attr : Name) : MetaM (Array (Name × Bool)) := do
+  let some ext ← getSimpExtension? attr | throwError "unknown simp attribute `{attr}`"
+  return (← ext.getTheorems).lemmaNames.fold (init := #[]) fun acc o => match o with
+    | .decl n _ inv => acc.push (n, inv)
+    | _ => acc
+
+/-- A simp context with the given lemmas, those of the given simp attributes, and definitions to
+unfold only. -/
+def simpContext (names : Array Name) (unfolds : Array Name := #[]) (attrs : Array Name := #[]) :
+    MetaM Simp.Context := do
   let mut thms : SimpTheorems := {}
   for name in names do thms ← thms.addConst name
   for name in unfolds do thms ← thms.addDeclToUnfold name
+  -- Registered statements about encodings, such as `@[dominated_simp]`, in the same index.
+  for attr in attrs do
+    for (name, inv) in ← attrDecls attr do thms ← thms.addConst name (inv := inv)
   Simp.mkContext (simpTheorems := #[thms]) (congrTheorems := ← getSimpCongrTheorems)
 
 /-- Simplify the goal and the hypotheses introduced by the pointwise step; `none` if the goal is
@@ -268,13 +322,20 @@ def dsimpOwn (ctx : Simp.Context) (goal : MVarId) (outer : Option FVarIdSet := n
 
 /-- Use the equations left by splitting a `match`: an equation between constructor applications
 is substituted, and the goal is closed when `cases` on an equation leaves no cases, as for a
-branch that contradicts the test selecting it. -/
+branch that contradicts the test selecting it. A heterogeneous equation between variables, left
+by generalizing a dependent discriminant, is substituted. -/
 partial def casesEquations (outer : FVarIdSet) (goal : MVarId) : MetaM (Array MVarId) :=
   goal.withContext do
   for decl in ← getLCtx do
     let type ← instantiateMVars decl.type
-    if decl.isImplementationDetail || outer.contains decl.fvarId || !type.isAppOfArity ``Eq 3 then
-      continue
+    if decl.isImplementationDetail || outer.contains decl.fvarId then continue
+    if type.isAppOfArity ``HEq 4 && type.appFn!.appFn!.appArg!.isFVar && type.appArg!.isFVar then
+      let saved ← saveState
+      try
+        if let #[g] ← goal.cases decl.fvarId then return ← casesEquations outer g.mvarId
+      catch _ => pure ()
+      saved.restore
+    unless type.isAppOfArity ``Eq 3 do continue
     let constructor (e : Lean.Expr) : MetaM Bool := do
       let some name := (← whnfR e).getAppFn.constName? | return false
       return (← getEnv).find? name |>.any (·.isCtor)
@@ -289,7 +350,29 @@ partial def casesEquations (outer : FVarIdSet) (goal : MVarId) : MetaM (Array MV
     saved.restore
   return #[goal]
 
-/-- Split the first `casesOn` or `rec` application on a local variable in the goal. -/
+/-- The patterns of each alternative of a matcher, as functions of the alternative's parameters,
+read from the matcher's type with an opaque motive. -/
+def alternativePatterns (app : MatcherApp) : MetaM (Array (Array Lean.Expr)) := do
+  let matcher := mkAppN (mkConst app.matcherName app.matcherLevels.toList) app.params
+  withLocalDeclD `motive (← inferType app.motive) fun motive => do
+    let types ← inferArgumentTypesN app.alts.size (mkAppN (mkApp matcher motive) app.discrs)
+    (types.zip app.altNumParams).mapM fun (type, n) =>
+      forallBoundedTelescope type n fun xs body =>
+        body.consumeMData.getAppArgs.mapM (mkLambdaFVars xs ·)
+
+/-- The variables of a discriminant at which a pattern has a constructor. -/
+partial def inspectedVariables (discr pattern : Lean.Expr) : MetaM (Array Lean.Expr) := do
+  let pattern ← whnfR pattern
+  let .const ctor _ := pattern.getAppFn | return #[]
+  unless (← getEnv).find? ctor |>.any (·.isCtor) do return #[]
+  let discr ← whnfR discr
+  if discr.isFVar then return #[discr]
+  unless discr.getAppFn.isConstOf ctor do return #[]
+  (discr.getAppArgs.zip pattern.getAppArgs).foldlM (init := #[]) fun vars (d, p) => do
+    return vars ++ (← inspectedVariables d p)
+
+/-- Split the first `casesOn` or `rec` application on a local variable in the goal, or a variable
+that a `match` inspects. -/
 def casesOnVariable (goal : MVarId) : MetaM (Option (Array MVarId)) := goal.withContext do
   let target ← instantiateMVars (← goal.getType)
   let collect (e : Lean.Expr) : StateT (Array (Name × Lean.Expr)) MetaM Bool := do
@@ -297,6 +380,18 @@ def casesOnVariable (goal : MVarId) : MetaM (Option (Array MVarId)) := goal.with
       if name.isStr && (name.getString! == "casesOn" || name.getString! == "rec") then
         for a in e.getAppArgs do
           if a.isFVar then modify (·.push (name.getPrefix, a))
+      -- A `match` that `split` cannot eliminate, as on an indexed family: split the variables
+      -- its patterns inspect.
+      -- (Not under a binder, as `split` does, since the discriminants are inspected.)
+      else if !e.hasLooseBVars then
+        if let some app ← matchMatcherApp? e then
+          for patterns in ← alternativePatterns app do
+            let some first := patterns[0]? | continue
+            let (params, _, _) ← lambdaMetaTelescope first
+            for discr in app.discrs, pattern in patterns do
+              for a in ← inspectedVariables discr (pattern.beta params) do
+                if let .const family _ := (← whnfR (← inferType a)).getAppFn then
+                  modify (·.push (family, a))
     return true
   let (_, candidates) ← (target.forEach' collect).run #[]
   for (family, major) in candidates do
@@ -395,8 +490,11 @@ cache. The pointwise step `sizeOmega` plays the part of a discharger. -/
 
 /-- The facts and the list of one `dominated` call. -/
 structure Context where
-  /-- Statements `a ≤ b` or `a = b` to instantiate at matching terms in the pointwise step. -/
-  lemmas : Array Lean.Expr
+  /-- Statements `a ≤ b`, `a < b` or `a = b` to instantiate at matching terms in the pointwise
+  step, by the term each is about: those given and those registered with `@[dominated]`. -/
+  statements : DiscrTree Lean.Expr
+  /-- Statements registered with `@[dominated_of]`, by their premise. -/
+  premises : DiscrTree Lean.Expr
   /-- `Dominated` facts with their types, compositions unfolded. -/
   facts : Array (Lean.Expr × Lean.Expr)
   /-- Expansion of encoded sizes on the left side. -/
@@ -407,8 +505,6 @@ structure Context where
   expand : Simp.Context
   /-- Numeral arithmetic used with `expand`, so that exponents such as `2 * 3` become literals. -/
   numerals : Simp.SimprocsArray
-  /-- The default simp set with the same definitions, tried when `expand` is not enough. -/
-  expandAll : Simp.Context
 
 /-- Comparisons settled during one call, and the summands left to the user. -/
 structure State where
@@ -425,8 +521,9 @@ backtracking step could unassign them. -/
 def memo (p : Lean.Expr) (k : DominatedM (Option Lean.Expr)) : DominatedM (Option Lean.Expr) := do
   let p ← instantiateMVars p
   if let some r := (← get).cache[p]? then return r
+  -- The proof is stated at `p`, so assembling proofs never rechecks definitional equality.
   let r ← match ← k with
-    | some proof => pure (some (← instantiateMVars proof))
+    | some proof => pure (some (← mkExpectedTypeHint (← instantiateMVars proof) p))
     | none => pure none
   unless r.any (·.hasMVar) do modify fun s => { s with cache := s.cache.insert p r }
   return r
@@ -467,20 +564,15 @@ def domainOf (f : Lean.Expr) : MetaM Lean.Expr := do
   return (← whnf (← inferType f)).bindingDomain!
 
 /-- Close one case of the pointwise step by `omega` with the size and power facts, expanding the
-encoded sizes that splitting has exposed, or else after simplifying with the default simp set. -/
+encoded sizes that splitting has exposed. -/
 def closeCase (outer : FVarIdSet) (goal : MVarId) : DominatedM Bool := do
   let ctx ← read
-  let finish (goal : Option MVarId) : TacticM Unit := do
-    setGoals goal.toList
-    unless goal.isNone do Omega.omegaDefault
-  if ← closes goal do
-      let some g ← simpOwn outer ctx.expand (← addSizeFacts outer ctx.lemmas goal) ctx.numerals
-        | setGoals []
-      finish (some (← addPowerFacts g)) then
-    return true
   closes goal do
-    let some g ← simpOwn outer ctx.expandAll goal #[← Simp.getSimprocs] | setGoals []
-    finish (← simpOwn outer ctx.sizes (← addSizeFacts outer ctx.lemmas g))
+    let some g ← simpOwn outer ctx.expand
+        (← addSizeFacts outer ctx.statements ctx.premises goal) ctx.numerals
+      | setGoals []
+    setGoals [← addPowerFacts g]
+    Omega.omegaDefault
 
 /-- The pointwise step: prove `goal : ∀ x, p x` by destructuring `x`, splitting its cases,
 expanding encoded sizes and closing each case with `closeCase`. -/
@@ -606,6 +698,7 @@ partial def split (f g : Lean.Expr) (ctx : Simp.Context)
   let some eq := r.proof? | return some proof
   let motive ← withLocalDeclD `F (← inferType f) fun F => do
     mkLambdaFVars #[F] (← mkAppM ``Dominated #[F, g])
+  let proof ← mkExpectedTypeHint proof (← mkAppM ``Dominated #[r.expr, g])
   return some (← mkEqMPR (← mkCongrArg motive eq) proof)
 
 /-- One summand against the target: a fact, the base rules, or a traversal rule; a maximum over
@@ -638,9 +731,9 @@ def proveOrLeave (f g : Lean.Expr) : DominatedM (Option Lean.Expr) := do
 
 /-- Close a growth comparison `Dominated f g` whose two sides are given, splitting sums and
 maxima of the left side; equal summands are proved once. Local `Dominated` hypotheses are used
-as facts. The list gives definitions to unfold when comparing pointwise, and statements `a ≤ b`
-or `a = b` to instantiate at matching terms there, as for those registered with `@[dominated]`.
-Summands that cannot be proved are left as goals. -/
+as facts. The list gives definitions to unfold when comparing pointwise, and statements `a ≤ b`,
+`a < b` or `a = b` to instantiate at matching terms there, as for those registered with
+`@[dominated]`. Summands that cannot be proved are left as goals. -/
 syntax (name := dominated) "dominated" (" [" term,* "]")? : tactic
 
 elab_rules : tactic
@@ -655,8 +748,9 @@ elab_rules : tactic
           unfolds := unfolds.push name
           continue
       let (_, _, body) ← forallMetaTelescopeReducing type
-      if (lhs? body).isNone then
-        throwErrorAt arg "dominated: expected a definition or a statement `a ≤ b` or `a = b`"
+      if (key? body).isNone then
+        throwErrorAt arg
+          "dominated: expected a definition or a statement `a ≤ b`, `a < b` or `a = b`"
       lemmas := lemmas.push e
     let goal ← getMainGoal
     let target := (← instantiateMVars (← goal.getType)).consumeMData
@@ -666,24 +760,17 @@ elab_rules : tactic
       if decl.isImplementationDetail then continue
       let type := (← instantiateMVars decl.type).consumeMData
       if type.isAppOf ``Dominated then facts := facts.push (decl.toExpr, ← unfoldComp type)
-    let sizeLemmas := #[``size_encode_prod, ``Sigma.encode_mk, ``size_encode_unit,
-      ``encode_list_cons, ``encode_list_nil, ``size_encode_reverse, ``List.length_reverse,
-      ``Function.comp_apply]
-    let sizes ← simpContext sizeLemmas
-    let sizesMul ← simpContext (sizeLemmas ++ #[``Nat.mul_add, ``Nat.mul_one, ``Nat.mul_zero])
-    let expand ← simpContext (simpOnlyBuiltins.toArray ++ #[``size_encode_prod, ``Sigma.encode_mk,
-      ``UniqueEncoding.encode_subtype, ``encode_list_cons, ``encode_list_nil, ``size_encode_unit,
-      ``encode_bool_true, ``encode_bool_false, ``size_encode_reverse, ``List.length_reverse,
-      ``List.length_cons, ``List.length_nil, ``List.length_append, ``List.length_map,
-      ``Tree.encode_self, ``encode_option_some, ``encode_option_none, ``encode_fin,
-      ``encode_fin_castSucc, ``Fin.val_last, ``Function.comp_apply, ``max_le_iff,
+    let sizes ← simpContext #[``Function.comp_apply] (attrs := #[`dominated_simp])
+    let sizesMul ← simpContext
+      #[``Function.comp_apply, ``Nat.mul_add, ``Nat.mul_one, ``Nat.mul_zero]
+      (attrs := #[`dominated_simp])
+    let expand ← simpContext (simpOnlyBuiltins.toArray ++ #[``Function.comp_apply, ``max_le_iff,
       ``List.map_const', ``List.sum_replicate, ``smul_eq_mul, ``pow_zero]) unfolds
-    let mut all ← (← getSimpTheorems).addConst ``size_encode_prod
-    for name in unfolds do all ← all.addDeclToUnfold name
-    let expandAll ←
-      Simp.mkContext (simpTheorems := #[all]) (congrTheorems := ← getSimpCongrTheorems)
+      (attrs := #[`dominated_simp, `dominated_expand])
     let numerals := #[← (← ({} : Simp.Simprocs).add ``Nat.reduceMul true).add ``Nat.reduceAdd true]
-    let ctx : Context := { lemmas, facts, sizes, sizesMul, expand, numerals, expandAll }
+    let ctx : Context :=
+      { statements := ← factTree lemmas, premises := ← premiseTree, facts, sizes, sizesMul,
+        expand, numerals }
     let (proof, state) ← (split target.appFn!.appArg! target.appArg! ctx.sizes proveOrLeave
       |>.run ctx).run {}
     let some proof := proof | throwError "dominated: no proof"

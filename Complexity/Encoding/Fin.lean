@@ -21,7 +21,8 @@ namespace Complexity
 instance {R : Type*} [c : UniqueEncoding R ℕ] {n : ℕ} : UniqueEncoding R (Fin n) :=
   (c.subtype (· < n)).ofEquiv Fin.equivSubtype
 
-@[simp high] theorem encode_fin {R : Type*} [UniqueEncoding R ℕ] {n : ℕ} (i : Fin n) :
+@[simp high, dominated_expand]
+theorem encode_fin {R : Type*} [UniqueEncoding R ℕ] {n : ℕ} (i : Fin n) :
     encode R i = encode R i.val := rfl
 
 /-- Recover a finite tuple from a list of the required length. -/
@@ -94,7 +95,7 @@ theorem encode_fin_function_congr {α β : Type*}
   simp only [h]
 
 /-- Increasing the bound on stored wire indices does not traverse or change their codes. -/
-@[simp high] theorem encode_fin_castSucc [UniqueEncoding Tree ℕ] {n k : ℕ}
+@[simp high, dominated_expand] theorem encode_fin_castSucc [UniqueEncoding Tree ℕ] {n k : ℕ}
     (f : Fin n → Fin k) :
     ⌜Fin.castSucc ∘ f⌝ₜ = ⌜f⌝ₜ :=
   encode_fin_function_congr _ _ fun _ => rfl
@@ -103,7 +104,13 @@ theorem size_encode_fin_apply_le {α : Type*} [UniqueEncoding Tree α] {n : ℕ}
     (f : Fin n → α) (i : Fin n) : ⌜f i⌝ₜ.size ≤ ⌜f⌝ₜ.size :=
   size_encode_le_list_of_mem (List.mem_ofFn.mpr ⟨i, rfl⟩)
 
-theorem card_le_size_encode_fin_function {α : Type*} [UniqueEncoding Tree α] {n : ℕ}
+/-- An index stored in a table, as a number, fits in the table. -/
+@[dominated] theorem size_encode_val_apply_le [UniqueEncoding Tree ℕ] {n m : ℕ}
+    (f : Fin n → Fin m) (i : Fin n) :
+    ⌜(f i).val⌝ₜ.size ≤ ⌜f⌝ₜ.size :=
+  size_encode_fin_apply_le f i
+
+@[dominated] theorem card_le_size_encode_fin_function {α : Type*} [UniqueEncoding Tree α] {n : ℕ}
     (f : Fin n → α) : n ≤ ⌜f⌝ₜ.size := by
   simp only [encode_fin_function, size_encode_list, List.length_ofFn]
   omega
