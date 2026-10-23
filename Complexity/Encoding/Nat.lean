@@ -44,12 +44,6 @@ instance : UniqueEncoding Tree ℕ :=
 
 theorem encode_nat_tree (n : ℕ) : ⌜n⌝ₜ = ⌜n.bits⌝ₜ := rfl
 
-/-- The code of the numeral `0`, so that finite source cases can output it as a constant. -/
-@[source_case_simp] theorem encode_nat_zero : ⌜(0 : ℕ)⌝ₜ = ⌜()⌝ₜ := rfl
-
-/-- The code of the numeral `1`, so that finite source cases can output it as a constant. -/
-@[source_case_simp] theorem encode_nat_one : ⌜(1 : ℕ)⌝ₜ = ⌜[true]⌝ₜ := rfl
-
 @[dominated] theorem size_encode_bits (n : ℕ) : ⌜n.bits⌝ₜ.size = ⌜n⌝ₜ.size := rfl
 
 theorem size_encode_list_bool_le (bs : List Bool) : ⌜bs⌝ₜ.size ≤ 4 * bs.length + 1 :=

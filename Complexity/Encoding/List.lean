@@ -80,7 +80,7 @@ theorem size_encode_list_le {α : Type*} [UniqueEncoding Tree α] (xs : List α)
     ⌜xs.tail⌝ₜ.size ≤ ⌜xs⌝ₜ.size := by
   cases xs <;> simp [size_encode_prod]
 
-@[dominated_of] theorem size_encode_le_list_of_mem {α : Type*} [UniqueEncoding Tree α]
+@[dominated_forward] theorem size_encode_le_list_of_mem {α : Type*} [UniqueEncoding Tree α]
     {x : α} {xs : List α} (hx : x ∈ xs) : ⌜x⌝ₜ.size ≤ ⌜xs⌝ₜ.size := by
   have h := List.le_sum_of_mem (List.mem_map.mpr ⟨x, hx, rfl⟩ :
     ⌜x⌝ₜ.size ∈ xs.map (fun a => ⌜a⌝ₜ.size))

@@ -515,11 +515,6 @@ def Implementation.finComp {ρ : Type*} [UniqueEncoding Tree ρ]
 
 namespace Implementation
 
-def listNonempty {α : Type*} [UniqueEncoding Tree α] :
-    Implementation (fun xs : List α => !xs.isEmpty) (fun _ => 1) (fun xs => ⌜xs⌝ₜ.size) := by
-  source_fun_prop
-  all_goals dominated
-
 def listTail {α : Type*} [UniqueEncoding Tree α] :
     Implementation (List.tail : List α → List α) (fun _ => 1) (fun xs => ⌜xs⌝ₜ.size) := by
   source_fun_prop
@@ -527,7 +522,7 @@ def listTail {α : Type*} [UniqueEncoding Tree α] :
 
 end Implementation
 
-attribute [scoped fun_prop] Implementation.listNonempty Implementation.listTail
+attribute [scoped fun_prop] Implementation.listTail
 
 def Implementation.prepend {α : Type*} [UniqueEncoding Tree α] :
     Implementation (Function.uncurry (fun acc : List α => fun x => x :: acc)) (fun _ => 1)

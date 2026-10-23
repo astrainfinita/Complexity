@@ -21,7 +21,7 @@ The coefficient is a hidden witness. The list names definitions to unfold in the
 goals, and statements `a ≤ b`, `a < b` or `a = b` to instantiate there, as for those registered
 with `@[dominated]`: each is instantiated at the matching terms it is about (its left side, or its
 right side when the left side is a variable or a literal), and the terms of its other side are
-looked at in the next round. Statements registered with `@[dominated_of]` are instantiated at
+looked at in the next round. Statements registered with `@[dominated_forward]` are instantiated at
 matching hypotheses. Encoded sizes are normalized with `@[dominated_simp]` and expanded pointwise
 with `@[dominated_expand]`. Facts that are genuine properties of the source function are
 `Dominated` hypotheses, matched reducibly. Like `omega`, the pointwise step reads the other
@@ -104,10 +104,10 @@ def instanceOf (e h : Lean.Expr) : MetaM (Option Lean.Expr) := withoutModifyingS
 def ownHyps (outer : FVarIdSet) (goal : MVarId) : MetaM (Array FVarId) :=
   return (← goal.getNondepPropHyps).filter (!outer.contains ·)
 
-/-- The statements registered with `@[dominated_of]`, by their first explicit premise. -/
+/-- The statements registered with `@[dominated_forward]`, by their first explicit premise. -/
 def premiseTree : MetaM (DiscrTree Lean.Expr) := do
   let mut tree : DiscrTree Lean.Expr := {}
-  for name in dominatedOfAttr.getState (← getEnv) do
+  for name in dominatedForwardAttr.getState (← getEnv) do
     let e ← mkConstWithFreshMVarLevels name
     let (xs, bis, _) ← forallMetaTelescopeReducing (← inferType e)
     let some i ← (xs.zip bis).findIdxM? fun (x, bi) => do
@@ -162,7 +162,7 @@ def addSizeFacts (outer : FVarIdSet) (tree premises : DiscrTree Lean.Expr) (goal
       facts := facts ++ shaped ++ instances.map (·.1)
       for (_, other) in instances do next := next ++ (← subterms other)
     pending := next
-  -- Statements registered with `@[dominated_of]`, at each hypothesis matching their premise.
+  -- Statements registered with `@[dominated_forward]`, at each hypothesis matching their premise.
   for decl in ← getLCtx do
     if decl.isImplementationDetail then continue
     for e in ← premises.getMatch decl.type do
@@ -493,7 +493,7 @@ structure Context where
   /-- Statements `a ≤ b`, `a < b` or `a = b` to instantiate at matching terms in the pointwise
   step, by the term each is about: those given and those registered with `@[dominated]`. -/
   statements : DiscrTree Lean.Expr
-  /-- Statements registered with `@[dominated_of]`, by their premise. -/
+  /-- Statements registered with `@[dominated_forward]`, by their premise. -/
   premises : DiscrTree Lean.Expr
   /-- `Dominated` facts with their types, compositions unfolded. -/
   facts : Array (Lean.Expr × Lean.Expr)

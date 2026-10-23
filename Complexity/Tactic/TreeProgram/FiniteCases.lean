@@ -51,12 +51,33 @@ private def expandPair (e : Lean.Expr) : SimpM Simp.Step := withTransparency .de
 /-- Expose only product and dependent-pair structure when analyzing an encoded result. -/
 simproc_decl sourcePair (encode Tree _) := expandPair
 
+/-- The tree a closed tree term evaluates to at default transparency: finite source cases are
+decided when compiling, and a closed value is a constant of the compiled program. -/
+private partial def closedTree (t : Lean.Expr) : MetaM (Option Lean.Expr) := do
+  let t ← withTransparency .default <| whnf t
+  match t.getAppFn.constName?, t.getAppArgs with
+  | some ``BinaryTree.nil, _ => return mkConst ``Tree.nil
+  | some ``BinaryTree.node, #[_, _, l, r] =>
+    let some l ← closedTree l | return none
+    let some r ← closedTree r | return none
+    return mkApp2 (mkConst ``Tree.pair) l r
+  | _, _ => return none
+
+/-- The code of a closed value, computed when compiling finite source cases. -/
+simproc_decl sourceConstant (encode Tree _) := fun e => do
+  unless e.isAppOfArity ``UniqueEncoding.encode 4 && !e.hasFVar && !e.hasMVar do return .continue
+  let some t ← closedTree e | return .continue
+  return .done { expr := t }
+
 end FiniteCases
 open Lean Meta in
+/-- `proof` as a proof of `type`: itself when the types agree reducibly, otherwise an auxiliary
+theorem stated at `type`, which the kernel checks. -/
 def typedSourceProof (type proof : Lean.Expr) : MetaM Lean.Expr := do
   if ← withReducible (isDefEq type (← inferType proof)) then return proof
   mkAuxTheorem type proof
 open Lean Meta Elab Tactic in
+/-- The arguments of a goal `Implementation f time peak`, with its implicit types and encodings. -/
 def sourceGoalArgs (goal : MVarId) : MetaM (Array Lean.Expr) := do
   let target := (← instantiateMVars (← goal.getType)).consumeMData
   unless target.isAppOfArity ``Implementation 7 do
@@ -128,6 +149,8 @@ private structure CompiledCase where
   inputCode : Lean.Expr
   output : Lean.Expr
 
+/-- The values a `match`, `casesOn` or non-recursive `rec` at the head of `e` inspects (through
+the matcher's own definition), or the structure a projection at the head reads. -/
 partial def caseDiscriminators (e : Lean.Expr) (fromMatcher := false) :
     MetaM (Array Lean.Expr) := do
   if let .proj _ _ base := e then return #[base]
@@ -196,13 +219,14 @@ private partial def visitCases {α : Type} (g : MVarId) (f : Lean.Expr) (inputNa
     pure (mkAppN out.getAppFn (out.getAppArgs.set! 3 inspected)) else pure out
   return #[← leaf g decl inputCode out]
 
-/-- The lemmas registered with `source_case_simp` and `sourcePair`, as `simp` arguments, so that
-they are one index rather than an index per set. -/
+/-- The lemmas registered with `source_case_simp`, `sourcePair` and `sourceConstant`, as `simp`
+arguments, so that they are one index rather than an index per set. -/
 private def caseLemmas : MetaM (Array (TSyntax ``Lean.Parser.Tactic.simpLemma)) := do
   let lemmas ← (← Growth.attrDecls `source_case_simp).mapM fun (n, inv) =>
     if inv then `(Lean.Parser.Tactic.simpLemma| ← $(mkCIdent n):term)
     else `(Lean.Parser.Tactic.simpLemma| $(mkCIdent n):term)
-  return lemmas.push (← `(Lean.Parser.Tactic.simpLemma| sourcePair))
+  return lemmas ++ #[← `(Lean.Parser.Tactic.simpLemma| sourcePair),
+    ← `(Lean.Parser.Tactic.simpLemma| sourceConstant)]
 
 private def caseEquations (g : MVarId) (f outputType outputInst : Lean.Expr)
     (decl : LocalDecl) (inputCode out : Lean.Expr)
@@ -302,6 +326,8 @@ private def replayCases (splits : Array CaseSplit) (oldGoal newGoal : MVarId)
       goals := goals.insert old.mvarId (next.mvarId, translated)
   return goals
 
+/-- Compile a source function with finitely many cases on the shape of its encoded input: tests
+on the input tree select the case, and the output is built from constants and input subtrees. -/
 def sourceCases : TacticM Unit := withMainContext do
   let goal ← getMainGoal
   let rest := (← getGoals).tail
@@ -749,6 +775,7 @@ def sourceCalls (roots : NameSet) (certify : Lean.Expr → MetaM Lean.Expr) :
         let some (_, h) := callees.find? (·.1 == branch.call.implementation) |
           throwError "source calls: missing callee certificate"
         return (g, branch.call, h, subst.apply branch.value, space, inputCode, equations)
+    let lemmas ← caseLemmas
     for (g, c, h, value, space, inputCode, equations) in proofCases do
       setGoals [g]
       tryCatch (withoutRecover <| withMainContext do
@@ -764,7 +791,6 @@ def sourceCalls (roots : NameSet) (certify : Lean.Expr → MetaM Lean.Expr) :
         let equations ← equations.mapM fun equation => do
           let term ← Term.exprToSyntax equation
           `(Lean.Parser.Tactic.simpLemma| $term:term)
-        let lemmas ← caseLemmas
         trace[source.translation] "verify compiled call branch"
         -- Use the concrete encoding equations already obtained for this branch.
         evalTactic (← `(tactic|
@@ -795,8 +821,7 @@ def sourceCalls (roots : NameSet) (certify : Lean.Expr → MetaM Lean.Expr) :
           evalTactic (← `(tactic|
             (simp +contextual (disch := omega)
                [-sup_of_le_left, -sup_of_le_right,
-                 -Nat.max_eq_left, -Nat.max_eq_right, Code.Bounded, Code.block,
-                 sourcePair,
+                 -Nat.max_eq_left, -Nat.max_eq_right, Code.Bounded, Code.block, sourcePair,
                  Nat.mul_add, Nat.mul_one, $equations,*]
                at source_call ⊢
              all_goals (repeat' apply And.intro)

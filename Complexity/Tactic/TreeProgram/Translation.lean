@@ -483,14 +483,34 @@ private def sourceContext : MetaM Mathlib.Meta.FunProp.Context := do
   return { disch := tacticToDischarge tactic, config }
 
 open Lean Meta in
-/-- Record the definition a source function translates: its head, also under binders and an
-encoder. -/
+/-- Whether `e` is `x` or a projection of it. -/
+private partial def isProjectionOf (x e : Lean.Expr) : MetaM Bool := do
+  if e == x then return true
+  if let .proj _ _ base := e then return ← isProjectionOf x base
+  let some name := e.getAppFn.constName? | return false
+  let some info ← getProjectionFnInfo? name | return false
+  if e.getAppNumArgs != info.numParams + 1 then return false
+  isProjectionOf x e.appArg!
+
+open Lean Meta in
+/-- Record the definition a source function is, up to eta, uncurrying and an encoder: `g`,
+`fun x => g x.1 x.2` or `fun x => ⌜g x⌝ₜ`, whose explicit arguments are the input or its
+projections. Calling `g` on anything else is a use of `g`, which needs its own selected
+implementation. -/
 def addSourceRoot (session : Search.Session) (f : Lean.Expr) : MetaM Unit := do
-  if let some name := f.eta.getAppFn.constName? then session.roots.modify (·.insert name)
-  let head ← lambdaTelescope f fun _ body => do
-    let body := if body.isAppOfArity ``UniqueEncoding.encode 4 then body.appArg! else body
-    return body.getAppFn.constName?
-  if let some name := head then session.roots.modify (·.insert name)
+  if let some name := f.eta.getAppFn.constName? then
+    session.roots.modify (·.insert name)
+    return
+  let some name ← lambdaTelescope f fun xs body => do
+      let body := if body.isAppOfArity ``UniqueEncoding.encode 4 then body.appArg! else body
+      let some name := body.getAppFn.constName? | return none
+      let #[x] := xs | return none
+      let info ← getFunInfoNArgs body.getAppFn body.getAppNumArgs
+      for arg in body.getAppArgs, param in info.paramInfo do
+        if param.isExplicit && !(← isProjectionOf x arg) then return none
+      return some name
+    | return
+  session.roots.modify (·.insert name)
 
 open Lean Meta Elab Tactic Mathlib.Meta.FunProp in
 /-- Certify a callback named in a method syntax completely, sharing the method's session.

@@ -32,9 +32,11 @@ initialize dominatedAttr : Lean.LabelExtension ←
     "instantiate this statement at matching terms when `dominated` compares pointwise"
 
 /-- Statements `p → a ≤ b` (or `<`, `=`), such as a bound on a list element's size, that
-`dominated` instantiates at every hypothesis `p` of the pointwise step. -/
-initialize dominatedOfAttr : Lean.LabelExtension ←
-  Lean.registerLabelAttr `dominated_of
+`dominated` instantiates at every local hypothesis matching their first explicit premise `p` when
+comparing pointwise, as forward reasoning in the manner of `@[gcongr_forward]`. The terms of an
+instance are not looked at in a next round. -/
+initialize dominatedForwardAttr : Lean.LabelExtension ←
+  Lean.registerLabelAttr `dominated_forward
     "instantiate this statement at each matching hypothesis when `dominated` compares pointwise"
 
 /-- Equations normalizing encoded sizes, used by `dominated` on the left side before splitting
