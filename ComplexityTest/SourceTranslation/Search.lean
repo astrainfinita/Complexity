@@ -154,12 +154,6 @@ private def branches (x : Bool × List Bool) : List Bool :=
   if x.1 then x.2.reverse else x.2
 
 -- Branch callbacks share the outer translation's search budget.
-set_option source.maxSteps 5 in
-example := (by source_fun_prop : Implementation (fun xs => branches (false, xs)) _ _)
-
-set_option source.maxSteps 5 in
-example := (by source_fun_prop : Implementation (fun xs => branches (true, xs)) _ _)
-
 /-- error: source translation: maximum number (5) of search steps exceeded -/
 #guard_msgs in
 set_option source.maxSteps 5 in

@@ -44,6 +44,11 @@ example : Implementation (fun xs => preciseIdentity (preciseIdentity xs))
 example : (by source_fun_prop : Implementation aliasedIdentity _ _).program =
     preciseIdentityImplementation.program := rfl
 
+-- A call of the alias needs the alias's own selected implementation.
+def aliasedIdentityImplementation :
+    Implementation aliasedIdentity (fun _ => 0) (fun _ => 0) := by source_fun_prop
+
+attribute [local source] aliasedIdentityImplementation in
 example : Implementation (fun xs => aliasedIdentity (aliasedIdentity xs))
     (fun _ => 0 + 0) (fun _ => max 0 0) := by source_fun_prop
 

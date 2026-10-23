@@ -104,6 +104,14 @@ private def unequalBranches (x : Bool × List Bool) : List Bool :=
 example : Implementation unequalBranches (fun _ => 1)
     (fun x => max ⌜x⌝ₜ.size ⌜unequalBranches x⌝ₜ.size) := by source_cases
 
+private def selectConstant : Bool → ℕ
+  | false => 2
+  | true => 5
+
+-- Closed values are evaluated to constant trees when compiling.
+example : Implementation selectConstant (fun _ => 1)
+    (fun x => max ⌜x⌝ₜ.size ⌜selectConstant x⌝ₜ.size) := by source_cases
+
 private def nonemptyTailReverse (x : {xs : List Bool // xs ≠ []}) : List Bool :=
   match h : x.1 with
   | [] => False.elim (x.2 h)

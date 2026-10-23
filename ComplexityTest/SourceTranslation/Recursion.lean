@@ -142,12 +142,18 @@ private theorem drain_cost_growth :
       (Dominated.refl _) (Dominated.refl _) (Dominated.refl _) (Dominated.refl _)
       (fun _ => Nat.zero_lt_one) (fun _ => Nat.zero_lt_one)
 
+/-- The test of `drain`, translated as `Bool.not` after `List.isEmpty`. -/
+def drainTest : Implementation (fun xs : List Bool => !xs.isEmpty) (fun _ => 1)
+    (fun xs => ⌜xs⌝ₜ.size) := by
+  source_fun_prop
+  all_goals dominated
+
 -- The terminal allowance appears once; the stack allowance grows with recursion depth.
 def drainStructural : Implementation drain
     (fun xs => 1 + (xs.length + 1) + 1)
     (fun xs => (⌜xs⌝ₜ.size + (xs.length + 1) * (⌜xs⌝ₜ.size + 1)) + 1) :=
   (Implementation.ofEncode (f := drain) (g := fun xs => ⌜drain xs⌝ₜ) (fun _ => rfl)
-    (drainRecursion.implementation Implementation.listNonempty Implementation.listTail
+    (drainRecursion.implementation drainTest Implementation.listTail
       drainFinish drainResume)).mono
     (((Dominated.refl _).add drain_cost_growth.1).add (Dominated.refl _))
     (drain_cost_growth.2.add (Dominated.refl _))

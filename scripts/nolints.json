@@ -1,1 +1,6 @@
-[]
+[["defsWithUnderscore", "Complexity.TreeProgram.Source.Parser.Attr.dominated_expand"],
+ ["defsWithUnderscore", "Complexity.TreeProgram.Source.Parser.Attr.dominated_expand_proc"],
+ ["defsWithUnderscore", "Complexity.TreeProgram.Source.Parser.Attr.dominated_simp"],
+ ["defsWithUnderscore", "Complexity.TreeProgram.Source.Parser.Attr.dominated_simp_proc"],
+ ["defsWithUnderscore", "Complexity.TreeProgram.Source.Parser.Attr.source_case_simp"],
+ ["defsWithUnderscore", "Complexity.TreeProgram.Source.Parser.Attr.source_case_simp_proc"]]

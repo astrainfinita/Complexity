@@ -31,19 +31,13 @@ def drain (_ : List Bool) : List Bool := []
     omega
   case decreases => intro xs ys _ ht; cases ys <;> simp_all
   case input_size => exact Dominated.of_le fun z => z.2.2
-  case check_peak => exact Dominated.of_le fun z => z.2.2
+  case check_peak => dominated
   case step_peak => exact Dominated.of_le fun z => z.2.2
   case stop_peak => exact Dominated.of_le fun _ => Nat.zero_le _
   case step_time => exact Dominated.refl _
-  case check_time => exact Dominated.refl _
+  case check_time => dominated
   case stop_time => exact Dominated.of_le fun _ => Nat.zero_le _
-  case time =>
-    apply Dominated.of_le_mul 4
-    intro xs
-    have := length_le_codeSize xs
-    have := Tree.size_pos ⌜xs⌝ₜ
-    simp
-    omega
+  case time => dominated
   all_goals intro; decide
 
 theorem drain_ftisp : drain ∈ FTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by
@@ -52,7 +46,7 @@ theorem drain_ftisp : drain ∈ FTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) :=
 
 -- The program is determined by the callbacks; tail-loop space has no stack multiplier.
 example : drainImplementation.program =
-    loopCode (Implementation.listNonempty (α := Bool)).program
+    loopCode (by source_fun_prop : Implementation (fun xs : List Bool => !xs.isEmpty) _ _).program
       (Implementation.listTail (α := Bool)).program
       (Implementation.identity (α := List Bool)).program := by
   rfl
