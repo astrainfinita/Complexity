@@ -108,7 +108,7 @@ private def selectConstant : Bool → ℕ
   | false => 2
   | true => 5
 
--- Closed values are evaluated to constant trees when compiling.
+-- Closed values become constant trees of the case table.
 example : Implementation selectConstant (fun _ => 1)
     (fun x => max ⌜x⌝ₜ.size ⌜selectConstant x⌝ₜ.size) := by source_cases
 
