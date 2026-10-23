@@ -51,8 +51,9 @@ private def expandPair (e : Lean.Expr) : SimpM Simp.Step := withTransparency .de
 /-- Expose only product and dependent-pair structure when analyzing an encoded result. -/
 simproc_decl sourcePair (encode Tree _) := expandPair
 
-/-- The tree a closed tree term evaluates to at default transparency: finite source cases are
-decided when compiling, and a closed value is a constant of the compiled program. -/
+/-- The tree a closed tree term evaluates to at default transparency. A finite source case is a
+table on the shape of the input, so a closed value in it is a constant of the table, computed by
+the translation rather than by the program. -/
 private partial def closedTree (t : Lean.Expr) : MetaM (Option Lean.Expr) := do
   let t ← withTransparency .default <| whnf t
   match t.getAppFn.constName?, t.getAppArgs with
@@ -63,7 +64,7 @@ private partial def closedTree (t : Lean.Expr) : MetaM (Option Lean.Expr) := do
     return mkApp2 (mkConst ``Tree.pair) l r
   | _, _ => return none
 
-/-- The code of a closed value, computed when compiling finite source cases. -/
+/-- The code of a closed value, as a constant tree of a finite source case. -/
 simproc_decl sourceConstant (encode Tree _) := fun e => do
   unless e.isAppOfArity ``UniqueEncoding.encode 4 && !e.hasFVar && !e.hasMVar do return .continue
   let some t ← closedTree e | return .continue
