@@ -145,6 +145,7 @@ public import Complexity.Resources.TreeMachine.Composition
 public import Complexity.Resources.TreeMachine.Program
 public import Complexity.Resources.TreeMachine.StackMachine
 public import Complexity.Resources.TuringMachine
+public import Complexity.Tactic.Hole
 public import Complexity.Tactic.TreeProgram.Arithmetic
 public import Complexity.Tactic.TreeProgram.Attributes
 public import Complexity.Tactic.TreeProgram.Environment
