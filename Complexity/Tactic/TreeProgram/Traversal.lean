@@ -42,6 +42,12 @@ variable {f} in
   induction xs generalizing a <;> simp [*]
 
 variable {f} in
+/-- A constant callback time is charged once per element. -/
+@[simp, dominated_simp] theorem foldlTime_const (c : ℕ) (a : β) (xs : List α) :
+    foldlTime f (fun _ => c) a xs = xs.length * c := by
+  induction xs generalizing a <;> simp [*, Nat.succ_mul, Nat.add_comm]
+
+variable {f} in
 /-- Callback times bounded by their current elements add at most once per element. -/
 theorem foldlTime_le_sum {t : β × α → ℕ} (u : α → ℕ) (h : ∀ z, t z ≤ u z.2) (a : β)
     (xs : List α) : foldlTime f t a xs ≤ (xs.map u).sum := by
@@ -148,17 +154,30 @@ theorem foldlPeak_le_of_size {p : β × α → ℕ} (a : β) (xs : List α)
     simp only [foldlPeak_cons, encode_list_cons, size_encode_prod, max_le_iff] at hr hp this ⊢
     omega
 
-/-- Prepending retains exactly the final list's size as its peak, including the empty fold. -/
-@[simp] theorem foldlPeak_prepend {α : Type*} [UniqueEncoding Tree α] (acc xs : List α) :
-    foldlPeak (fun acc x => x :: acc) (fun z => ⌜z⌝ₜ.size) acc xs = ⌜xs.reverse ++ acc⌝ₜ.size := by
+/-- The callback's result is stored as the next state, so a callback holding only its input and
+its result adds nothing to the stored states. -/
+@[simp, dominated_simp] theorem foldlPeak_max_size_uncurry (a : β) (xs : List α) :
+    foldlPeak f (fun z => max ⌜z⌝ₜ.size ⌜Function.uncurry f z⌝ₜ.size) a xs =
+      foldlPeak f (fun z => ⌜z⌝ₜ.size) a xs := by
+  induction xs generalizing a with
+  | nil => rfl
+  | cons x xs ih =>
+    have := size_le_foldlPeak (f := f) (fun z => ⌜z⌝ₜ.size) (f a x) xs
+    simp only [foldlPeak_cons, ih, Function.uncurry_apply_pair]
+    omega
+
+/-- Prepending retains exactly the final list as its peak, including the empty fold: both lists,
+sharing one terminator. -/
+@[simp, dominated_simp] theorem foldlPeak_prepend {α : Type*} [UniqueEncoding Tree α]
+    (acc xs : List α) :
+    foldlPeak (fun acc x => x :: acc) (fun z => ⌜z⌝ₜ.size) acc xs =
+      ⌜xs⌝ₜ.size + ⌜acc⌝ₜ.size - 1 := by
   induction xs generalizing acc with
   | nil => simp
   | cons x xs ih =>
-    rw [foldlPeak_cons, ih]
-    simp only [List.reverse_cons, List.append_assoc, List.singleton_append, size_encode_prod]
-    have := size_encode_list_append xs.reverse (x :: acc)
-    simp only [encode_list_cons, size_encode_prod] at this
-    have := Tree.size_pos ⌜xs.reverse⌝ₜ
+    have h := ih (x :: acc)
+    have := Tree.size_pos ⌜xs⌝ₜ
+    simp only [foldlPeak_cons, encode_list_cons, size_encode_prod] at h ⊢
     omega
 
 theorem _root_.Complexity.Dominated.foldlPeak {p q : β × α → ℕ} (h : Dominated p q) :

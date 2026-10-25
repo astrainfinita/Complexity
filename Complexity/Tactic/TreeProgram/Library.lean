@@ -374,19 +374,6 @@ def implementationSingleton : Implementation (fun t : Tree => [t]) (fun _ => 1)
 
 attribute [scoped fun_prop] List.implementationTail
 
-def implementationPrepend {α : Type*} [UniqueEncoding Tree α] :
-    Implementation (Function.uncurry (fun acc : List α => fun x => x :: acc)) (fun _ => 1)
-      (fun x => ⌜x⌝ₜ.size) := by
-  source_fun_prop
-  all_goals dominated
-
-/-- Prepending charges each element once and stores only the final list. -/
-@[scoped fun_prop] def implementationPrependFold {α : Type*} [UniqueEncoding Tree α] :
-    Implementation (fun x : List α × List α => x.2.foldl (fun acc a => a :: acc) x.1)
-      (fun x => x.2.length + 1) (fun x => ⌜x⌝ₜ.size) :=
-  implementationPrepend.foldl.mono (by dominated [foldlTime_eq_sum (t := fun _ : α => 1)])
-    (by dominated [foldlPeak_prepend])
-
 section Index
 
 /-! Operations on indices; an index is stored as its value. -/

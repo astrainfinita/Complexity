@@ -31,6 +31,10 @@ theorem mul (hf : Dominated f g) (hh : Dominated f' g') :
   have hy := hd x
   simpa only [Nat.nsmul_eq_mul, Nat.mul_mul_mul_comm] using Nat.mul_le_mul hx hy
 
+/-- A difference is dominated whenever its minuend is. -/
+theorem sub_left (hf : Dominated f g) (f' : α → ℕ) : Dominated (fun x => f x - f' x) g :=
+  hf.mono_left fun _ => Nat.sub_le _ _
+
 theorem pow (hf : Dominated f g) (d : ℕ) :
     Dominated (fun x => f x ^ d) (fun x => g x ^ d) := by
   obtain ⟨C, hc⟩ := hf

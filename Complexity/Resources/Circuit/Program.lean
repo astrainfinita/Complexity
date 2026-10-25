@@ -53,9 +53,7 @@ abbrev AccumulateInput := CNF ℕ ×
     Dominated.of_le_mul 3 (fun x => by
       simpa only [gateClauses, Nat.mul_one] using
         CNF.length_ofGate_le x.2.2.1 x.2.2.2.1 x.2.2.2.2)
-  refine (((?pair : Implementation (fun input : AccumulateInput => (input.1, gateClauses input.2))
-    ?pairTime ?pairPeak).comp implementationPrependFold).congr (by funext x; rfl)).mono ?time ?peak
-  case pair => source_fun_prop
+  source_fun_prop
   all_goals dominated [gateClauses_size_le]
 
 theorem accumulateGate_ftisp :

@@ -26,7 +26,7 @@ matching hypotheses. Encoded sizes are normalized with `@[dominated_simp]` and e
 with `@[dominated_expand]`. Facts that are genuine properties of the source function are
 `Dominated` hypotheses, matched reducibly. Like `omega`, the pointwise step reads the other
 hypotheses without changing them. Every comparison is settled once per call.
-Summands that cannot be proved are left as goals.
+A difference is compared through its minuend. Summands that cannot be proved are left as goals.
 -/
 
 public meta section
@@ -516,16 +516,28 @@ structure State where
 /-- The solver monad: one context and one cache per `dominated` call. -/
 abbrev DominatedM := ReaderT Context (StateRefT State TacticM)
 
-/-- Settle `p` once per call. A proof that still has metavariables is not kept, since a later
-backtracking step could unassign them. -/
+/-- Unfold the type abbreviations in `e`, such as `CNF ℕ` to `List (CNF.Clause ℕ)`. -/
+partial def unfoldTypeAbbrevs (env : Environment) (e : Lean.Expr) : Lean.Expr :=
+  e.replace fun t => do
+    let .const c us := t.getAppFn | none
+    let some (.defnInfo info) := env.find? c | none
+    unless getReducibilityStatusCore env c matches .reducible do none
+    unless info.type.getForallBody.isSort do none
+    some (unfoldTypeAbbrevs env ((info.value.instantiateLevelParams info.levelParams us).beta
+      t.getAppArgs))
+
+/-- Settle `p` once per call, up to type abbreviations: a lemma about an underlying type, such as
+one about `List α` used at `CNF ℕ`, reaches the same comparisons. A proof that still has
+metavariables is not kept, since a later backtracking step could unassign them. -/
 def memo (p : Lean.Expr) (k : DominatedM (Option Lean.Expr)) : DominatedM (Option Lean.Expr) := do
   let p ← instantiateMVars p
-  if let some r := (← get).cache[p]? then return r
+  let key := unfoldTypeAbbrevs (← getEnv) p
   -- The proof is stated at `p`, so assembling proofs never rechecks definitional equality.
+  if let some r := (← get).cache[key]? then return ← r.mapM (mkExpectedTypeHint · p)
   let r ← match ← k with
     | some proof => pure (some (← mkExpectedTypeHint (← instantiateMVars proof) p))
     | none => pure none
-  unless r.any (·.hasMVar) do modify fun s => { s with cache := s.cache.insert p r }
+  unless r.any (·.hasMVar) do modify fun s => { s with cache := s.cache.insert key r }
   return r
 
 /-- Run a rule; an exception counts as a failure and leaves no trace. -/
@@ -674,8 +686,9 @@ def viaFacts (f g : Lean.Expr) : DominatedM (Option Lean.Expr) := do
         return some (← mkAppM ``Dominated.trans #[h, rest])
   return none
 
-/-- Expand encoded sizes in `f` with `ctx` and split its sums, maxima and zeros; `leaf` proves
-`Dominated a g` for the remaining summands `a`. The right side `g` is not rewritten. -/
+/-- Expand encoded sizes in `f` with `ctx` and split its sums, maxima and zeros, and the minuends
+of its differences; `leaf` proves `Dominated a g` for the remaining summands `a`. The right side
+`g` is not rewritten. -/
 partial def split (f g : Lean.Expr) (ctx : Simp.Context)
     (leaf : Lean.Expr → Lean.Expr → DominatedM (Option Lean.Expr)) :
     DominatedM (Option Lean.Expr) := do
@@ -689,6 +702,9 @@ partial def split (f g : Lean.Expr) (ctx : Simp.Context)
       let combine := if body.isAppOfArity ``HAdd.hAdd 6 then ``Dominated.add_same
         else ``Dominated.max_same
       return some (← mkAppM combine #[pa, pb])
+    if body.isAppOfArity ``HSub.hSub 6 then
+      let some h ← go (part body.appFn!.appArg!) | return none
+      return some (← mkAppM ``Dominated.sub_left #[h, part body.appArg!])
     if body.nat? == some 0 then
       let zero ← mkFreshExprSyntheticOpaqueMVar (← mkAppM ``Dominated #[f, g])
       let _ ← zero.mvarId!.apply (← mkConstWithFreshMVarLevels ``Dominated.zero)
@@ -760,7 +776,7 @@ elab_rules : tactic
       if decl.isImplementationDetail then continue
       let type := (← instantiateMVars decl.type).consumeMData
       if type.isAppOf ``Dominated then facts := facts.push (decl.toExpr, ← unfoldComp type)
-    let sizes ← simpContext #[``Function.comp_apply] (attrs := #[`dominated_simp])
+    let sizes ← simpContext #[``Function.comp_apply, ``Nat.mul_one] (attrs := #[`dominated_simp])
     let sizesMul ← simpContext
       #[``Function.comp_apply, ``Nat.mul_add, ``Nat.mul_one, ``Nat.mul_zero]
       (attrs := #[`dominated_simp])
