@@ -84,8 +84,9 @@ open Complexity.TreeProgram.Source in
 example (acc xs : List Bool) :
     foldlPeak (fun acc x => x :: acc) (fun z => ⌜z⌝ₜ.size) acc xs + 1 =
       ⌜xs⌝ₜ.size + ⌜acc⌝ₜ.size := by
+  have := Tree.size_pos ⌜xs⌝ₜ
   rw [foldlPeak_prepend]
-  simpa using size_encode_list_append xs.reverse acc
+  omega
 
 -- Ordinary nested calls use saved specifications without choosing a numerical coefficient.
 example : accumulateGate ∈ FTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
