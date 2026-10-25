@@ -16,24 +16,25 @@ example : (by source_fun_prop : Implementation rewireStored _ _).program =
 example : Implementation rewireStored (fun x => ⌜x⌝ₜ.size ^ 7) (fun x => ⌜x⌝ₜ.size ^ 4) := by
   source_fun_prop
 
-example : Implementation (fun x => ⌜relabelFn x⌝ₜ)
+example : Implementation relabelFn
     (fun x => relabelScale x ^ 7) (fun x => relabelScale x ^ 4) := relabelImplementation
-example : Implementation (fun x => ⌜compFn x⌝ₜ)
+example : Implementation compFn
     (fun x => compScale x ^ 7) (fun x => compScale x ^ 4) := compImplementation
-example : Implementation (fun x => ⌜keepFn x⌝ₜ)
+example : Implementation keepFn
     (fun x => keepScale x ^ 8) (fun x => keepScale x ^ 4) := keepImplementation
 
 -- The ordinary composition adapter consumes the raw selected implementation.
 example {ρ : Type} [UniqueEncoding Tree ρ] {t p : ρ → ℕ}
     (h : Implementation (fun _ : ρ => (⟨0, 0, 0, Circuit.id _ 0, Circuit.id _ 0⟩ : CompInput)) t p) :
-    (h.circuitComp).program = (h.comp compImplementation).program := rfl
+    (h.circuitComp).program = (h.compDep compImplementation).program := rfl
 
 example : keepImplementation.program =
     (keepRecursion.implementation keepCheck keepNext keepFinish
       keepResume).program := rfl
 
 -- Binary dimensions are not bounded by code size without a hypothesis. Restrict only the
--- external source type; mapInput reuses the same program and its all-input certificate.
+-- external source type; mapInput reuses the same program and its all-input certificate. The
+-- output types depend on the input, so the class membership is stated for the output codes.
 abbrev StoredComp := {x : CompInput // x.n ≤ ⌜x⌝ₜ.size}
 abbrev StoredKeep := {x : KeepInput // x.n ≤ ⌜x⌝ₜ.size}
 
@@ -48,7 +49,7 @@ private theorem restrict_ftisp {α : Type} [UniqueEncoding Tree α] {f : α → 
 
 example : (fun x : StoredComp => ⌜compFn x.1⌝ₜ) ∈
     FTISP .tree (fun n => n ^ 7) (fun n => n ^ 4) := by
-  apply restrict_ftisp compScale 7 compImplementation
+  apply restrict_ftisp compScale 7 (compImplementation.ofEncode fun _ => Tree.encode_self _)
   refine Dominated.of_le_mul 8 ?_
   rintro ⟨⟨n, m, k, c, d⟩, hn⟩
   have hm := c.outputs_le_size_encode
@@ -61,7 +62,7 @@ example : (fun x : StoredComp => ⌜compFn x.1⌝ₜ) ∈
 
 example : (fun x : StoredKeep => ⌜keepFn x.1⌝ₜ) ∈
     FTISP .tree (fun n => n ^ 8) (fun n => n ^ 4) := by
-  apply restrict_ftisp keepScale 8 keepImplementation
+  apply restrict_ftisp keepScale 8 (keepImplementation.ofEncode fun _ => Tree.encode_self _)
   refine Dominated.of_le_mul 5 ?_
   rintro ⟨⟨n, m, c⟩, hn⟩
   have hm := c.outputs_le_size_encode

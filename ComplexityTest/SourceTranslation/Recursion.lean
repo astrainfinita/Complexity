@@ -106,12 +106,12 @@ def drainRecursion : TreeProgram.Source.Recursion drain where
   decreases := by intro xs h; cases xs <;> simp_all
 
 def drainFinish :
-    Implementation (fun x => ⌜drainRecursion.finish x⌝ₜ) (fun _ => 1) (fun _ => 1) := by
+    Implementation drainRecursion.finish (fun _ => 1) (fun _ => 1) := by
   source_fun_prop
   all_goals dominated
 
 def drainResume : Implementation
-    (fun x : drainRecursion.Return => ⌜drainRecursion.resume x.1 x.2⌝ₜ) (fun _ => 1)
+    (fun x : drainRecursion.Return => drainRecursion.resume x.1 x.2) (fun _ => 1)
     (fun _ => 1) := by
   source_fun_prop
   all_goals dominated
@@ -152,9 +152,7 @@ def drainTest : Implementation (fun xs : List Bool => !xs.isEmpty) (fun _ => 1)
 def drainStructural : Implementation drain
     (fun xs => 1 + (xs.length + 1) + 1)
     (fun xs => (⌜xs⌝ₜ.size + (xs.length + 1) * (⌜xs⌝ₜ.size + 1)) + 1) :=
-  (Implementation.ofEncode (f := drain) (g := fun xs => ⌜drain xs⌝ₜ) (fun _ => rfl)
-    (drainRecursion.implementation drainTest Implementation.listTail
-      drainFinish drainResume)).mono
+  (drainRecursion.implementation drainTest Implementation.listTail drainFinish drainResume).mono
     (((Dominated.refl _).add drain_cost_growth.1).add (Dominated.refl _))
     (drain_cost_growth.2.add (Dominated.refl _))
 

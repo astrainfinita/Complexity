@@ -58,7 +58,7 @@ private def uncertified : List Bool → List Bool
 -- Encoded results report the unsupported source operation, not its encoder.
 /--
 error: source translation: `ComplexityTest.SourceTranslation.Search.uncertified` needs a registered implementation (choose replacement source with `via`, or register a function equality with `[source]`)
-source path: fun xs => encode Complexity.Tree (uncertified xs) → fun xs => uncertified xs
+source path: fun xs => encode Complexity.Tree (uncertified xs) → uncertified
 -/
 #guard_msgs in
 example : Implementation (fun xs => ⌜uncertified xs⌝ₜ) (fun _ => 1) (fun _ => 1) := by

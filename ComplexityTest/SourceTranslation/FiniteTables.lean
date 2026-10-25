@@ -143,18 +143,7 @@ attribute [local fun_prop] Implementation.finComp in
 theorem composeWires_ftisp :
     composeWires ∈ FTISP .tree (fun n => n ^ 3) (fun n => n ^ 2) := by
   model_fun_prop
-  all_goals
-    simp only [Dominated.add_iff, Dominated.max_iff]
-    repeat' apply And.intro
-  all_goals first
-    | exact Dominated.refl _
-    | exact Dominated.const_of_pos _ (fun _ => Nat.pow_pos (Tree.size_pos _))
-    | apply Dominated.of_le
-      rintro ⟨n, k, m, f, g⟩
-      have hf := size_encode_fin_comp_le f g
-      have hpos := Tree.size_pos ⌜(n, k, m, f, g)⌝ₜ
-      simp only [Sigma.encode_mk, size_encode_prod, Tree.encode_self] at *
-      nlinarith [Nat.le_self_pow (by decide : 2 ≠ 0) ⌜(n, k, m, f, g)⌝ₜ.size]
+  all_goals dominated
 
 -- A represented table and a single callback implement one algorithm for every runtime index.
 -- Pointwise existence must not be mistaken for such a callback.

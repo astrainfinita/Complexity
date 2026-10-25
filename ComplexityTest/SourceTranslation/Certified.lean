@@ -132,9 +132,7 @@ def optionalReverseImpl := (by source_calls : Implementation optionalReverse _ _
 
 def singletonIndexed (x : Σ n, List (Fin n)) : Σ n, List (List (Fin n)) := ⟨x.1, [x.2]⟩
 
-def singletonIndexedImpl := (by
-  source_dependent
-  source_cases : Implementation singletonIndexed _ _)
+def singletonIndexedImpl := (by source_cases : Implementation singletonIndexed _ _)
 
 /-- info: 2 -/
 #guard_msgs in

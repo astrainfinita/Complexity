@@ -17,7 +17,7 @@ example : compImplementation.program =
 -- Recursive certification keeps the explicitly selected terminal callback.
 example : relabelImplementation.program =
     (relabelRecursion.implementation relabelCheck relabelNext relabelFinish relabelResume).program := rfl
-example : Implementation (fun x => ⌜relabelFinishFn x⌝ₜ)
+example : Implementation relabelFinishFn
     (fun x => ⌜x⌝ₜ.size ^ 3) (fun x => ⌜x⌝ₜ.size ^ 2) := relabelFinish
 
 def rewire (x : RelabelInput) : Σ n, Σ m, Circuit .booleanAlgebra n m :=
@@ -84,7 +84,7 @@ abbrev StoredRelabelInput := Σ n, Σ m, Circuit .booleanAlgebra n m × (Fin n �
     apply hp.mono_left
     rintro ⟨n, m, c, w⟩
     dsimp only [S, o, u, Function.comp_apply, relabelFn]
-    simp only [Sigma.encode_mk, RelabelInput.encode_mk, size_encode_prod, Tree.encode_self]
+    simp only [Sigma.encode_mk, RelabelInput.encode_mk, size_encode_prod]
     omega
 
 theorem rewireStored_ftisp :
@@ -127,11 +127,10 @@ def layersStored (x : Σ n, Circuit .booleanAlgebra (n + 1) n × List Unit) :
   simp only [← pow_mul, Function.comp_def, u] at htime hpeak
   have hout := (Dominated.comp unrollImplementation.size_encode u).trans
     ((hu.le_pow (by decide : 0 < 8)).max_same hpeak)
-  simp only [Tree.encode_self, Function.comp_def, u] at hout
+  simp only [Function.comp_def, u] at hout
   source_fun_prop
   all_goals
-    simp only [Sigma.encode_mk, Tree.encode_self,
-      size_encode_prod, Dominated.add_iff, Dominated.max_iff]
+    simp only [Sigma.encode_mk, size_encode_prod, Dominated.add_iff, Dominated.max_iff]
     repeat' apply And.intro
   all_goals with_reducible first
     | assumption
