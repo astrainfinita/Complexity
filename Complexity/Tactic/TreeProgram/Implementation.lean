@@ -59,9 +59,11 @@ theorem add_mul_le_mul_of_le_mul_tsub {a C P Q : ℕ} (ha : 0 < a) (h : a ≤ C 
   /-- Intermediate-tree size allowance for each source input. -/
   peak : α → ℕ
 
-/-- One uniform program implements the function on every encoded input, preserving its context. -/
-def Implements {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
-    (p : Value → Code Value) (f : α → β) (b : Bounds α) : Prop :=
+/-- One uniform program implements the function on every encoded input, preserving its context.
+The type of the result may depend on the input. -/
+def Implements {α : Type*} {β : α → Type*} [UniqueEncoding Tree α]
+    [∀ x, UniqueEncoding Tree (β x)] (p : Value → Code Value) (f : (x : α) → β x) (b : Bounds α) :
+    Prop :=
   (∀ v n, v.expression.bound ≤ n →
     n ≤ ((p v).build n).2.1 ∧ ((p v).build n).1.expression.bound ≤ ((p v).build n).2.1) ∧
   ∀ v n s x, v.expression.bound ≤ n → v.eval s = ⌜x⌝ₜ →
@@ -70,9 +72,10 @@ def Implements {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
 
 namespace Implements
 
-variable {α β γ : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
-  [UniqueEncoding Tree γ] {p q : Value → Code Value} {f : α → β} {g : β → γ}
-  {b c : Bounds α}
+section
+
+variable {α : Type*} {β γ : α → Type*} [UniqueEncoding Tree α] [∀ x, UniqueEncoding Tree (β x)]
+  [∀ x, UniqueEncoding Tree (γ x)] {p : Value → Code Value} {f : (x : α) → β x} {b c : Bounds α}
 
 theorem mono (hp : Implements p f b)
     (h : ∀ x, b.time x ≤ c.time x ∧ b.peak x ≤ c.peak x) : Implements p f c :=
@@ -90,8 +93,50 @@ theorem size_le (hp : Implements p f b) (x : α) :
   obtain ⟨_, _, _, _, ⟨ho, _⟩, hs⟩ := h.exec
   simpa only [ho] using hs
 
+/-- Reinterpret the result without changing the program or its resources. -/
+theorem of_encode {g : (x : α) → γ x} (hp : Implements p g b)
+    (hfg : ∀ x, ⌜f x⌝ₜ = ⌜g x⌝ₜ) : Implements p f b := by
+  refine ⟨hp.1, ?_⟩
+  intro v n s x hv hx
+  simpa only [hfg] using hp.2 v n s x hv hx
+
+/-- Continue with a program receiving both the computed value and the original input. -/
+theorem bindInput {r : Value → Value → Code Value} {g : (x : α) → γ x} {time peak : α → ℕ}
+    (hp : Implements p f b)
+    (hr₁ : ∀ u v n, u.expression.bound ≤ n → v.expression.bound ≤ n →
+      n ≤ ((r u v).build n).2.1 ∧ ((r u v).build n).1.expression.bound ≤ ((r u v).build n).2.1)
+    (hr₂ : ∀ u v n s x, u.expression.bound ≤ n → v.expression.bound ≤ n →
+      u.eval s = ⌜f x⌝ₜ → v.eval s = ⌜x⌝ₜ →
+      (r u v).Bounded n s (time x) (peak x) (fun w t => w.eval t = ⌜g x⌝ₜ ∧ ∀ j < n, t j = s j)) :
+    Implements (fun v => do let w ← p v; r w v) g
+      ⟨fun x => b.time x + time x, fun x => max (b.peak x) (peak x)⟩ := by
+  obtain ⟨hpFresh, hp⟩ := hp
+  constructor
+  · intro v n hv
+    obtain ⟨hn, hw⟩ := hpFresh v n hv
+    obtain ⟨hm, hz⟩ := hr₁ _ v _ hw (hv.trans hn)
+    exact ⟨hn.trans hm, hz⟩
+  · intro v n s x hv hx
+    obtain ⟨hn, hw⟩ := hpFresh v n hv
+    apply Code.Bounded.bind ((hp v n s x hv hx).with_result.mono le_rfl
+      (Nat.le_max_left _ _) (fun _ _ h => h))
+    rintro w t ⟨rfl, hwVal, ht⟩
+    apply (hr₂ _ v _ t x hw (hv.trans hn) hwVal ((v.eval_eq_of_forall_lt hv ht).trans hx)).mono
+      le_rfl (Nat.le_max_right _ _)
+    intro a u ⟨ha, hu⟩
+    exact ⟨ha, fun j hj => (hu j (hj.trans_le hn)).trans (ht j hj)⟩
+
+end
+
+section
+
+variable {α β : Type*} {γ : β → Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
+  [∀ y, UniqueEncoding Tree (γ y)] {p q : Value → Code Value} {f : α → β}
+  {g : (y : β) → γ y} {b : Bounds α}
+
+/-- The type of the second result may depend on the intermediate value. -/
 theorem comp {d : Bounds β} (hp : Implements p f b) (hq : Implements q g d) :
-    Implements (fun v => p v >>= q) (g ∘ f)
+    Implements (fun v => p v >>= q) (fun x => g (f x))
       ⟨fun x => b.time x + d.time (f x), fun x => max (b.peak x) (d.peak (f x))⟩ := by
   constructor
   · intro v n hv
@@ -108,22 +153,20 @@ theorem comp {d : Bounds β} (hp : Implements p f b) (hq : Implements q g d) :
     intro z u ⟨hz, hframe'⟩
     exact ⟨hz, fun j hj => (hframe' j (hj.trans_le hn)).trans (hframe j hj)⟩
 
-/-- Reinterpret the result without changing the program or its resources. -/
-theorem of_encode {g : α → γ} (hp : Implements p g b)
-    (hfg : ∀ x, ⌜f x⌝ₜ = ⌜g x⌝ₜ) : Implements p f b := by
-  refine ⟨hp.1, ?_⟩
-  intro v n s x hv hx
-  simpa only [hfg] using hp.2 v n s x hv hx
+end
 
 /-- Returning the supplied input incurs no assignment or intermediate-tree cost. -/
-theorem id : Implements (fun v => pure v) (id : α → α) ⟨fun _ => 0, fun _ => 0⟩ :=
+theorem id {α : Type*} [UniqueEncoding Tree α] :
+    Implements (fun v => pure v) (id : α → α) ⟨fun _ => 0, fun _ => 0⟩ :=
   ⟨fun _ _ hv => ⟨le_rfl, hv⟩,
     fun v _ _ _ _ hx => (Code.bounded_pure_iff v _).2 ⟨hx, fun _ _ => rfl⟩⟩
 
 /-- Restrict or reinterpret inputs without changing their codes or the implementing program. -/
-theorem map_input (hp : Implements p f b) (i : γ → α)
+theorem map_input {α γ : Type*} {β : α → Type*} [UniqueEncoding Tree α]
+    [∀ x, UniqueEncoding Tree (β x)] [UniqueEncoding Tree γ] {p : Value → Code Value}
+    {f : (x : α) → β x} {b : Bounds α} (hp : Implements p f b) (i : γ → α)
     (hi : ∀ x, ⌜i x⌝ₜ = ⌜x⌝ₜ) :
-    Implements p (f ∘ i) ⟨b.time ∘ i, b.peak ∘ i⟩ := by
+    Implements p (fun x => f (i x)) ⟨b.time ∘ i, b.peak ∘ i⟩ := by
   refine ⟨hp.1, ?_⟩
   intro v n s x hv hx
   exact hp.2 v n s (i x) hv (hx.trans (hi x).symm)
@@ -142,8 +185,8 @@ def callCode (p : Value → Code Value) (e : Expr ℕ) : Code Value :=
 
 namespace Implements
 
-variable {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
-  {p : Value → Code Value} {f : α → β} {b : Bounds α}
+variable {α : Type*} {β : α → Type*} [UniqueEncoding Tree α] [∀ x, UniqueEncoding Tree (β x)]
+  {p : Value → Code Value} {f : (x : α) → β x} {b : Bounds α}
 
 @[simp] theorem callCode_result (p : Value → Code Value) (e : Expr ℕ) (n : ℕ) :
     ((callCode p e).build n).1 = .var n := rfl
@@ -181,8 +224,8 @@ end Implements
 
 /-- A fixed program for `f` whose exact budgets grow at most like `time` and `peak`.
 The hidden coefficient is uniform over all inputs, including repeated calls on small inputs. -/
-structure Implementation {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
-    (f : α → β) (time peak : α → ℕ) where
+structure Implementation {α : Type*} {β : α → Type*} [UniqueEncoding Tree α]
+    [∀ x, UniqueEncoding Tree (β x)] (f : (x : α) → β x) (time peak : α → ℕ) where
   /-- One code generator shared by all encoded inputs. -/
   program : Value → Code Value
   /-- Some exact budgets certify the program and are dominated by the stated growth. -/
@@ -190,8 +233,10 @@ structure Implementation {α β : Type*} [UniqueEncoding Tree α] [UniqueEncodin
 
 namespace Implementation
 
-variable {α β γ : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
-  [UniqueEncoding Tree γ] {f : α → β} {g : β → γ} {t p : α → ℕ} {u q : β → ℕ}
+section
+
+variable {α : Type*} {β γ : α → Type*} [UniqueEncoding Tree α] [∀ x, UniqueEncoding Tree (β x)]
+  [∀ x, UniqueEncoding Tree (γ x)] {f : (x : α) → β x} {t p : α → ℕ}
 
 /-- Use the exact budgets of a certified program as its growth specification. -/
 def ofImplements (program : Value → Code Value) (b : Bounds α) (h : Implements program f b) :
@@ -248,34 +293,52 @@ theorem callCode_fresh (hf : Implementation f t p) (e : Expr ℕ) (n : ℕ) :
   obtain ⟨b, h, -⟩ := hf.sound
   exact h.callCode_fresh e n
 
-/-- Returning the supplied input incurs no assignment or intermediate-tree cost. -/
-def identity : Implementation (id : α → α) (fun _ => 0) (fun _ => 0) :=
-  ofImplements (fun v => pure v) ⟨fun _ => 0, fun _ => 0⟩ Implements.id
-
-/-- Compose implementations; the second call is charged at the intermediate value. -/
-def comp (hf : Implementation f t p) (hg : Implementation g u q) :
-    Implementation (g ∘ f) (fun x => t x + u (f x)) (fun x => max (p x) (q (f x))) where
-  program v := hf.program v >>= hg.program
-  sound := by
-    obtain ⟨b, hb, hbt, hbp⟩ := hf.sound
-    obtain ⟨c, hc, hct, hcp⟩ := hg.sound
-    exact ⟨_, hb.comp hc, hbt.add (hct.comp f), hbp.max (hcp.comp f)⟩
-
 /-- Change the source function by equality, retaining the program and growth. -/
-def congr (hf : Implementation f t p) {g : α → β} (h : f = g) : Implementation g t p :=
+def congr (hf : Implementation f t p) {g : (x : α) → β x} (h : f = g) : Implementation g t p :=
   ⟨hf.program, h ▸ hf.sound⟩
 
 /-- Retain a program when only the interpretation of its encoded result changes. -/
-def ofEncode {f : α → β} {g : α → γ} (hfg : ∀ x, ⌜f x⌝ₜ = ⌜g x⌝ₜ)
+def ofEncode {g : (x : α) → γ x} (hfg : ∀ x, ⌜f x⌝ₜ = ⌜g x⌝ₜ)
     (hg : Implementation g t p) : Implementation f t p where
   program := hg.program
   sound := by
     obtain ⟨b, h, ht, hp⟩ := hg.sound
     exact ⟨b, h.of_encode hfg, ht, hp⟩
 
+end
+
+/-- Returning the supplied input incurs no assignment or intermediate-tree cost. -/
+def identity {α : Type*} [UniqueEncoding Tree α] :
+    Implementation (id : α → α) (fun _ => 0) (fun _ => 0) :=
+  ofImplements (fun v => pure v) ⟨fun _ => 0, fun _ => 0⟩ Implements.id
+
+variable {α β γ : Type*} {δ : β → Type*} {ε : α → Type*} [UniqueEncoding Tree α]
+  [UniqueEncoding Tree β] [UniqueEncoding Tree γ] [∀ y, UniqueEncoding Tree (δ y)]
+  [∀ x, UniqueEncoding Tree (ε x)] {t p : α → ℕ} {u q : β → ℕ}
+
+/-- Compose implementations; the second call is charged at the intermediate value, and its
+result type may depend on that value. Rules state their results through this; a family of
+encodings applied to a computed value is not a pattern `fun_prop` can unify, so it composes
+with `comp`. -/
+def compDep {f : α → β} {g : (y : β) → δ y} (hf : Implementation f t p)
+    (hg : Implementation g u q) :
+    Implementation (fun x => g (f x)) (fun x => t x + u (f x)) (fun x => max (p x) (q (f x)))
+    where
+  program v := hf.program v >>= hg.program
+  sound := by
+    obtain ⟨b, hb, hbt, hbp⟩ := hf.sound
+    obtain ⟨c, hc, hct, hcp⟩ := hg.sound
+    exact ⟨_, hb.comp hc, hbt.add (hct.comp f), hbp.max (hcp.comp f)⟩
+
+/-- Compose implementations; the second call is charged at the intermediate value. -/
+def comp {f : α → β} {g : β → γ} (hf : Implementation f t p) (hg : Implementation g u q) :
+    Implementation (g ∘ f) (fun x => t x + u (f x)) (fun x => max (p x) (q (f x))) :=
+  hf.compDep hg
+
 /-- Reinterpret inputs with the same codes, retaining the program. -/
-def mapInput (hf : Implementation f t p) (i : γ → α) (hi : ∀ x, ⌜i x⌝ₜ = ⌜x⌝ₜ) :
-    Implementation (f ∘ i) (fun x => t (i x)) (fun x => p (i x)) where
+def mapInput {f : (x : α) → ε x} (hf : Implementation f t p) (i : γ → α)
+    (hi : ∀ x, ⌜i x⌝ₜ = ⌜x⌝ₜ) :
+    Implementation (fun x => f (i x)) (fun x => t (i x)) (fun x => p (i x)) where
   program := hf.program
   sound := by
     obtain ⟨b, h, ht, hp⟩ := hf.sound

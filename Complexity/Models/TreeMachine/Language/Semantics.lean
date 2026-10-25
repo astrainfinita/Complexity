@@ -72,6 +72,24 @@ theorem size_eval_le_maxSize (e : Expr ν) (s : ν → Tree) :
   | right e ih => exact Nat.le_trans (Tree.size_right_le _) ih
   | pair a b => exact Nat.le_trans (Nat.le_max_right _ _) (Nat.le_max_right _ _)
 
+/-- An expression building a constant tree. -/
+def ofTree : Tree → Expr ν
+  | .nil => .nil
+  | .node _ l r => .pair (ofTree l) (ofTree r)
+
+@[simp] theorem eval_ofTree (T : Tree) (s : ν → Tree) : (ofTree T).eval s = T := by
+  induction T with
+  | nil => rfl
+  | node _ l r hl hr => simp only [ofTree, eval_pair, hl, hr]
+
+@[simp] theorem maxSize_ofTree (T : Tree) (s : ν → Tree) : (ofTree T).maxSize s = T.size := by
+  induction T with
+  | nil => rfl
+  | node _ l r hl hr =>
+    simp only [ofTree, maxSize, hl, hr, eval_ofTree]
+    change max (Tree.size l) (max (Tree.size r) (Tree.pair l r).size) = (Tree.pair l r).size
+    simp only [Tree.size_pair]; omega
+
 /-- Exact unit time for obtaining an expression's value; existing values need no copy. -/
 @[simp] def steps : Expr ν → ℕ
   | .nil | .var _ => 0

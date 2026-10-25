@@ -54,7 +54,7 @@ simproc_decl sourcePair (encode Tree _) := expandPair
 /-- The tree a closed tree term evaluates to at default transparency. A finite source case is a
 table on the shape of the input, so a closed value in it is a constant of the table, computed by
 the translation rather than by the program. -/
-private partial def closedTree (t : Lean.Expr) : MetaM (Option Lean.Expr) := do
+partial def closedTree (t : Lean.Expr) : MetaM (Option Lean.Expr) := do
   let t ← withTransparency .default <| whnf t
   match t.getAppFn.constName?, t.getAppArgs with
   | some ``BinaryTree.nil, _ => return mkConst ``Tree.nil
@@ -234,6 +234,9 @@ private def caseEquations (g : MVarId) (f outputType outputInst : Lean.Expr)
     (ctx : Simp.Context) (procs : Simp.SimprocsArray) :
     MetaM (Lean.Expr × Lean.Expr × MVarId × Array Lean.Expr) := do
   let input := inputCode.appArg!
+  -- The output type may depend on the input.
+  let outputType := outputType.beta #[input]
+  let outputInst := outputInst.beta #[input]
   let ri := (← simp inputCode ctx procs).1
   let output ← mkAppOptM ``encode
     #[some (mkConst ``Tree), some outputType, some outputInst, some out]
@@ -363,7 +366,8 @@ def sourceCases : TacticM Unit := withMainContext do
     let input ← mkAppOptM ``encode
       #[some (mkConst ``Tree), some inputType, some inputInst, some x]
     let output ← mkAppOptM ``encode
-      #[some (mkConst ``Tree), some outputType, some outputInst, some (mkApp f x).headBeta]
+      #[some (mkConst ``Tree), some (outputType.beta #[x]), some (outputInst.beta #[x]),
+        some (mkApp f x).headBeta]
     let peak ← mkAppM ``max #[← mkAppM ``Tree.size #[input], ← mkAppM ``Tree.size #[output]]
     return (← mkLambdaFVars #[x] time, ← mkLambdaFVars #[x] peak)
   bounds.mvarId!.assign (← mkAppM ``Bounds.mk #[timeFn, peak])

@@ -90,24 +90,35 @@ def Implementation.lookup {α : Type*} [UniqueEncoding Tree α] :
   case stop_pos => exact fun _ => Nat.zero_lt_one
   case time => dominated
 
-def Implementation.getElem? {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
-    {f : α → List β} {i : α → ℕ} {tf pf ti pi : α → ℕ} (hf : Implementation f tf pf)
-    (hi : Implementation i ti pi) :
+theorem encode_option_codes {γ : Type*} [UniqueEncoding Tree γ] (o : Option γ) :
+    ⌜o.map (encode Tree)⌝ₜ = ⌜o⌝ₜ := by
+  cases o <;> simp only [Option.map_none, Option.map_some, encode_option_none, encode_option_some,
+    encode_prod, Tree.encode_self]
+
+/-- Look an index up in a list, on the codes of its entries. -/
+def Implementation.getElem? {α : Type*} {β : α → Type*} [UniqueEncoding Tree α]
+    [∀ x, UniqueEncoding Tree (β x)] {f : (x : α) → List (β x)} {i : α → ℕ} {tf pf ti pi : α → ℕ}
+    (hf : Implementation f tf pf) (hi : Implementation i ti pi) :
     Implementation (fun x => (f x)[i x]?) (fun x => ti x + (tf x + 1) + ⌜(i x, f x)⌝ₜ.size ^ 2)
       (fun x => max (max (pi x) (max (pf x) ⌜(i x, f x)⌝ₜ.size)) ⌜(i x, f x)⌝ₜ.size) :=
-  (hi.pair hf).comp Implementation.lookup
+  (((hi.pair hf.listCodes).comp Implementation.lookup).ofEncode fun x => by
+      simp only [Function.comp_apply, List.getElem?_map, encode_option_codes]).mono
+    (Dominated.of_le fun x => by simp only [size_encode_prod, encode_list_codes, le_refl])
+    (Dominated.of_le fun x => by simp only [size_encode_prod, encode_list_codes, le_refl])
 
 attribute [scoped fun_prop] Implementation.getElem?
 
-def Implementation.encodeTree {α : Type*} [UniqueEncoding Tree α] :
-    Implementation (encode Tree : α → Tree) (fun _ => 0) (fun _ => 0) :=
-  .ofEncode (g := id) (fun _ => rfl) Implementation.identity
+/-- The code of a computed value is the value's own result. -/
+def Implementation.encodeTree {α : Type*} {β : α → Type*} [UniqueEncoding Tree α]
+    [∀ x, UniqueEncoding Tree (β x)] {v : (x : α) → β x} {t p : α → ℕ}
+    (hv : Implementation v t p) : Implementation (fun x => ⌜v x⌝ₜ) t p :=
+  hv.ofEncode fun _ => Tree.encode_self _
 
 attribute [scoped fun_prop] Implementation.encodeTree
 
 /-- Reading a represented table reuses its code; construction remains a separate premise. -/
-def Implementation.ofFn {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
-    {n : α → ℕ} {f : (x : α) → Fin (n x) → β} {t p : α → ℕ}
+def Implementation.ofFn {α : Type*} {β : α → Type*} [UniqueEncoding Tree α]
+    [∀ x, UniqueEncoding Tree (β x)] {n : α → ℕ} {f : (x : α) → Fin (n x) → β x} {t p : α → ℕ}
     (hf : Implementation (fun x => ⌜f x⌝ₜ) t p) :
     Implementation (fun x => List.ofFn (f x)) t p :=
   .ofEncode (g := fun x => ⌜f x⌝ₜ) (fun _ => rfl) hf
@@ -122,67 +133,13 @@ def Implementation.someValue {β : Type*} [UniqueEncoding Tree β] :
   all_goals dominated
 
 /-- Removing a known successful result adds one fixed operation and retains the selected call. -/
-def Implementation.ofSome {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
-    {f : α → β} {g : α → Option β} {t p : α → ℕ} (hg : Implementation g t p)
-    (hfg : ∀ x, g x = some (f x)) :
+def Implementation.ofSome {α : Type*} {β : α → Type*} [UniqueEncoding Tree α]
+    [∀ x, UniqueEncoding Tree (β x)] {f : (x : α) → β x} {g : (x : α) → Option (β x)}
+    {t p : α → ℕ} (hg : Implementation g t p) (hfg : ∀ x, g x = some (f x)) :
     Implementation f (fun x => t x + 1) (fun x => max (p x) ⌜g x⌝ₜ.size) :=
-  .ofEncode (fun x => by simp [hfg]) (hg.comp Implementation.someValue)
-
-def Implementation.finApply {α : Type*} [UniqueEncoding Tree α] :
-    Implementation (fun x : Σ n, (Fin n → α) × Fin n => x.2.1 x.2.2) (fun x => ⌜x⌝ₜ.size ^ 2)
-      (fun x => ⌜x⌝ₜ.size) := by
-  have hget : Dominated
-      (fun x : Σ n, (Fin n → α) × Fin n => ⌜(List.ofFn x.2.1)[x.2.2.val]?⌝ₜ.size)
-      (fun x => ⌜x⌝ₜ.size) := by
-    apply Dominated.of_le
-    rintro ⟨n, f, i⟩
-    have hsize := size_encode_fin_apply_le f i
-    have he : (List.ofFn f)[i.val]? = some (f i) := by simp
-    simp only [he, encode_option_some, Sigma.encode_mk, size_encode_prod, size_encode_unit]
-    have hn := Tree.size_pos ⌜n⌝ₜ
-    have hi := Tree.size_pos ⌜i⌝ₜ
-    omega
-  refine (Implementation.ofSome
-    (g := fun x : Σ n, (Fin n → α) × Fin n => (List.ofFn x.2.1)[x.2.2.val]?)
-    (t := fun x => ⌜x⌝ₜ.size ^ 2) (p := fun x => ⌜x⌝ₜ.size) ?_ (by rintro ⟨n, f, i⟩; simp)).mono
-    ?_ ?_
-  · source_fun_prop
-    all_goals dominated
-  · exact (Dominated.refl _).add_same
-      (Dominated.const_of_pos _ fun _ => Nat.pow_pos (Tree.size_pos _))
-  · exact (Dominated.refl _).max_same hget
-
-/-- A table whose length is fixed by the type is read like a runtime-length table. -/
-def Implementation.finApplyFixed {α : Type*} [UniqueEncoding Tree α] (n : ℕ) :
-    Implementation (fun x : (Fin n → α) × Fin n => x.1 x.2) (fun x => ⌜x⌝ₜ.size ^ 2)
-      (fun x => ⌜x⌝ₜ.size) := by
-  have hget : Dominated
-      (fun x : (Fin n → α) × Fin n => ⌜(List.ofFn x.1)[x.2.val]?⌝ₜ.size)
-      (fun x => ⌜x⌝ₜ.size) := by
-    apply Dominated.of_le
-    rintro ⟨f, i⟩
-    have hsize := size_encode_fin_apply_le f i
-    have he : (List.ofFn f)[i.val]? = some (f i) := by simp
-    simp only [he, encode_option_some, size_encode_prod, size_encode_unit]
-    have hi := Tree.size_pos ⌜i⌝ₜ
-    omega
-  refine (Implementation.ofSome
-    (g := fun x : (Fin n → α) × Fin n => (List.ofFn x.1)[x.2.val]?)
-    (t := fun x => ⌜x⌝ₜ.size ^ 2) (p := fun x => ⌜x⌝ₜ.size) ?_ (by rintro ⟨f, i⟩; simp)).mono
-    ?_ ?_
-  · source_fun_prop
-    all_goals dominated
-  · exact (Dominated.refl _).add_same
-      (Dominated.const_of_pos _ fun _ => Nat.pow_pos (Tree.size_pos _))
-  · exact (Dominated.refl _).max_same hget
-
-attribute [scoped fun_prop] Implementation.finApply Implementation.finApplyFixed
-
-theorem finApply_ftisp {α : Type*} [UniqueEncoding Tree α] :
-    (fun x : Σ n, (Fin n → α) × Fin n => x.2.1 x.2.2) ∈
-      FTISP .tree (fun n => n ^ 2) (fun n => n ^ 1) :=
-  (Implementation.finApply.mono (Dominated.refl _)
-    (Dominated.of_le fun _ => by rw [pow_one])).mem_ftisp_pow (by decide)
+  (((hg.ofEncode (f := fun x => (g x).map (encode Tree)) fun x => encode_option_codes _).comp
+    Implementation.someValue).ofEncode fun x => by simp [hfg]).mono
+    (Dominated.refl _) (Dominated.of_le fun x => by simp only [encode_option_codes, le_refl])
 
 def rangeContinues (x : ℕ × List ℕ) : Bool := !x.1.bits.isEmpty
 
@@ -336,10 +293,10 @@ attribute [scoped fun_prop] Implementation.length
 /-- Construct a represented tuple using one selected callback for every environment and index.
 Tabulation sums the callback growth; one coefficient covers every environment and index. -/
 def Implementation.finFunction {ρ : Type*} {β : ρ → Type*}
-    [UniqueEncoding Tree ρ] [∀ e, UniqueEncoding Tree (β e)]
+    [UniqueEncoding Tree ρ] [instβ : ∀ e, UniqueEncoding Tree (β e)]
     {n : ρ → ℕ} {f : (e : ρ) → Fin (n e) → β e} {tn pn : ρ → ℕ} {tf pf : (Σ e, Fin (n e)) → ℕ}
     (hn : Implementation n tn pn)
-    (hf : Implementation (fun p : Σ e, Fin (n e) => ⌜f p.1 p.2⌝ₜ) tf pf) :
+    (hf : Implementation (fun p : Σ e, Fin (n e) => f p.1 p.2) tf pf) :
     Implementation (fun e => ⌜f e⌝ₜ)
       (fun e => (tn e + (n e + 1) ^ 2 + 1) +
         (((List.finRange (n e)).map (fun i => tf ⟨e, i⟩)).sum + n e + 1))
@@ -350,17 +307,16 @@ def Implementation.finFunction {ρ : Type*} {β : ρ → Type*}
       ⌜(e, List.range (n e))⌝ₜ := by simp only [Sigma.encode_mk, encode_prod, encode_finRange]
   let he := Implementation.ofEncode heq
     (Implementation.identity.pair (hn.comp Implementation.range))
-  refine (Implementation.ofEncode (g := fun e => (List.finRange (n e)).map (fun i => ⌜f e i⌝ₜ))
-    (fun e => by rw [← List.ofFn_eq_map, Tree.encode_self, encode_fin_function_codes])
-    (he.mapDependentWith (f := fun e i => ⌜f e i⌝ₜ) hf)).mono ?_ ?_
+  refine (Implementation.ofEncode (g := fun e => (List.finRange (n e)).map (f e))
+    (fun e => by rw [← List.ofFn_eq_map, Tree.encode_self, encode_fin_function])
+    (he.mapDependentWith (f := f) hf)).mono ?_ ?_
   · apply Dominated.of_le
     intro e
     simp only [Nat.zero_add, List.length_finRange]
     omega
   · apply Dominated.of_le
     intro e
-    simp only [Nat.zero_max, ← List.ofFn_eq_map,
-      encode_fin_function_codes, heq, id_eq]
+    simp only [Nat.zero_max, ← List.ofFn_eq_map, ← encode_fin_function, heq, id_eq]
     omega
 
 end Complexity.TreeProgram.Source
@@ -378,18 +334,20 @@ end tabulate
 
 namespace Complexity.TreeProgram.Source
 
-/-- Evaluate the index and table once, then reuse the represented-list lookup. -/
-def Implementation.finApplyEncoded {ρ : Type*} {β : ρ → Type*}
+/-- Reading a represented table evaluates the index and the table once, then looks the index up
+in the table's code. -/
+def Implementation.finApply {ρ : Type*} {β : ρ → Type*}
     [UniqueEncoding Tree ρ] [∀ e, UniqueEncoding Tree (β e)]
     {n : ρ → ℕ} {f : (e : ρ) → Fin (n e) → β e} {i : (e : ρ) → Fin (n e)} {tf pf ti pi : ρ → ℕ}
     (hf : Implementation (fun e => ⌜f e⌝ₜ) tf pf)
     (hi : Implementation (fun e => (i e).val) ti pi) :
-    Implementation (fun e => ⌜f e (i e)⌝ₜ)
+    Implementation (fun e => f e (i e))
       (fun e => ti e + (tf e + 1) + ⌜(i e, f e)⌝ₜ.size ^ 2 + 1)
       (fun e => max (pi e) (max (pf e) ⌜(i e, f e)⌝ₜ.size)) := by
   let ht : Implementation (fun e => List.ofFn (fun i => ⌜f e i⌝ₜ)) tf pf :=
     .ofEncode (fun e => (encode_fin_function_codes _).trans (Tree.encode_self _).symm) hf
-  refine (((hi.pair ht).comp Implementation.lookup).ofSome (by intro e; simp)).mono ?_ ?_
+  refine ((((hi.pair ht).comp Implementation.lookup).ofSome (by intro e; simp)).ofEncode
+    (fun e => (Tree.encode_self _).symm)).mono ?_ ?_
   · apply Dominated.of_le
     intro e
     simp only [size_encode_prod, encode_fin_function_codes, encode_fin]
@@ -403,34 +361,98 @@ def Implementation.finApplyEncoded {ρ : Type*} {β : ρ → Type*}
       encode_fin_function_codes, encode_fin]
     omega
 
-/-- Reading a finite-valued table retains the encoded lookup's selected program and growth. -/
-def Implementation.finValApply {ρ : Type*} [UniqueEncoding Tree ρ]
-    {n k : ρ → ℕ} {f : (e : ρ) → Fin (n e) → Fin (k e)} {i : (e : ρ) → Fin (n e)}
-    {tf pf ti pi : ρ → ℕ} (hf : Implementation (fun e => ⌜f e⌝ₜ) tf pf)
-    (hi : Implementation (fun e => (i e).val) ti pi) :
-    Implementation (fun e => (f e (i e)).val)
-      (fun e => ti e + (tf e + 1) + ⌜(i e, f e)⌝ₜ.size ^ 2 + 1)
-      (fun e => max (pi e) (max (pf e) ⌜(i e, f e)⌝ₜ.size)) :=
-  .ofEncode (fun _ => (encode_fin _).symm.trans (Tree.encode_self _).symm)
-    (Implementation.finApplyEncoded hf hi)
-
 /-- A one-element list of an encoded value. -/
 def Implementation.singleton : Implementation (fun t : Tree => [t]) (fun _ => 1)
     (fun t => ⌜t⌝ₜ.size) := by
   source_fun_prop
   all_goals dominated
 
+namespace Implementation
+
+def listTail {α : Type*} [UniqueEncoding Tree α] :
+    Implementation (List.tail : List α → List α) (fun _ => 1) (fun xs => ⌜xs⌝ₜ.size) := by
+  source_fun_prop
+  all_goals dominated
+
+end Implementation
+
+attribute [scoped fun_prop] Implementation.listTail
+
+def Implementation.prepend {α : Type*} [UniqueEncoding Tree α] :
+    Implementation (Function.uncurry (fun acc : List α => fun x => x :: acc)) (fun _ => 1)
+      (fun x => ⌜x⌝ₜ.size) := by
+  source_fun_prop
+  all_goals dominated
+
+/-- Prepending charges each element once and stores only the final list. -/
+@[scoped fun_prop] def Implementation.prependFold {α : Type*} [UniqueEncoding Tree α] :
+    Implementation (fun x : List α × List α => x.2.foldl (fun acc a => a :: acc) x.1)
+      (fun x => x.2.length + 1) (fun x => ⌜x⌝ₜ.size) :=
+  Implementation.prepend.foldl.mono (by dominated [foldlTime_eq_sum (t := fun _ : α => 1)])
+    (by dominated [foldlPeak_prepend])
+
+section Index
+
+/-! Operations on indices; an index is stored as its value. -/
+
+variable {ρ : Type*} [UniqueEncoding Tree ρ] {k m : ρ → ℕ} {i : (e : ρ) → Fin (k e)}
+  {t p : ρ → ℕ}
+
+/-- The last index is stored as its value. -/
+def Implementation.finLast (hk : Implementation k t p) :
+    Implementation (fun e => Fin.last (k e)) t p :=
+  hk.ofEncode fun _ => by rw [encode_fin, Fin.val_last]
+
+/-- Casting an index up keeps its value. -/
+def Implementation.finCastSucc (hi : Implementation i t p) :
+    Implementation (fun e => (i e).castSucc) t p :=
+  .ofEncode (f := fun e => (i e).castSucc) (g := i) (fun _ => rfl) hi
+
+/-- Casting an index into a longer range keeps its value. -/
+def Implementation.finCastAdd (hi : Implementation i t p) :
+    Implementation (fun e => Fin.castAdd (m e) (i e)) t p :=
+  .ofEncode (f := fun e => Fin.castAdd (m e) (i e)) (g := i) (fun _ => rfl) hi
+
+/-- Shifting an index is an addition of its value. -/
+def Implementation.finNatAdd (h : Implementation (fun e => m e + (i e).val) t p) :
+    Implementation (fun e => Fin.natAdd (m e) (i e)) t p :=
+  .ofEncode (f := fun e => Fin.natAdd (m e) (i e)) (g := fun e => m e + (i e).val)
+    (fun _ => rfl) h
+
+/-- The value of an index is stored as the index. -/
+def Implementation.finVal (hi : Implementation i t p) :
+    Implementation (fun e => (i e).val) t p :=
+  .ofEncode (f := fun e => (i e).val) (g := i) (fun _ => rfl) hi
+
+/-- The next index is a successor of the value. -/
+def Implementation.finSucc (h : Implementation (fun e => (i e).val + 1) t p) :
+    Implementation (fun e => (i e).succ) t p :=
+  .ofEncode (f := fun e => (i e).succ) (g := fun e => (i e).val + 1) (fun _ => rfl) h
+
+/-- The first index of a nonempty range is stored as zero, the empty tree. -/
+def Implementation.finZero :
+    Implementation (fun e => (0 : Fin (k e + 1))) (fun _ => 0) (fun _ => 0) :=
+  .ofEncode (f := fun e => (0 : Fin (k e + 1))) (g := fun _ => ())
+    (fun e => by rw [encode_fin, encode_unit]; simp; rfl) Implementation.unit
+
+attribute [scoped fun_prop] Implementation.finVal Implementation.finSucc Implementation.finZero
+  Implementation.finCastSucc Implementation.finCastAdd Implementation.finNatAdd
+  Implementation.finLast
+
+end Index
+
 /-- Extend a represented table without re-enumerating its indices. -/
 def Implementation.finSnoc {ρ : Type*} {α : ρ → Type*}
     [UniqueEncoding Tree ρ] [∀ e, UniqueEncoding Tree (α e)]
     {n : ρ → ℕ} {f : (e : ρ) → Fin (n e) → α e} {a : (e : ρ) → α e} {tf pf ta pa : ρ → ℕ}
-    (hf : Implementation (fun e => ⌜f e⌝ₜ) tf pf) (ha : Implementation (fun e => ⌜a e⌝ₜ) ta pa) :
+    (hf : Implementation (fun e => ⌜f e⌝ₜ) tf pf) (ha : Implementation a ta pa) :
     Implementation (fun e => ⌜Fin.snoc (α := fun _ => α e) (f e) (a e)⌝ₜ)
       (fun e => tf e + ta e + n e + 1)
       (fun e => max (pf e) (max (pa e) (⌜f e⌝ₜ.size + ⌜a e⌝ₜ.size))) := by
   let ht : Implementation (fun e => List.ofFn (fun i => ⌜f e i⌝ₜ)) tf pf :=
     .ofEncode (fun e => (encode_fin_function_codes _).trans (Tree.encode_self _).symm) hf
-  refine (Implementation.ofEncode ?_ (ht.append (ha.comp Implementation.singleton))).mono ?_ ?_
+  let hc : Implementation (fun e => ⌜a e⌝ₜ) ta pa := ha.ofEncode fun e => Tree.encode_self _
+  refine (Implementation.ofEncode ?_ (ht.append (hc.comp Implementation.singleton))).mono ?_ ?_
   · intro e
     rw [Tree.encode_self, encode_fin_snoc]
     simpa only [List.map_append, List.map_cons, List.map_nil, List.map_ofFn,
@@ -471,15 +493,25 @@ def Implementation.finAppend {ρ : Type*} {α : ρ → Type*}
     (encode_list_map_of_encode (encode Tree) (fun _ => Tree.encode_self _)
       (List.ofFn (f e) ++ List.ofFn (g e))).symm
 
--- Known operations reuse their certificates before unfolding. General lookup remains a
--- fallback after stored-field extraction; new tables still require explicit guidance.
-attribute [scoped fun_prop] Implementation.finSnoc Implementation.finAppend
-attribute [scoped source_fallback] Implementation.finApplyEncoded Implementation.finValApply
+/-- Casting the entries of a table of indices up keeps its code. -/
+def Implementation.finCastSuccComp {ρ : Type*} [UniqueEncoding Tree ρ] {n k : ρ → ℕ}
+    {f : (e : ρ) → Fin (n e) → Fin (k e)} {t p : ρ → ℕ}
+    (hf : Implementation (fun e => ⌜f e⌝ₜ) t p) :
+    Implementation (fun e => ⌜Fin.castSucc ∘ f e⌝ₜ) t p :=
+  hf.ofEncode fun e => by rw [Tree.encode_self, Tree.encode_self, encode_fin_castSucc]
 
-open Lean Meta Mathlib.Meta.FunProp in
-run_elab do
-  addTheorem ``Implementation.finApplyEncoded .scoped 100
-  addTheorem ``Implementation.finValApply .scoped 100
+/-- Erasing the bounds of a table of indices keeps its code. -/
+def Implementation.finValComp {ρ : Type*} [UniqueEncoding Tree ρ] {n k : ρ → ℕ}
+    {f : (e : ρ) → Fin (n e) → Fin (k e)} {t p : ρ → ℕ}
+    (hf : Implementation (fun e => ⌜f e⌝ₜ) t p) :
+    Implementation (fun e => ⌜Fin.val ∘ f e⌝ₜ) t p :=
+  hf.ofEncode fun e => by
+    rw [Tree.encode_self, Tree.encode_self]
+    exact encode_fin_function_congr _ _ fun _ => rfl
+
+-- Known operations reuse their certificates before unfolding.
+attribute [scoped fun_prop] Implementation.finSnoc Implementation.finAppend
+  Implementation.finCastSuccComp Implementation.finValComp
 
 abbrev FinCompInput := Σ n, Σ k, Σ m, (Fin n → Fin k) × (Fin k → Fin m)
 
@@ -489,7 +521,7 @@ def finCompCountImplementation :
   all_goals dominated
 
 def finCompStepImplementation :
-    Implementation (fun z : Σ x : FinCompInput, Fin x.1 => ⌜z.1.2.2.2.2 (z.1.2.2.2.1 z.2)⌝ₜ)
+    Implementation (fun z : Σ x : FinCompInput, Fin x.1 => z.1.2.2.2.2 (z.1.2.2.2.1 z.2))
       (fun z => ⌜z.1⌝ₜ.size ^ 2) (fun z => ⌜z.1⌝ₜ.size ^ 2) := by
   source_fun_prop
   all_goals dominated
@@ -498,7 +530,7 @@ def finCompStepImplementation :
 def finCompImplementation : Implementation (fun x : FinCompInput => ⌜x.2.2.2.2 ∘ x.2.2.2.1⌝ₜ)
     (fun x => ⌜x⌝ₜ.size ^ 3) (fun x => ⌜x⌝ₜ.size ^ 2) := by
   refine (Implementation.finFunction (β := fun x : FinCompInput => Fin x.2.2.1)
-    (n := fun x => x.1) (f := fun x => x.2.2.2.2 ∘ x.2.2.2.1)
+    (instβ := fun _ => inferInstance) (n := fun x => x.1) (f := fun x => x.2.2.2.2 ∘ x.2.2.2.1)
     finCompCountImplementation finCompStepImplementation).mono ?_ ?_
   all_goals dominated
 
@@ -512,29 +544,5 @@ def Implementation.finComp {ρ : Type*} [UniqueEncoding Tree ρ]
       (fun e => t e + ⌜(⟨n e, k e, m e, f e, g e⟩ : FinCompInput)⌝ₜ.size ^ 3)
       (fun e => max (p e) (⌜(⟨n e, k e, m e, f e, g e⟩ : FinCompInput)⌝ₜ.size ^ 2)) :=
   h.comp finCompImplementation
-
-namespace Implementation
-
-def listTail {α : Type*} [UniqueEncoding Tree α] :
-    Implementation (List.tail : List α → List α) (fun _ => 1) (fun xs => ⌜xs⌝ₜ.size) := by
-  source_fun_prop
-  all_goals dominated
-
-end Implementation
-
-attribute [scoped fun_prop] Implementation.listTail
-
-def Implementation.prepend {α : Type*} [UniqueEncoding Tree α] :
-    Implementation (Function.uncurry (fun acc : List α => fun x => x :: acc)) (fun _ => 1)
-      (fun x => ⌜x⌝ₜ.size) := by
-  source_fun_prop
-  all_goals dominated
-
-/-- Prepending charges each element once and stores only the final list. -/
-@[scoped fun_prop] def Implementation.prependFold {α : Type*} [UniqueEncoding Tree α] :
-    Implementation (fun x : List α × List α => x.2.foldl (fun acc a => a :: acc) x.1)
-      (fun x => x.2.length + 1) (fun x => ⌜x⌝ₜ.size) :=
-  Implementation.prepend.foldl.mono (by dominated [foldlTime_eq_sum (t := fun _ : α => 1)])
-    (by dominated [foldlPeak_prepend])
 
 end Complexity.TreeProgram.Source

@@ -85,60 +85,16 @@ def circuitStep (input : TseitinState) :
   | ⟨n, .gate (k := k) op args next⟩ =>
       (⟨n + 1, next⟩, accumulateGate (input.2, ⟨k, op, Fin.val ∘ args, n⟩))
 
-abbrev OutputStateInput := Σ n, (Fin 1 → Fin n) × CNF ℕ
-abbrev GateStateInput := Σ n, Σ k, FirstOrder.Language.booleanAlgebra.Functions k ×
-  (Fin k → Fin n) × Circuit .booleanAlgebra (n + 1) 1 × CNF ℕ
-
-def outputState (x : OutputStateInput) : TseitinState :=
-  (⟨x.1, .outputs x.2.1⟩, x.2.2)
-
-def gateState (x : GateStateInput) : TseitinState :=
-  (⟨x.1, .gate x.2.2.1 x.2.2.2.1 x.2.2.2.2.1⟩, x.2.2.2.2.2)
-
-theorem circuitState_cover (x : TseitinState) :
-    (∃ y, outputState y = x) ∨ ∃ z, gateState z = x := by
-  rcases x with ⟨⟨n, c⟩, acc⟩
-  cases c with
-  | outputs s => exact Or.inl ⟨⟨n, s, acc⟩, rfl⟩
-  | gate op args next => exact Or.inr ⟨⟨n, _, op, args, next, acc⟩, rfl⟩
-
 /-- Gate input values keep the code of the gate's wire table. -/
-theorem size_encode_gate_input (n : ℕ) {k : ℕ} (op : FirstOrder.Language.booleanAlgebra.Functions k)
-    (args : Fin k → Fin n) :
-    ⌜(⟨k, op, Fin.val ∘ args, n⟩ :
-      Σ k, FirstOrder.Language.booleanAlgebra.Functions k × (Fin k → ℕ) × ℕ)⌝ₜ.size =
-      1 + ⌜k⌝ₜ.size + (1 + ⌜op⌝ₜ.size + (1 + ⌜args⌝ₜ.size + ⌜n⌝ₜ.size)) := by
-  have h := encode_fin_values args
-  simp only [Function.comp_def] at h
-  simp only [Sigma.encode_mk, size_encode_prod, encode_fin_function, Function.comp_def, h]
+theorem size_encode_val_comp {n k : ℕ} (args : Fin k → Fin n) :
+    ⌜Fin.val ∘ args⌝ₜ.size = ⌜args⌝ₜ.size := by
+  simpa only [encode_fin_function] using congrArg Tree.size (encode_fin_values args)
 
 @[source] def circuitStepImpl :
     Implementation circuitStep (fun x => ⌜x.1⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
   source_fun_prop
-  all_goals
-    apply Dominated.of_cover outputState gateState circuitState_cover
-  all_goals
-    apply Dominated.of_le_mul 20
-    intro x
-    dsimp only [Function.comp_def, outputState, gateState]
-  all_goals first
-    | rcases x with ⟨n, select, acc⟩
-      simp only [Sigma.encode_mk, size_encode_prod, Circuit.encode_outputs, size_encode_unit,
-        max_le_iff]
-      omega
-    | rcases x with ⟨n, k, op, args, next, acc⟩
-      have hsize := accumulateGate_size (acc, ⟨k, op, Fin.val ∘ args, n⟩)
-      have hclauses := gateClauses_size_le (⟨k, op, Fin.val ∘ args, n⟩ :
-        Σ k, FirstOrder.Language.booleanAlgebra.Functions k × (Fin k → ℕ) × ℕ)
-      have hgate := size_encode_gate_input n op args
-      have hsucc := size_encode_nat_succ_le n
-      have hvals : ⌜List.ofFn fun i => (args i).val⌝ₜ.size = ⌜List.ofFn args⌝ₜ.size := by
-        simpa only [Function.comp_def] using congrArg Tree.size (encode_fin_values args)
-      have htab : ⌜args⌝ₜ.size = ⌜List.ofFn args⌝ₜ.size := rfl
-      simp only [Function.comp_def] at hsize hclauses hgate
-      simp only [Sigma.encode_mk, size_encode_prod, Circuit.encode_gate, size_encode_unit,
-        Tree.encode_self, max_le_iff, encode_fin_function] at hsize ⊢
-      omega
+  all_goals dominated [accumulateGate_size, gateClauses_size_le, size_encode_val_comp,
+    size_encode_nat_succ_le]
 
 theorem circuitStep_ftisp :
     circuitStep ∈ FTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by

@@ -38,7 +38,7 @@ structure Recursion {α : Type*} {β : α → Type*} (f : (x : α) → β x) whe
 namespace Recursion
 
 variable {α : Type*} {β : α → Type*} {f : (x : α) → β x}
-  [UniqueEncoding Tree α] [∀ x, UniqueEncoding Tree (β x)] (r : Recursion f)
+  [UniqueEncoding Tree α] [instβ : ∀ x, UniqueEncoding Tree (β x)] (r : Recursion f)
 
 /-- One program serves every runtime index, including dependent recursive return values. -/
 abbrev Return := (x : {x // r.test x = true}) × β (r.next x.val)
@@ -433,23 +433,34 @@ variable {tc pc ts ps : α → ℕ} {td pd : {x // r.test x = false} → ℕ} {t
 /-- Callback implementations and the source recursion equation determine one program.
 Its growth is the structural recursion cost of the callback growths; controller constants
 and the factor for the descending and ascending passes are hidden. -/
-def implementation (hc : Implementation r.test tc pc) (hs : Implementation r.next ts ps)
-    (hd : Implementation (fun x => ⌜r.finish x⌝ₜ) td pd)
-    (hr : Implementation (fun x : r.Return => ⌜r.resume x.1 x.2⌝ₜ) tr pr) :
-    Implementation (fun x => ⌜f x⌝ₜ)
+def implementation
+    {instD : ∀ x : {x // r.test x = false}, UniqueEncoding Tree (β x.1)}
+    {instR : ∀ x : r.Return, UniqueEncoding Tree (β x.1.1)}
+    (hc : Implementation r.test tc pc) (hs : Implementation r.next ts ps)
+    (hd : Implementation r.finish td pd)
+    (hr : Implementation (fun x : r.Return => r.resume x.1 x.2) tr pr)
+    -- The callbacks' encodings, elaborated with their own types, are those of `f`.
+    (hD : ∀ x, instD x = instβ x.1 := by intros; rfl)
+    (hR : ∀ x, instR x = instβ x.1.1 := by intros; rfl) :
+    Implementation f
       (fun x => tc x + (r.cost ⟨tc, pc⟩ ⟨ts, ps⟩ ⟨td, pd⟩ ⟨tr, pr⟩ x).time + 1)
       (fun x => (r.cost ⟨tc, pc⟩ ⟨ts, ps⟩ ⟨td, pd⟩ ⟨tr, pr⟩ x).peak + 1) where
   program := code hc.program hs.program hd.program hr.program
   sound := by
+    obtain rfl : instD = _ := funext hD
+    obtain rfl : instR = _ := funext hR
     obtain ⟨bc, hbc, hct, hcp⟩ := hc.sound
     obtain ⟨bs, hbs, hst, hsp⟩ := hs.sound
     obtain ⟨bd, hbd, hdt, hdp⟩ := hd.sound
     obtain ⟨br, hbr, hrt, hrp⟩ := hr.sound
     have hcost := r.dominated_cost_congr (bc' := ⟨tc, pc⟩) (bs' := ⟨ts, ps⟩)
       (bd' := ⟨td, pd⟩) (br' := ⟨tr, pr⟩) ⟨hct, hcp⟩ ⟨hst, hsp⟩ ⟨hdt, hdp⟩ ⟨hrt, hrp⟩
-    refine ⟨_, r.implements hbc hbs hbd hbr
+    -- The program reads the callbacks' results as trees.
+    refine ⟨_, (r.implements hbc hbs (hbd.of_encode fun _ => Tree.encode_self _)
+      (hbr.of_encode fun _ => Tree.encode_self _)
       ⟨fun x => (r.cost bc bs bd br x).time, fun x => (r.cost bc bs bd br x).peak⟩
-      ?_ ?_ ?_ ?_, ((hct.add (hcost.1.const_mul_left 3)).add (Dominated.const 10)),
+      ?_ ?_ ?_ ?_).of_encode fun _ => (Tree.encode_self _).symm,
+      ((hct.add (hcost.1.const_mul_left 3)).add (Dominated.const 10)),
       hcost.2.add (Dominated.refl _)⟩
     · intro x
       cases h : r.test x <;>
@@ -672,13 +683,16 @@ theorem dominated_cost_of_scale (bc bs : Bounds α) (bd : Bounds {x // r.test x 
       fun z => z.1.2 :)
     (fun x => Nat.pow_pos (hS x)) (fun x => Nat.pow_pos (hS x))
 
-variable [∀ x, UniqueEncoding Tree (β x)]
+variable [instβ : ∀ x, UniqueEncoding Tree (β x)]
   {tc pc ts ps : α → ℕ} {td pd : {x // r.test x = false} → ℕ} {tr pr : r.Return → ℕ}
 
 /-- The recursive program, with the growth of `dominated_cost_of_scale`. -/
-def implementationOfScale (hc : Implementation r.test tc pc) (hs : Implementation r.next ts ps)
-    (hd : Implementation (fun x => ⌜r.finish x⌝ₜ) td pd)
-    (hr : Implementation (fun x : r.Return => ⌜r.resume x.1 x.2⌝ₜ) tr pr)
+def implementationOfScale
+    {instD : ∀ x : {x // r.test x = false}, UniqueEncoding Tree (β x.1)}
+    {instR : ∀ x : r.Return, UniqueEncoding Tree (β x.1.1)}
+    (hc : Implementation r.test tc pc) (hs : Implementation r.next ts ps)
+    (hd : Implementation r.finish td pd)
+    (hr : Implementation (fun x : r.Return => r.resume x.1 x.2) tr pr)
     (S : α → ℕ) (hS : ∀ x, 0 < S x)
     (hnext : ∀ x, r.test x = true → S (r.next x) ≤ S x) {e a b c : ℕ}
     (hsize : Dominated (fun x => ⌜x⌝ₜ.size) (fun x => S x ^ e))
@@ -688,14 +702,16 @@ def implementationOfScale (hc : Implementation r.test tc pc) (hs : Implementatio
     (htr : Dominated (fun x : {x // r.test x = true} => tr ⟨x, f (r.next x.1)⟩)
       (fun x => S x.1 ^ a))
     (hpr : Dominated (fun x : {x // r.test x = true} => pr ⟨x, f (r.next x.1)⟩)
-      (fun x => S x.1 ^ b)) :
-    Implementation (fun x => ⌜f x⌝ₜ) (fun x => (r.measure x + 1) * S x ^ a + S x ^ c)
+      (fun x => S x.1 ^ b))
+    (hD : ∀ x, instD x = instβ x.1 := by intros; rfl)
+    (hR : ∀ x, instR x = instβ x.1.1 := by intros; rfl) :
+    Implementation f (fun x => (r.measure x + 1) * S x ^ a + S x ^ c)
       (fun x => S x ^ b + (r.measure x + 1) * (S x ^ e + 1)) :=
   have h := r.dominated_cost_of_scale ⟨tc, pc⟩ ⟨ts, ps⟩ ⟨td, pd⟩ ⟨tr, pr⟩ S hS hnext hsize
     ⟨htc, hpc⟩ ⟨hts, hps⟩ ⟨htd, hpd⟩ ⟨htr, hpr⟩
   have hpos x : 0 < (r.measure x + 1) * S x ^ a + S x ^ c :=
     Nat.add_pos_right _ (Nat.pow_pos (hS x))
-  (r.implementation hc hs hd hr).mono
+  (r.implementation hc hs hd hr hD hR).mono
     (((htc.trans (Dominated.of_le fun _ => (Nat.le_mul_of_pos_left _ (Nat.succ_pos _)).trans
         (Nat.le_add_right _ _))).add_same (h.1.trans (Dominated.of_le fun _ =>
           Nat.add_le_add_right (Nat.mul_le_mul_right _ (Nat.le_succ _)) _))).add_same

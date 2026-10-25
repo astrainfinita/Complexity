@@ -377,7 +377,8 @@ private def mkEncodeEquation (target : Target) (ctor : ConstructorVal) :
   let value ← (← ctorShape ind ctor).term fields ``Unit.unit ``Prod.mk
   let rhs ← ``(encode Tree $value)
   let name := target.ns ++ .mkSimple s!"encode_{ctor.name.getString!}"
-  `(@[simp] theorem $(rootIdent name):ident
+  -- `dominated` sizes a constructor by its fields, as it sizes a tuple.
+  `(@[simp, dominated_simp] theorem $(rootIdent name):ident
       $headerBinders:bracketedBinder* $binders:bracketedBinder* :
     encode Tree (α := $resultType) (@$(mkCIdent ctor.name) $params:term* $args:term*) = $rhs := rfl)
 

@@ -248,9 +248,11 @@ private def proveMeasuredLoop (method : TSyntax `sourceMeasuredLoop) (scope : Op
       throwError "source loop: unexpected callback implementation type {← inferType impl}"
     callbacks := callbacks.push impl
     growth := growth.push type[5]! |>.push type[6]!
-  let parameters := args[:4].toArray ++ #[test, next, finish, source] ++ growth ++ callbacks ++
-    #[inv, measure, step, stop, peak]
-  let mut result ← mkAppOptM ``Implementation.tailLoop (parameters.map some)
+  -- The loop's output type is that of `finish`, fixed by unification.
+  let parameters := #[some args[0]!, none, some args[2]!, none] ++
+    ((#[test, next, finish, source] ++ growth ++ callbacks ++
+      #[inv, measure, step, stop, peak]).map some)
+  let mut result ← mkAppOptM ``Implementation.tailLoop parameters
   let mut obligations := []
   let context ← Simp.mkContext
     (config := { iota := false, zeta := false, zetaDelta := false })

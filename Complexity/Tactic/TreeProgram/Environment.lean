@@ -34,17 +34,18 @@ def normalizeProjections (e : Lean.Expr) (only? : Option FVarId := none) : MetaM
 
 private partial def withFields {α : Type} (ty source : Lean.Expr)
     (k : Lean.Expr → Array (Lean.Expr × Lean.Expr) → MetaM α) : MetaM α := do
-  let ty ← normalizeProjections (← whnf ty)
-  let name := ty.getAppFn.constName?
+  let reduced ← normalizeProjections (← whnf ty)
+  let name := reduced.getAppFn.constName?
   if name == some ``Prod || name == some ``Sigma then
     let name := name.get!
-    let #[a, b] := ty.getAppArgs | throwError "bad structure"
+    let #[a, b] := reduced.getAppArgs | throwError "bad structure"
     withFields a (.proj name 0 source) fun left ls => do
       let rightTy := if name == ``Sigma then b.beta #[left] else b
       withFields rightTy (.proj name 1 source) fun right rs => do
         let value ← mkAppOptM (name ++ `mk) #[some a, some b, some left, some right]
         k value (ls ++ rs)
-  else withLocalDeclD `field ty fun value => k value #[(value, source)]
+  -- A field keeps its declared type, whose instances are found by its name.
+  else withLocalDeclD `field (← normalizeProjections ty) fun value => k value #[(value, source)]
 
 /-- The value and its projections are computed together, including erased proof fields. -/
 structure Packed where
@@ -107,7 +108,10 @@ def decomposition? (fn : Lean.Expr) : MetaM (Option (Lean.Expr × Lean.Expr)) :=
       let inner ← mkLambdaFVars #[input] packed
       if ← isDefEq fn outer then return none
       if ← isDefEq fn inner then return none
-      unless ← isDefEq fn (← mkAppM ``Function.comp #[outer, inner]) do return none
+      -- The result's type may depend on the environment.
+      let composite ← withLocalDeclD `x (← inferType input) fun x => do
+        mkLambdaFVars #[x] (mkApp outer (mkApp inner x)).headBeta
+      unless ← isDefEq fn composite do return none
       return some (outer, inner)
 
 end Complexity.TreeProgram.Source.Environment

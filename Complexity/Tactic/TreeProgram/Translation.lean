@@ -131,83 +131,22 @@ public meta section
 namespace Complexity.TreeProgram.Source
 
 open Lean Meta Elab Tactic in
-private partial def independentValue (x : FVarId) (value : Lean.Expr) : MetaM Lean.Expr := do
-  let type ← inferType value
-  unless type.containsFVar x do return value
-  if (← whnf type).isAppOfArity ``Prod 2 then
-    let left ← if value.isAppOfArity ``Prod.mk 4 then pure value.getAppArgs[2]!
-      else mkAppM ``Prod.fst #[value]
-    let right ← if value.isAppOfArity ``Prod.mk 4 then pure value.getAppArgs[3]!
-      else mkAppM ``Prod.snd #[value]
-    let left ← independentValue x left
-    let right ← independentValue x right
-    mkAppM ``Prod.mk #[left, right]
-  else
-    mkAppM ``encode #[mkConst ``Tree, value]
-open Lean Meta Elab Tactic in
-private partial def structuralResult (x : FVarId) (lhs : Lean.Expr) (dependentOnly : Bool) :
-    TacticM (Lean.Expr × Lean.Expr) := do
-  let source := lhs.appArg!.headBeta
-  if source.isAppOfArity ``UniqueEncoding.encode 4 then
-    if ← isDefEq source.getAppArgs[0]! (mkConst ``Tree) then
-      let self ← mkAppM ``Tree.encode_self #[source]
-      let some (_, start, _) := (← inferType self).eq? |
-        throwError "source translation: expected the tree encoding identity"
-      if ← isDefEq start lhs then
-        let (code, proof) ← structuralResult x source false
-        return (code, ← mkEqTrans self proof)
-  -- Expose the source constructor before matching its structural encoding equation.
-  let value ← whnf lhs.appArg!
-  if dependentOnly && !(← isConstructorApp value) then
-    Search.unsupported "dependent result construction requires a known constructor"
-  let ctx ← mkSimpContext (← `(tactic| simp)) false
-  let (r, _) ← simp (mkAppN lhs.getAppFn (lhs.getAppArgs.set! 3 value)) ctx.ctx ctx.simprocs
-  if lhs == r.expr then Search.unsupported "no structural encoding equation applies"
-  unless r.expr.isAppOfArity ``UniqueEncoding.encode 4 do
-    Search.unsupported "expected a structural encoding"
-  unless r.expr.getAppArgs[1]!.containsFVar x do
-    if dependentOnly then
-      Search.unsupported "the structural result type is independent of the input"
-    return (r.expr, ← r.getProof)
-  unless ← isConstructorApp value do
-    Search.unsupported "dependent result construction requires a known constructor"
-  let value ← independentValue x r.expr.appArg!
-  let code ← mkAppM ``encode #[mkConst ``Tree, value]
-  let some proof ← Mathlib.Meta.FunProp.tacticToDischarge
-    (← `(tactic| simp only [encode_prod, Tree.encode_self, FiniteCases.sourcePair]))
-      (← mkEq r.expr code) |
-    throwError "the structural result changed its encoding"
-  return (code, ← mkEqTrans (← r.getProof) proof)
-open Lean Meta Elab Tactic in
-/-- Prove a structural encoding equation for a source function's result. -/
-elab (name := sourceEncoding) "source_encoding" : tactic => do
-  let (x, goal) ← (← getMainGoal).intro1
-  replaceMainGoal [goal]
-  withMainContext do
-    let some (_, lhs, rhs) := (← goal.getType).eq? |
-      throwError "expected an encoding equation"
-    let (code, proof) ← structuralResult x lhs false
-    unless rhs.isAppOfArity ``UniqueEncoding.encode 4 do throwError "expected an encoding"
-    for (a, b) in code.getAppArgs.zip rhs.getAppArgs do
-      unless ← isDefEq a b do throwError "incompatible structural encoding"
-    let proof ← typedSourceProof (← instantiateMVars (← goal.getType)) proof
-    closeMainGoal `source_encoding proof
-open Lean Meta Elab Tactic in
-private def sourceDependent : TacticM Unit := withMainContext do
+/-- A table is built and read by the rules on its code, which have the same program. -/
+private def sourceTable : TacticM Unit := withMainContext do
   let goal ← getMainGoal
-  let #[input, _, _, _, f, time, peak] ← sourceGoalArgs goal |
-    throwError "source dependent: invalid source arguments"
-  let (g, proof) ← withLocalDeclD `x input fun x => do
-    let lhs ← mkAppM ``encode #[mkConst ``Tree, mkApp f x]
-    let (code, proof) ← structuralResult x.fvarId! lhs true
-    let proof ← typedSourceProof (← mkEq lhs code) proof
-    return (← mkLambdaFVars #[x] code.appArg!, ← mkLambdaFVars #[x] proof)
-  let next ← mkFreshExprSyntheticOpaqueMVar (← mkAppM ``Implementation #[g, time, peak])
+  let #[_, _, _, _, f, time, peak] ← sourceGoalArgs goal |
+    throwError "source table: invalid source arguments"
+  let some code ← lambdaBoundedTelescope (← etaExpand f) 1 fun xs body => do
+      unless xs.size == 1 && (← whnf (← inferType body)).isForall do return none
+      let some code ← (observing? (mkAppM ``encode #[mkConst ``Tree, body.eta]) : MetaM _) |
+        return none
+      return some (← mkLambdaFVars xs code)
+    | Search.unsupported "source table: not a table"
+  let next ← mkFreshExprSyntheticOpaqueMVar (← mkAppM ``Implementation #[code, time, peak])
+  let proof ← withLocalDeclD `x (← whnf (← inferType f)).bindingDomain! fun x => do
+    mkLambdaFVars #[x] (← mkEqSymm (← mkAppM ``Tree.encode_self #[(mkApp code x).headBeta]))
   goal.assign (← mkAppM ``Implementation.ofEncode #[proof, next])
   replaceMainGoal [next.mvarId!]
-
-/-- Reinterpret a dependent source result through its structural encoding. -/
-elab (name := sourceDependentTactic) "source_dependent" : tactic => sourceDependent
 
 /-- Certify source branches with previously registered function implementations. -/
 syntax (name := sourceCalls) "source_calls" : tactic
@@ -307,6 +246,145 @@ private def implementationKey (goal : Lean.Expr) : Lean.Expr :=
   if goal.isAppOfArity ``Implementation 7 then mkAppN goal.getAppFn (goal.getAppArgs.extract 0 5)
   else goal
 
+open Lean Meta in
+/-- The components of a right-nested tuple. -/
+private partial def tupleComponents (e : Lean.Expr) : List Lean.Expr :=
+  if e.isAppOfArity ``Prod.mk 4 then e.appFn!.appArg! :: tupleComponents e.appArg! else [e]
+
+open Lean Meta in
+/-- A stated encoding equation `⌜v⌝ₜ = ⌜w⌝ₜ` for the code `⌜v⌝ₜ`, applied at the root only:
+the code `⌜w⌝ₜ` and the equation. -/
+private def rootEncoding (code : Lean.Expr) : MetaM (Option (Lean.Expr × Lean.Expr)) := do
+  let candidates ← (← getSimpTheorems).post.getMatch code
+  for thm in candidates.qsort (·.priority > ·.priority) do
+    let value ← thm.getValue
+    let (args, _, type) ← forallMetaTelescopeReducing (← inferType value)
+    let some (_, l, r) := type.eq? | continue
+    unless r.isAppOfArity ``UniqueEncoding.encode 4 do continue
+    unless ← isDefEq l code do continue
+    let r ← instantiateMVars r
+    let proof ← instantiateMVars (mkAppN value args)
+    if r.hasMVar || proof.hasMVar || r == code then continue
+    return some (r, ← mkExpectedTypeHint proof (← mkEq code r))
+  return none
+
+open Lean Meta in
+/-- The structural encoding `⌜C a⌝ₜ = ⌜v⌝ₜ` of a constructor application, with the components of
+`v` and their declared types. The equation is found for the constructor alone, its fields being
+local variables, and the actual fields are substituted afterwards. -/
+private def constructorEncoding (body : Lean.Expr) :
+    MetaM (Option (Lean.Expr × List (Lean.Expr × Lean.Expr))) := do
+  let .const name _ := body.getAppFn | return none
+  let some (.ctorInfo ctor) := (← getEnv).find? name | return none
+  if name == ``Prod.mk then return none
+  let args := body.getAppArgs
+  unless args.size == ctor.numParams + ctor.numFields do return none
+  let head := mkAppN body.getAppFn (args.extract 0 ctor.numParams)
+  let fields := args.extract ctor.numParams args.size
+  forallBoundedTelescope (← inferType head) ctor.numFields fun ys type => do
+    let some inst ← synthInstance? (← mkAppM ``UniqueEncoding #[mkConst ``Tree, type]) |
+      return none
+    let some (r, proof) ← rootEncoding
+        (← mkAppOptM ``encode #[mkConst ``Tree, type, inst, mkAppN head ys]) |
+      return none
+    let substitute (e : Lean.Expr) := do return (← mkLambdaFVars ys e).beta fields
+    return some (← substitute proof, ← (tupleComponents r.appArg!).mapM fun c => do
+      return (← substitute c, ← substitute (← inferType c)))
+
+open Lean Meta Mathlib.Meta.FunProp in
+/-- A constructor applied to computed fields, through its structural encoding: the fields are
+computed in turn and paired, after a constant tag if the encoding starts with one. The growth
+counts each field and the result once, so the encoding's tuple does not appear in it. -/
+private def constructorRule (search : Lean.Expr → FunPropM (Option Result)) (goal : Lean.Expr) :
+    FunPropM (Option Result) :=
+  lambdaTelescope (goal.getArg! 4) fun xs body => do
+    let #[x] := xs | return none
+    -- A definition whose value is a constructor application, such as `Circuit.id`, is unfolded
+    -- once to expose it; nothing else is computed.
+    let body ← if ← isConstructorApp body then pure body else do
+      let some value ← withTransparency .default <| unfoldDefinition? body | return none
+      let value := value.headBeta
+      unless (← isConstructorApp value) && (← constructorEncoding value).isSome do return none
+      pure value
+    let encodeTree (e : Lean.Expr) := mkAppM ``encode #[mkConst ``Tree, e]
+    let encodeAs (type e : Lean.Expr) := do
+      mkAppOptM ``encode #[mkConst ``Tree, type,
+        ← synthInstance (← mkAppM ``UniqueEncoding #[mkConst ``Tree, type]), e]
+    -- The value is encoded at the requested type.
+    let code ← mkAppOptM ``encode
+      #[mkConst ``Tree, (goal.getArg! 1).beta #[x], (goal.getArg! 3).beta #[x], body]
+    -- A closed value whose code is the empty tree is computed by no step, like `()`.
+    unless body.containsFVar x.fvarId! do
+      let some T ← FiniteCases.closedTree code | return none
+      unless T.isConstOf ``Tree.nil do return none
+      let unit ← mkAppOptM ``Implementation.unit #[← inferType x, none]
+      let empty ← mkExpectedTypeHint (← mkEqRefl code)
+        (← mkEq code (← encodeTree (mkConst ``Unit.unit)))
+      return some ⟨← mkAppM ``Implementation.ofEncode #[← mkLambdaFVars #[x] empty, unit]⟩
+    let some (proof, components) ← constructorEncoding body | return none
+    let (tag, fields) ← match components with
+      | (first, type) :: rest@(_ :: _) =>
+        if first.hasFVar then pure (none, components)
+        else if let some T ← FiniteCases.closedTree (← encodeAs type first) then
+          pure (some (first, T), rest)
+        else pure (none, components)
+      | _ => pure (none, components)
+    if fields.isEmpty then return none
+    let growth ← mkArrow (← inferType x) (mkConst ``Nat)
+    let mut proofs := #[]
+    for (field, type) in fields do
+      -- A field is computed at its declared type, whose encoding is found by that name.
+      let inst ← synthInstance (← mkAppM ``UniqueEncoding #[mkConst ``Tree, type])
+      let fieldGoal ← mkAppOptM ``Implementation #[none, ← mkLambdaFVars #[x] type, none,
+        ← mkLambdaFVars #[x] inst, ← mkLambdaFVars #[x] field, ← mkFreshExprMVar growth,
+        ← mkFreshExprMVar growth]
+      let some r ← search fieldGoal | return none
+      proofs := proofs.push r.proof
+    let mut chain ← mkAppM ``Implementation.withSize #[proofs.back!]
+    for h in proofs.pop.reverse do
+      chain ← mkAppM ``Implementation.fieldCons #[h, chain]
+    let some (first, T) := tag |
+      return some ⟨← mkAppM ``Implementation.ofFields #[← mkLambdaFVars #[x] proof, chain]⟩
+    let tuple := ((← inferType chain).getArg! 4).beta #[x]
+    let tagged ← mkEq code (mkApp2 (mkConst ``Tree.pair) T (← encodeTree tuple))
+    let henc ← mkExpectedTypeHint
+      (← mkEqTrans proof (← mkAppM ``encode_prod #[first, tuple])) tagged
+    return some ⟨← mkAppM ``Implementation.ofTaggedFields #[T, ← mkLambdaFVars #[x] henc, chain]⟩
+
+open Lean Meta Mathlib.Meta.FunProp in
+/-- Reading a table, a local or a field of one, at an index: the table is computed as its code
+and the index as its value, and the entry is looked up in the code. -/
+private def tableRead (search : Lean.Expr → FunPropM (Option Result)) (goal : Lean.Expr) :
+    FunPropM (Option Result) :=
+  lambdaTelescope (goal.getArg! 4) fun xs body => do
+    let #[x] := xs | return none
+    let body ← whnfR body
+    let .app table index := body | return none
+    let fn := body.getAppFn
+    let stored ← do
+      if fn.isFVar || fn.isProj then pure (fn != x) else
+      let some name := fn.constName? | pure false
+      let some info ← getProjectionFnInfo? name | pure false
+      pure (body.getAppNumArgs > info.numParams + 1)
+    -- The lookup rule is proved with the library, after this file.
+    let rule := `Complexity.TreeProgram.Source.Implementation.finApply
+    unless stored && (← getEnv).contains rule do return none
+    let some hf ← search (← implementationGoal
+      (← mkLambdaFVars #[x] (← mkAppM ``encode #[mkConst ``Tree, table]))) | return none
+    let some hi ← search (← implementationGoal
+      (← mkLambdaFVars #[x] (← mkAppM ``Fin.val #[index]))) | return none
+    return some ⟨← mkAppM rule #[hf.proof, hi.proof]⟩
+
+open Lean Meta in
+/-- Whether a value is built by constructors from the input, its projections and closed values,
+so that its code is assembled from subtrees of the input's code. -/
+private partial def isAtHand (x e : Lean.Expr) : MetaM Bool := do
+  if !e.containsFVar x.fvarId! then return true
+  if ← Search.isProjectionOf x e then return true
+  let some name := e.getAppFn.constName? | return false
+  let some (.ctorInfo ctor) := (← getEnv).find? name | return false
+  (e.getAppArgs.extract ctor.numParams e.getAppNumArgs).allM (isAtHand x)
+
 open Lean Meta Elab Tactic Mathlib.Meta.FunProp in
 private partial def sourceSearch (session : Search.Session) (nested : Bool)
     (ancestors : Array Lean.Expr) (goal : Lean.Expr) : FunPropM (Option Result) := do
@@ -334,21 +412,22 @@ private partial def sourceSearch (session : Search.Session) (nested : Bool)
   let context ← read
   -- A branch has a different local context: only fuel, path and diagnostics cross this boundary.
   let query := sourceQuery search context
+  let solve : TacticM Unit := withMainContext do
+    let goal ← getMainGoal
+    let some proof ← query (← goal.getType) |
+      Search.unsupported "source table: the table has no implementation"
+    goal.assign proof
+    replaceMainGoal []
   let structural : FunPropM (Option Result) := Search.attempt do
     -- A speculative lambda rule may leave an unencodable function-valued result.
     -- Such a premise cannot be compiled structurally, but another candidate may apply.
     for encoder in goal.getAppArgs.extract 2 4 do
       let encoder ← instantiateMVars encoder
-      if encoder.isMVar then
+      -- The output encoder is a family over the input.
+      if (if encoder.isLambda then encoder.bindingBody! else encoder).getAppFn.isMVar then
         let some encoderProof ← synthInstance? (← inferType encoder) | return none
         unless ← isDefEq encoder encoderProof do return none
-    let solve : TacticM Unit := withMainContext do
-      let goal ← getMainGoal
-      let some proof ← query (← goal.getType) |
-        Search.unsupported "source translation: dependent result has no implementation"
-      goal.assign proof
-      replaceMainGoal []
-    for action in [FiniteCases.sourceCases, sourceDependent *> solve,
+    for action in [FiniteCases.sourceCases, sourceTable *> solve,
         sourceCallsWith (← session.roots.get) query] do
       if let some proof ← session.discharge ancestors action goal then
         return some ⟨proof⟩
@@ -381,16 +460,6 @@ private partial def sourceSearch (session : Search.Session) (nested : Bool)
     unless body.isAppOfArity ``UniqueEncoding.encode 4 do return none
     let some name := body.appArg!.getAppFn.constName? | return none
     return if ← isRecursiveDefinition name then some name else none
-  -- A runtime-dependent encoder is representation metadata, not another runtime argument.
-  -- Expose its source constructor or case split before generic function decomposition.
-  let dependentStructure ← lambdaTelescope f fun xs body => do
-    unless body.isAppOfArity ``UniqueEncoding.encode 4 do return false
-    unless xs.any (fun x => body.getAppArgs[1]!.containsFVar x.fvarId!) do return false
-    let value ← whnf body.appArg!
-    if ← isConstructorApp value then return true
-    return !(← FiniteCases.caseDiscriminators value).isEmpty
-  if dependentStructure then
-    if let some result ← structural then return ← finish (some result)
   -- Rules recursively use this driver, including callbacks; no preliminary scan is needed.
   let data ← getFunctionData? f defaultUnfoldPred
   let result ← match data with
@@ -415,16 +484,27 @@ private partial def sourceSearch (session : Search.Session) (nested : Bool)
         if let some r ← rules true then return some r
         session.reject ancestors (Search.recursionMessage name) .specification (some name)
         return none
-      -- Root constructors use their encoding equations; nested structural helpers remain atomic.
-      if let .const name _ := d.fn then
-        if !nested && (← getConstInfo name).isCtor then
-          if let some r ← Search.transitionRules search target then return some r
+      let info? ← match d.fn with
+        | .const name _ => pure (some (← getConstInfo name))
+        | _ => pure none
+      -- A nested constructor of values at hand is assembled from subtrees of the input's code.
+      let atHand ← if nested && info?.any (·.isCtor) then
+          lambdaTelescope (target.getArg! 4) fun xs body => do
+            let #[x] := xs | return false
+            isAtHand x body
+        else pure false
+      if atHand then
+        if let some r ← structural then return some r
+      -- Otherwise a constructor is built from its fields, also as the value of a definition.
+      if info?.any fun info => info.isCtor || info.isDefinition then
+        if let some r ← Search.attempt (constructorRule search target) then return some r
       -- A nonmatching candidate must not block structural field extraction.
-      if nested || !candidates.isEmpty then
+      if !atHand && (nested || !candidates.isEmpty) then
         if let some r ← structural then return some r
       -- Subcall specifications need structural decomposition before their fallback rules:
       -- otherwise lookup of a composite table can recursively request rebuilding that table.
       if let some r ← rules true then return some r
+      if let some r ← Search.attempt (tableRead search target) then return some r
       -- An encoder describes representation; unfolding it does not select an algorithm.
       if d.fn.isConstOf ``UniqueEncoding.encode then
         session.reject ancestors m!"source translation: no implementation for the encoded result; \
@@ -478,19 +558,9 @@ def withSourceSpecs {α : Type} (scope : Option Ident) (action : TacticM α) : T
 
 open Lean Meta Elab Tactic Mathlib.Meta.FunProp in
 private def sourceContext : MetaM Mathlib.Meta.FunProp.Context := do
-  let tactic ← `(tactic| first | with_reducible assumption | infer_param | source_encoding)
+  let tactic ← `(tactic| first | with_reducible assumption | infer_param)
   let config := { maxSteps := source.maxSteps.get (← getOptions) : Mathlib.Meta.FunProp.Config }
   return { disch := tacticToDischarge tactic, config }
-
-open Lean Meta in
-/-- Whether `e` is `x` or a projection of it. -/
-private partial def isProjectionOf (x e : Lean.Expr) : MetaM Bool := do
-  if e == x then return true
-  if let .proj _ _ base := e then return ← isProjectionOf x base
-  let some name := e.getAppFn.constName? | return false
-  let some info ← getProjectionFnInfo? name | return false
-  if e.getAppNumArgs != info.numParams + 1 then return false
-  isProjectionOf x e.appArg!
 
 open Lean Meta in
 /-- Record the definition a source function is, up to eta, uncurrying and an encoder: `g`,
@@ -507,7 +577,7 @@ def addSourceRoot (session : Search.Session) (f : Lean.Expr) : MetaM Unit := do
       let #[x] := xs | return none
       let info ← getFunInfoNArgs body.getAppFn body.getAppNumArgs
       for arg in body.getAppArgs, param in info.paramInfo do
-        if param.isExplicit && !(← isProjectionOf x arg) then return none
+        if param.isExplicit && !(← Search.isProjectionOf x arg) then return none
       return some name
     | return
   session.roots.modify (·.insert name)
@@ -621,19 +691,19 @@ private def proveRecursion (method : TSyntax `sourceRecursion) (scope : Option I
   let certify := certifyCallback session `recursion
   let hc ← certify `test (← instantiateMVars fields[3]!)
   let hs ← certify `next (← instantiateMVars fields[4]!)
-  let encodeResult (callback : Lean.Expr) : MetaM Lean.Expr := do
-    forallTelescope (← inferType callback) fun xs _ => do
-      let result ← mkAppM ``encode #[mkConst ``Tree, mkAppN callback xs]
-      mkLambdaFVars xs result
-  let hd ← certify `finish (← encodeResult (← instantiateMVars fields[5]!))
+  let hd ← certify `finish (← instantiateMVars fields[5]!)
   let resume ← instantiateMVars fields[6]!
   let returnType ← forallTelescope (← inferType resume) fun xs _ => do
     mkAppM ``Sigma #[← mkLambdaFVars #[xs[0]!] (← inferType xs[1]!)]
   let resume ← withLocalDeclD `x returnType fun x => do
-    let call := mkAppN resume #[← mkAppM ``Sigma.fst #[x], ← mkAppM ``Sigma.snd #[x]]
-    mkLambdaFVars #[x] (← mkAppM ``encode #[mkConst ``Tree, call])
+    mkLambdaFVars #[x] (mkAppN resume #[← mkAppM ``Sigma.fst #[x], ← mkAppM ``Sigma.snd #[x]])
   let hr ← certify `resume resume
-  let implementation ← mkAppM ``Recursion.implementation #[r, hc, hs, hd, hr]
+  -- The callbacks' encoding families agree with the recursion's by definition.
+  let implementation ← Term.elabTerm (← `(Recursion.implementation $(← Term.exprToSyntax r)
+    $(← Term.exprToSyntax hc) $(← Term.exprToSyntax hs) $(← Term.exprToSyntax hd)
+    $(← Term.exprToSyntax hr))) none
+  Term.synthesizeSyntheticMVarsNoPostponing
+  let implementation ← instantiateMVars implementation
   let actual := (← inferType implementation).getAppArgs[4]!
   let equality ← withLocalDeclD `x args[0]! fun x => do
     let lhs ← mkAppM ``encode #[mkConst ``Tree, mkApp source x]

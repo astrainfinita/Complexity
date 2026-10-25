@@ -158,9 +158,41 @@ def isFallback (env : Environment) (rule : FunctionTheorem) : Bool :=
   | .decl name => (sourceFallbackAttr.getState env).contains name
   | .fvar _ => false
 
+/-- Whether `e` is `x` or a projection of it. -/
+partial def isProjectionOf (x e : Expr) : MetaM Bool := do
+  if e == x then return true
+  if let .proj _ _ base := e then return ← isProjectionOf x base
+  let some name := e.getAppFn.constName? | return false
+  let some info ← getProjectionFnInfo? name | return false
+  if e.getAppNumArgs != info.numParams + 1 then return false
+  isProjectionOf x e.appArg!
+
+/-- fun_prop's composition theorem has one result type. A result whose type depends on the
+intermediate value is composed from the implementations of the two parts with
+`Implementation.compDep`, proved after this file. -/
+private def dependentComposition (outer inner : Expr) : FunPropM (Option Result) := do
+  let rule := `Complexity.TreeProgram.Source.Implementation.compDep
+  unless (← getEnv).contains rule do return none
+  let goalOf (f : Expr) : MetaM Expr := do
+    let growth ← mkArrow (← whnf (← inferType f)).bindingDomain! (mkConst ``Nat)
+    mkAppM `Complexity.TreeProgram.Source.Implementation
+      #[f, ← mkFreshExprMVar growth, ← mkFreshExprMVar growth]
+  let some ho ← search (← goalOf outer) | return none
+  let some hi ← search (← goalOf inner) | return none
+  return some ⟨← mkAppM rule #[hi.proof, ho.proof]⟩
+
 /-- Mathlib supplies rule indexing and theorem application; only attempts are transactional. -/
 def lambdaRules (decl : FunPropDecl) (kind : LambdaTheoremType) (goal : Expr)
     (functions : Option (Expr × Expr) := none) : FunPropM (Option Result) := do
+  if kind == .comp then
+    if let some (outer, inner) := functions then
+      if let .forallE _ _ result _ ← whnf (← inferType outer) then
+        if result.hasLooseBVars then
+          -- A projection of the input is a subtree of its code, read by the structural stage.
+          if ← lambdaTelescope (goal.getArg! decl.funArgId) fun xs body => do
+              return xs.size == 1 && (← isProjectionOf xs[0]! body) then
+            return none
+          return ← attempt (dependentComposition search outer inner)
   let saved := sourceSavedImplementationExt.getState (← getEnv)
   let thms ← getLambdaTheorems decl.funPropName kind
   let thms := thms.filter (fun thm => saved.contains thm.thmName) ++
@@ -181,11 +213,6 @@ private def generalRules (goal : Expr) (thms : Array GeneralTheorem) :
     if let some result ← attempt <| tryTheorem? goal (.decl thm.thmName) search then
       return some result
   return none
-
-/-- Try indexed transition rules within the transition-depth limit. -/
-def transitionRules (goal : Expr) : FunPropM (Option Result) :=
-  withIncreasedTransitionDepth do
-    generalRules search goal (← getTransitionTheorems goal)
 
 private def removeArg (decl : FunPropDecl) (goal : Expr) (data : FunctionData) :
     FunPropM (Option Result) := do
