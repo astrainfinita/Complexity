@@ -45,7 +45,7 @@ abbrev GatherInput := Bool × List (List Bool) × List Bool
 def chunkWork (x : GatherInput) : ℕ :=
   match x.2.1 with | [] => 1 | xs :: _ => ⌜xs⌝ₜ.size + 1
 
-def advanceImplementation : Implementation advance chunkWork (fun x => ⌜x⌝ₜ.size + 10) := by
+def implementationAdvance : Implementation advance chunkWork (fun x => ⌜x⌝ₜ.size + 10) := by
   source_fun_prop
   all_goals
     apply Dominated.of_le_mul 20
@@ -59,11 +59,11 @@ def advanceImplementation : Implementation advance chunkWork (fun x => ⌜x⌝�
 
 def gatherCheck (x : GatherInput) := !x.2.1.isEmpty
 
-def gatherCheckImplementation : Implementation gatherCheck (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
+def implementationGatherCheck : Implementation gatherCheck (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   source_fun_prop
   all_goals dominated
 
-def gatherFinishImplementation :
+def implementationGatherFinish :
     Implementation (fun x : GatherInput => x.2.2) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   source_fun_prop
   all_goals dominated
@@ -89,10 +89,10 @@ theorem gather_input_size : Dominated
   omega
 
 /-- The potential is the size of the chunks still to be consumed. -/
-def gatherLoop : Implementation gather
+def implementationGatherLoop : Implementation gather
     (fun x => 1 + (⌜x.2.1⌝ₜ.size + 1) + 1) (fun x => ⌜x⌝ₜ.size) := by
-  refine Implementation.tailLoopPotential gatherCheckImplementation advanceImplementation
-    gatherFinishImplementation gatherInvariant (fun _ x => ⌜x.2.1⌝ₜ.size) (fun _ => 1)
+  refine Implementation.tailLoopPotential implementationGatherCheck implementationAdvance
+    implementationGatherFinish gatherInvariant (fun _ x => ⌜x.2.1⌝ₜ.size) (fun _ => 1)
     (fun x => ⌜x⌝ₜ.size) ?_ (fun _ => le_rfl) ?_ gather_input_size gather_input_size ?_ ?_
     (Dominated.const 2) ?_
   · rintro ⟨tag, xs, acc⟩
@@ -128,9 +128,9 @@ def gatherLoop : Implementation gather
         (fun z : {p : GatherInput × GatherInput //
           gatherInvariant p.1 p.2 ∧ gatherCheck p.2 = true} => ⟨z.1.2, z.2.2⟩)
 
-@[source] def gatherImplementation : Implementation gather
+@[source] def implementationGather : Implementation gather
     (fun x => ⌜x⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) :=
-  gatherLoop.mono (Dominated.of_le_mul 4 fun ⟨tag, xs, acc⟩ => by
+  implementationGatherLoop.mono (Dominated.of_le_mul 4 fun ⟨tag, xs, acc⟩ => by
     have := Tree.size_pos ⌜(tag, xs, acc)⌝ₜ
     simp only [size_encode_prod] at *
     omega) (Dominated.refl _)
@@ -146,12 +146,12 @@ example : ⌜((true, [[]], []) : GatherInput)⌝ₜ.size <
 -- Variable rounds remain visible in the public work measure.
 example : chunkWork (true, [[]], []) < chunkWork (true, [[true]], []) := by decide
 
-example : gatherImplementation.program = loopCode gatherCheckImplementation.program
-    advanceImplementation.program gatherFinishImplementation.program := rfl
+example : implementationGather.program = loopCode implementationGatherCheck.program
+    implementationAdvance.program implementationGatherFinish.program := rfl
 
 def keep (xs : List Bool) := xs
 
-@[source] def keepImplementation : Implementation keep (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
+@[source] def implementationKeep : Implementation keep (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   source_fun_prop using loop
     (test := fun _ => false) (next := id) (finish := id)
     (invariant := fun x y => y = x)

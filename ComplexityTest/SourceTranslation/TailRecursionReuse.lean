@@ -16,7 +16,7 @@ open TreeProgram.Source
 
 -- Importing restores the selected loop program and its growth.
 example : (by source_fun_prop : Implementation keep _ _).program =
-    keepImplementation.program := rfl
+    implementationKeep.program := rfl
 example : Implementation keep (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by source_fun_prop
 example : keep ∈ FTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
   model_fun_prop

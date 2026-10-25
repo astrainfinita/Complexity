@@ -55,20 +55,20 @@ example : True := by
 
 def retain (xs : List Bool) := xs
 
-def retainSlow : Implementation retain (fun xs => ⌜xs⌝ₜ.size + ⌜xs.reverse⌝ₜ.size)
+def implementationRetainSlow : Implementation retain (fun xs => ⌜xs⌝ₜ.size + ⌜xs.reverse⌝ₜ.size)
     (fun xs => max ⌜xs⌝ₜ.size ⌜xs.reverse⌝ₜ.size) := by
   source_fun_prop via (fun xs : List Bool => xs.reverse.reverse)
   case source_eq => funext xs; simp [retain]
 
 -- The source equation does not optimize away the expressly selected program.
-example : retainSlow.program = (Implementation.reverse.comp
-    (Implementation.reverse (α := Bool))).program := rfl
+example : implementationRetainSlow.program = (List.implementationReverse.comp
+    (List.implementationReverse (α := Bool))).program := rfl
 
 section
 @[local source] theorem retain_eq : retain = (fun xs : List Bool => xs.reverse.reverse) := by
   funext xs; simp [retain]
 
-example : (by source_fun_prop : Implementation retain _ _).program = retainSlow.program := rfl
+example : (by source_fun_prop : Implementation retain _ _).program = implementationRetainSlow.program := rfl
 end
 
 example : (by source_fun_prop : Implementation retain _ _).program =
@@ -97,7 +97,7 @@ def userReverse {α : Type*} (xs : List α) := match xs with
 end ReverseByCases
 
 -- The selected interpretation states its own growth.
-def customReverseImplementation {α : Type*} [UniqueEncoding Tree α] :
+def implementationCustomReverse {α : Type*} [UniqueEncoding Tree α] :
     Implementation (List.reverse (α := α)) (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) := by
   source_fun_prop using ReverseByCases
   all_goals dominated
@@ -105,10 +105,10 @@ def customReverseImplementation {α : Type*} [UniqueEncoding Tree α] :
 open scoped ReverseByCases in
 example {α : Type*} [UniqueEncoding Tree α] :
     (by source_fun_prop : Implementation (List.reverse (α := α)) _ _).program =
-      (customReverseImplementation (α := α)).program := rfl
+      (implementationCustomReverse (α := α)).program := rfl
 
 example : (by source_fun_prop : Implementation (List.reverse (α := Bool)) _ _).program =
-    (Implementation.reverse (α := Bool)).program := rfl
+    (List.implementationReverse (α := Bool)).program := rfl
 
 example : Implementation (userReverse (α := Bool)) (fun xs => ⌜xs⌝ₜ.size)
     (fun xs => ⌜xs⌝ₜ.size) := by
@@ -147,14 +147,14 @@ example : (by source_fun_prop : Implementation Scoped.custom _ _).program =
 
 open scoped Scoped in
 example : (by source_fun_prop : Implementation Scoped.custom _ _).program =
-    retainSlow.program := rfl
+    implementationRetainSlow.program := rfl
 
 section
 @[local source] theorem identity_eq :
     (id : List Bool → List Bool) = (fun xs => xs.reverse.reverse) := by funext xs; simp
 
 example : (by source_fun_prop : Implementation (id : List Bool → List Bool) _ _).program =
-    retainSlow.program := rfl
+    implementationRetainSlow.program := rfl
 end
 
 -- An unsupported replacement does not fall back to the supported original source.

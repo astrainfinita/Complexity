@@ -16,7 +16,7 @@ namespace ComplexityTest.SourceTranslation.SpecComparison
 
 def duplicate {α : Type*} (xs : List α) := xs ++ xs
 
-def duplicateImplementation {α : Type*} [UniqueEncoding Tree α] :
+def implementationDuplicate {α : Type*} [UniqueEncoding Tree α] :
     Implementation (duplicate : List α → List α) (fun xs => xs.length + 1)
       (fun xs => ⌜xs⌝ₜ.size + ⌜xs⌝ₜ.size) :=
   (Implementation.identity.append Implementation.identity).mono
@@ -40,12 +40,12 @@ instance sourceWP : WP Source Growth Prop Unit where
 
 @[spec] theorem spec_reverse (Q : Growth → Prop) :
     Triple (source List.reverse) (Q (fun xs => ⌜xs⌝ₜ.size, fun xs => ⌜xs⌝ₜ.size)) Q () :=
-  ⟨fun h => ⟨(_, _), ⟨Implementation.reverse⟩, h⟩⟩
+  ⟨fun h => ⟨(_, _), ⟨List.implementationReverse⟩, h⟩⟩
 
 @[spec] theorem spec_duplicate (Q : Growth → Prop) :
     Triple (source duplicate) (Q (fun xs => xs.length + 1, fun xs => ⌜xs⌝ₜ.size + ⌜xs⌝ₜ.size))
       Q () :=
-  ⟨fun h => ⟨(_, _), ⟨duplicateImplementation⟩, h⟩⟩
+  ⟨fun h => ⟨(_, _), ⟨implementationDuplicate⟩, h⟩⟩
 
 @[spec 1100] theorem spec_duplicate_lambda (Q : Growth → Prop) :
     Triple (source (fun xs : List Bool => xs ++ xs))
@@ -105,7 +105,7 @@ local instance : WP (List Bool → List Bool) Growth Prop Unit where
     Triple (fun xs : List Bool => xs.reverse.reverse)
       (Q (fun xs => ⌜xs⌝ₜ.size + ⌜xs.reverse⌝ₜ.size,
         fun xs => max ⌜xs⌝ₜ.size ⌜xs.reverse⌝ₜ.size)) Q () :=
-  ⟨fun h => ⟨(_, _), ⟨Implementation.reverse.comp Implementation.reverse⟩, h⟩⟩
+  ⟨fun h => ⟨(_, _), ⟨List.implementationReverse.comp List.implementationReverse⟩, h⟩⟩
 
 /-- error: No spec found for program fun xs => xs.reverse.reverse. -/
 #guard_msgs in

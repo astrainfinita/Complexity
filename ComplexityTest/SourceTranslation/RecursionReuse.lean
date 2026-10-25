@@ -4,7 +4,7 @@ import ComplexityTest.SourceTranslation.Recursion
 open Complexity TreeProgram.Source ComplexityTest.SourceTranslation.Recursion
 
 example : (by source_fun_prop : Implementation drain _ _).program =
-    drainImplementation.program := rfl
+    implementationDrain.program := rfl
 
 example : Implementation drain (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size ^ 2) := by
   source_fun_prop

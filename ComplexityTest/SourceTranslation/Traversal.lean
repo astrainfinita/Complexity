@@ -14,7 +14,7 @@ private def mapInput : List (List Bool) := [[true, false], [], [false, true, tru
 private def mapOutput : List (List Bool) := [[false, true], [], [true, true, false]]
 
 -- The certificate stores executable model code, not an opaque existential witness.
-private def mapReverseCode := (Implementation.reverse (α := Bool)).map.program .input
+private def mapReverseCode := (List.implementationReverse (α := Bool)).map.program .input
 #guard let p := mapReverseCode
   let c := ComplexityTest.TreeRun.runFrom p.compile
     (p.compile.initInput (Config := TreeMachine.Cfg p.registers _) ⌜mapInput⌝ₜ) 186

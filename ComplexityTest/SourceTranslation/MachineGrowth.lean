@@ -44,18 +44,18 @@ example : True := by
   trivial
 
 /-- A deliberately slower program for the identity, saved as the selected implementation. -/
-@[source] def selected : Implementation (id : List Bool → List Bool) (fun xs => ⌜xs⌝ₜ.size)
+@[source] def implementationSelected : Implementation (id : List Bool → List Bool) (fun xs => ⌜xs⌝ₜ.size)
     (fun xs => ⌜xs⌝ₜ.size) :=
-  ((Implementation.reverse.comp Implementation.reverse).congr (by funext xs; simp)).mono
+  ((List.implementationReverse.comp List.implementationReverse).congr (by funext xs; simp)).mono
     (Dominated.of_le_mul 2 fun _ => by simp; omega) (Dominated.of_le fun _ => by simp)
 
 -- Direct exits keep the stated growth of the selected implementation.
 theorem canonical_machine : TimeSpaceModel.tree.ComputableWithGrowth
     (id : List Bool → List Bool) (fun xs => ⌜xs⌝ₜ.size + 4)
       (fun xs => max ⌜xs⌝ₜ.size ⌜xs⌝ₜ.size + 2) :=
-  selected.computableWithGrowth
+  implementationSelected.computableWithGrowth
 
 example : (by source_fun_prop : Implementation (id : List Bool → List Bool) _ _).program =
-    selected.program := rfl
+    implementationSelected.program := rfl
 
 end ComplexityTest.SourceTranslation.MachineGrowth

@@ -16,7 +16,7 @@ namespace ComplexityTest.SourceTranslation.AsymptoticTailRecursion
 def drain (_ : List Bool) : List Bool := []
 
 -- Neither callback budgets nor a chosen credit coefficient occur in this proof.
-@[source] def drainImplementation : Implementation drain
+@[source] def implementationDrain : Implementation drain
     (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) := by
   source_fun_prop using loop (test := fun xs : List Bool => !xs.isEmpty)
     (next := List.tail) (finish := id)
@@ -45,9 +45,9 @@ theorem drain_ftisp : drain ∈ FTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) :=
   all_goals dominated
 
 -- The program is determined by the callbacks; tail-loop space has no stack multiplier.
-example : drainImplementation.program =
+example : implementationDrain.program =
     loopCode (by source_fun_prop : Implementation (fun xs : List Bool => !xs.isEmpty) _ _).program
-      (Implementation.listTail (α := Bool)).program
+      (List.implementationTail (α := Bool)).program
       (Implementation.identity (α := List Bool)).program := by
   rfl
 

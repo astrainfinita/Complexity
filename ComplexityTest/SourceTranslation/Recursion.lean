@@ -37,7 +37,7 @@ theorem length_invert (xs : List Bool) : (invert xs).length = xs.length := by
 open TreeProgram.Source
 
 -- The measured entry exposes source equations, without a guessed exact allowance.
-def invertImplementation := (by
+def implementationInvert := (by
   source_fun_prop using recursion
     (test := fun xs : List Bool => !xs.isEmpty) (next := List.tail)
     (finish := fun _ => []) (resume := invertResume)
@@ -63,7 +63,7 @@ def positionResume : (x : {xs : List Bool // (!xs.isEmpty) = true}) →
   | ⟨_ :: _, _⟩, result => result.succ
 
 -- A dependent result still uses the public encoding view; callbacks return ordinary Fin values.
-def endPositionImplementation := (by
+def implementationEndPosition := (by
   source_fun_prop using recursion
     (test := fun xs : List Bool => !xs.isEmpty) (next := List.tail)
     (finish := fun _ => 0) (resume := positionResume)
@@ -105,12 +105,12 @@ def drainRecursion : TreeProgram.Source.Recursion drain where
   measure := List.length
   decreases := by intro xs h; cases xs <;> simp_all
 
-def drainFinish :
+def implementationDrainFinish :
     Implementation drainRecursion.finish (fun _ => 1) (fun _ => 1) := by
   source_fun_prop
   all_goals dominated
 
-def drainResume : Implementation
+def implementationDrainResume : Implementation
     (fun x : drainRecursion.Return => drainRecursion.resume x.1 x.2) (fun _ => 1)
     (fun _ => 1) := by
   source_fun_prop
@@ -143,16 +143,16 @@ private theorem drain_cost_growth :
       (fun _ => Nat.zero_lt_one) (fun _ => Nat.zero_lt_one)
 
 /-- The test of `drain`, translated as `Bool.not` after `List.isEmpty`. -/
-def drainTest : Implementation (fun xs : List Bool => !xs.isEmpty) (fun _ => 1)
+def implementationDrainTest : Implementation (fun xs : List Bool => !xs.isEmpty) (fun _ => 1)
     (fun xs => ⌜xs⌝ₜ.size) := by
   source_fun_prop
   all_goals dominated
 
 -- The terminal allowance appears once; the stack allowance grows with recursion depth.
-def drainStructural : Implementation drain
+def implementationDrainStructural : Implementation drain
     (fun xs => 1 + (xs.length + 1) + 1)
     (fun xs => (⌜xs⌝ₜ.size + (xs.length + 1) * (⌜xs⌝ₜ.size + 1)) + 1) :=
-  (drainRecursion.implementation drainTest Implementation.listTail drainFinish drainResume).mono
+  (drainRecursion.implementation implementationDrainTest List.implementationTail implementationDrainFinish implementationDrainResume).mono
     (((Dominated.refl _).add drain_cost_growth.1).add (Dominated.refl _))
     (drain_cost_growth.2.add (Dominated.refl _))
 
@@ -164,9 +164,9 @@ example : (by
       (measure := List.length)
       (decreases := by intro xs h; cases xs <;> simp_all)
     all_goals intros; exact Subsingleton.elim _ _ : Implementation drain _ _).program =
-    drainStructural.program := rfl
+    implementationDrainStructural.program := rfl
 
-@[source] def drainImplementation : Implementation drain
+@[source] def implementationDrain : Implementation drain
     (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size ^ 2) := by
   have hlen : Dominated (List.length : List Bool → ℕ) (fun xs => ⌜xs⌝ₜ.size) :=
     Dominated.of_le length_le_codeSize
@@ -174,7 +174,7 @@ example : (by
   have hc : Dominated (fun _ : List Bool => 1) (fun xs => ⌜xs⌝ₜ.size) := Dominated.one hpos
   have hs := (hlen.add_same hc).mul ((Dominated.refl _).add_same hc)
   simp only [← pow_two] at hs
-  apply drainStructural.mono
+  apply implementationDrainStructural.mono
   · simp only [Dominated.add_iff]
     exact ⟨⟨hc, hlen, hc⟩, hc⟩
   · simp only [Dominated.add_iff]

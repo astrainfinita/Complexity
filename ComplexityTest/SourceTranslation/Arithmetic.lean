@@ -44,6 +44,6 @@ example := (by source_fun_prop : Implementation (fun x : Bool × Bool × Bool =>
 
 -- Addition by one keeps the selected successor program.
 example : (by source_fun_prop : Implementation (fun n : ℕ => n + 1) _ _).program =
-    Implementation.succ.program := rfl
+    Nat.implementationSucc.program := rfl
 
 end ComplexityTest.SourceTranslation.Arithmetic

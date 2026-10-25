@@ -35,19 +35,19 @@ private def unsupported : List Bool → List Bool
 
 private def chosen (xs : List Bool) := xs.reverse
 
-private def availableImplementation :
+private def implementationAvailable :
     Implementation chosen (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) :=
-  Implementation.reverse
+  List.implementationReverse
 
 private def needsRecursive (_h : Implementation unsupported (fun _ => 1) (fun _ => 1)) :
     Implementation chosen (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) :=
-  availableImplementation
+  implementationAvailable
 
 -- A failed implementation premise is rolled back before another implementation rule is tried.
-attribute [local fun_prop] availableImplementation needsRecursive
+attribute [local fun_prop] implementationAvailable needsRecursive
 
 example : (by source_fun_prop : Implementation chosen _ _).program =
-    availableImplementation.program := rfl
+    implementationAvailable.program := rfl
 
 end CandidateFailure
 
@@ -77,9 +77,9 @@ example {t p : List Bool → ℕ} (h : Implementation (List.reverse : List Bool 
 
 private def alternative (xs : List Bool) := xs.reverse
 
-@[local fun_prop] private def defaultImplementation :
+@[local fun_prop] private def implementationDefault :
     Implementation alternative (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) :=
-  Implementation.reverse.congr rfl
+  List.implementationReverse.congr rfl
 
 example {t p : List Bool → ℕ} (selected : Implementation alternative t p) :
     (by source_fun_prop : Implementation alternative t p) = selected := rfl
@@ -92,9 +92,9 @@ example {t p : Bool → ℕ} (selected : Implementation (fun _ : Bool => ()) t p
 
 private def doubleReverse (xs : List Bool) := xs.reverse.reverse
 
-@[local fun_prop] private def doubleReverseDefault : Implementation doubleReverse
+@[local fun_prop] private def implementationDoubleReverseDefault : Implementation doubleReverse
     (fun xs => ⌜xs⌝ₜ.size + ⌜xs.reverse⌝ₜ.size) (fun xs => max ⌜xs⌝ₜ.size ⌜xs.reverse⌝ₜ.size) :=
-  Implementation.reverse.comp Implementation.reverse
+  List.implementationReverse.comp List.implementationReverse
 
 -- A semantic equality can expressly select a faster program; growth search never does so.
 example : (by
@@ -106,7 +106,7 @@ example : (by
       (Implementation.identity (α := List Bool)).program := rfl
 
 example : (by source_fun_prop : Implementation doubleReverse _ _).program =
-    doubleReverseDefault.program := rfl
+    implementationDoubleReverseDefault.program := rfl
 
 end LocalPriority
 
@@ -114,36 +114,36 @@ section RuleStages
 
 private def stored (x : Bool × Bool) : Bool := x.1
 
-private def rebuilt : Implementation stored (fun _ => 1 + (1 + 1) + 1)
+private def implementationRebuilt : Implementation stored (fun _ => 1 + (1 + 1) + 1)
     (fun x => max (max ⌜x⌝ₜ.size (max ⌜x⌝ₜ.size ⌜(x.1, x.2)⌝ₜ.size)) ⌜(x.1, x.2)⌝ₜ.size) :=
-  (Implementation.fst.pair Implementation.snd).comp Implementation.fst
+  (Prod.implementationFst.pair Prod.implementationSnd).comp Prod.implementationFst
 
-private def preferred := rebuilt
-private def secondary : Implementation stored (fun _ => 1) (fun x => ⌜x⌝ₜ.size) :=
-  Implementation.fst
-private def fallback : Implementation stored (fun _ => 1) (fun x => ⌜x⌝ₜ.size) :=
-  Implementation.fst
+private def implementationPreferred := implementationRebuilt
+private def implementationSecondary : Implementation stored (fun _ => 1) (fun x => ⌜x⌝ₜ.size) :=
+  Prod.implementationFst
+private def implementationFallback : Implementation stored (fun _ => 1) (fun x => ⌜x⌝ₜ.size) :=
+  Prod.implementationFst
 
-attribute [local source_fallback] fallback
+attribute [local source_fallback] implementationFallback
 
 open Lean Meta Mathlib.Meta.FunProp in
 run_elab do
-  addTheorem ``preferred .local 20
-  addTheorem ``secondary .local 10
-  addTheorem ``fallback .local 2000
+  addTheorem ``implementationPreferred .local 20
+  addTheorem ``implementationSecondary .local 10
+  addTheorem ``implementationFallback .local 2000
 
 -- Ordinary registered rules precede structural projection, independent of their numeric cost.
-example : (by source_fun_prop : Implementation stored _ _).program = preferred.program := rfl
+example : (by source_fun_prop : Implementation stored _ _).program = implementationPreferred.program := rfl
 
-example : (preferred.program Value.input).build 1 |>.2.1 ≠
-    ((secondary.program Value.input).build 1).2.1 := by decide
+example : (implementationPreferred.program Value.input).build 1 |>.2.1 ≠
+    ((implementationSecondary.program Value.input).build 1).2.1 := by decide
 
 section
-attribute [local source_fallback] preferred secondary
+attribute [local source_fallback] implementationPreferred implementationSecondary
 
 -- Fallback rules do not displace a structural projection.
 example : (by source_fun_prop : Implementation stored _ _).program =
-    (Implementation.fst (α := Bool) (β := Bool)).program := rfl
+    (Prod.implementationFst (α := Bool) (β := Bool)).program := rfl
 end
 
 end RuleStages

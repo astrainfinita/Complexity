@@ -13,7 +13,7 @@ open Complexity TreeProgram TreeProgram.Source
 namespace ComplexityTest.SourceTranslation.Encoding
 
 -- The input map need not cover all inputs of the original implementation.
-def trueOnly : Implementation (fun b : {b : Bool // b = true} => b.val) (fun _ => 0) (fun _ => 0) :=
+def implementationTrueOnly : Implementation (fun b : {b : Bool // b = true} => b.val) (fun _ => 0) (fun _ => 0) :=
   Implementation.identity.mapInput Subtype.val (fun _ => rfl)
 
 example : ¬Function.Surjective (Subtype.val : {b : Bool // b = true} → Bool) := by
@@ -21,14 +21,14 @@ example : ¬Function.Surjective (Subtype.val : {b : Bool // b = true} → Bool) 
   obtain ⟨b, hb⟩ := h false
   exact Bool.noConfusion (b.property.symm.trans hb)
 
-example : trueOnly.program = (Implementation.identity (α := Bool)).program := rfl
+example : implementationTrueOnly.program = (Implementation.identity (α := Bool)).program := rfl
 
-def sigmaIdentity : Implementation (fun p : Bool × Unit => (⟨p.1, p.2⟩ : Σ _ : Bool, Unit))
+def implementationSigmaIdentity : Implementation (fun p : Bool × Unit => (⟨p.1, p.2⟩ : Σ _ : Bool, Unit))
     (fun _ => 0) (fun _ => 0) :=
   (Implementation.identity (α := Bool × Unit)).ofEncode
     (fun p => @Sigma.encode_mk Bool (fun _ => Unit) _ _ p.1 p.2)
 
-example : sigmaIdentity.program = (Implementation.identity (α := Bool × Unit)).program := rfl
+example : implementationSigmaIdentity.program = (Implementation.identity (α := Bool × Unit)).program := rfl
 
 -- Independent universes and arbitrary encoding instances remain supported.
 universe u v w

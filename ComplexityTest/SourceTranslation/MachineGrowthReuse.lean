@@ -14,7 +14,7 @@ namespace ComplexityTest.SourceTranslation.MachineGrowthReuse
 
 -- The imported selection, with its own growth, is reused by ordinary calls.
 example : (by source_fun_prop : Implementation (id : List Bool → List Bool) _ _).program =
-    MachineGrowth.selected.program := rfl
+    MachineGrowth.implementationSelected.program := rfl
 
 def nested (xs : List Bool) := id (id xs)
 

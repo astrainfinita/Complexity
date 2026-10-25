@@ -44,7 +44,7 @@ example : (fun xs : List Bool => xs.reverse.reverse) ∈ FTISP .tree
 example (m : ℕ) : (List.reverse (α := Bool)) ∈ FTISP .tree
     (fun n => n ^ (m + 1)) (fun n => n ^ 1) := by
   apply Implementation.mem_ftisp_pow ?_ (by decide)
-  apply Implementation.reverse.mono
+  apply List.implementationReverse.mono
   · exact Dominated.of_le fun xs => Nat.le_self_pow (by omega) _
   · simpa only [pow_one] using (Dominated.refl (fun xs : List Bool => ⌜xs⌝ₜ.size))
 

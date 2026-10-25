@@ -16,7 +16,7 @@ open ComplexityTest.SourceTranslation.Asymptotics
 namespace ComplexityTest.SourceTranslation.AsymptoticReuse
 
 -- Loop callbacks reuse the imported selection without unfolding its evaluator.
-def importedLoop :
+def implementationImportedLoop :
     Implementation preciseIdentity (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   source_fun_prop using loop (test := fun _ : List Bool => false)
     (next := preciseIdentity) (finish := preciseIdentity)
@@ -32,9 +32,9 @@ def importedLoop :
   case time => exact Dominated.const _
   all_goals intro; decide
 
-example : importedLoop.program = loopCode (by source_fun_prop :
+example : implementationImportedLoop.program = loopCode (by source_fun_prop :
     Implementation (fun _ : List Bool => false) _ _).program
-    preciseIdentityImplementation.program preciseIdentityImplementation.program := rfl
+    implementationPreciseIdentity.program implementationPreciseIdentity.program := rfl
 
 -- Repeated calls reuse the imported growth, at every input.
 example : Implementation (fun xs => preciseIdentity (preciseIdentity xs))
@@ -42,13 +42,13 @@ example : Implementation (fun xs => preciseIdentity (preciseIdentity xs))
 
 -- An imported alias also retains the selected program and its zero growth.
 example : (by source_fun_prop : Implementation aliasedIdentity _ _).program =
-    preciseIdentityImplementation.program := rfl
+    implementationPreciseIdentity.program := rfl
 
 -- A call of the alias needs the alias's own selected implementation.
-def aliasedIdentityImplementation :
+def implementationAliasedIdentity :
     Implementation aliasedIdentity (fun _ => 0) (fun _ => 0) := by source_fun_prop
 
-attribute [local source] aliasedIdentityImplementation in
+attribute [local source] implementationAliasedIdentity in
 example : Implementation (fun xs => aliasedIdentity (aliasedIdentity xs))
     (fun _ => 0 + 0) (fun _ => max 0 0) := by source_fun_prop
 
@@ -65,7 +65,7 @@ theorem drainTwice_ftisp :
 
 -- A zero atTop conclusion on a finite type retains the positive selected callback.
 example : (by source_fun_prop : Implementation Bool.not _ _).program =
-    finiteNotImplementation.program := rfl
+    implementationFiniteNot.program := rfl
 
 example : Implementation (fun b => !!b) (fun _ => 1 + 1) (fun _ => max 1 1) := by
   source_fun_prop

@@ -113,17 +113,17 @@ example {α : Type*} [UniqueEncoding Tree α] {f : α → α} {t p : α → ℕ}
 
 def preciseIdentity (xs : List Bool) := xs
 
-@[source] def preciseIdentityImplementation :
+@[source] def implementationPreciseIdentity :
     Implementation preciseIdentity (fun _ => 0) (fun _ => 0) := Implementation.identity
 
 -- A weaker mathematical consequence is legal, but it is not another selected implementation.
-def preciseIdentityWeaker : Implementation preciseIdentity
+def implementationPreciseIdentityWeaker : Implementation preciseIdentity
     (fun x => ⌜x⌝ₜ.size ^ 2) (fun x => ⌜x⌝ₜ.size ^ 2) :=
-  preciseIdentityImplementation.mono Dominated.zero Dominated.zero
+  implementationPreciseIdentity.mono Dominated.zero Dominated.zero
 
-/-- error: `source` already has a selected implementation of preciseIdentity: preciseIdentityImplementation; choose another one at a call with a local hypothesis or `via` -/
+/-- error: `source` already has a selected implementation of preciseIdentity: implementationPreciseIdentity; choose another one at a call with a local hypothesis or `via` -/
 #guard_msgs in
-attribute [local source] preciseIdentityWeaker
+attribute [local source] implementationPreciseIdentityWeaker
 
 -- A coarser model exit does not change the selected implementation's growth.
 theorem preciseIdentity_ftisp :
@@ -135,7 +135,7 @@ theorem preciseIdentity_ftisp :
 def aliasedIdentity (xs : List Bool) := preciseIdentity xs
 
 example : (by source_fun_prop : Implementation aliasedIdentity _ _).program =
-    preciseIdentityImplementation.program := rfl
+    implementationPreciseIdentity.program := rfl
 
 example : Implementation aliasedIdentity (fun _ => 0) (fun _ => 0) := by source_fun_prop
 
@@ -178,12 +178,12 @@ theorem finiteIdentity_ftisp :
     omega
 
 -- The selected all-input callback has positive cost even though its final size class is zero.
-@[source] def finiteNotImplementation : Implementation Bool.not (fun _ => 1) (fun _ => 1) := by
+@[source] def implementationFiniteNot : Implementation Bool.not (fun _ => 1) (fun _ => 1) := by
   source_fun_prop
   all_goals dominated
 
 theorem finiteNot_ftisp : Bool.not ∈ FTISP .tree (fun _ => 0) (fun _ => 0) := by
-  apply finiteNotImplementation.mem_ftisp_of_sizeEnvelope
+  apply implementationFiniteNot.mem_ftisp_of_sizeEnvelope
   all_goals
     refine ⟨0, eventually_atTop.mpr ⟨4, fun n hn => ?_⟩⟩
     simp only [Nat.zero_mul]

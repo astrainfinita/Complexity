@@ -11,14 +11,16 @@ open Complexity TreeProgram Complexity.TreeProgram.Source
 namespace ComplexityTest.SourceTranslation.CircuitComposition
 
 -- The structural recursion entry keeps the previously selected callback programs.
-example : compImplementation.program =
-    (compRecursion.implementation compCheck compNext compFinish compResume).program := rfl
+example : implementationCompFn.program =
+    (compRecursion.implementation implementationCompTest implementationCompNextFn
+      implementationCompFinishFn implementationCompResume).program := rfl
 
 -- Recursive certification keeps the explicitly selected terminal callback.
-example : relabelImplementation.program =
-    (relabelRecursion.implementation relabelCheck relabelNext relabelFinish relabelResume).program := rfl
+example : implementationRelabelFn.program =
+    (relabelRecursion.implementation implementationRelabelTest implementationRelabelNextFn
+      implementationRelabelFinishFn implementationRelabelResume).program := rfl
 example : Implementation relabelFinishFn
-    (fun x => ⌜x⌝ₜ.size ^ 3) (fun x => ⌜x⌝ₜ.size ^ 2) := relabelFinish
+    (fun x => ⌜x⌝ₜ.size ^ 3) (fun x => ⌜x⌝ₜ.size ^ 2) := implementationRelabelFinishFn
 
 def rewire (x : RelabelInput) : Σ n, Σ m, Circuit .booleanAlgebra n m :=
   ⟨x.k, x.m, x.circuit.relabel x.wires⟩
@@ -44,7 +46,7 @@ def rewireStored (x : Σ n, Σ m, Circuit .booleanAlgebra n m × (Fin n → Fin 
 abbrev StoredRelabelInput := Σ n, Σ m, Circuit .booleanAlgebra n m × (Fin n → Fin n)
 
 /-- Compose the selected implementation; only the mathematical size relations remain. -/
-@[source] def rewireStoredImplementation : Implementation rewireStored
+@[source] def implementationRewireStored : Implementation rewireStored
     (fun x => ⌜x⌝ₜ.size ^ 7) (fun x => ⌜x⌝ₜ.size ^ 4) := by
   let u (x : Σ n, Σ m, Circuit .booleanAlgebra n m × (Fin n → Fin n)) : RelabelInput :=
     ⟨x.1, x.2.1, x.1, x.2.2.1, x.2.2.2⟩
@@ -89,14 +91,14 @@ abbrev StoredRelabelInput := Σ n, Σ m, Circuit .booleanAlgebra n m × (Fin n �
 
 theorem rewireStored_ftisp :
     rewireStored ∈ FTISP .tree (fun n => n ^ 7) (fun n => n ^ 4) :=
-  rewireStoredImplementation.mem_ftisp_pow (by decide)
+  implementationRewireStored.mem_ftisp_pow (by decide)
 
 /-- Unary storage makes the number of generated layers bounded by input size. -/
 def layersStored (x : Σ n, Circuit .booleanAlgebra (n + 1) n × List Unit) :
     Σ n, Σ m, Circuit .booleanAlgebra n m :=
   ⟨x.1 + x.2.2.length, x.1, x.2.1.unroll x.2.2.length⟩
 
-@[source] def layersStoredImplementation : Implementation layersStored
+@[source] def implementationLayersStored : Implementation layersStored
     (fun x => ⌜x⌝ₜ.size ^ 18) (fun x => ⌜x⌝ₜ.size ^ 8) := by
   let S (x : Σ n, Circuit .booleanAlgebra (n + 1) n × List Unit) := ⌜x⌝ₜ.size
   let u (x : Σ n, Circuit .booleanAlgebra (n + 1) n × List Unit) : UnrollInput :=
@@ -125,7 +127,7 @@ def layersStored (x : Σ n, Circuit .booleanAlgebra (n + 1) n × List Unit) :
   have htime := hR.pow 9
   have hpeak := hR.pow 4
   simp only [← pow_mul, Function.comp_def, u] at htime hpeak
-  have hout := (Dominated.comp unrollImplementation.size_encode u).trans
+  have hout := (Dominated.comp implementationUnroll.size_encode u).trans
     ((hu.le_pow (by decide : 0 < 8)).max_same hpeak)
   simp only [Function.comp_def, u] at hout
   source_fun_prop
@@ -140,6 +142,6 @@ def layersStored (x : Σ n, Circuit .booleanAlgebra (n + 1) n × List Unit) :
 
 theorem layersStored_ftisp :
     layersStored ∈ FTISP .tree (fun n => n ^ 18) (fun n => n ^ 8) :=
-  layersStoredImplementation.mem_ftisp_pow (by decide)
+  implementationLayersStored.mem_ftisp_pow (by decide)
 
 end ComplexityTest.SourceTranslation.CircuitComposition

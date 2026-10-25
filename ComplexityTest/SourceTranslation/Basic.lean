@@ -35,15 +35,15 @@ example (hf : Implementation f t p) :
 end
 
 -- A concrete composition charges each reversal at its own input.
-def reverseTwice {α : Type*} [UniqueEncoding Tree α] :
+def implementationReverseTwice {α : Type*} [UniqueEncoding Tree α] :
     Implementation ((List.reverse : List α → List α) ∘ List.reverse)
       (fun xs => ⌜xs⌝ₜ.size + ⌜xs.reverse⌝ₜ.size) (fun xs => max ⌜xs⌝ₜ.size ⌜xs.reverse⌝ₜ.size) :=
-  Implementation.reverse.comp Implementation.reverse
+  List.implementationReverse.comp List.implementationReverse
 
 example {α : Type*} [UniqueEncoding Tree α] :
     Implementation ((List.reverse : List α → List α) ∘ List.reverse)
       (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) :=
-  reverseTwice.mono (Dominated.of_le_mul 2 fun xs => by simp; omega)
+  implementationReverseTwice.mono (Dominated.of_le_mul 2 fun xs => by simp; omega)
     (Dominated.of_le fun xs => by simp)
 
 section BranchTranslation

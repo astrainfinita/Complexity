@@ -24,9 +24,9 @@ def collect (input : CNF ℕ ×
   (gateClauses input.2).foldl (fun acc clause => clause :: acc) input.1
 
 open Complexity.TreeProgram.Source in
-@[local source] def collectImplementation :
+@[local source] def implementationCollect :
     Implementation collect (fun _ => 1) (fun input => ⌜input⌝ₜ.size) :=
-  accumulateGateImpl.congr (by funext x; rfl)
+  implementationAccumulateGate.congr (by funext x; rfl)
 
 theorem collect_ftisp : collect ∈ FTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
   model_fun_prop
@@ -51,7 +51,7 @@ theorem collect_pair_ftisp : (fun input => (collect input, input.1)) ∈ FTISP .
 -- The selected program is reused as chosen.
 open Complexity.TreeProgram.Source in
 example : (by source_fun_prop : Implementation collect _ _).program =
-    collectImplementation.program := rfl
+    implementationCollect.program := rfl
 
 open Complexity.TreeProgram.Source in
 example : True := by

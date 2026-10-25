@@ -15,7 +15,7 @@ open ComplexityTest.SourceTranslation.SpecComparison
 
 namespace ComplexityTest.SourceTranslation.Examples
 
-attribute [local fun_prop] duplicateImplementation
+attribute [local fun_prop] implementationDuplicate
 
 private theorem size_encode_map_le {α β : Type*}
     [UniqueEncoding Tree α] [UniqueEncoding Tree β] (f : α → β) (xs : List α)
@@ -83,14 +83,14 @@ private theorem encode_liftWires (x : Σ n, Σ k, Fin n → Fin k) :
     simp [Function.comp_def]
   simp only [liftWires, Sigma.encode_mk, encode_prod, he]
 
-def liftWiresImplementation := Implementation.ofEncode encode_liftWires (by source_fun_prop :
+def implementationLiftWires := Implementation.ofEncode encode_liftWires (by source_fun_prop :
   Implementation (fun x : Σ n, Σ k, Fin n → Fin k =>
     (x.1 + 1, x.2.1 + 1, List.ofFn (Fin.val ∘ x.2.2) ++ [x.2.1])) _ _)
 
-attribute [local fun_prop] liftWiresImplementation
+attribute [local fun_prop] implementationLiftWires
 
 example : (by source_fun_prop : Implementation liftWires _ _).program =
-    liftWiresImplementation.program := rfl
+    implementationLiftWires.program := rfl
 
 example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop :
     Implementation (fun x : Σ n, Fin n → α => List.ofFn x.2) _ _)
@@ -113,7 +113,7 @@ def optionalReverse {α : Type*} : Option (List α) → List α
   | none => []
   | some xs => xs.reverse
 
-def optionalReverseImplementation {α : Type*} [UniqueEncoding Tree α] :=
+def implementationOptionalReverse {α : Type*} [UniqueEncoding Tree α] :=
   (by source_fun_prop : Implementation (optionalReverse (α := α)) _ _)
 
 theorem optionalReverse_ftisp {α : Type*} [UniqueEncoding Tree α] :
@@ -137,7 +137,7 @@ def indexedReverse (input : Σ n, Option (Fin n × List Bool)) : ℕ × List Boo
 example := (by source_fun_prop :
     Implementation indexedReverse _ _)
 
-attribute [local source] optionalReverseImplementation
+attribute [local source] implementationOptionalReverse
 
 example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop :
     Implementation (fun x : Option (List α) => (optionalReverse x).reverse) _ _)
@@ -175,9 +175,9 @@ example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop :
 example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop :
     Implementation (fun xs : List α => let ys := xs.reverse; (ys, xs)) _ _)
 
-def helperImplementation := (by source_fun_prop : Implementation helper _ _)
+def implementationHelper := (by source_fun_prop : Implementation helper _ _)
 
-attribute [local source] helperImplementation
+attribute [local source] implementationHelper
 
 -- A helper can be called only on a let-bound value, while the continuation retains its input.
 def helperInLet (xs : List Bool) :=
@@ -267,9 +267,9 @@ example {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
 def conditionalReverse {α : Type*} (x : Bool × List α) : List α :=
   if x.1 then x.2.reverse else x.2 ++ x.2
 
-def branchImplementation := (by source_fun_prop : Implementation branch _ _)
+def implementationBranch := (by source_fun_prop : Implementation branch _ _)
 
-attribute [local source] branchImplementation
+attribute [local source] implementationBranch
 
 example := (by source_fun_prop :
     Implementation (List.map branch) _ _)
@@ -381,7 +381,7 @@ example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop :
 example : Implementation (List.map (List.reverse : List Unit → List Unit))
     (fun xss => ⌜xss⌝ₜ.size) (fun xss => max ⌜xss⌝ₜ.size (max (⌜xss.map List.reverse⌝ₜ.size + 1)
       (xss.foldr (fun xs s => max ⌜xs⌝ₜ.size s) 0))) :=
-  Implementation.reverse.map.mono (Dominated.of_le fun xss => (size_encode_list xss).ge)
+  List.implementationReverse.map.mono (Dominated.of_le fun xss => (size_encode_list xss).ge)
     (Dominated.refl _)
 
 -- Only ordinary size arithmetic remains; no generated code appears in this proof.
@@ -427,23 +427,7 @@ example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop :
 theorem foldReverse_ftisp {α : Type*} [UniqueEncoding Tree α] :
     foldReverse (α := α) ∈ FTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by
   model_fun_prop
-  · apply Dominated.of_le_mul 6
-    intro xs
-    have := foldlTime_le_sum (f := fun (acc : List α) x => x :: acc) (fun _ => 1)
-      (fun _ => le_rfl) [] xs
-    have := length_le_codeSize xs
-    have := Tree.size_pos ⌜xs⌝ₜ
-    simp at *
-    omega
-  · apply Dominated.of_le_mul 4
-    intro xs
-    have hpeak := foldlPeak_le_of_size (f := fun (acc : List α) x => x :: acc)
-      (p := fun z => max ⌜z⌝ₜ.size ⌜Function.uncurry (fun (acc : List α) x => x :: acc) z⌝ₜ.size)
-      [] xs (fun _ _ => by simp [size_encode_prod]; omega)
-      (fun _ _ => by simp [size_encode_prod]; omega)
-    simp [size_encode_prod] at *
-    have := Tree.size_pos ⌜xs⌝ₜ
-    exact ⟨by omega, by omega, hpeak.trans (by omega)⟩
+  all_goals dominated
 
 def collectStep {α : Type*} (acc : List α) (x : α) := x :: acc
 
