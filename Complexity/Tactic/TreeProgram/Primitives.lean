@@ -25,46 +25,46 @@ theorem dominated_size_encode_bool {α : Type*} [UniqueEncoding Tree α] (f : α
   (Dominated.refl _).max_same ((Dominated.const_of_pos 3 fun _ => Tree.size_pos _).mono_left
     fun _ => size_encode_bool_le _)
 
-def Implementation.boolNot : Implementation Bool.not (fun _ => 1) (fun x => ⌜x⌝ₜ.size) :=
+def _root_.Bool.implementationNot : Implementation Bool.not (fun _ => 1) (fun x => ⌜x⌝ₜ.size) :=
   .ofEncode (by intro x; cases x <;> rfl)
     (by source_cases; exact dominated_size_encode_bool _ :
       Implementation (fun x => match x with | false => true | true => false)
         (fun _ => 1) (fun x => ⌜x⌝ₜ.size))
 
-def Implementation.boolAnd :
+def implementationBoolAnd :
     Implementation (fun x : Bool × Bool => x.1 && x.2) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) :=
   .ofEncode (by rintro ⟨a, b⟩; cases a <;> cases b <;> rfl)
     (by source_cases; exact dominated_size_encode_bool _ :
       Implementation (fun x : Bool × Bool => match x.1 with | false => false | true => x.2)
         (fun _ => 1) (fun x => ⌜x⌝ₜ.size))
 
-def Implementation.boolOr :
+def implementationBoolOr :
     Implementation (fun x : Bool × Bool => x.1 || x.2) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) :=
   .ofEncode (by rintro ⟨a, b⟩; cases a <;> cases b <;> rfl)
     (by source_cases; exact dominated_size_encode_bool _ :
       Implementation (fun x : Bool × Bool => match x.1 with | false => x.2 | true => true)
         (fun _ => 1) (fun x => ⌜x⌝ₜ.size))
 
-def Implementation.boolXor :
+def implementationBoolXor :
     Implementation (fun x : Bool × Bool => xor x.1 x.2) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) :=
   .ofEncode (by rintro ⟨a, b⟩; cases a <;> cases b <;> rfl)
     (by source_cases; exact dominated_size_encode_bool _ :
       Implementation (fun x : Bool × Bool => match x.1 with | false => x.2 | true => !x.2)
         (fun _ => 1) (fun x => ⌜x⌝ₜ.size))
 
-def Implementation.boolBeq :
+def implementationBoolBeq :
     Implementation (fun x : Bool × Bool => x.1 == x.2) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) :=
   (Implementation.ofEncode (by rintro ⟨a, b⟩; cases a <;> cases b <;> rfl)
-    (Implementation.boolXor.comp Implementation.boolNot)).mono (Dominated.const 2)
+    (implementationBoolXor.comp Bool.implementationNot)).mono (Dominated.const 2)
     (dominated_size_encode_bool _)
 
 /-- Testing a list for emptiness inspects its root. -/
-def Implementation.listIsEmpty {α : Type*} [UniqueEncoding Tree α] :
+@[uniform_program] def _root_.List.implementationIsEmpty {α : Type*} [UniqueEncoding Tree α] :
     Implementation (List.isEmpty : List α → Bool) (fun _ => 1) (fun xs => ⌜xs⌝ₜ.size) := by
   source_fun_prop
   all_goals dominated
 
-attribute [scoped fun_prop] Implementation.boolNot Implementation.boolAnd Implementation.boolOr
-  Implementation.boolXor Implementation.boolBeq Implementation.listIsEmpty
+attribute [scoped fun_prop] Bool.implementationNot implementationBoolAnd implementationBoolOr
+  implementationBoolXor implementationBoolBeq List.implementationIsEmpty
 
 end Complexity.TreeProgram.Source

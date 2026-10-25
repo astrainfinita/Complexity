@@ -376,6 +376,76 @@ private def tableRead (search : Lean.Expr → FunPropM (Option Result)) (goal : 
     return some ⟨← mkAppM rule #[hf.proof, hi.proof]⟩
 
 open Lean Meta in
+/-- A value as the corresponding value of codes, with the same code: lists and pairs. -/
+private def codesView (type : Lean.Expr) : MetaM (Option (Lean.Expr × Lean.Expr)) := do
+  if type.isAppOfArity ``List 1 then
+    let entry := type.appArg!
+    let encode ← mkAppOptM ``UniqueEncoding.encode #[mkConst ``Tree, entry, none]
+    return some (← mkAppM ``List.map #[encode], ← mkAppOptM ``encode_list_codes #[entry, none])
+  if type.isAppOfArity ``Prod 2 then
+    let code (field : Name) (z : Lean.Expr) := do
+      mkAppM ``encode #[mkConst ``Tree, ← mkAppM field #[z]]
+    let view ← withLocalDeclD `z type fun z => do
+      mkLambdaFVars #[z] (← mkAppM ``Prod.mk #[← code ``Prod.fst z, ← code ``Prod.snd z])
+    let equation ← mkAppOptM ``encode_prod_codes #[type.appFn!.appArg!, type.appArg!, none, none]
+    return some (view, equation)
+  return none
+
+open Lean Meta in
+/-- A registered `HasProgram` fact instantiated at the function `fn`, or at `Tree` for every type
+parameter. -/
+private def instantiateFact (fact : Name) (fn : Option Lean.Expr) : MetaM Lean.Expr := do
+  let proof ← mkConstWithFreshMVarLevels fact
+  let (args, binders, statement) ← forallMetaTelescopeReducing (← inferType proof)
+  match fn with
+  | some fn =>
+    unless ← isDefEq (statement.getArg! 4) fn do throwError "{fact} does not apply"
+  | none =>
+    for arg in args do
+      if (← whnf (← inferType arg)).isSort then
+        unless ← isDefEq arg (mkConst ``Tree) do throwError "{fact} has no instance at codes"
+  for arg in args, binder in binders do
+    if binder.isInstImplicit && !(← arg.mvarId!.isAssigned) then
+      arg.mvarId!.assign (← synthInstance (← inferType arg))
+  instantiateMVars (mkAppN proof args)
+
+open Lean Meta Mathlib.Meta.FunProp in
+/-- A function with one program at every type (`HasProgram`, from `uniform_program`) applied to an
+argument whose type depends on the input: the argument is computed and the program runs on its
+code (`Implementation.compCodes`). The growth is stated on the argument, not on its code. -/
+private def codesComposition (search : Lean.Expr → FunPropM (Option Result))
+    (goal : Lean.Expr) : FunPropM (Option Result) := do
+  let some (argument, view, equation, atCodes, atTypes) ←
+      lambdaTelescope (← etaExpand (goal.getArg! 4)) fun xs body => do
+        let #[x] := xs | return none
+        let body := body.headBeta
+        -- A projection of the input is a subtree of its code, read by the structural stage.
+        if ← Search.isProjectionOf x body then return none
+        let some name := body.getAppFn.constName? | return none
+        unless body.isApp do return none
+        unless (← inferType body.appArg!).containsFVar x.fvarId! do return none
+        let some (view, equation) ← codesView (← whnfR (← inferType body.appArg!)) | return none
+        for fact in ← getTheoremsForFunction name ``HasProgram do
+          let .decl fact := fact.thmOrigin | continue
+          let some (atType, atCodes) ← (observing? (return (← instantiateFact fact
+              (some body.appFn!), ← instantiateFact fact none)) : MetaM _) | continue
+          return some (← mkLambdaFVars xs body.appArg!, ← mkLambdaFVars xs view,
+            ← mkLambdaFVars xs equation, atCodes, ← mkLambdaFVars xs atType)
+        return none
+    | return none
+  let some hx ← search (← implementationGoal argument) | return none
+  let result ← mkAppM ``Implementation.compCodes #[hx.proof, view, equation, atCodes, atTypes]
+  let type ← whnfR (← inferType result)
+  let codes ← Simp.mkContext (simpTheorems := #[← [``encode_list_codes, ``encode_prod_codes,
+    ``List.length_map, ``Tree.encode_self].foldlM (·.addConst ·) ({} : SimpTheorems)])
+  let comparisons ← [5, 6].mapM fun i => do
+    let growth := type.getArg! i
+    match (← simp growth codes).1.proof? with
+    | some equation => mkAppM ``dominated_of_eq #[equation]
+    | none => mkAppM ``Dominated.refl #[growth]
+  return some ⟨← mkAppM ``Implementation.mono #[result, comparisons[0]!, comparisons[1]!]⟩
+
+open Lean Meta in
 /-- Whether a value is built by constructors from the input, its projections and closed values,
 so that its code is assembled from subtrees of the input's code. -/
 private partial def isAtHand (x e : Lean.Expr) : MetaM Bool := do
@@ -480,6 +550,10 @@ private partial def sourceSearch (session : Search.Session) (nested : Bool)
         return none
       -- This driver owns every stage; queries and certificate adapters do not schedule work.
       if let some r ← rules false then return some r
+      -- A function with one program at every type, at an argument whose type depends on the input.
+      if let .const name _ := d.fn then
+        unless (← getTheoremsForFunction name ``HasProgram).isEmpty do
+          if let some r ← Search.attempt (codesComposition search target) then return some r
       if let some name := encodedCall then
         if let some r ← rules true then return some r
         session.reject ancestors (Search.recursionMessage name) .specification (some name)

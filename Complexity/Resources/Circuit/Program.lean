@@ -27,7 +27,7 @@ theorem gateClauses_size_le {α : Type*} [UniqueEncoding Tree α]
   rcases x with ⟨k, op, args, out⟩
   exact CNF.size_encode_ofGate_le op args out
 
-@[source] def gateClausesImpl {α : Type*} [UniqueEncoding Tree α] :
+@[source] def implementationGateClauses {α : Type*} [UniqueEncoding Tree α] :
     Implementation (gateClauses (α := α)) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   source_fun_prop
   exact (Dominated.refl _).max_same (Dominated.of_le_mul _ gateClauses_size_le)
@@ -47,14 +47,14 @@ def accumulateGate
 abbrev AccumulateInput := CNF ℕ ×
   (Σ k, FirstOrder.Language.booleanAlgebra.Functions k × (Fin k → ℕ) × ℕ)
 
-@[source] def accumulateGateImpl :
+@[source] def implementationAccumulateGate :
     Implementation accumulateGate (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   have : Dominated (fun x : AccumulateInput => (gateClauses x.2).length) (fun _ => 1) :=
     Dominated.of_le_mul 3 (fun x => by
       simpa only [gateClauses, Nat.mul_one] using
         CNF.length_ofGate_le x.2.2.1 x.2.2.2.1 x.2.2.2.2)
   refine (((?pair : Implementation (fun input : AccumulateInput => (input.1, gateClauses input.2))
-    ?pairTime ?pairPeak).comp Implementation.prependFold).congr (by funext x; rfl)).mono ?time ?peak
+    ?pairTime ?pairPeak).comp implementationPrependFold).congr (by funext x; rfl)).mono ?time ?peak
   case pair => source_fun_prop
   all_goals dominated [gateClauses_size_le]
 
@@ -90,7 +90,7 @@ theorem size_encode_val_comp {n k : ℕ} (args : Fin k → Fin n) :
     ⌜Fin.val ∘ args⌝ₜ.size = ⌜args⌝ₜ.size := by
   simpa only [encode_fin_function] using congrArg Tree.size (encode_fin_values args)
 
-@[source] def circuitStepImpl :
+@[source] def implementationCircuitStep :
     Implementation circuitStep (fun x => ⌜x.1⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
   source_fun_prop
   all_goals dominated [accumulateGate_size, gateClauses_size_le, size_encode_val_comp,
@@ -153,7 +153,7 @@ theorem tseitinLoop_state_size (x y : TseitinState)
   change ⌜((m, d), bs)⌝ₜ.size ≤ 10 * ⌜((n, c), acc)⌝ₜ.size ^ 2
   omega
 
-@[source] def circuitContinuesImpl :
+@[source] def implementationCircuitContinues :
     Implementation circuitContinues (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   source_fun_prop
   all_goals dominated
@@ -163,7 +163,7 @@ theorem circuitContinues_ftisp :
   model_fun_prop
   all_goals dominated
 
-@[source] def circuitFinishImpl :
+@[source] def implementationCircuitFinish :
     Implementation circuitFinish (fun x => ⌜x⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
   source_fun_prop
   all_goals dominated [CNF.Literal.pos]
@@ -185,7 +185,7 @@ theorem circuitStep_circuit_size_lt
       Circuit.encode_gate, size_encode_unit]
     omega
 
-def tseitinLoopImpl : Implementation (fun x : TseitinState => tseitinLoop x.1 x.2)
+def implementationTseitinLoop : Implementation (fun x : TseitinState => tseitinLoop x.1 x.2)
     (fun x => ⌜x⌝ₜ.size ^ 2) (fun x => ⌜x⌝ₜ.size ^ 2) := by
   source_fun_prop using loop
     (test := circuitContinues) (next := circuitStep) (finish := circuitFinish)
@@ -210,9 +210,9 @@ def tseitinLoopImpl : Implementation (fun x : TseitinState => tseitinLoop x.1 x.
 theorem tseitinLoop_ftisp :
     (fun x : TseitinState => tseitinLoop x.1 x.2) ∈
       FTISP .tree (fun n => n ^ 2) (fun n => n ^ 2) :=
-  tseitinLoopImpl.mem_ftisp_pow (by decide)
+  implementationTseitinLoop.mem_ftisp_pow (by decide)
 
-attribute [source] tseitinLoopImpl
+attribute [source] implementationTseitinLoop
 
 @[local source] theorem tseitin_source :
     (fun input : Σ n, Circuit .booleanAlgebra n 1 => input.2.tseitin) =

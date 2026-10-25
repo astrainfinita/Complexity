@@ -173,30 +173,31 @@ theorem size_encode_relabelFn_le (x : RelabelInput) :
       (by dsimp [relabelScale]; omega : c.size + m + 1 ≤ relabelScale ⟨n, m, k, c, w⟩))
     (by dsimp [relabelScale]; omega : k + c.size + 1 ≤ relabelScale ⟨n, m, k, c, w⟩)
 
-def relabelCheck : Implementation relabelTest
+def implementationRelabelTest : Implementation relabelTest
     (fun x => ⌜x⌝ₜ.size ^ 3) (fun x => ⌜x⌝ₜ.size ^ 2) := by
   source_fun_prop
   all_goals dominated
 
-def relabelNext : Implementation relabelNextFn
-    (fun x => ⌜x⌝ₜ.size ^ 3) (fun x => ⌜x⌝ₜ.size ^ 2) := by
-  source_fun_prop
-  all_goals dominated
-
-attribute [local fun_prop] Implementation.finComp in
-def relabelFinish : Implementation relabelFinishFn
+def implementationRelabelNextFn : Implementation relabelNextFn
     (fun x => ⌜x⌝ₜ.size ^ 3) (fun x => ⌜x⌝ₜ.size ^ 2) := by
   source_fun_prop
   all_goals dominated
 
 attribute [local fun_prop] Implementation.finComp in
-def relabelResume : Implementation (fun x : relabelRecursion.Return => relabelResumeFn x.1 x.2)
+def implementationRelabelFinishFn : Implementation relabelFinishFn
     (fun x => ⌜x⌝ₜ.size ^ 3) (fun x => ⌜x⌝ₜ.size ^ 2) := by
+  source_fun_prop
+  all_goals dominated
+
+attribute [local fun_prop] Implementation.finComp in
+def implementationRelabelResume :
+    Implementation (fun x : relabelRecursion.Return => relabelResumeFn x.1 x.2)
+      (fun x => ⌜x⌝ₜ.size ^ 3) (fun x => ⌜x⌝ₜ.size ^ 2) := by
   source_fun_prop
   all_goals dominated
 
 /-- The recursive program, with the structural cost of its callbacks bounded by its scale. -/
-@[source] def relabelImplementation : Implementation relabelFn
+@[source] def implementationRelabelFn : Implementation relabelFn
     (fun x => relabelScale x ^ 7) (fun x => relabelScale x ^ 4) :=
   have hsize := Dominated.of_le_mul 128 size_encode_relabelInput_le
   have hpow (d : ℕ) : Dominated (fun x : RelabelInput => ⌜x⌝ₜ.size ^ d)
@@ -204,7 +205,8 @@ def relabelResume : Implementation (fun x : relabelRecursion.Return => relabelRe
   have hstop (d : ℕ) := (hpow d).comp (Subtype.val (p := fun x => relabelTest x = false))
   have hreturn := relabelRecursion.dominated_size_return relabelScale relabelScale_pos
     (fun x _ => relabelScale_next_le x) hsize (Dominated.of_le_mul 100 size_encode_relabelFn_le)
-  (relabelRecursion.implementationOfScale relabelCheck relabelNext relabelFinish relabelResume
+  (relabelRecursion.implementationOfScale implementationRelabelTest implementationRelabelNextFn
+    implementationRelabelFinishFn implementationRelabelResume
     relabelScale relabelScale_pos (fun x _ => relabelScale_next_le x) hsize (hpow 3) (hpow 2)
     (hpow 3) (hpow 2) (hstop 3) (hstop 2) (hreturn 3) (hreturn 2)).mono
     (by dominated [relabelScale, relabelRecursion]) (by dominated [relabelScale, relabelRecursion])
@@ -218,7 +220,7 @@ def Implementation.relabel {ρ : Type} [UniqueEncoding Tree ρ]
     Implementation (fun x => (c x).relabel (w x))
       (fun x => t x + relabelScale ⟨n x, m x, k x, c x, w x⟩ ^ 7)
       (fun x => max (p x) (relabelScale ⟨n x, m x, k x, c x, w x⟩ ^ 4)) :=
-  h.compDep relabelImplementation
+  h.compDep implementationRelabelFn
 
 attribute [scoped fun_prop] Implementation.relabel
 
@@ -310,32 +312,35 @@ theorem size_encode_compFn_le (x : CompInput) : ⌜compFn x⌝ₜ.size ≤ 100 *
       c.size + d.size + k + 1 ≤ compScale ⟨n, m, k, c, d⟩))
     (by dsimp [compScale]; omega : n + (c.size + d.size) + 1 ≤ compScale ⟨n, m, k, c, d⟩)
 
-def compCheck : Implementation compTest (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
+def implementationCompTest : Implementation compTest (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   source_fun_prop
   all_goals dominated
 
-def compNext : Implementation compNextFn (fun x => ⌜x⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
+def implementationCompNextFn :
+    Implementation compNextFn (fun x => ⌜x⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
   source_fun_prop
   all_goals dominated
 
-def compFinish : Implementation compFinishFn
+def implementationCompFinishFn : Implementation compFinishFn
     (fun x => compScale x.1 ^ 7) (fun x => ⌜x⌝ₜ.size + compScale x.1 ^ 4) := by
   source_fun_prop
   all_goals dominated [relabelScale, compScale]
 
-def compResume : Implementation (fun x : compRecursion.Return => compResumeFn x.1 x.2)
+def implementationCompResume :
+    Implementation (fun x : compRecursion.Return => compResumeFn x.1 x.2)
     (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   source_fun_prop
   all_goals dominated
 
 /-- The terminal relabel call is paid once, so the time expression has degree seven, not eight. -/
-def compImplementation : Implementation compFn
+def implementationCompFn : Implementation compFn
     (fun x => compScale x ^ 7) (fun x => compScale x ^ 4) :=
   have hsize := Dominated.of_le_mul 256 size_encode_compInput_le
   have hpos x := Nat.pow_pos (n := 2) (compScale_pos x)
   have hreturn := compRecursion.dominated_size_return compScale compScale_pos
     (fun x _ => compScale_next_le x) hsize (Dominated.of_le_mul 100 size_encode_compFn_le) 1
-  (compRecursion.implementationOfScale compCheck compNext compFinish compResume compScale
+  (compRecursion.implementationOfScale implementationCompTest implementationCompNextFn
+    implementationCompFinishFn implementationCompResume compScale
     compScale_pos (fun x _ => compScale_next_le x) hsize (Dominated.one hpos)
     (hsize.mono_pow (by decide : 2 ≤ 4) compScale_pos) hsize
     (hsize.mono_pow (by decide : 2 ≤ 4) compScale_pos) (Dominated.refl _)
@@ -355,7 +360,7 @@ def Implementation.circuitComp {ρ : Type} [UniqueEncoding Tree ρ]
     Implementation (fun x => (c x).comp (d x))
       (fun x => t x + compScale ⟨n x, m x, k x, c x, d x⟩ ^ 7)
       (fun x => max (p x) (compScale ⟨n x, m x, k x, c x, d x⟩ ^ 4)) :=
-  h.compDep compImplementation
+  h.compDep implementationCompFn
 
 attribute [scoped fun_prop] Implementation.circuitComp
 
@@ -453,15 +458,16 @@ theorem size_encode_keepFn_le (x : KeepInput) : ⌜keepFn x⌝ₜ.size ≤ 100 *
       c.size + (n + m) + 1 ≤ keepScale ⟨n, m, c⟩))
     (by dsimp [keepScale]; omega : n + c.size + 1 ≤ keepScale ⟨n, m, c⟩)
 
-def keepCheck : Implementation keepTest (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
+def implementationKeepTest : Implementation keepTest (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   source_fun_prop
   all_goals dominated
 
-def keepNext : Implementation keepNextFn (fun x => ⌜x⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
+def implementationKeepNextFn :
+    Implementation keepNextFn (fun x => ⌜x⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
   source_fun_prop
   all_goals dominated
 
-def keepOutputs : Implementation keepOutputsFn
+def implementationKeepOutputsFn : Implementation keepOutputsFn
     (fun x => (x.n + x.m + 1) ^ 2) (fun x => (x.n + x.m + 1) ^ 2) := by
   source_fun_prop using tabulate
   all_goals dominated
@@ -471,14 +477,15 @@ def keepFinishInput : {x // keepTest x = false} → KeepOutputsInput
   | ⟨⟨_, _, .gate _ _ _⟩, h⟩ => False.elim (by cases h)
   | ⟨⟨n, m, .outputs w⟩, _⟩ => ⟨n, m, w⟩
 
-def keepFinishInputImplementation :
+def implementationKeepFinishInput :
     Implementation keepFinishInput (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   source_fun_prop
   all_goals dominated
 
-def keepFinish : Implementation keepFinishFn
+def implementationKeepFinishFn : Implementation keepFinishFn
     (fun x => keepScale x.1 ^ 2) (fun x => keepScale x.1 ^ 2) := by
-  refine ((keepFinishInputImplementation.compDep keepOutputs).ofEncode ?_).mono ?_ ?_
+  refine ((implementationKeepFinishInput.compDep implementationKeepOutputsFn).ofEncode ?_).mono
+    ?_ ?_
   · rintro ⟨⟨n, m, c⟩, h⟩
     cases c with
     | outputs _ => rfl
@@ -503,7 +510,7 @@ def Implementation.mapOutputs {ρ : Type} [UniqueEncoding Tree ρ] {n m k : ρ �
     Implementation (fun x => (c x).mapOutputs (f x))
       (fun x => t x + compScale ⟨n x, m x, k x, c x, .outputs (f x)⟩ ^ 7)
       (fun x => max (p x) (compScale ⟨n x, m x, k x, c x, .outputs (f x)⟩ ^ 4)) :=
-  h.compDep compImplementation
+  h.compDep implementationCompFn
 
 attribute [scoped fun_prop] Implementation.mapOutputs
 
@@ -519,7 +526,7 @@ def keepGateFn (x : KeepGateInput) : Circuit .booleanAlgebra x.1 (x.1 + x.2.1) :
 
 def keepGateScale (x : KeepGateInput) := x.1 + x.2.1 + x.2.2.2.2.2.size + 1
 
-def keepGateImplementation : Implementation keepGateFn
+def implementationKeepGateFn : Implementation keepGateFn
     (fun x => keepGateScale x ^ 7) (fun x => keepGateScale x ^ 4) := by
   have hk : Dominated (fun x : KeepGateInput => x.2.2.1) keepGateScale :=
     (Dominated.const_of_pos 2 fun _ => Nat.succ_pos _).mono_left fun x => by
@@ -551,22 +558,23 @@ def keepResumeInput : keepRecursion.Return → KeepGateInput
   | ⟨⟨⟨_, _, .outputs _⟩, h⟩, _⟩ => False.elim (by cases h)
   | ⟨⟨⟨n, m, .gate (k := k) op args _⟩, _⟩, result⟩ => ⟨n, m, k, op, args, result⟩
 
-def keepResumeInputImplementation :
+def implementationKeepResumeInput :
     Implementation keepResumeInput (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   source_fun_prop
   all_goals dominated
 
 def keepReturnScale (x : keepRecursion.Return) : ℕ := x.1.1.n + x.1.1.m + x.2.size + 1
 
-def keepResume : Implementation (fun x : keepRecursion.Return => keepResumeFn x.1 x.2)
-    (fun x => keepReturnScale x ^ 7) (fun x => ⌜x⌝ₜ.size + keepReturnScale x ^ 4) := by
+def implementationKeepResume :
+    Implementation (fun x : keepRecursion.Return => keepResumeFn x.1 x.2)
+      (fun x => keepReturnScale x ^ 7) (fun x => ⌜x⌝ₜ.size + keepReturnScale x ^ 4) := by
   have hscale (x : keepRecursion.Return) :
       keepGateScale (keepResumeInput x) = keepReturnScale x := by
     rcases x with ⟨⟨⟨n, m, c⟩, h⟩, result⟩
     cases c with
     | outputs _ => cases h
     | gate _ _ _ => rfl
-  refine ((keepResumeInputImplementation.compDep keepGateImplementation).ofEncode ?_).mono ?_ ?_
+  refine ((implementationKeepResumeInput.compDep implementationKeepGateFn).ofEncode ?_).mono ?_ ?_
   · rintro ⟨⟨⟨n, m, c⟩, h⟩, result⟩
     cases c with
     | outputs _ => cases h
@@ -578,7 +586,7 @@ def keepResume : Implementation (fun x : keepRecursion.Return => keepResumeFn x.
     exact Dominated.of_le fun _ => max_le (Nat.le_add_right ..) (Nat.le_add_left ..)
 
 /-- The selected recursive program for `keepInputs`, with its polynomial growth. -/
-def keepImplementation : Implementation keepFn
+def implementationKeepFn : Implementation keepFn
     (fun x => keepScale x ^ 8) (fun x => keepScale x ^ 4) :=
   have hsize := Dominated.of_le_mul 128 size_encode_keepInput_le
   have hpos x := Nat.pow_pos (n := 2) (keepScale_pos x)
@@ -598,7 +606,8 @@ def keepImplementation : Implementation keepFn
         change n + m + next.keepInputs.size + 1 ≤ _
         simp only [Circuit.size_keepInputs, keepScale, Circuit.size_gate]
         omega
-  (keepRecursion.implementationOfScale keepCheck keepNext keepFinish keepResume keepScale
+  (keepRecursion.implementationOfScale implementationKeepTest implementationKeepNextFn
+    implementationKeepFinishFn implementationKeepResume keepScale
     keepScale_pos (fun x _ => keepScale_next_le x) hsize (Dominated.one fun x =>
       Nat.pow_pos (n := 7) (keepScale_pos x))
     (hsize.mono_pow (by decide : 2 ≤ 4) keepScale_pos)
@@ -615,7 +624,7 @@ def Implementation.keepInputs {ρ : Type} [UniqueEncoding Tree ρ]
     Implementation (fun x => (c x).keepInputs)
       (fun x => t x + keepScale ⟨n x, m x, c x⟩ ^ 8)
       (fun x => max (p x) (keepScale ⟨n x, m x, c x⟩ ^ 4)) :=
-  h.compDep keepImplementation
+  h.compDep implementationKeepFn
 
 attribute [scoped fun_prop] Implementation.keepInputs
 

@@ -38,7 +38,7 @@ grind_pattern size_encode_reverse => ⌜xs.reverse⌝ₜ.size
   omega
 
 /-- A certified linear-time reversal, without traversing the encoded elements. -/
-def Implementation.reverse {α : Type*} [UniqueEncoding Tree α] :
+@[uniform_program] def _root_.List.implementationReverse {α : Type*} [UniqueEncoding Tree α] :
     Implementation (List.reverse : List α → List α) (fun xs => ⌜xs⌝ₜ.size)
       (fun xs => ⌜xs⌝ₜ.size) :=
   ⟨List.Code.reverse, ⟨fun xs => 13 * xs.length + 8, fun xs => ⌜xs⌝ₜ.size + 1⟩,
@@ -192,6 +192,30 @@ these codes, so the type of the entries may depend on the input. -/
 def Implementation.listCodes {f : (x : α) → List (β x)} (hf : Implementation f t p) :
     Implementation (fun x => (f x).map (encode Tree)) t p :=
   hf.ofEncode fun x => encode_list_codes (f x)
+
+theorem encode_prod_codes {γ δ : Type*} [UniqueEncoding Tree γ] [UniqueEncoding Tree δ]
+    (z : γ × δ) : ⌜(⌜z.1⌝ₜ, ⌜z.2⌝ₜ)⌝ₜ = ⌜z⌝ₜ := by
+  cases z; simp only [encode_prod, Tree.encode_self]
+
+/-- A function with one program at every type, applied to a computed value whose type may depend
+on the input: the instance on the value's codes `c` gives the growth, the one at its type the
+result. -/
+def Implementation.compCodes {A δ : α → Type*} {B γ : Type*} [∀ x, UniqueEncoding Tree (A x)]
+    [∀ x, UniqueEncoding Tree (δ x)] [UniqueEncoding Tree B] [UniqueEncoding Tree γ]
+    {F : (x : α) → A x → δ x} {G : B → γ} {f : (x : α) → A x} {program : Value → Code Value}
+    {u q : B → ℕ} {u' q' : (x : α) → A x → ℕ} (hf : Implementation f t p)
+    (c : (x : α) → A x → B) (hc : ∀ x a, ⌜c x a⌝ₜ = ⌜a⌝ₜ) (hG : HasProgram G program u q)
+    (hF : ∀ x, HasProgram (F x) program (u' x) (q' x)) :
+    Implementation (fun x => F x (f x)) (fun x => t x + u (c x (f x)))
+      (fun x => max (p x) (q (c x (f x)))) :=
+  ((hf.ofEncode (f := fun x => c x (f x)) fun x => hc x (f x)).compDep
+      ⟨program, hG.sound⟩).ofEncode fun x => by
+    obtain ⟨_, h, -⟩ := (hF x).sound
+    obtain ⟨_, g, -⟩ := hG.sound
+    exact h.encode_congr g (hc x (f x)).symm
+
+theorem dominated_of_eq {ι : Type*} {f g : ι → ℕ} (h : f = g) : Dominated f g :=
+  h ▸ .refl f
 
 /-- Compute two encoded lists and append them. -/
 def Implementation.append {f g : (x : α) → List (β x)} (hf : Implementation f t p)
@@ -532,7 +556,7 @@ theorem Implements.loop_budget_finish {α β : Type*} [UniqueEncoding Tree α] [
     exact run t _ hj
 
 /-- Binary successor on bit lists. -/
-def Implementation.increment :
+def _root_.Complexity.BitList.implementationIncrement :
     Implementation BitList.increment (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) :=
   ⟨Nat.Code.succ, ⟨fun xs => 28 * xs.length + 25, fun xs => ⌜xs⌝ₜ.size + 5⟩,
     ⟨fun v n _ => by
@@ -549,15 +573,17 @@ def Implementation.increment :
       have := Tree.size_pos ⌜xs⌝ₜ
       omega⟩
 
-def Implementation.succ : Implementation Nat.succ (fun n => ⌜n⌝ₜ.size) (fun n => ⌜n⌝ₜ.size) :=
+def _root_.Nat.implementationSucc :
+    Implementation Nat.succ (fun n => ⌜n⌝ₜ.size) (fun n => ⌜n⌝ₜ.size) :=
   .ofEncode (by intro n; simp [encode_nat_tree])
-    (Implementation.increment.mapInput Nat.bits (fun _ => rfl))
+    (BitList.implementationIncrement.mapInput Nat.bits (fun _ => rfl))
 
-def Implementation.addOne :
+def implementationAddOne :
     Implementation (fun a : ℕ => a + 1) (fun n => ⌜n⌝ₜ.size) (fun n => ⌜n⌝ₜ.size) :=
-  Implementation.succ
+  Nat.implementationSucc
 
-attribute [scoped fun_prop] Implementation.increment Implementation.succ Implementation.addOne
+attribute [scoped fun_prop] BitList.implementationIncrement Nat.implementationSucc
+  implementationAddOne
 
 section Constructor
 
@@ -626,7 +652,7 @@ section Projection
 variable {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
 
 /-- Select the first field of an encoded pair. -/
-def Implementation.fst :
+@[uniform_program] def _root_.Prod.implementationFst :
     Implementation (Prod.fst : α × β → α) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) :=
   .ofImplements Value.left ⟨fun _ => 1, fun x => ⌜x⌝ₜ.size⟩ ⟨fun v n hv => by
       change n ≤ n + 1 ∧ n + 1 ≤ n + 1
@@ -634,7 +660,7 @@ def Implementation.fst :
     fun v n s ⟨x, y⟩ hv hx => by simp +contextual (disch := omega) [hx]⟩
 
 /-- Select the second field of an encoded pair. -/
-def Implementation.snd :
+@[uniform_program] def _root_.Prod.implementationSnd :
     Implementation (Prod.snd : α × β → β) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) :=
   .ofImplements Value.right ⟨fun _ => 1, fun x => ⌜x⌝ₜ.size⟩ ⟨fun v n hv => by
       change n ≤ n + 1 ∧ n + 1 ≤ n + 1
@@ -767,10 +793,11 @@ def Implementation.foldlWith {ρ α β : Type*}
     simp only [size_encode_prod]; omega
   have hout := (hs.size_encode.comp (fun z : (ρ × β) × α => (z.1.1, z.1.2, z.2)))
   simp only [Function.comp_def, hargs] at hout
-  let getEnv := (Implementation.fst (α := ρ × β) (β := α)).comp
-    (Implementation.fst (α := ρ) (β := β))
-  let getArgs := getEnv.pair (((Implementation.fst (α := ρ × β) (β := α)).comp
-    (Implementation.snd (α := ρ) (β := β))).pair (Implementation.snd (α := ρ × β) (β := α)))
+  let getEnv := (Prod.implementationFst (α := ρ × β) (β := α)).comp
+    (Prod.implementationFst (α := ρ) (β := β))
+  let getArgs := getEnv.pair (((Prod.implementationFst (α := ρ × β) (β := α)).comp
+    (Prod.implementationSnd (α := ρ) (β := β))).pair
+      (Prod.implementationSnd (α := ρ × β) (β := α)))
   let step : Implementation (Function.uncurry (fun (ea : ρ × β) (x : α) => (ea.1, f ea.1 ea.2 x)))
       (fun z => ts (z.1.1, z.1.2, z.2) + 1)
       (fun z => max ⌜z⌝ₜ.size (ps (z.1.1, z.1.2, z.2))) :=
@@ -786,7 +813,7 @@ def Implementation.foldlWith {ρ α β : Type*}
           | exact Dominated.of_le fun z => (show _ ≤ ⌜z⌝ₜ.size by
               rcases z with ⟨⟨e, a⟩, x⟩; simp only [size_encode_prod]; omega).trans
                 (le_max_left _ _))
-  refine ((hi.comp (step.foldl.comp Implementation.snd)).congr ?_).mono ?_ ?_
+  refine ((hi.comp (step.foldl.comp Prod.implementationSnd)).congr ?_).mono ?_ ?_
   · funext e
     have hfold : (xs e).foldl (fun (ea : ρ × β) x => (ea.1, f ea.1 ea.2 x)) (e, a e) =
         (e, (xs e).foldl (f e) (a e)) := List.foldl_hom (fun b => (e, b)) (by intros; rfl)
@@ -836,8 +863,8 @@ def Implementation.mapWith {ρ α β : Type*}
       (fun p => (@Sigma.encode_mk ρ (fun _ => α) _ _ p.1 p.2).symm))).mono
     (Dominated.refl _) (Dominated.of_le fun e => by simp only [Sigma.encode_mk, le_refl])
 
-attribute [scoped fun_prop] Implementation.identity Implementation.comp Implementation.reverse
-  Implementation.map Implementation.append Implementation.fst Implementation.snd
+attribute [scoped fun_prop] Implementation.identity Implementation.comp List.implementationReverse
+  Implementation.map Implementation.append Prod.implementationFst Prod.implementationSnd
   Implementation.pair Implementation.unit Implementation.ite
   Implementation.foldl
 attribute [scoped fun_prop] Implementation.foldlWith

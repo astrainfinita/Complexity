@@ -75,7 +75,7 @@ theorem iterate_unrollStep (n : ℕ) (step : Circuit .booleanAlgebra (n + 1) n) 
 def unrollStepScale (x : UnrollState) :=
   2 * x.1 + x.2.1 + x.2.2.1.size + x.2.2.2.size + 2
 
-def unrollStepImpl : Implementation unrollStep
+def implementationUnrollStep : Implementation unrollStep
     (fun x => unrollStepScale x ^ 8) (fun x => unrollStepScale x ^ 4) := by
   -- Every circuit of a step has quadratic encoded size in the scale.
   have circuit {n m : UnrollState → ℕ}
@@ -111,7 +111,7 @@ def unrollInitial (x : UnrollInput) : ℕ × UnrollState :=
 def unrollScale (x : UnrollInput) :=
   2 * x.1 + x.2.2 + (x.2.2 + 1) * x.2.1.size + 2
 
-def unrollInitialImpl : Implementation unrollInitial
+def implementationUnrollInitial : Implementation unrollInitial
     (fun x => unrollScale x ^ 2) (fun x => unrollScale x ^ 2) := by
   have := Dominated.size_encode_circuit (fun x : UnrollInput => x.2.1)
     (R := unrollScale) (.of_le fun x => by dsimp [unrollScale]; omega)
@@ -122,13 +122,13 @@ def unrollInitialImpl : Implementation unrollInitial
   all_goals dominated [unrollScale, Circuit.id]
 
 /-- The result projection is selected independently of its eventual budget. -/
-def unrollResultImpl : Implementation (fun x : UnrollState => x.2.2.2)
+def implementationUnrollResult : Implementation (fun x : UnrollState => x.2.2.2)
     (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   source_fun_prop
   all_goals dominated
 
 /-- The loop sums one step allowance per layer and retains a maximum space allowance. -/
-def unrollImplementation :
+def implementationUnroll :
     Implementation (fun x : UnrollInput => x.2.1.unroll x.2.2)
       (fun x => unrollScale x ^ 9) (fun x => unrollScale x ^ 4) := by
   have hR x : 0 < unrollScale x := by dsimp [unrollScale]; omega
@@ -181,8 +181,8 @@ def unrollImplementation :
       rw [iterate_unrollStep]
       exact size_unrollState_le n step t t le_rfl
   obtain ⟨htime, hpeak⟩ := hiter
-  refine ((unrollInitialImpl.compDep
-    (unrollStepImpl.iterate.compDep unrollResultImpl)).ofEncode ?_).mono ?_ ?_
+  refine ((implementationUnrollInitial.compDep
+    (implementationUnrollStep.iterate.compDep implementationUnrollResult)).ofEncode ?_).mono ?_ ?_
   · rintro ⟨n, step, t⟩
     exact (congrArg (fun s : UnrollState => ⌜s.2.2.2⌝ₜ) (iterate_unrollStep n step t)).symm
   all_goals dominated [unrollScale, unrollInitial]
@@ -194,7 +194,7 @@ def Implementation.unroll {ρ : Type} [UniqueEncoding Tree ρ]
     Implementation (fun x => (step x).unroll (t x))
       (fun x => u x + unrollScale ⟨n x, step x, t x⟩ ^ 9)
       (fun x => max (q x) (unrollScale ⟨n x, step x, t x⟩ ^ 4)) :=
-  h.compDep unrollImplementation
+  h.compDep implementationUnroll
 
 attribute [scoped fun_prop] Implementation.unroll
 

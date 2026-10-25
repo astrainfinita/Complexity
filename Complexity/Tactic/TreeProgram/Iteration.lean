@@ -215,7 +215,7 @@ theorem Iteration.continues_eq_true {α : Type*} (x : ℕ × α) :
       intro h; have := BitList.toNat_bits (n + 1); simp [h, BitList.toNat] at this
     simp [Iteration.continues, hbits]
 
-def Iteration.continuesImplementation {α : Type*} [UniqueEncoding Tree α] :
+def Iteration.implementationContinues {α : Type*} [UniqueEncoding Tree α] :
     Implementation (Iteration.continues (α := α)) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   source_fun_prop
   all_goals dominated
@@ -225,10 +225,10 @@ def Iteration.stepImplementation {α : Type*} [UniqueEncoding Tree α] {f : α �
     {t p : α → ℕ} (hf : Implementation f t p) :
     Implementation (fun x : ℕ × α => (x.1.pred, f x.2)) (fun x => ⌜x.1⌝ₜ.size + t x.2)
       (fun x => max ⌜x⌝ₜ.size (p x.2)) := by
-  have := Implementation.pred.size_encode.comp (Prod.fst : ℕ × α → ℕ)
+  have := Nat.implementationPred.size_encode.comp (Prod.fst : ℕ × α → ℕ)
   have := hf.size_encode.comp (Prod.snd : ℕ × α → α)
-  refine (((Implementation.fst (α := ℕ) (β := α)).comp Implementation.pred).pair
-    ((Implementation.snd (α := ℕ) (β := α)).comp hf)).mono ?_ ?_
+  refine (((Prod.implementationFst (α := ℕ) (β := α)).comp Nat.implementationPred).pair
+    ((Prod.implementationSnd (α := ℕ) (β := α)).comp hf)).mono ?_ ?_
   all_goals dominated
 
 /-- Compile one callback for every count as a tail loop over the counter and the state. -/
@@ -243,8 +243,8 @@ def Implementation.iterate {α : Type*} [UniqueEncoding Tree α] {f : α → α}
     rw [hy]
     exact size_le_iteratePeak p _ hk
   refine (Implementation.tailLoopPotential (result := fun x : ℕ × α => f^[x.1] x.2)
-    Iteration.continuesImplementation (Iteration.stepImplementation hf)
-    (Implementation.snd (α := ℕ) (β := α)) I (fun _ y => iterateTime f t y.1 y.2) (fun _ => 1)
+    Iteration.implementationContinues (Iteration.stepImplementation hf)
+    (Prod.implementationSnd (α := ℕ) (β := α)) I (fun _ y => iterateTime f t y.1 y.2) (fun _ => 1)
     (fun x => iteratePeak f p x.1 x.2) ?_ ?_ ?_ (Dominated.of_le size) (Dominated.of_le size)
     ?_ (Dominated.of_le fun z => size ⟨z.1, z.2.1⟩) (Dominated.of_le_mul 2 fun _ => le_rfl)
     ?_).mono (Dominated.of_le_mul 3 fun x => by omega) (Dominated.refl _)
@@ -290,11 +290,11 @@ def Implementation.iterateWith {ρ α : Type*} [UniqueEncoding Tree ρ] [UniqueE
   have hout := hs.size_encode
   let carry : Implementation (fun x : ρ × α => (x.1, f x.1 x.2)) (fun x => ts x + 1)
       (fun x => max ⌜x⌝ₜ.size (ps x)) :=
-    ((Implementation.fst (α := ρ) (β := α)).pair hs).mono (by dominated) (by dominated)
+    ((Prod.implementationFst (α := ρ) (β := α)).pair hs).mono (by dominated) (by dominated)
   have hiter (n : ℕ) (e : ρ) (a : α) :
       (fun x : ρ × α => (x.1, f x.1 x.2))^[n] (e, a) = (e, (f e)^[n] a) :=
     (Function.Semiconj.iterate_right (f := fun a => (e, a)) (fun _ => rfl) n a).symm
-  refine ((hi.comp (carry.iterate.comp (Implementation.snd (α := ρ) (β := α)))).congr ?_).mono
+  refine ((hi.comp (carry.iterate.comp (Prod.implementationSnd (α := ρ) (β := α)))).congr ?_).mono
     ?_ ?_
   · funext e
     simp only [Function.comp_apply, hiter]

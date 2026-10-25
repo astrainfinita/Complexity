@@ -15,7 +15,7 @@ open Complexity TreeProgram
 namespace Complexity.TreeProgram.Source
 
 -- Binary operations reuse the source-loop compiler and the existing carry implementation.
-def Implementation.bits : Implementation Nat.bits (fun _ => 0) (fun _ => 0) :=
+def _root_.Nat.implementationBits : Implementation Nat.bits (fun _ => 0) (fun _ => 0) :=
   .ofEncode (g := id) (fun _ => rfl) Implementation.identity
 
 def borrowContinues (x : List Bool × List Bool) : Bool :=
@@ -29,26 +29,26 @@ def borrowFinish (x : List Bool × List Bool) : List Bool :=
     | true :: xs => if xs.isEmpty then [] else false :: xs
     | _ => []
 
-def borrowContinuesImplementation :
+def implementationBorrowContinues :
     Implementation borrowContinues (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   source_cases
   all_goals dominated
 
-def borrowStepImplementation :
+def implementationBorrowStep :
     Implementation borrowStep (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   source_cases
   all_goals dominated [borrowStep]
 
 def borrow (x : List Bool × List Bool) := x.2.reverse ++ BitList.decrement x.1
 
-def borrowFinishImplementation :
+def implementationBorrowFinish :
     Implementation borrowFinish (fun x => ⌜x⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
   source_fun_prop
   all_goals dominated
 
 
-attribute [scoped fun_prop] borrowContinuesImplementation borrowStepImplementation
-  borrowFinishImplementation
+attribute [scoped fun_prop] implementationBorrowContinues implementationBorrowStep
+  implementationBorrowFinish
 
 def borrowInvariant (x y : List Bool × List Bool) : Prop :=
   y.1.length + y.2.length ≤ x.1.length + x.2.length
@@ -59,7 +59,7 @@ theorem borrowInvariant_size : Dominated
   dominated [borrowInvariant, size_encode_list_bool_le]
 
 /-- The loop consumes callback growth specifications; no overall credit constant is supplied. -/
-def borrowImplementation : Implementation borrow (fun x => ⌜x⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
+def implementationBorrow : Implementation borrow (fun x => ⌜x⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
   source_fun_prop using loop (test := borrowContinues) (next := borrowStep)
     (finish := borrowFinish) (invariant := borrowInvariant) (measure := fun x => x.1.length)
     (step := fun _ => 1) (stop := fun x => ⌜x⌝ₜ.size) (space := fun x => ⌜x⌝ₜ.size)
@@ -88,20 +88,22 @@ def borrowImplementation : Implementation borrow (fun x => ⌜x⌝ₜ.size) (fun
   case stop_pos => exact fun _ => Tree.size_pos _
   case time => dominated
 
-def Implementation.decrement :
+def _root_.Complexity.BitList.implementationDecrement :
     Implementation BitList.decrement (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) := by
-  let hb := borrowImplementation
+  let hb := implementationBorrow
   source_fun_prop via (fun xs => borrow (xs, []))
   case source_eq => funext xs; simp [borrow]
   all_goals dominated
 
-def Implementation.pred : Implementation Nat.pred (fun n => ⌜n⌝ₜ.size) (fun n => ⌜n⌝ₜ.size) :=
+def _root_.Nat.implementationPred :
+    Implementation Nat.pred (fun n => ⌜n⌝ₜ.size) (fun n => ⌜n⌝ₜ.size) :=
   (Implementation.ofEncode (by intro n; simp [Nat.pred_eq_sub_one, encode_nat_tree])
-    (Implementation.bits.comp Implementation.decrement)).mono
+    (Nat.implementationBits.comp BitList.implementationDecrement)).mono
     (Dominated.of_le fun n => by simp [size_encode_bits])
     (Dominated.of_le fun n => by simp [size_encode_bits])
 
-attribute [scoped fun_prop] Implementation.bits Implementation.decrement Implementation.pred
+attribute [scoped fun_prop] Nat.implementationBits BitList.implementationDecrement
+  Nat.implementationPred
 
 def addContinues (x : Bool × List Bool × List Bool × List Bool) : Bool :=
   !x.2.1.isEmpty && !x.2.2.1.isEmpty
@@ -115,13 +117,13 @@ def addStep (x : Bool × List Bool × List Bool × List Bool) :=
 def carryFinish (x : Bool × List Bool) :=
   if x.1 then BitList.increment x.2 else x.2
 
-def carryFinishImplementation :
+def implementationCarryFinish :
     Implementation carryFinish (fun x => ⌜x⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
   source_fun_prop
   all_goals dominated
 
 
-attribute [local fun_prop] carryFinishImplementation
+attribute [local fun_prop] implementationCarryFinish
 
 
 def addFinish (x : Bool × List Bool × List Bool × List Bool) :=
@@ -131,7 +133,7 @@ def addFinish (x : Bool × List Bool × List Bool × List Bool) :=
 def addResult (x : Bool × List Bool × List Bool × List Bool) :=
   x.2.2.2.reverse ++ BitList.addCarry x.1 x.2.1 x.2.2.1
 
-def addContinuesImplementation :
+def implementationAddContinues :
     Implementation addContinues (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   have hb (f : Bool × List Bool × List Bool × List Bool → Bool) :
       Dominated (fun x => ⌜f x⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) :=
@@ -140,18 +142,18 @@ def addContinuesImplementation :
   all_goals dominated
 
 
-attribute [local fun_prop] addContinuesImplementation
+attribute [local fun_prop] implementationAddContinues
 
 
-def addStepImplementation : Implementation addStep (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
+def implementationAddStep : Implementation addStep (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   source_calls
   all_goals dominated [addStep]
 
 
-attribute [local fun_prop] addStepImplementation
+attribute [local fun_prop] implementationAddStep
 
 
-def addFinishImplementation :
+def implementationAddFinish :
     Implementation addFinish (fun x => ⌜x⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
   have hcarryInput : Dominated
       (fun x : Bool × List Bool × List Bool × List Bool =>
@@ -161,7 +163,7 @@ def addFinishImplementation :
     rintro ⟨c, xs, ys, acc⟩
     simp only [size_encode_prod]
     split <;> omega
-  have hcarry := (carryFinishImplementation.size_encode.comp
+  have hcarry := (implementationCarryFinish.size_encode.comp
     (fun x : Bool × List Bool × List Bool × List Bool =>
       (x.1, if x.2.1.isEmpty then x.2.2.1 else x.2.1))).trans
       (hcarryInput.max_same hcarryInput)
@@ -169,7 +171,7 @@ def addFinishImplementation :
   all_goals dominated
 
 
-attribute [local fun_prop] addFinishImplementation
+attribute [local fun_prop] implementationAddFinish
 
 
 def addCount (x : Bool × List Bool × List Bool × List Bool) : ℕ :=
@@ -181,7 +183,7 @@ theorem addCount_size_growth : Dominated
     (fun z => ⌜z.1.1⌝ₜ.size) := by
   dominated [addCount, size_encode_list_bool_le]
 
-def addResultImplementation :
+def implementationAddResult :
     Implementation addResult (fun x => ⌜x⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
   source_fun_prop using loop (test := addContinues) (next := addStep) (finish := addFinish)
     (invariant := fun x y => addCount y ≤ addCount x) (measure := fun x => x.2.1.length)
@@ -209,9 +211,9 @@ def addResultImplementation :
   case stop_pos => exact fun _ => Tree.size_pos _
   case time => dominated
 
-def Implementation.add :
+def implementationAdd :
     Implementation (fun x : ℕ × ℕ => x.1 + x.2) (fun x => ⌜x⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
-  let hadd := addResultImplementation
+  let hadd := implementationAddResult
   refine Implementation.ofEncode
     (g := fun x : ℕ × ℕ => addResult (false, x.1.bits, x.2.bits, [])) ?_ ?_
   · rintro ⟨m, n⟩; simp [addResult, BitList.addCarry_bits, encode_nat_tree]
@@ -230,7 +232,7 @@ def leStep (x : Bool × List Bool × List Bool) :=
 
 def leResult (x : Bool × List Bool × List Bool) := BitList.leAux x.1 x.2.1 x.2.2
 
-def leContinuesImplementation :
+def implementationLeContinues :
     Implementation leContinues (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   have hb (f : Bool × List Bool × List Bool → Bool) :
       Dominated (fun x => ⌜f x⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) :=
@@ -239,15 +241,15 @@ def leContinuesImplementation :
   all_goals dominated
 
 
-attribute [local fun_prop] leContinuesImplementation
+attribute [local fun_prop] implementationLeContinues
 
 
-def leStepImplementation : Implementation leStep (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
+def implementationLeStep : Implementation leStep (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   source_calls
   all_goals dominated [leStep]
 
 
-attribute [local fun_prop] leStepImplementation
+attribute [local fun_prop] implementationLeStep
 
 
 def compareCount (x : Bool × List Bool × List Bool) : ℕ :=
@@ -258,7 +260,7 @@ theorem compareCount_size_growth : Dominated
       compareCount p.2 ≤ compareCount p.1} => ⌜z.1.2⌝ₜ.size) (fun z => ⌜z.1.1⌝ₜ.size) := by
   dominated [compareCount, size_encode_list_bool_le]
 
-def leResultImplementation :
+def implementationLeResult :
     Implementation leResult (fun x => ⌜x⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
   source_fun_prop using loop (test := leContinues) (next := leStep) (finish := Prod.fst)
     (invariant := fun x y => compareCount y ≤ compareCount x) (measure := compareCount)
@@ -286,34 +288,34 @@ def leResultImplementation :
   case stop_pos => exact fun _ => Nat.zero_lt_one
   case time => dominated [compareCount]
 
-def compareImplementation (c : Bool) :
+def implementationCompare (c : Bool) :
     Implementation (fun x : ℕ × ℕ => leResult (c, x.1.bits, x.2.bits))
       (fun x => ⌜x⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
-  let hle := leResultImplementation
+  let hle := implementationLeResult
   cases c <;> source_fun_prop
   all_goals dominated
 
-def Implementation.ble :
+def implementationBle :
     Implementation (fun x : ℕ × ℕ => Nat.ble x.1 x.2) (fun x => ⌜x⌝ₜ.size)
       (fun x => ⌜x⌝ₜ.size) := by
-  apply Implementation.ofEncode (hg := compareImplementation true)
+  apply Implementation.ofEncode (hg := implementationCompare true)
   rintro ⟨m, n⟩
   congr 1
   apply Bool.eq_iff_iff.mpr
   simp [leResult, BitList.leAux_eq]
 
-def Implementation.lt :
+def implementationLt :
     Implementation (fun x : ℕ × ℕ => decide (x.1 < x.2)) (fun x => ⌜x⌝ₜ.size)
       (fun x => ⌜x⌝ₜ.size) := by
-  apply Implementation.ofEncode (hg := compareImplementation false)
+  apply Implementation.ofEncode (hg := implementationCompare false)
   rintro ⟨m, n⟩
   congr 1
   apply Bool.eq_iff_iff.mpr
   simp [leResult, BitList.leAux_eq]
 
-attribute [scoped fun_prop] Implementation.add Implementation.ble Implementation.lt
+attribute [scoped fun_prop] implementationAdd implementationBle implementationLt
 
-def Implementation.natBeq :
+def implementationNatBeq :
     Implementation (fun x : ℕ × ℕ => Nat.beq x.1 x.2) (fun x => ⌜x⌝ₜ.size)
       (fun x => ⌜x⌝ₜ.size) := by
   source_fun_prop via (fun x : ℕ × ℕ => Nat.ble x.1 x.2 && Nat.ble x.2 x.1)
@@ -323,6 +325,6 @@ def Implementation.natBeq :
     simp [Nat.le_antisymm_iff]
   all_goals dominated
 
-attribute [scoped fun_prop] Implementation.natBeq
+attribute [scoped fun_prop] implementationNatBeq
 
 end Complexity.TreeProgram.Source
