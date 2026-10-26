@@ -50,4 +50,9 @@ register_simp_attr dominated_expand
 /-- Encoding equations used when deciding finite source cases. -/
 register_simp_attr source_case_simp
 
+/-- Views `⌜x⌝ₜ = ⌜x.1⌝ₜ` of a structure stored as its data field, such as `Fin` and subtypes, and
+equations `(f a).1 = v` for the field of an operation. The source translation computes a value of
+such a type as its field. -/
+register_simp_attr source_view
+
 end Complexity.TreeProgram.Source

@@ -14,8 +14,9 @@ public import Complexity.Tactic.TreeProgram.Attributes
 
 `dominated` and finite source cases know encodings only through registrations: the normalization
 of encoded sizes (`dominated_simp`, and `dominated_expand` for the pointwise expansion), the size
-facts instantiated at matching terms (`dominated`) and at hypotheses (`dominated_forward`), and the
-encoding equations of finite source cases (`source_case_simp`). Lemmas of this library are
+facts instantiated at matching terms (`dominated`) and at hypotheses (`dominated_forward`), the
+encoding equations of finite source cases (`source_case_simp`), and the types stored as a field with
+the field's operations (`source_view`). Lemmas of this library are
 registered where they are stated; this file registers those from Lean and Mathlib and those whose
 files do not import the tactic layer. -/
 
@@ -34,6 +35,9 @@ growth; their sizes are the defining equations of `Tree.size`. -/
 attribute [dominated_expand] Tree.encode_self Tree.size_nil Tree.size_pair
 
 attribute [source_case_simp] encode_unit encode_prod List.ofFn_succ
+
+attribute [source_view] encode_fin UniqueEncoding.encode_subtype Fin.val_castSucc Fin.val_castAdd
+  Fin.val_natAdd Fin.val_succ Fin.val_last Fin.val_zero
 
 attribute [dominated] Tree.size_pos size_encode_bool_le Fin.isLt size_encode_fin_table_le
 

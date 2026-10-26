@@ -383,55 +383,6 @@ theorem _root_.List.hasProgram_tail {α : Type*} [UniqueEncoding Tree α] :
 
 attribute [scoped fun_prop] List.hasProgram_tail
 
-section Index
-
-/-! Operations on indices; an index is stored as its value. -/
-
-variable {ρ : Type*} [UniqueEncoding Tree ρ] {k m : ρ → ℕ} {i : (e : ρ) → Fin (k e)}
-  {q : Value → Code Value} {t p : ρ → ℕ}
-
-/-- The last index is stored as its value. -/
-theorem HasProgram.finLast (hk : HasProgram k q t p) :
-    HasProgram (fun e => Fin.last (k e)) q t p :=
-  hk.of_encode fun _ => by rw [encode_fin, Fin.val_last]
-
-/-- Casting an index up keeps its value. -/
-theorem HasProgram.finCastSucc (hi : HasProgram i q t p) :
-    HasProgram (fun e => (i e).castSucc) q t p :=
-  .of_encode (f := fun e => (i e).castSucc) (g := i) (fun _ => rfl) hi
-
-/-- Casting an index into a longer range keeps its value. -/
-theorem HasProgram.finCastAdd (hi : HasProgram i q t p) :
-    HasProgram (fun e => Fin.castAdd (m e) (i e)) q t p :=
-  .of_encode (f := fun e => Fin.castAdd (m e) (i e)) (g := i) (fun _ => rfl) hi
-
-/-- Shifting an index is an addition of its value. -/
-theorem HasProgram.finNatAdd (h : HasProgram (fun e => m e + (i e).val) q t p) :
-    HasProgram (fun e => Fin.natAdd (m e) (i e)) q t p :=
-  .of_encode (f := fun e => Fin.natAdd (m e) (i e)) (g := fun e => m e + (i e).val)
-    (fun _ => rfl) h
-
-/-- The value of an index is stored as the index. -/
-theorem HasProgram.finVal (hi : HasProgram i q t p) :
-    HasProgram (fun e => (i e).val) q t p :=
-  .of_encode (f := fun e => (i e).val) (g := i) (fun _ => rfl) hi
-
-/-- The next index is a successor of the value. -/
-theorem HasProgram.finSucc (h : HasProgram (fun e => (i e).val + 1) q t p) :
-    HasProgram (fun e => (i e).succ) q t p :=
-  .of_encode (f := fun e => (i e).succ) (g := fun e => (i e).val + 1) (fun _ => rfl) h
-
-/-- The first index of a nonempty range is stored as zero, the empty tree. -/
-theorem HasProgram.finZero :
-    HasProgram (fun e => (0 : Fin (k e + 1))) (fun _ => pure .nil) (fun _ => 0) (fun _ => 0) :=
-  .of_encode (f := fun e => (0 : Fin (k e + 1))) (g := fun _ => ())
-    (fun e => by rw [encode_fin, encode_unit]; simp; rfl) HasProgram.unit
-
-attribute [scoped fun_prop] HasProgram.finVal HasProgram.finSucc HasProgram.finZero
-  HasProgram.finCastSucc HasProgram.finCastAdd HasProgram.finNatAdd HasProgram.finLast
-
-end Index
-
 /-- Extend a represented table without re-enumerating its indices. -/
 theorem HasProgram.finSnoc {ρ : Type*} {α : ρ → Type*}
     [UniqueEncoding Tree ρ] [∀ e, UniqueEncoding Tree (α e)]
