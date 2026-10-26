@@ -18,6 +18,7 @@ public import Complexity.Encoding.TreeSize
 public meta import Lean.Meta.Match.MatcherApp.Transform
 public meta import Lean.Meta.RecExt
 public meta import Complexity.Tactic.TreeProgram.FiniteCases
+public meta import Complexity.Tactic.Hole
 
 /-! # Certified translation of Lean source functions
 
@@ -145,7 +146,7 @@ private def sourceTable : TacticM Unit := withMainContext do
   let next ← mkFreshExprSyntheticOpaqueMVar (← mkAppM ``HasProgram #[code, program, time, peak])
   let proof ← withLocalDeclD `x (← whnf (← inferType f)).bindingDomain! fun x => do
     mkLambdaFVars #[x] (← mkEqSymm (← mkAppM ``Tree.encode_self #[(mkApp code x).headBeta]))
-  goal.assign (← mkAppM ``HasProgram.ofEncode #[proof, next])
+  goal.assign (← mkAppM ``HasProgram.of_encode #[proof, next])
   replaceMainGoal [next.mvarId!]
 
 /-- Certify source branches with previously registered function implementations. -/
@@ -198,6 +199,12 @@ def finishProgram (goal : MVarId) (result : Lean.Expr) : MetaM (List MVarId) :=
   let value ← if obligations.isEmpty then pure result
     else mkAppM ``HasProgram.mono #[result, comparisons[0]!, comparisons[1]!]
   unless ← isDefEq (← goal.getType) (← inferType value) do
+    -- A program left as a hole is filled only by `fill_hole`.
+    if let .mvar hole := (target.getArg! 5).getAppFn then
+      if (Hole.infoExt.getState (← getEnv)).contains hole && !(← hole.isAssigned) then
+        let name := (← hole.getDecl).userName.eraseMacroScopes
+        throwError "source translation: the program is the hole `{name}`; write \
+          `fill_hole {name} in` before the tactic"
     throwError "source translation: the implementation does not match the requested source"
   goal.assign value
   return obligations
@@ -327,7 +334,7 @@ private def constructorRule (search : Lean.Expr → FunPropM (Option Result)) (g
       let unit ← mkAppOptM ``HasProgram.unit #[← inferType x, none]
       let empty ← mkExpectedTypeHint (← mkEqRefl code)
         (← mkEq code (← encodeTree (mkConst ``Unit.unit)))
-      return some ⟨← mkAppM ``HasProgram.ofEncode #[← mkLambdaFVars #[x] empty, unit]⟩
+      return some ⟨← mkAppM ``HasProgram.of_encode #[← mkLambdaFVars #[x] empty, unit]⟩
     let some (proof, components) ← constructorEncoding body | return none
     let (tag, fields) ← match components with
       | (first, type) :: rest@(_ :: _) =>
@@ -348,16 +355,16 @@ private def constructorRule (search : Lean.Expr → FunPropM (Option Result)) (g
         ← mkFreshExprMVar growth, ← mkFreshExprMVar growth]
       let some r ← search fieldGoal | return none
       proofs := proofs.push r.proof
-    let mut chain ← mkAppM ``HasProgram.withSize #[proofs.back!]
+    let mut chain ← mkAppM ``HasProgram.with_size #[proofs.back!]
     for h in proofs.pop.reverse do
-      chain ← mkAppM ``HasProgram.fieldCons #[h, chain]
+      chain ← mkAppM ``HasProgram.field_cons #[h, chain]
     let some (first, T) := tag |
-      return some ⟨← mkAppM ``HasProgram.ofFields #[← mkLambdaFVars #[x] proof, chain]⟩
+      return some ⟨← mkAppM ``HasProgram.of_fields #[← mkLambdaFVars #[x] proof, chain]⟩
     let tuple := ((← inferType chain).getArg! 4).beta #[x]
     let tagged ← mkEq code (mkApp2 (mkConst ``Tree.pair) T (← encodeTree tuple))
     let henc ← mkExpectedTypeHint
       (← mkEqTrans proof (← mkAppM ``encode_prod #[first, tuple])) tagged
-    return some ⟨← mkAppM ``HasProgram.ofTaggedFields #[T, ← mkLambdaFVars #[x] henc, chain]⟩
+    return some ⟨← mkAppM ``HasProgram.of_tagged_fields #[T, ← mkLambdaFVars #[x] henc, chain]⟩
 
 open Lean Meta Mathlib.Meta.FunProp in
 /-- Reading a table, a local or a field of one, at an index: the table is computed as its code
@@ -375,7 +382,7 @@ private def tableRead (search : Lean.Expr → FunPropM (Option Result)) (goal : 
       let some info ← getProjectionFnInfo? name | pure false
       pure (body.getAppNumArgs > info.numParams + 1)
     -- The lookup rule is proved with the library, after this file.
-    let rule := `Complexity.TreeProgram.Source.HasProgram.finApply
+    let rule := `Complexity.TreeProgram.Source.HasProgram.fin_apply
     unless stored && (← getEnv).contains rule do return none
     let some hf ← search (← programGoal
       (← mkLambdaFVars #[x] (← mkAppM ``encode #[mkConst ``Tree, table]))) | return none
@@ -384,30 +391,43 @@ private def tableRead (search : Lean.Expr → FunPropM (Option Result)) (goal : 
     return some ⟨← mkAppM rule #[hf.proof, hi.proof]⟩
 
 open Lean Meta in
-/-- A value as the corresponding value of codes, with the same code: lists and pairs. -/
-private def codesView (type : Lean.Expr) : MetaM (Option (Lean.Expr × Lean.Expr)) := do
-  if type.isAppOfArity ``List 1 then
-    let entry := type.appArg!
-    let encode ← mkAppOptM ``UniqueEncoding.encode #[mkConst ``Tree, entry, none]
-    return some (← mkAppM ``List.map #[encode], ← mkAppOptM ``encode_list_codes #[entry, none])
-  if type.isAppOfArity ``Prod 2 then
-    let code (field : Name) (z : Lean.Expr) := do
-      mkAppM ``encode #[mkConst ``Tree, ← mkAppM field #[z]]
-    let view ← withLocalDeclD `z type fun z => do
-      mkLambdaFVars #[z] (← mkAppM ``Prod.mk #[← code ``Prod.fst z, ← code ``Prod.snd z])
-    let equation ← mkAppOptM ``encode_prod_codes #[type.appFn!.appArg!, type.appArg!, none, none]
-    return some (view, equation)
+/-- The value of codes corresponding to `e`, where `pattern` is the argument type of a fact: the
+entries at a type parameter of the fact become their codes, through lists and pairs. The value
+and the equation that its code is that of `e`. -/
+private partial def codesView (pattern e : Lean.Expr) : MetaM (Option (Lean.Expr × Lean.Expr)) := do
+  let pattern ← instantiateMVars pattern
+  if pattern.isMVar then
+    let code ← mkAppM ``encode #[mkConst ``Tree, e]
+    return some (code, ← mkAppM ``Tree.encode_self #[code])
+  if !pattern.hasMVar then
+    return some (e, ← mkEqRefl (← mkAppM ``encode #[mkConst ``Tree, e]))
+  if pattern.isAppOfArity ``List 1 then
+    let some (view, equation) ← withLocalDeclD `a (← whnfR (← inferType e)).appArg! fun a => do
+        let some (v, h) ← codesView pattern.appArg! a | return none
+        return some ((← mkLambdaFVars #[a] v).eta, ← mkLambdaFVars #[a] h) | return none
+    return some (← mkAppM ``List.map #[view, e],
+      ← mkAppM ``encode_list_map_of_encode #[view, equation, e])
+  if pattern.isAppOfArity ``Prod 2 then
+    let some (v₁, h₁) ← codesView pattern.appFn!.appArg! (← mkAppM ``Prod.fst #[e]) | return none
+    let some (v₂, h₂) ← codesView pattern.appArg! (← mkAppM ``Prod.snd #[e]) | return none
+    let v ← mkAppM ``Prod.mk #[v₁, v₂]
+    -- Stated on `e` itself rather than on the pair of its fields.
+    let h ← mkExpectedTypeHint (← mkAppM ``encode_prod_congr #[h₁, h₂])
+      (← mkEq (← mkAppM ``encode #[mkConst ``Tree, v]) (← mkAppM ``encode #[mkConst ``Tree, e]))
+    return some (v, h)
   return none
 
 open Lean Meta in
-/-- A registered `HasProgram` fact instantiated at the function `fn`, or at `Tree` for every type
-parameter. -/
-private def instantiateFact (fact : Name) (fn : Option Lean.Expr) : MetaM Lean.Expr := do
+/-- A registered `HasProgram` fact instantiated where its function applied to `argument` is
+`value`, or at `Tree` for every type parameter. -/
+private def instantiateFact (fact : Name) (at? : Option (Lean.Expr × Lean.Expr)) :
+    MetaM Lean.Expr := do
   let proof ← mkConstWithFreshMVarLevels fact
   let (args, binders, statement) ← forallMetaTelescopeReducing (← inferType proof)
-  match fn with
-  | some fn =>
-    unless ← isDefEq (statement.getArg! 4) fn do throwError "{fact} does not apply"
+  match at? with
+  | some (argument, value) =>
+    unless ← isDefEq ((statement.getArg! 4).beta #[argument]) value do
+      throwError "{fact} does not apply"
   | none =>
     for arg in args do
       if (← whnf (← inferType arg)).isSort then
@@ -418,38 +438,56 @@ private def instantiateFact (fact : Name) (fn : Option Lean.Expr) : MetaM Lean.E
   instantiateMVars (mkAppN proof args)
 
 open Lean Meta Mathlib.Meta.FunProp in
-/-- A function with one program at every type (a `HasProgram` fact) applied to an argument whose
-type depends on the input: the argument is computed and the program runs on its
-code (`HasProgram.compCodes`). The growth is stated on the argument, not on its code. -/
+/-- A fact in simple form without premises, one program at every type, applied in `body` to
+arguments whose types depend on the input `x`: the tuple of the arguments, its view of codes and
+their equation, and the fact at codes and at the arguments. -/
+private def codesInstance (x body : Lean.Expr) (fact : FunctionTheorem) :
+    MetaM (Option (Lean.Expr × Lean.Expr × Lean.Expr × Lean.Expr × Lean.Expr)) := do
+  let .decl name := fact.thmOrigin | return none
+  unless fact.form == .uncurried && body.getAppNumArgs == fact.appliedArgs do return none
+  if ← forallTelescope (← getConstInfo name).type fun ys _ => ys.anyM fun y => do
+      return !(← y.fvarId!.getBinderInfo).isInstImplicit && (← isProp (← inferType y)) then
+    return none
+  let arguments := fact.mainArgs.map body.getArg!
+  unless ← arguments.anyM fun a => return (← inferType a).containsFVar x.fvarId! do return none
+  let argument ← arguments.pop.foldrM (fun a z => mkAppM ``Prod.mk #[a, z]) arguments.back!
+  let (_, _, statement) ← forallMetaTelescopeReducing
+    (← inferType (← mkConstWithFreshMVarLevels name))
+  let some (view, equation) ← withLocalDeclD `z (← inferType argument) fun z => do
+      let some (v, h) ← codesView (statement.getArg! 0) z | return none
+      return some (← mkLambdaFVars #[z] v, ← mkLambdaFVars #[z] h) | return none
+  let some atType ← observing? (instantiateFact name (some (argument, body))) | return none
+  let some atCodes ← observing? (instantiateFact name none) | return none
+  return some (argument, view, equation, atCodes, atType)
+
+open Lean Meta Mathlib.Meta.FunProp in
+/-- A function with one program at every type applied to arguments whose types depend on the
+input: the tuple of the arguments is computed and the program runs on its code
+(`HasProgram.comp_codes`). The growth is stated on the arguments, not on their codes. -/
 private def codesComposition (search : Lean.Expr → FunPropM (Option Result))
     (goal : Lean.Expr) : FunPropM (Option Result) := do
-  let some (argument, view, equation, atCodes, atTypes) ←
+  let some (argument, view, equation, atCodes, atTypes, viewed) ←
       lambdaTelescope (← etaExpand (goal.getArg! 4)) fun xs body => do
         let #[x] := xs | return none
         let body := body.headBeta
         -- A projection of the input is a subtree of its code, read by the structural stage.
         if ← Search.isProjectionOf x body then return none
         let some name := body.getAppFn.constName? | return none
-        unless body.isApp do return none
-        unless (← inferType body.appArg!).containsFVar x.fvarId! do return none
-        let some (view, equation) ← codesView (← whnfR (← inferType body.appArg!)) | return none
         for fact in ← getTheoremsForFunction name ``HasProgram do
-          let .decl fact := fact.thmOrigin | continue
-          -- One program at every type is a fact without premises.
-          if ← forallTelescope (← getConstInfo fact).type fun ys _ => ys.anyM fun y => do
-              return !(← y.fvarId!.getBinderInfo).isInstImplicit && (← isProp (← inferType y)) then
+          let some (argument, view, equation, atCodes, atType) ← codesInstance x body fact |
             continue
-          let some (atType, atCodes) ← (observing? (return (← instantiateFact fact
-              (some body.appFn!), ← instantiateFact fact none)) : MetaM _) | continue
-          return some (← mkLambdaFVars xs body.appArg!, ← mkLambdaFVars xs view,
-            ← mkLambdaFVars xs equation, atCodes, ← mkLambdaFVars xs atType)
+          return some (← mkLambdaFVars xs argument, ← mkLambdaFVars xs view,
+            ← mkLambdaFVars xs equation, atCodes, ← mkLambdaFVars xs atType,
+            ← mkLambdaFVars xs (equation.beta #[argument]))
         return none
     | return none
   let some hx ← search (← programGoal argument) | return none
-  let result ← mkAppM ``HasProgram.compCodes #[hx.proof, view, equation, atCodes, atTypes]
+  let result ← mkAppM ``HasProgram.comp_codes #[hx.proof, view, equation, atCodes, atTypes]
   let type ← whnfR (← inferType result)
-  let codes ← Simp.mkContext (simpTheorems := #[← [``encode_list_codes, ``encode_prod_codes,
-    ``List.length_map, ``Tree.encode_self].foldlM (·.addConst ·) ({} : SimpTheorems)])
+  -- The growth at the codes is restated on the arguments.
+  let lemmas ← [``encode_list_codes, ``List.length_map, ``Tree.encode_self].foldlM
+    (·.addConst ·) ({} : SimpTheorems)
+  let codes ← Simp.mkContext (simpTheorems := #[← lemmas.add (.other `codes) #[] viewed])
   let comparisons ← [6, 7].mapM fun i => do
     let growth := type.getArg! i
     match (← simp growth codes).1.proof? with
@@ -798,7 +836,7 @@ private def proveRecursion (method : TSyntax `sourceRecursion) (scope : Option I
     let rhs ← mkAppM ``encode #[mkConst ``Tree, mkApp actual x]
     let proof ← typedSourceProof (← mkEq lhs rhs) (← mkEqRefl lhs)
     mkLambdaFVars #[x] proof
-  let result ← mkAppM ``HasProgram.ofEncode #[equality, implementation]
+  let result ← mkAppM ``HasProgram.of_encode #[equality, implementation]
   let comparisons ← finishProgram goal result
   trace[source.translation] "source recursion: program combined"
   setGoals rest

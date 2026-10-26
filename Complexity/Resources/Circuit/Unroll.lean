@@ -186,8 +186,9 @@ theorem hasProgram_unroll :
       exact size_unrollState_le n step t t le_rfl
   obtain ⟨htime, hpeak⟩ := hiter
   fill_hole program in
-    refine ((hasProgram_unrollInitial.compDep
-      (hasProgram_unrollStep.iterate.compDep hasProgram_unrollResult)).ofEncode ?_).mono ?_ ?_
+    refine ((hasProgram_unrollInitial.comp_dependent
+      (hasProgram_unrollStep.iterate.comp_dependent hasProgram_unrollResult)).of_encode ?_).mono
+      ?_ ?_
   · rintro ⟨n, step, t⟩
     exact (congrArg (fun s : UnrollState => ⌜s.2.2.2⌝ₜ) (iterate_unrollStep n step t)).symm
   all_goals dominated [unrollScale, unrollInitial]
@@ -200,7 +201,7 @@ theorem HasProgram.unroll {ρ : Type} [UniqueEncoding Tree ρ]
     HasProgram (fun x => (step x).unroll (t x)) (fun v => r v >>= programUnroll)
       (fun x => u x + unrollScale ⟨n x, step x, t x⟩ ^ 9)
       (fun x => max (q x) (unrollScale ⟨n x, step x, t x⟩ ^ 4)) :=
-  h.compDep hasProgram_unroll
+  h.comp_dependent hasProgram_unroll
 
 attribute [scoped fun_prop] HasProgram.unroll
 

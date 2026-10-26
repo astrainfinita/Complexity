@@ -685,7 +685,7 @@ variable [instβ : ∀ x, UniqueEncoding Tree (β x)]
   {tc pc ts ps : α → ℕ} {td pd : {x // r.test x = false} → ℕ} {tr pr : r.Return → ℕ}
 
 /-- The recursive program, with the growth of `dominated_cost_of_scale`. -/
-theorem hasProgramOfScale
+theorem hasProgram_of_scale
     {instD : ∀ x : {x // r.test x = false}, UniqueEncoding Tree (β x.1)}
     {instR : ∀ x : r.Return, UniqueEncoding Tree (β x.1.1)} {qc qs qd qr : Value → Code Value}
     (hc : HasProgram r.test qc tc pc) (hs : HasProgram r.next qs ts ps)

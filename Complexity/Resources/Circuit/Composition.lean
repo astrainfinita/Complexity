@@ -185,14 +185,14 @@ theorem hasProgram_relabelNextFn : HasProgram relabelNextFn hole(⊢ program)
   fill_hole program in source_fun_prop
   all_goals dominated
 
-attribute [local fun_prop] HasProgram.finComp in
+attribute [local fun_prop] HasProgram.fin_comp in
 theorem hasProgram_relabelFinishFn : HasProgram relabelFinishFn hole(⊢ program)
     (fun x => ⌜x⌝ₜ.size ^ 3) (fun x => ⌜x⌝ₜ.size ^ 2) := by
   abstract_hole program using programRelabelFinishFn
   fill_hole program in source_fun_prop
   all_goals dominated
 
-attribute [local fun_prop] HasProgram.finComp in
+attribute [local fun_prop] HasProgram.fin_comp in
 theorem hasProgram_relabelResume :
     HasProgram (fun x : relabelRecursion.Return => relabelResumeFn x.1 x.2) hole(⊢ program)
       (fun x => ⌜x⌝ₜ.size ^ 3) (fun x => ⌜x⌝ₜ.size ^ 2) := by
@@ -211,7 +211,7 @@ theorem hasProgram_relabelResume :
   have hreturn := relabelRecursion.dominated_size_return relabelScale relabelScale_pos
     (fun x _ => relabelScale_next_le x) hsize (Dominated.of_le_mul 100 size_encode_relabelFn_le)
   fill_hole program in
-    exact (relabelRecursion.hasProgramOfScale hasProgram_relabelTest
+    exact (relabelRecursion.hasProgram_of_scale hasProgram_relabelTest
       hasProgram_relabelNextFn hasProgram_relabelFinishFn
       hasProgram_relabelResume
       relabelScale relabelScale_pos (fun x _ => relabelScale_next_le x) hsize (hpow 3) (hpow 2)
@@ -229,7 +229,7 @@ theorem HasProgram.relabel {ρ : Type} [UniqueEncoding Tree ρ]
     HasProgram (fun x => (c x).relabel (w x)) (fun v => q v >>= programRelabelFn)
       (fun x => t x + relabelScale ⟨n x, m x, k x, c x, w x⟩ ^ 7)
       (fun x => max (p x) (relabelScale ⟨n x, m x, k x, c x, w x⟩ ^ 4)) :=
-  h.compDep hasProgram_relabelFn
+  h.comp_dependent hasProgram_relabelFn
 
 attribute [scoped fun_prop] HasProgram.relabel
 
@@ -355,7 +355,7 @@ theorem hasProgram_compFn : HasProgram compFn hole(⊢ program)
   have hreturn := compRecursion.dominated_size_return compScale compScale_pos
     (fun x _ => compScale_next_le x) hsize (Dominated.of_le_mul 100 size_encode_compFn_le) 1
   fill_hole program in
-    exact (compRecursion.hasProgramOfScale hasProgram_compTest
+    exact (compRecursion.hasProgram_of_scale hasProgram_compTest
       hasProgram_compNextFn hasProgram_compFinishFn
       hasProgram_compResume compScale
       compScale_pos (fun x _ => compScale_next_le x) hsize (Dominated.one hpos)
@@ -378,7 +378,7 @@ theorem HasProgram.circuitComp {ρ : Type} [UniqueEncoding Tree ρ]
     HasProgram (fun x => (c x).comp (d x)) (fun v => q v >>= programCompFn)
       (fun x => t x + compScale ⟨n x, m x, k x, c x, d x⟩ ^ 7)
       (fun x => max (p x) (compScale ⟨n x, m x, k x, c x, d x⟩ ^ 4)) :=
-  h.compDep hasProgram_compFn
+  h.comp_dependent hasProgram_compFn
 
 attribute [scoped fun_prop] HasProgram.circuitComp
 
@@ -509,7 +509,8 @@ theorem hasProgram_keepFinishFn : HasProgram keepFinishFn hole(⊢ program)
     (fun x => keepScale x.1 ^ 2) (fun x => keepScale x.1 ^ 2) := by
   abstract_hole program using programKeepFinishFn
   fill_hole program in
-    refine ((hasProgram_keepFinishInput.compDep hasProgram_keepOutputsFn).ofEncode ?_).mono ?_ ?_
+    refine ((hasProgram_keepFinishInput.comp_dependent hasProgram_keepOutputsFn).of_encode ?_).mono
+      ?_ ?_
   · rintro ⟨⟨n, m, c⟩, h⟩
     cases c with
     | outputs _ => rfl
@@ -535,7 +536,7 @@ theorem HasProgram.mapOutputs {ρ : Type} [UniqueEncoding Tree ρ] {n m k : ρ �
     HasProgram (fun x => (c x).mapOutputs (f x)) (fun v => q v >>= programCompFn)
       (fun x => t x + compScale ⟨n x, m x, k x, c x, .outputs (f x)⟩ ^ 7)
       (fun x => max (p x) (compScale ⟨n x, m x, k x, c x, .outputs (f x)⟩ ^ 4)) :=
-  h.compDep hasProgram_compFn
+  h.comp_dependent hasProgram_compFn
 
 attribute [scoped fun_prop] HasProgram.mapOutputs
 
@@ -603,7 +604,8 @@ theorem hasProgram_keepResume :
     | outputs _ => cases h
     | gate _ _ _ => rfl
   fill_hole program in
-    refine ((hasProgram_keepResumeInput.compDep hasProgram_keepGateFn).ofEncode ?_).mono ?_ ?_
+    refine ((hasProgram_keepResumeInput.comp_dependent hasProgram_keepGateFn).of_encode ?_).mono
+      ?_ ?_
   · rintro ⟨⟨⟨n, m, c⟩, h⟩, result⟩
     cases c with
     | outputs _ => cases h
@@ -637,7 +639,7 @@ theorem hasProgram_keepFn : HasProgram keepFn hole(⊢ program)
         simp only [Circuit.size_keepInputs, keepScale, Circuit.size_gate]
         omega
   fill_hole program in
-    exact (keepRecursion.hasProgramOfScale hasProgram_keepTest
+    exact (keepRecursion.hasProgram_of_scale hasProgram_keepTest
       hasProgram_keepNextFn hasProgram_keepFinishFn
       hasProgram_keepResume keepScale
       keepScale_pos (fun x _ => keepScale_next_le x) hsize (Dominated.one fun x =>
@@ -657,7 +659,7 @@ theorem HasProgram.keepInputs {ρ : Type} [UniqueEncoding Tree ρ]
     HasProgram (fun x => (c x).keepInputs) (fun v => q v >>= programKeepFn)
       (fun x => t x + keepScale ⟨n x, m x, c x⟩ ^ 8)
       (fun x => max (p x) (keepScale ⟨n x, m x, c x⟩ ^ 4)) :=
-  h.compDep hasProgram_keepFn
+  h.comp_dependent hasProgram_keepFn
 
 attribute [scoped fun_prop] HasProgram.keepInputs
 

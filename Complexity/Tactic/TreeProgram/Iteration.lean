@@ -223,7 +223,7 @@ theorem Iteration.hasProgram_continues {α : Type*} [UniqueEncoding Tree α] :
   all_goals dominated
 
 /-- One counter step and one callback, with the counter's binary size charged. -/
-theorem Iteration.hasProgram_step {α : Type*} [UniqueEncoding Tree α] {f : α → α}
+theorem HasProgram.iteration_step {α : Type*} [UniqueEncoding Tree α] {f : α → α}
     {qf : Value → Code Value} {t p : α → ℕ} (hf : HasProgram f qf t p) :
     HasProgram (fun x : ℕ × α => (x.1.pred, f x.2)) hole(qf ⊢ program)
       (fun x => ⌜x.1⌝ₜ.size + t x.2) (fun x => max ⌜x⌝ₜ.size (p x.2)) := by
@@ -246,8 +246,8 @@ theorem HasProgram.iterate {α : Type*} [UniqueEncoding Tree α] {f : α → α}
     rw [hy]
     exact size_le_iteratePeak p _ hk
   fill_hole program in
-    refine (HasProgram.tailLoopPotential (result := fun x : ℕ × α => f^[x.1] x.2)
-      Iteration.hasProgram_continues (Iteration.hasProgram_step hf)
+    refine (HasProgram.tail_loop_potential (result := fun x : ℕ × α => f^[x.1] x.2)
+      Iteration.hasProgram_continues hf.iteration_step
       (Prod.hasProgram_snd (α := ℕ) (β := α)) I (fun _ y => iterateTime f t y.1 y.2)
       (fun _ => 1) (fun x => iteratePeak f p x.1 x.2) ?_ ?_ ?_ (Dominated.of_le size)
       (Dominated.of_le size) ?_ (Dominated.of_le fun z => size ⟨z.1, z.2.1⟩)
@@ -284,7 +284,7 @@ theorem HasProgram.iterate {α : Type*} [UniqueEncoding Tree α] {f : α → α}
     omega
 
 /-- Captured values stay in the loop state; one callback covers all runtime environments. -/
-theorem HasProgram.iterateWith {ρ α : Type*} [UniqueEncoding Tree ρ] [UniqueEncoding Tree α]
+theorem HasProgram.iterate_with {ρ α : Type*} [UniqueEncoding Tree ρ] [UniqueEncoding Tree α]
     {f : ρ → α → α} {count : ρ → ℕ} {initial : ρ → α} {qi qs : Value → Code Value}
     {ti pi : ρ → ℕ} {ts ps : ρ × α → ℕ}
     (hi : HasProgram (fun e => (count e, (e, initial e))) qi ti pi)
@@ -319,6 +319,6 @@ theorem HasProgram.iterateWith {ρ α : Type*} [UniqueEncoding Tree ρ] [UniqueE
     simp only [hiter, max_le_iff, size_encode_prod] at hlift ⊢
     omega
 
-attribute [scoped fun_prop] HasProgram.iterate HasProgram.iterateWith
+attribute [scoped fun_prop] HasProgram.iterate HasProgram.iterate_with
 
 end Complexity.TreeProgram.Source

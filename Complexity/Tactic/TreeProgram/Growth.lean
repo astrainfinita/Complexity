@@ -703,6 +703,9 @@ partial def split (f g : Lean.Expr) (ctx : Simp.Context)
         else ``Dominated.max_same
       return some (← mkAppM combine #[pa, pb])
     if body.isAppOfArity ``HSub.hSub 6 then
+      -- The difference itself when it is the target or a fact; its minuend otherwise.
+      if ← withReducible (isDefEq f g) then return some (← mkAppM ``Dominated.refl #[g])
+      if let some h ← attempt (viaFacts f g) then return some h
       let some h ← go (part body.appFn!.appArg!) | return none
       return some (← mkAppM ``Dominated.sub_left #[h, part body.appArg!])
     if body.nat? == some 0 then

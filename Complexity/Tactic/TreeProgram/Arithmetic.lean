@@ -16,10 +16,8 @@ namespace Complexity.TreeProgram.Source
 
 -- Binary operations reuse the source-loop compiler and the existing carry implementation.
 theorem _root_.Nat.hasProgram_bits :
-    HasProgram Nat.bits hole(⊢ program) (fun _ => 0) (fun _ => 0) := by
-  abstract_hole program using programBits
-  fill_hole program in
-    exact .ofEncode (g := id) (fun _ => rfl) HasProgram.identity
+    HasProgram Nat.bits (fun v => pure v) (fun _ => 0) (fun _ => 0) :=
+  .of_encode (g := id) (fun _ => rfl) HasProgram.identity
 
 def borrowContinues (x : List Bool × List Bool) : Bool :=
   match x.1 with | false :: _ => true | _ => false
@@ -109,7 +107,7 @@ theorem _root_.Nat.hasProgram_pred :
     HasProgram Nat.pred hole(⊢ program) (fun n => ⌜n⌝ₜ.size) (fun n => ⌜n⌝ₜ.size) := by
   abstract_hole program using programPred
   fill_hole program in
-    exact (HasProgram.ofEncode (by intro n; simp [Nat.pred_eq_sub_one, encode_nat_tree])
+    exact (HasProgram.of_encode (by intro n; simp [Nat.pred_eq_sub_one, encode_nat_tree])
       (Nat.hasProgram_bits.comp BitList.hasProgram_decrement)).mono
       (Dominated.of_le fun n => by simp [size_encode_bits])
       (Dominated.of_le fun n => by simp [size_encode_bits])
@@ -236,7 +234,7 @@ theorem hasProgram_add :
   abstract_hole program using programAdd
   have hadd := hasProgram_addResult
   fill_hole program in
-    exact HasProgram.ofEncode (g := fun x : ℕ × ℕ => addResult (false, x.1.bits, x.2.bits, []))
+    exact HasProgram.of_encode (g := fun x : ℕ × ℕ => addResult (false, x.1.bits, x.2.bits, []))
       (by rintro ⟨m, n⟩; simp [addResult, BitList.addCarry_bits, encode_nat_tree])
       (by source_fun_prop; all_goals dominated)
 
@@ -319,7 +317,7 @@ theorem hasProgram_ble :
   abstract_hole program using programBle
   have hle := hasProgram_leResult
   fill_hole program in
-    refine HasProgram.ofEncode (g := fun x : ℕ × ℕ => leResult (true, x.1.bits, x.2.bits)) ?_
+    refine HasProgram.of_encode (g := fun x : ℕ × ℕ => leResult (true, x.1.bits, x.2.bits)) ?_
       (by source_fun_prop; all_goals dominated)
   rintro ⟨m, n⟩
   congr 1
@@ -332,7 +330,7 @@ theorem hasProgram_lt :
   abstract_hole program using programLt
   have hle := hasProgram_leResult
   fill_hole program in
-    refine HasProgram.ofEncode (g := fun x : ℕ × ℕ => leResult (false, x.1.bits, x.2.bits)) ?_
+    refine HasProgram.of_encode (g := fun x : ℕ × ℕ => leResult (false, x.1.bits, x.2.bits)) ?_
       (by source_fun_prop; all_goals dominated)
   rintro ⟨m, n⟩
   congr 1

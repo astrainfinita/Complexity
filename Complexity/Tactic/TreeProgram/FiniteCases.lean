@@ -380,7 +380,7 @@ def sourceCases : TacticM Unit := withMainContext do
     (simp +contextual (disch := omega)
       [Code.Bounded, Code.block, sourcePair, *] <;> omega)))
   let proof ← typedSourceProof (← instantiateMVars type) (← instantiateMVars certificate)
-  let certified ← mkAppM ``HasProgram.ofImplements #[bounds, proof]
+  let certified ← mkAppM ``HasProgram.of_implements #[bounds, proof]
   -- The fixed number of controller steps is absorbed into the hidden coefficient.
   let value ← mkAppM ``HasProgram.mono #[certified,
     ← mkAppOptM ``Dominated.const #[some inputType, some time], ← mkAppM ``Dominated.refl #[peak]]

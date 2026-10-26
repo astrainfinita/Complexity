@@ -114,7 +114,7 @@ theorem of_encode {g : (x : α) → γ x} (hp : Implements p g b)
   simpa only [hfg] using hp.2 v n s x hv hx
 
 /-- Continue with a program receiving both the computed value and the original input. -/
-theorem bindInput {r : Value → Value → Code Value} {g : (x : α) → γ x} {time peak : α → ℕ}
+theorem bind_input {r : Value → Value → Code Value} {g : (x : α) → γ x} {time peak : α → ℕ}
     (hp : Implements p f b)
     (hr₁ : ∀ u v n, u.expression.bound ≤ n → v.expression.bound ≤ n →
       n ≤ ((r u v).build n).2.1 ∧ ((r u v).build n).1.expression.bound ≤ ((r u v).build n).2.1)
@@ -255,7 +255,7 @@ variable {α : Type*} {β γ : α → Type*} [UniqueEncoding Tree α] [∀ x, Un
   {t p : α → ℕ}
 
 /-- Use the exact budgets of a certified program as its growth specification. -/
-theorem ofImplements (b : Bounds α) (h : Implements program f b) :
+theorem of_implements (b : Bounds α) (h : Implements program f b) :
     HasProgram f program b.time b.peak :=
   ⟨b, h, .refl _, .refl _⟩
 
@@ -305,7 +305,7 @@ theorem congr (hf : HasProgram f program t p) {g : (x : α) → β x} (h : f = g
   h ▸ hf
 
 /-- Retain a program when only the interpretation of its encoded result changes. -/
-theorem ofEncode {g : (x : α) → γ x} (hfg : ∀ x, ⌜f x⌝ₜ = ⌜g x⌝ₜ)
+theorem of_encode {g : (x : α) → γ x} (hfg : ∀ x, ⌜f x⌝ₜ = ⌜g x⌝ₜ)
     (hg : HasProgram g program t p) : HasProgram f program t p := by
   obtain ⟨b, h, ht, hp⟩ := hg.sound
   exact ⟨b, h.of_encode hfg, ht, hp⟩
@@ -315,7 +315,7 @@ end
 /-- Returning the supplied input incurs no assignment or intermediate-tree cost. -/
 theorem identity {α : Type*} [UniqueEncoding Tree α] :
     HasProgram (id : α → α) (fun v => pure v) (fun _ => 0) (fun _ => 0) :=
-  ofImplements ⟨fun _ => 0, fun _ => 0⟩ Implements.id
+  of_implements ⟨fun _ => 0, fun _ => 0⟩ Implements.id
 
 variable {α β γ : Type*} {δ : β → Type*} {ε : α → Type*} [UniqueEncoding Tree α]
   [UniqueEncoding Tree β] [UniqueEncoding Tree γ] [∀ y, UniqueEncoding Tree (δ y)]
@@ -325,7 +325,7 @@ variable {α β γ : Type*} {δ : β → Type*} {ε : α → Type*} [UniqueEncod
 /-- Compose programs; the second call is charged at the intermediate value, and its result type
 may depend on that value. Rules state their results through this; a family of encodings applied
 to a computed value is not a pattern `fun_prop` can unify, so it composes with `comp`. -/
-theorem compDep {f : α → β} {g : (y : β) → δ y} (hf : HasProgram f pf t p)
+theorem comp_dependent {f : α → β} {g : (y : β) → δ y} (hf : HasProgram f pf t p)
     (hg : HasProgram g pg u q) :
     HasProgram (fun x => g (f x)) (fun v => pf v >>= pg) (fun x => t x + u (f x))
       (fun x => max (p x) (q (f x))) := by
@@ -337,10 +337,10 @@ theorem compDep {f : α → β} {g : (y : β) → δ y} (hf : HasProgram f pf t 
 theorem comp {f : α → β} {g : β → γ} (hf : HasProgram f pf t p) (hg : HasProgram g pg u q) :
     HasProgram (g ∘ f) (fun v => pf v >>= pg) (fun x => t x + u (f x))
       (fun x => max (p x) (q (f x))) :=
-  hf.compDep hg
+  hf.comp_dependent hg
 
 /-- Reinterpret inputs with the same codes, retaining the program. -/
-theorem mapInput {f : (x : α) → ε x} (hf : HasProgram f program t p) (i : γ → α)
+theorem map_input {f : (x : α) → ε x} (hf : HasProgram f program t p) (i : γ → α)
     (hi : ∀ x, ⌜i x⌝ₜ = ⌜x⌝ₜ) :
     HasProgram (fun x => f (i x)) program (fun x => t (i x)) (fun x => p (i x)) := by
   obtain ⟨b, h, ht, hp⟩ := hf.sound
