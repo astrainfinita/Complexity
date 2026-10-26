@@ -5,7 +5,7 @@ Authors: Yuyang Zhao
 -/
 module
 
-public import Complexity.Encoding.Tree
+public import Complexity.Encoding.Vector
 public import Mathlib.Data.Fin.Basic
 public import Mathlib.Data.List.OfFn
 public import Mathlib.Data.List.FinRange
@@ -62,6 +62,22 @@ instance {R α : Type*} [c : UniqueEncoding R (List α)] {n : ℕ} :
 
 @[dominated] theorem size_encode_ofFn {α : Type*} [UniqueEncoding Tree α] {n : ℕ}
     (f : Fin n → α) : ⌜List.ofFn f⌝ₜ.size = ⌜f⌝ₜ.size := rfl
+
+theorem encode_ofFn {R α : Type*} [UniqueEncoding R (List α)] {n : ℕ} (f : Fin n → α) :
+    encode R (List.ofFn f) = encode R f := rfl
+
+/-- A finite tuple has the code of its vector of values. -/
+theorem encode_fin_function_vector {R α : Type*} [UniqueEncoding R (List α)] {n : ℕ}
+    (f : Fin n → α) : encode R f = encode R (Vector.ofFn f) := by
+  rw [encode_fin_function, encode_vector, Vector.toList_ofFn]
+
+theorem encode_vector_ofFn {R α : Type*} [UniqueEncoding R (List α)] {n : ℕ} (f : Fin n → α) :
+    encode R (Vector.ofFn f) = encode R f :=
+  (encode_fin_function_vector f).symm
+
+@[dominated] theorem size_encode_vector_ofFn {α : Type*} [UniqueEncoding Tree α] {n : ℕ}
+    (f : Fin n → α) : ⌜Vector.ofFn f⌝ₜ.size = ⌜f⌝ₜ.size := by
+  rw [encode_vector_ofFn]
 
 /-- Appending a tuple entry uses the ordinary list representation. -/
 @[simp high] theorem encode_fin_snoc {α : Type*} [UniqueEncoding Tree α] {n : ℕ}

@@ -131,24 +131,6 @@ public meta section
 
 namespace Complexity.TreeProgram.Source
 
-open Lean Meta Elab Tactic in
-/-- A table is built and read by the rules on its code, which have the same program. -/
-private def sourceTable : TacticM Unit := withMainContext do
-  let goal ← getMainGoal
-  let #[_, _, _, _, f, program, time, peak] ← sourceGoalArgs goal |
-    throwError "source table: invalid source arguments"
-  let some code ← lambdaBoundedTelescope (← etaExpand f) 1 fun xs body => do
-      unless xs.size == 1 && (← whnf (← inferType body)).isForall do return none
-      let some code ← (observing? (mkAppM ``encode #[mkConst ``Tree, body.eta]) : MetaM _) |
-        return none
-      return some (← mkLambdaFVars xs code)
-    | Search.unsupported "source table: not a table"
-  let next ← mkFreshExprSyntheticOpaqueMVar (← mkAppM ``HasProgram #[code, program, time, peak])
-  let proof ← withLocalDeclD `x (← whnf (← inferType f)).bindingDomain! fun x => do
-    mkLambdaFVars #[x] (← mkEqSymm (← mkAppM ``Tree.encode_self #[(mkApp code x).headBeta]))
-  goal.assign (← mkAppM ``HasProgram.of_encode #[proof, next])
-  replaceMainGoal [next.mvarId!]
-
 /-- Certify source branches with previously registered function implementations. -/
 syntax (name := sourceCalls) "source_calls" : tactic
 /-- Compose source-function implementations and their growth.
@@ -266,21 +248,24 @@ private partial def tupleComponents (e : Lean.Expr) : List Lean.Expr :=
   if e.isAppOfArity ``Prod.mk 4 then e.appFn!.appArg! :: tupleComponents e.appArg! else [e]
 
 open Lean Meta in
-/-- An equation of `thms` rewriting `e` at the root only, to an encoding if `encoding`: the
-right side and the equation. -/
-private def rootEquation (thms : SimpTheorems) (e : Lean.Expr) (encoding : Bool) :
-    MetaM (Option (Lean.Expr × Lean.Expr)) := do
+/-- The first equation of `thms` rewriting `e` at the root only, to an encoding if `encoding`,
+that `accept` takes, given the right side, the equation and whether the left side applies a
+variable. -/
+private def rootEquation {α : Type} (thms : SimpTheorems) (e : Lean.Expr) (encoding : Bool)
+    (accept : Lean.Expr → Lean.Expr → Bool → MetaM (Option α)) : MetaM (Option α) := do
   let candidates ← thms.post.getMatch e
   for thm in candidates.qsort (·.priority > ·.priority) do
     let value ← thm.getValue
     let (args, _, type) ← forallMetaTelescopeReducing (← inferType value)
     let some (_, l, r) := type.eq? | continue
     if encoding && !r.isAppOfArity ``UniqueEncoding.encode 4 then continue
+    let arg := if encoding then l.appArg! else l
+    let applied := arg.isApp && arg.getAppFn.isMVar
     unless ← isDefEq l e do continue
     let r ← instantiateMVars r
     let proof ← instantiateMVars (mkAppN value args)
     if r.hasMVar || proof.hasMVar || r == e then continue
-    return some (r, ← mkExpectedTypeHint proof (← mkEq e r))
+    if let some a ← accept r (← mkExpectedTypeHint proof (← mkEq e r)) applied then return some a
   return none
 
 open Lean Meta in
@@ -300,7 +285,8 @@ private def constructorEncoding (body : Lean.Expr) :
     let some inst ← synthInstance? (← mkAppM ``UniqueEncoding #[mkConst ``Tree, type]) |
       return none
     let some (r, proof) ← rootEquation (← getSimpTheorems)
-        (← mkAppOptM ``encode #[mkConst ``Tree, type, inst, mkAppN head ys]) true |
+        (← mkAppOptM ``encode #[mkConst ``Tree, type, inst, mkAppN head ys]) true
+        fun r h _ => return some (r, h) |
       return none
     let substitute (e : Lean.Expr) := do return (← mkLambdaFVars ys e).beta fields
     return some (← substitute proof, ← (tupleComponents r.appArg!).mapM fun c => do
@@ -368,12 +354,29 @@ private def constructorRule (search : Lean.Expr → FunPropM (Option Result)) (g
     return some ⟨← mkAppM ``HasProgram.of_tagged_fields #[T, ← mkLambdaFVars #[x] henc, chain]⟩
 
 open Lean Meta in
-/-- For a value of a type stored as its field by a `source_view` equation `⌜y⌝ₜ = ⌜y.1⌝ₜ`, the
-request for the value computed instead and the equation of their codes: the field `y.1` is
-computed as `y`, and another value `b` as the form of `b.1` given by a `source_view` equation or,
-for a constructor, as its field. A value whose field has no other form is left to other stages. -/
-private def viewRequest? (goal : Lean.Expr) : MetaM (Option (Lean.Expr × Lean.Expr)) :=
-  lambdaTelescope (goal.getArg! 4) fun xs body => do
+/-- Whether the function applied in `e` is data: a local other than the input `x`, or a field. -/
+private def appliesData (x e : Lean.Expr) : MetaM Bool := do
+  let fn := e.getAppFn
+  if fn.isFVar || fn.isProj then return fn != x
+  let some name := fn.constName? | return false
+  let some info ← getProjectionFnInfo? name | return false
+  -- A class method is not a stored field.
+  return !info.fromClass && e.getAppNumArgs > info.numParams + 1
+
+open Lean Meta Mathlib.Meta.FunProp in
+/-- For a value `b` of a type with a `source_view` view `⌜y⌝ₜ = ⌜g y⌝ₜ`, such as an index, a
+subtype or a table (`List.ofFn`), the request for the value computed instead and the equation of
+their codes, which have the same program and growth. The view `g y` of a value `y` other than a
+function literal is computed as `y`. Otherwise `b` is computed as `w` by a `source_view` equation
+`⌜b⌝ₜ = ⌜w⌝ₜ`, or through its view `g b`: as the form of `g b` given by a `source_view` equation,
+or as `g b` itself when `g` has rules. A function literal is a table built pointwise, left to the
+enumeration rule; a projection of the input is stored, left to field extraction; an equation
+about an applied variable, such as a table read, applies to applied data only, a definition
+having its own implementation. Only reads are used if `reads`, and only the other equations
+otherwise. -/
+private def viewRequest? (goal : Lean.Expr) (reads : Bool) :
+    MetaM (Option (Lean.Expr × Lean.Expr)) :=
+  lambdaBoundedTelescope (goal.getArg! 4) 1 fun xs body => do
     let #[x] := xs | return none
     let some ext ← getSimpExtension? `source_view | return none
     let thms ← ext.getTheorems
@@ -381,26 +384,31 @@ private def viewRequest? (goal : Lean.Expr) : MetaM (Option (Lean.Expr × Lean.E
       #[mkConst ``Tree, (goal.getArg! 1).beta #[x], (goal.getArg! 3).beta #[x], body]
     -- The equation `code = ⌜v⌝ₜ` for the value `v` computed instead.
     let field : MetaM (Option Lean.Expr) := do
-      unless (← getProjectionFnInfo? (body.getAppFn.constName?.getD .anonymous)).isSome do
-        return none
-      let type ← inferType body.appArg!
-      let some inst ← synthInstance? (← mkAppM ``UniqueEncoding #[mkConst ``Tree, type]) |
-        return none
-      let y ← mkAppOptM ``encode #[mkConst ``Tree, type, inst, body.appArg!]
-      let some (r, h) ← rootEquation thms y true | return none
-      unless ← withReducible (isDefEq r.appArg! body) do return none
-      return some (← mkExpectedTypeHint (← mkEqSymm h) (← mkEq code y))
+      if reads then return none
+      let .app _ y := body | return none
+      if y.eta.isLambda then return none
+      -- A proof or a type has no code.
+      let some y ← (observing? (mkAppM ``encode #[mkConst ``Tree, y]) : MetaM _) | return none
+      rootEquation thms y true fun r h _ => do
+        unless ← withReducible (isDefEq r.appArg! body) do return none
+        return some (← mkExpectedTypeHint (← mkEqSymm h) (← mkEq code y))
     let form : MetaM (Option Lean.Expr) := do
-      let some (r, h) ← rootEquation thms code true | return none
-      let some info ← getProjectionFnInfo? (r.appArg!.getAppFn.constName?.getD .anonymous) |
-        return none
-      let some h' ← do
-          if let some (_, h') ← rootEquation thms r.appArg! false then pure (some h')
-          else if let some value ← projectCore? body info.i then
-            pure (some (← mkExpectedTypeHint (← mkEqRefl value) (← mkEq r.appArg! value)))
-          else pure none |
-        return none
-      return some (← mkEqTrans h (← mkCongrArg r.appFn! h'))
+      if ← Search.isProjectionOf x body then return none
+      rootEquation thms code true fun r h applied => do
+        if applied != reads then return none
+        let w := r.appArg!
+        unless w.isApp && w.appArg! == body do
+          if applied && !(← appliesData x body) then return none
+          return some h
+        if let some h' ← rootEquation thms w false fun _ h' _ => return some h' then
+          return some (← mkEqTrans h (← mkCongrArg r.appFn! h'))
+        let some name := w.getAppFn.constName? | return none
+        -- The field of a constructor; its equations have no key, being reduced in the index.
+        if let some info ← getProjectionFnInfo? name then
+          if let some value ← projectCore? body info.i then
+            return some (← mkExpectedTypeHint h (← mkEq code (mkApp r.appFn! value)))
+        if (← getTheoremsForFunction name ``HasProgram).isEmpty then return none
+        return some h
     let some h ← do if let some h ← field then pure (some h) else form | return none
     let some (_, _, value) := (← inferType h).eq? | return none
     let next ← mkAppOptM ``HasProgram #[none, ← mkLambdaFVars #[x] (value.getArg! 1), none,
@@ -409,39 +417,13 @@ private def viewRequest? (goal : Lean.Expr) : MetaM (Option (Lean.Expr × Lean.E
     return some (next, ← mkLambdaFVars #[x] h)
 
 open Lean Meta Mathlib.Meta.FunProp in
-/-- A value stored as its field is computed as the field, with the same program and growth. -/
-private def viewRule (search : Lean.Expr → FunPropM (Option Result)) (goal : Lean.Expr) :
-    FunPropM (Option Result) := do
-  let some (next, h) ← viewRequest? goal | return none
+/-- A value with a view is computed through it (`viewRequest?`), with the same program and growth.
+Reads, the equations about an applied variable, are tried after stored subtrees are extracted. -/
+private def viewRule (search : Lean.Expr → FunPropM (Option Result)) (goal : Lean.Expr)
+    (reads := false) : FunPropM (Option Result) := do
+  let some (next, h) ← viewRequest? goal reads | return none
   let some r ← search next | return none
   return some ⟨← mkAppM ``HasProgram.of_encode #[h, r.proof]⟩
-
-open Lean Meta Mathlib.Meta.FunProp in
-/-- Reading a table, a local or a field of one, at an index: the table is computed as its code
-and the index as its value, and the entry is looked up in the code. -/
-private def tableRead (search : Lean.Expr → FunPropM (Option Result)) (goal : Lean.Expr) :
-    FunPropM (Option Result) :=
-  lambdaTelescope (goal.getArg! 4) fun xs body => do
-    let #[x] := xs | return none
-    let body ← whnfR body
-    let .app table index := body | return none
-    let fn := body.getAppFn
-    let stored ← do
-      if fn.isFVar || fn.isProj then pure (fn != x) else
-      let some name := fn.constName? | pure false
-      let some info ← getProjectionFnInfo? name | pure false
-      -- A class method is not a stored field.
-      pure (!info.fromClass && body.getAppNumArgs > info.numParams + 1)
-    -- The lookup rule is proved with the library, after this file.
-    let rule := `Complexity.TreeProgram.Source.HasProgram.fin_apply
-    unless stored && (← getEnv).contains rule do return none
-    -- Only a function on indices has a code.
-    let some code ← (observing? (mkAppM ``encode #[mkConst ``Tree, table]) : MetaM _) |
-      return none
-    let some hf ← search (← programGoal (← mkLambdaFVars #[x] code)) | return none
-    let some hi ← search (← programGoal
-      (← mkLambdaFVars #[x] (← mkAppM ``Fin.val #[index]))) | return none
-    return some ⟨← mkAppM rule #[hf.proof, hi.proof]⟩
 
 open Lean Meta in
 /-- The value of codes corresponding to `e`, where `pattern` is the argument type of a fact: the
@@ -454,13 +436,17 @@ private partial def codesView (pattern e : Lean.Expr) : MetaM (Option (Lean.Expr
     return some (code, ← mkAppM ``Tree.encode_self #[code])
   if !pattern.hasMVar then
     return some (e, ← mkEqRefl (← mkAppM ``encode #[mkConst ``Tree, e]))
+  -- A fact matched by its head may be about another type with the same notation.
+  let type ← whnfR (← inferType e)
   if pattern.isAppOfArity ``List 1 then
-    let some (view, equation) ← withLocalDeclD `a (← whnfR (← inferType e)).appArg! fun a => do
+    unless type.isAppOfArity ``List 1 do return none
+    let some (view, equation) ← withLocalDeclD `a type.appArg! fun a => do
         let some (v, h) ← codesView pattern.appArg! a | return none
         return some ((← mkLambdaFVars #[a] v).eta, ← mkLambdaFVars #[a] h) | return none
     return some (← mkAppM ``List.map #[view, e],
       ← mkAppM ``encode_list_map_of_encode #[view, equation, e])
   if pattern.isAppOfArity ``Prod 2 then
+    unless type.isAppOfArity ``Prod 2 do return none
     let some (v₁, h₁) ← codesView pattern.appFn!.appArg! (← mkAppM ``Prod.fst #[e]) | return none
     let some (v₂, h₂) ← codesView pattern.appArg! (← mkAppM ``Prod.snd #[e]) | return none
     let v ← mkAppM ``Prod.mk #[v₁, v₂]
@@ -585,12 +571,6 @@ private partial def sourceSearch (session : Search.Session) (nested : Bool)
   let context ← read
   -- A branch has a different local context: only fuel, path and diagnostics cross this boundary.
   let query := sourceQuery search context
-  let solve : TacticM Unit := withMainContext do
-    let goal ← getMainGoal
-    let some proof ← query (← goal.getType) |
-      Search.unsupported "source table: the table has no implementation"
-    goal.assign proof
-    replaceMainGoal []
   let structural : FunPropM (Option Result) := Search.attempt do
     -- A speculative lambda rule may leave an unencodable function-valued result.
     -- Such a premise cannot be compiled structurally, but another candidate may apply.
@@ -600,8 +580,7 @@ private partial def sourceSearch (session : Search.Session) (nested : Bool)
       if (if encoder.isLambda then encoder.bindingBody! else encoder).getAppFn.isMVar then
         let some encoderProof ← synthInstance? (← inferType encoder) | return none
         unless ← isDefEq encoder encoderProof do return none
-    for action in [FiniteCases.sourceCases, sourceTable *> solve,
-        sourceCallsWith (← session.roots.get) query] do
+    for action in [FiniteCases.sourceCases, sourceCallsWith (← session.roots.get) query] do
       if let some proof ← session.discharge ancestors action goal then
         return some ⟨proof⟩
     return none
@@ -636,7 +615,11 @@ private partial def sourceSearch (session : Search.Session) (nested : Bool)
   -- Rules recursively use this driver, including callbacks; no preliminary scan is needed.
   let data ← getFunctionData? f defaultUnfoldPred
   let result ← match data with
-    | .lam f => Search.lambdaRules search decl .pi (goal.setArg decl.funArgId f)
+    | .lam f => do
+      let target := goal.setArg decl.funArgId f
+      if let some r ← Search.lambdaRules search decl .pi target then return some r
+      -- A function literal is a table built pointwise, through its view.
+      Search.attempt (viewRule search target)
     | .letE f => Search.letRule search decl (goal.setArg decl.funArgId f) f
     | .data d => withLCtx d.lctx d.insts do
       let target := goal.setArg decl.funArgId (← d.toExpr)
@@ -657,7 +640,7 @@ private partial def sourceSearch (session : Search.Session) (nested : Bool)
       if let .const name _ := d.fn then
         unless (← getTheoremsForFunction name ``HasProgram).isEmpty do
           if let some r ← Search.attempt (codesComposition search target) then return some r
-      -- A value stored as its field is computed as the field.
+      -- A value with a view is computed through it.
       if let some r ← Search.attempt (viewRule search target) then return some r
       if let some name := encodedCall then
         if let some r ← rules true then return some r
@@ -683,7 +666,8 @@ private partial def sourceSearch (session : Search.Session) (nested : Bool)
       -- Subcall specifications need structural decomposition before their fallback rules:
       -- otherwise lookup of a composite table can recursively request rebuilding that table.
       if let some r ← rules true then return some r
-      if let some r ← Search.attempt (tableRead search target) then return some r
+      -- A table is read after stored subtrees are extracted.
+      if let some r ← Search.attempt (viewRule search target (reads := true)) then return some r
       -- An encoder describes representation; unfolding it does not select an algorithm.
       if d.fn.isConstOf ``UniqueEncoding.encode then
         session.reject ancestors m!"source translation: no implementation for the encoded result; \

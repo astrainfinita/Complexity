@@ -107,31 +107,65 @@ theorem _root_.List.hasProgram_getElem? {γ : Type*} [UniqueEncoding Tree γ] :
 
 attribute [scoped fun_prop] List.hasProgram_getElem?
 
-/-- The code of a computed value is the value's own result. -/
-protected theorem HasProgram.encode {α : Type*} {β : α → Type*} [UniqueEncoding Tree α]
-    [∀ x, UniqueEncoding Tree (β x)] {v : (x : α) → β x} {q : Value → Code Value} {t p : α → ℕ}
-    (hv : HasProgram v q t p) : HasProgram (fun x => ⌜v x⌝ₜ) q t p :=
-  hv.of_encode fun _ => Tree.encode_self _
-
-attribute [scoped fun_prop] HasProgram.encode
-
-/-- Reading a represented table reuses its code; construction remains a separate premise. -/
-theorem HasProgram.ofFn {α : Type*} {β : α → Type*} [UniqueEncoding Tree α]
-    [∀ x, UniqueEncoding Tree (β x)] {n : α → ℕ} {f : (x : α) → Fin (n x) → β x}
-    {q : Value → Code Value} {t p : α → ℕ} (hf : HasProgram (fun x => ⌜f x⌝ₜ) q t p) :
-    HasProgram (fun x => List.ofFn (f x)) q t p :=
-  .of_encode (g := fun x => ⌜f x⌝ₜ) (fun _ => rfl) hf
-
-attribute [scoped fun_prop] HasProgram.ofFn
+/-- The code of an optional value's content, or the empty tree. -/
+def someValue {β : Type*} [UniqueEncoding Tree β] : Option β → Tree
+  | none => .nil
+  | some a => ⌜a⌝ₜ
 
 /-- Read the value of a known successful optional result. -/
 theorem hasProgram_someValue {β : Type*} [UniqueEncoding Tree β] :
-    HasProgram (fun x : Option β => match x with | none => (.nil : Tree) | some a => ⌜a⌝ₜ)
-      hole(⊢ program)
-      (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
+    HasProgram (someValue (β := β)) hole(⊢ program) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programSomeValue
   fill_hole program in source_fun_prop
   all_goals dominated
+
+attribute [scoped fun_prop] hasProgram_someValue
+
+/-! A table has the code of its vector (`encode_fin_function_vector`), and a vector that of its
+list (`encode_vector`). The search computes a table through them, by these equations and the list
+rules; the vector of a stored table is the table. -/
+
+theorem _root_.Vector.ofFn_fin_snoc {α : Type*} {n : ℕ} (f : Fin n → α) (a : α) :
+    Vector.ofFn (Fin.snoc (α := fun _ => α) f a) = (Vector.ofFn f).push a := by
+  rw [Vector.ofFn_succ]
+  simp [Fin.snoc]
+
+theorem _root_.Vector.ofFn_fin_append {α : Type*} {m n : ℕ} (f : Fin m → α) (g : Fin n → α) :
+    Vector.ofFn (Fin.append f g) = Vector.ofFn f ++ Vector.ofFn g := by
+  rw [Vector.ofFn_add]
+  simp
+
+/-- `Fin.append` is reducible, so the search sees `Fin.addCases`. -/
+theorem _root_.Vector.ofFn_addCases {α : Type*} {m n : ℕ} (f : Fin m → α) (g : Fin n → α) :
+    Vector.ofFn (Fin.addCases (motive := fun _ => α) f g) = Vector.ofFn f ++ Vector.ofFn g :=
+  Vector.ofFn_fin_append f g
+
+/-! The search unfolds `Function.comp` as notation, so a table of converted entries is a function
+literal. -/
+
+/-- Casting the entries of a table of indices up keeps its code. -/
+theorem encode_fun_castSucc {n k : ℕ} (f : Fin n → Fin k) : ⌜fun i => (f i).castSucc⌝ₜ = ⌜f⌝ₜ :=
+  encode_fin_function_congr _ _ fun _ => rfl
+
+/-- Erasing the bounds of the entries of a table of indices keeps its code. -/
+theorem encode_fun_val {n k : ℕ} (f : Fin n → Fin k) : ⌜fun i => (f i).val⌝ₜ = ⌜f⌝ₜ :=
+  encode_fin_function_congr _ _ fun _ => rfl
+
+/-- An entry of a table is read from the list of entry codes at its index. The codes have one
+type for every table, even when the entries' type depends on the input. -/
+theorem encode_apply_eq_someValue {α : Type*} [UniqueEncoding Tree α] {n : ℕ} (f : Fin n → α)
+    (i : Fin n) : ⌜f i⌝ₜ = ⌜someValue (List.ofFn fun j => ⌜f j⌝ₜ)[i.val]?⌝ₜ := by
+  simp [someValue]
+
+/-- Reading the list of a table at an index gives the entry. -/
+@[dominated_simp] theorem _root_.List.getElem?_ofFn_val {α : Type*} {n : ℕ} (f : Fin n → α)
+    (i : Fin n) : (List.ofFn f)[i.val]? = some (f i) := by
+  simp
+
+attribute [source_view] Vector.ofFn_fin_snoc Vector.ofFn_fin_append Vector.ofFn_addCases
+  encode_fun_castSucc encode_fun_val
+-- After the views, which compute an entry without reading the table.
+attribute [source_view low] encode_apply_eq_someValue
 
 def rangeContinues (x : ℕ × List ℕ) : Bool := !x.1.bits.isEmpty
 
@@ -300,7 +334,7 @@ theorem HasProgram.fin_function {ρ : Type*} {β : ρ → Type*}
     {n : ρ → ℕ} {f : (e : ρ) → Fin (n e) → β e} {qn qf : Value → Code Value} {tn pn : ρ → ℕ}
     {tf pf : (Σ e, Fin (n e)) → ℕ} (hn : HasProgram n qn tn pn)
     (hf : HasProgram (fun p : Σ e, Fin (n e) => f p.1 p.2) qf tf pf) :
-    HasProgram (fun e => ⌜f e⌝ₜ) hole(qn, qf ⊢ program)
+    HasProgram (fun e => Vector.ofFn (f e)) hole(qn, qf ⊢ program)
       (fun e => (tn e + (n e + 1) ^ 2 + 1) +
         (((List.finRange (n e)).map (fun i => tf ⟨e, i⟩)).sum + n e + 1))
       (fun e => max (max (pn e) ((n e + 1) ^ 2))
@@ -312,7 +346,7 @@ theorem HasProgram.fin_function {ρ : Type*} {β : ρ → Type*}
     (HasProgram.identity.pair (hn.comp List.hasProgram_range))
   fill_hole program in
     refine (HasProgram.of_encode (g := fun e => (List.finRange (n e)).map (f e))
-      (fun e => by rw [← List.ofFn_eq_map, Tree.encode_self, encode_fin_function])
+      (fun e => by rw [encode_vector, Vector.toList_ofFn, List.ofFn_eq_map])
       (he.map_dependent_with (f := f) hf)).mono ?_ ?_
   · apply Dominated.of_le
     intro e
@@ -338,42 +372,6 @@ end tabulate
 
 namespace Complexity.TreeProgram.Source
 
-/-- Reading a represented table evaluates the index and the table once, then looks the index up
-in the table's code. -/
-theorem HasProgram.fin_apply {ρ : Type*} {β : ρ → Type*}
-    [UniqueEncoding Tree ρ] [∀ e, UniqueEncoding Tree (β e)]
-    {n : ρ → ℕ} {f : (e : ρ) → Fin (n e) → β e} {i : (e : ρ) → Fin (n e)}
-    {qf qi : Value → Code Value} {tf pf ti pi : ρ → ℕ}
-    (hf : HasProgram (fun e => ⌜f e⌝ₜ) qf tf pf)
-    (hi : HasProgram (fun e => (i e).val) qi ti pi) :
-    HasProgram (fun e => f e (i e)) hole(qf, qi ⊢ program)
-      (fun e => ti e + (tf e + 1) + ⌜(i e, f e)⌝ₜ.size ^ 2 + 1)
-      (fun e => max (pi e) (max (pf e) ⌜(i e, f e)⌝ₜ.size)) := by
-  have ht : HasProgram (fun e => List.ofFn (fun i => ⌜f e i⌝ₜ)) qf tf pf :=
-    .of_encode (fun e => (encode_fin_function_codes _).trans (Tree.encode_self _).symm) hf
-  fill_hole program in
-    refine ((((hi.pair ht).comp hasProgram_lookup).comp hasProgram_someValue).of_encode
-      (fun e => by simp)).mono ?_ ?_
-  · apply Dominated.of_le
-    intro e
-    simp only [size_encode_prod, encode_fin_function_codes, encode_fin]
-    exact le_rfl
-  · apply Dominated.of_le
-    intro e
-    have hv := size_encode_fin_apply_le (f e) (i e)
-    have hi := Tree.size_pos ⌜(i e).val⌝ₜ
-    simp only [Function.comp_apply, List.getElem?_ofFn, Fin.isLt, dite_true, Fin.eta,
-      encode_option_some, size_encode_prod, Tree.encode_self, size_encode_unit,
-      encode_fin_function_codes, encode_fin]
-    omega
-
-/-- A one-element list of an encoded value. -/
-theorem hasProgram_singleton : HasProgram (fun t : Tree => [t]) hole(⊢ program) (fun _ => 1)
-    (fun t => ⌜t⌝ₜ.size) := by
-  abstract_hole program using programSingleton
-  fill_hole program in source_fun_prop
-  all_goals dominated
-
 theorem _root_.List.hasProgram_tail {α : Type*} [UniqueEncoding Tree α] :
     HasProgram (List.tail : List α → List α) hole(⊢ program)
       (fun _ => 1) (fun xs => ⌜xs⌝ₜ.size) := by
@@ -382,85 +380,6 @@ theorem _root_.List.hasProgram_tail {α : Type*} [UniqueEncoding Tree α] :
   all_goals dominated
 
 attribute [scoped fun_prop] List.hasProgram_tail
-
-/-- Extend a represented table without re-enumerating its indices. -/
-theorem HasProgram.finSnoc {ρ : Type*} {α : ρ → Type*}
-    [UniqueEncoding Tree ρ] [∀ e, UniqueEncoding Tree (α e)]
-    {n : ρ → ℕ} {f : (e : ρ) → Fin (n e) → α e} {a : (e : ρ) → α e} {qf qa : Value → Code Value}
-    {tf pf ta pa : ρ → ℕ} (hf : HasProgram (fun e => ⌜f e⌝ₜ) qf tf pf)
-    (ha : HasProgram a qa ta pa) :
-    HasProgram (fun e => ⌜Fin.snoc (α := fun _ => α e) (f e) (a e)⌝ₜ) hole(qf, qa ⊢ program)
-      (fun e => tf e + ta e + n e + 1)
-      (fun e => max (pf e) (max (pa e) (⌜f e⌝ₜ.size + ⌜a e⌝ₜ.size))) := by
-  have ht : HasProgram (fun e => List.ofFn (fun i => ⌜f e i⌝ₜ)) qf tf pf :=
-    .of_encode (fun e => (encode_fin_function_codes _).trans (Tree.encode_self _).symm) hf
-  have hc : HasProgram (fun e => ⌜a e⌝ₜ) qa ta pa := ha.of_encode fun e => Tree.encode_self _
-  fill_hole program in
-    refine (HasProgram.of_encode ?_
-      (HasProgram.binary append_spec ht (hc.comp hasProgram_singleton))).mono ?_ ?_
-  · intro e
-    rw [Tree.encode_self, encode_fin_snoc]
-    simpa only [List.map_append, List.map_cons, List.map_nil, List.map_ofFn,
-      Function.comp_def] using
-      (encode_list_map_of_encode (encode Tree) (fun _ => Tree.encode_self _)
-        (List.ofFn (f e) ++ [a e])).symm
-  · apply Dominated.of_le_mul 42
-    intro e
-    simp only [List.length_ofFn]
-    omega
-  · apply Dominated.of_le_mul 3
-    intro e
-    dsimp only
-    have := Tree.size_pos ⌜f e⌝ₜ
-    have := Tree.size_pos ⌜a e⌝ₜ
-    simp only [Function.comp_apply, Tree.encode_self, encode_fin_function_codes,
-      encode_list_cons, encode_list_nil, size_encode_prod, size_encode_unit, max_le_iff]
-    omega
-
-/-- Concatenate represented tables using the existing list append implementation. -/
-theorem HasProgram.finAppend {ρ : Type*} {α : ρ → Type*}
-    [UniqueEncoding Tree ρ] [∀ e, UniqueEncoding Tree (α e)]
-    {n m : ρ → ℕ} {f : (e : ρ) → Fin (n e) → α e}
-    {g : (e : ρ) → Fin (m e) → α e} {qf qg : Value → Code Value} {tf pf tg pg : ρ → ℕ}
-    (hf : HasProgram (fun e => ⌜f e⌝ₜ) qf tf pf) (hg : HasProgram (fun e => ⌜g e⌝ₜ) qg tg pg) :
-    HasProgram (fun e => ⌜Fin.append (f e) (g e)⌝ₜ)
-      (fun v => do let w ← qf v; let z ← qg v; List.Code.append w z)
-      (fun e => tf e + (tg e + (n e + 1)))
-      (fun e => max (pf e) (max (pg e) (⌜f e⌝ₜ.size + ⌜g e⌝ₜ.size))) := by
-  have hf' : HasProgram (fun e => List.ofFn (fun i => ⌜f e i⌝ₜ)) qf tf pf :=
-    .of_encode (fun e => (encode_fin_function_codes _).trans (Tree.encode_self _).symm) hf
-  have hg' : HasProgram (fun e => List.ofFn (fun i => ⌜g e i⌝ₜ)) qg tg pg :=
-    .of_encode (fun e => (encode_fin_function_codes _).trans (Tree.encode_self _).symm) hg
-  refine (HasProgram.of_encode
-    (g := fun e => List.ofFn (fun i => ⌜f e i⌝ₜ) ++ List.ofFn (fun i => ⌜g e i⌝ₜ))
-    ?_ (HasProgram.binary append_spec hf' hg')).mono
-      (Dominated.of_le_mul 26 fun e => by dsimp only; simp only [List.length_ofFn]; omega)
-      (Dominated.of_le fun e => by dsimp only; simp only [encode_fin_function_codes, le_refl])
-  intro e
-  rw [Tree.encode_self, encode_fin_function, List.ofFn_fin_append]
-  simpa only [List.map_append, List.map_ofFn, Function.comp_def] using
-    (encode_list_map_of_encode (encode Tree) (fun _ => Tree.encode_self _)
-      (List.ofFn (f e) ++ List.ofFn (g e))).symm
-
-/-- Casting the entries of a table of indices up keeps its code. -/
-theorem HasProgram.fin_castSucc_comp {ρ : Type*} [UniqueEncoding Tree ρ] {n k : ρ → ℕ}
-    {f : (e : ρ) → Fin (n e) → Fin (k e)} {q : Value → Code Value} {t p : ρ → ℕ}
-    (hf : HasProgram (fun e => ⌜f e⌝ₜ) q t p) :
-    HasProgram (fun e => ⌜Fin.castSucc ∘ f e⌝ₜ) q t p :=
-  hf.of_encode fun e => by rw [Tree.encode_self, Tree.encode_self, encode_fin_castSucc]
-
-/-- Erasing the bounds of a table of indices keeps its code. -/
-theorem HasProgram.fin_val_comp {ρ : Type*} [UniqueEncoding Tree ρ] {n k : ρ → ℕ}
-    {f : (e : ρ) → Fin (n e) → Fin (k e)} {q : Value → Code Value} {t p : ρ → ℕ}
-    (hf : HasProgram (fun e => ⌜f e⌝ₜ) q t p) :
-    HasProgram (fun e => ⌜Fin.val ∘ f e⌝ₜ) q t p :=
-  hf.of_encode fun e => by
-    rw [Tree.encode_self, Tree.encode_self]
-    exact encode_fin_function_congr _ _ fun _ => rfl
-
--- Known operations reuse their certificates before unfolding.
-attribute [scoped fun_prop] HasProgram.finSnoc HasProgram.finAppend
-  HasProgram.fin_castSucc_comp HasProgram.fin_val_comp
 
 abbrev FinCompInput := Σ n, Σ k, Σ m, (Fin n → Fin k) × (Fin k → Fin m)
 
@@ -474,7 +393,7 @@ theorem hasProgram_finCompStep :
 
 /-- Stored table composition directly enumerates its selected lookup callback. -/
 theorem hasProgram_finComp :
-    HasProgram (fun x : FinCompInput => ⌜x.2.2.2.2 ∘ x.2.2.2.1⌝ₜ) hole(⊢ program)
+    HasProgram (fun x : FinCompInput => Vector.ofFn (x.2.2.2.2 ∘ x.2.2.2.1)) hole(⊢ program)
     (fun x => ⌜x⌝ₜ.size ^ 3) (fun x => ⌜x⌝ₜ.size ^ 2) := by
   abstract_hole program using programFinComp
   fill_hole program in
@@ -491,9 +410,9 @@ theorem HasProgram.fin_comp {ρ : Type*} [UniqueEncoding Tree ρ]
     {g : (e : ρ) → Fin (k e) → Fin (m e)} {q : Value → Code Value} {t p : ρ → ℕ}
     (h : HasProgram (fun e => (⟨n e, k e, m e, f e, g e⟩ :
       Σ n, Σ k, Σ m, (Fin n → Fin k) × (Fin k → Fin m))) q t p) :
-    HasProgram (fun e => ⌜g e ∘ f e⌝ₜ) (fun v => q v >>= programFinComp)
+    HasProgram (fun e => Vector.ofFn (g e ∘ f e)) (fun v => q v >>= programFinComp)
       (fun e => t e + ⌜(⟨n e, k e, m e, f e, g e⟩ : FinCompInput)⌝ₜ.size ^ 3)
       (fun e => max (p e) (⌜(⟨n e, k e, m e, f e, g e⟩ : FinCompInput)⌝ₜ.size ^ 2)) :=
-  h.comp hasProgram_finComp
+  h.comp_dependent hasProgram_finComp
 
 end Complexity.TreeProgram.Source

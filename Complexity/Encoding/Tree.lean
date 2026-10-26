@@ -24,6 +24,9 @@ instance : UniqueEncoding Tree Tree := UniqueEncoding.refl Tree
 
 @[simp] theorem Tree.encode_self (a : Tree) : ⌜a⌝ₜ = a := rfl
 
+/-- The code of a code is the code itself. -/
+theorem Tree.encode_encode {α : Type*} [UniqueEncoding Tree α] (a : α) : ⌜⌜a⌝ₜ⌝ₜ = ⌜a⌝ₜ := rfl
+
 @[simp] theorem Tree.decode_self (a : Tree) : decode Tree a = Part.some a := rfl
 
 namespace BitList

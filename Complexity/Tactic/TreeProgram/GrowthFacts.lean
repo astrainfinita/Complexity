@@ -25,6 +25,8 @@ files do not import the tactic layer. -/
 namespace Complexity
 
 attribute [dominated_simp] size_encode_prod Sigma.encode_mk size_encode_unit List.length_reverse
+  encode_fin_function_codes encode_vector_ofFn Vector.toList_ofFn Vector.length_toList
+  List.length_ofFn size_encode_ofFn
 
 attribute [dominated_expand] UniqueEncoding.encode_subtype encode_bool_true encode_bool_false
   List.length_cons List.length_nil List.length_append List.length_map
@@ -34,10 +36,15 @@ attribute [dominated_expand] UniqueEncoding.encode_subtype encode_bool_true enco
 growth; their sizes are the defining equations of `Tree.size`. -/
 attribute [dominated_expand] Tree.encode_self Tree.size_nil Tree.size_pair
 
-attribute [source_case_simp] encode_unit encode_prod List.ofFn_succ
+attribute [source_case_simp] encode_unit encode_prod List.ofFn_succ encode_vector Vector.toList_ofFn
 
-attribute [source_view] encode_fin UniqueEncoding.encode_subtype Fin.val_castSucc Fin.val_castAdd
-  Fin.val_natAdd Fin.val_succ Fin.val_last Fin.val_zero
+attribute [source_view] Fin.val_castSucc Fin.val_castAdd Fin.val_natAdd Fin.val_succ Fin.val_last
+  Fin.val_zero Vector.toList_push Vector.toList_append encode_ofFn encode_fin_function_codes
+  Tree.encode_encode
+
+-- The views have a variable on the left; the more specific equations come first.
+attribute [source_view low] encode_fin UniqueEncoding.encode_subtype encode_fin_function_vector
+  encode_vector
 
 attribute [dominated] Tree.size_pos size_encode_bool_le Fin.isLt size_encode_fin_table_le
 

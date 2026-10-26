@@ -46,6 +46,12 @@ theorem size_encode_numeric_le {n m : ℕ} (c : Circuit .booleanAlgebra n m) :
     simp only [encode_gate, size_encode_prod, size_encode_unit, size_gate]
     nlinarith
 
+/-- Adding the new input wire appends one index to the old table; the source translation computes
+the lifted table as this vector. -/
+@[source_view] theorem ofFn_liftInputs {n k : ℕ} (f : Fin n → Fin k) :
+    Vector.ofFn (liftInputs f) = (Vector.ofFn (Fin.castSucc ∘ f)).push (Fin.last k) := by
+  simp only [liftInputs, Vector.ofFn_fin_snoc]
+
 /-- Adding the new input wire retains the old table and stores one additional index. -/
 @[dominated] theorem size_encode_liftInputs {n k : ℕ} (wires : Fin n → Fin k) :
     ⌜liftInputs wires⌝ₜ.size = ⌜wires⌝ₜ.size + ⌜k⌝ₜ.size + 1 := by
