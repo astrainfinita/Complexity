@@ -115,7 +115,7 @@ example (_f : ℕ → Bool) : True := by
 
 example {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
     {n : α → ℕ} {f : (x : α) → Fin (n x) → β}
-    {q : Value → Code Value} {t p : α → ℕ} (hf : HasProgram (fun x => ⌜f x⌝ₜ) q t p) := (by source_fun_prop :
+    {q : Value → Code Value} {t p : α → ℕ} (hf : HasProgram f q t p) := (by source_fun_prop :
     HasProgram (fun x => List.ofFn (f x)) _ _ _)
 
 -- The output index is computed at runtime; the continuation remains typed in the source.

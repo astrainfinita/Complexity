@@ -63,44 +63,51 @@ variable {ρ : Type*} {α : ρ → Type*}
   [UniqueEncoding Tree ρ] [∀ e, UniqueEncoding Tree (α e)]
   {n m : ρ → ℕ} {f : (e : ρ) → Fin (n e) → α e} {g : (e : ρ) → Fin (m e) → α e}
   {qf qg : Value → Code Value} {tf pf tg pg : ρ → ℕ}
-  (hf : HasProgram (fun e => ⌜f e⌝ₜ) qf tf pf) (hg : HasProgram (fun e => ⌜g e⌝ₜ) qg tg pg)
+  (hf : HasProgram f qf tf pf) (hg : HasProgram g qg tg pg)
 include hf hg
 
--- The growth adds the supplied growths and a traversal of the first table only.
-example : HasProgram (fun e => ⌜Fin.append (f e) (g e)⌝ₜ)
-    (fun v => do
-      let a ← qf v
-      let b ← qg v
-      List.Code.append a b)
-    (fun e => tf e + (tg e + (n e + 1)))
-    (fun e => max (pf e) (max (pg e) (⌜f e⌝ₜ.size + ⌜g e⌝ₜ.size))) :=
-  hf.finAppend hg
-
--- Native fun_prop and source translation both use the registered constructor.
-example := (by fun_prop : HasProgram (fun e => ⌜Fin.append (f e) (g e)⌝ₜ) _ _ _)
-
-example := (by source_fun_prop : HasProgram (fun e => ⌜Fin.append (f e) (g e)⌝ₜ)
-  (fun v => do let a ← qf v; let b ← qg v; List.Code.append a b) _ _)
+-- Appending tables appends their lists: the supplied growths, a pair and a traversal of the
+-- first table only.
+example : ∃ q p, HasProgram (fun e => Fin.append (f e) (g e)) q
+    (fun e => tf e + tg e + n e + 2) p := by
+  refine ⟨?q, ?p, ?h⟩
+  case h =>
+    source_fun_prop
+    all_goals dominated
 
 end FinAppendImplementation
 
 -- Only the first table is traversed; a stored second table is not regenerated.
-example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop :
-  HasProgram (fun x : Σ n, Σ m, (Fin n → α) × (Fin m → α) => ⌜Fin.append x.2.2.1 x.2.2.2⌝ₜ) _
-    (fun x => 1 + (1 + (x.1 + 1))) _)
+example {α : Type*} [UniqueEncoding Tree α] : ∃ q p, HasProgram
+    (fun x : Σ n, Σ m, (Fin n → α) × (Fin m → α) => ⌜Fin.append x.2.2.1 x.2.2.2⌝ₜ) q
+    (fun x => x.1 + 4) p := by
+  refine ⟨?q, ?p, ?h⟩
+  case h =>
+    source_fun_prop
+    all_goals dominated
 
 -- Selecting the enumeration scope must preserve the polymorphic append implementation.
-example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop using tabulate :
-  HasProgram (fun x : Σ n, Σ m, (Fin n → α) × (Fin m → α) => ⌜Fin.append x.2.2.1 x.2.2.2⌝ₜ) _
-    (fun x => 1 + (1 + (x.1 + 1))) _)
+example {α : Type*} [UniqueEncoding Tree α] : ∃ q p, HasProgram
+    (fun x : Σ n, Σ m, (Fin n → α) × (Fin m → α) => ⌜Fin.append x.2.2.1 x.2.2.2⌝ₜ) q
+    (fun x => x.1 + 4) p := by
+  refine ⟨?q, ?p, ?h⟩
+  case h =>
+    source_fun_prop using tabulate
+    all_goals dominated
 
-example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop :
-  HasProgram (fun x : Σ n, (Fin n → α) × α => ⌜Fin.snoc x.2.1 x.2.2⌝ₜ) _
-    (fun x => 1 + (1 + 0) + x.1 + 1) _)
+example {α : Type*} [UniqueEncoding Tree α] : ∃ q p, HasProgram
+    (fun x : Σ n, (Fin n → α) × α => ⌜Fin.snoc x.2.1 x.2.2⌝ₜ) q (fun x => x.1 + 4) p := by
+  refine ⟨?q, ?p, ?h⟩
+  case h =>
+    source_fun_prop
+    all_goals dominated
 
-example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop using tabulate :
-  HasProgram (fun x : Σ n, (Fin n → α) × α => ⌜Fin.snoc x.2.1 x.2.2⌝ₜ) _
-    (fun x => 1 + (1 + 0) + x.1 + 1) _)
+example {α : Type*} [UniqueEncoding Tree α] : ∃ q p, HasProgram
+    (fun x : Σ n, (Fin n → α) × α => ⌜Fin.snoc x.2.1 x.2.2⌝ₜ) q (fun x => x.1 + 4) p := by
+  refine ⟨?q, ?p, ?h⟩
+  case h =>
+    source_fun_prop using tabulate
+    all_goals dominated
 
 def successorWires (n : ℕ) : Σ n, Fin n → Fin (n + 1) := ⟨n, Fin.castSucc⟩
 
