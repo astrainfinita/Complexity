@@ -74,6 +74,16 @@ example := (by source_fun_prop :
 example := (by source_fun_prop :
     HasProgram (fun x : Σ n, Σ k, (Fin n → Fin k) × Fin n => (x.2.2.1 x.2.2.2).val + 1) _ _ _)
 
+-- Indices and subtypes are stored as their values; fields and constructors are those values.
+example := (by source_fun_prop :
+    HasProgram (fun z : {n : ℕ // n < 5} => z.1) (fun v => pure v) (fun _ => 0) (fun _ => 0))
+
+example := (by source_fun_prop : HasProgram (fun z : {n : ℕ // 0 < n} => z.1 + 1) _ _ _)
+
+example := (by source_fun_prop :
+    HasProgram (fun n : ℕ => (⟨n, n.lt_succ_self⟩ : Fin (n + 1))) (fun v => pure v)
+      (fun _ => 0) (fun _ => 0))
+
 def liftWires (x : Σ n, Σ k, Fin n → Fin k) : Σ n, Σ k, Fin n → Fin k :=
   ⟨x.1 + 1, x.2.1 + 1, Circuit.liftInputs x.2.2⟩
 

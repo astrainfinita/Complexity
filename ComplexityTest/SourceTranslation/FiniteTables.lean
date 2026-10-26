@@ -155,4 +155,14 @@ example (f : ℕ → ℕ → Bool) (program : ℕ → Value → Code Value)
       HasProgram (fun n => List.ofFn (fun i : Fin n => f n i.val)) _ _ _)
   trivial
 
+-- Neither a class method at an index nor a local function without a code is a table read; the
+-- missing implementation is reported.
+/-- error: source translation: `Fin.add` needs a selected implementation -/
+#guard_msgs (substring := true) in
+example := (by source_fun_prop : HasProgram (fun x : Fin 3 × Fin 3 => x.1 + x.2) _ _ _)
+
+/-- error: source cases: output contains an operation needing its own certificate -/
+#guard_msgs (substring := true) in
+example (f : ℕ → ℕ) := (by source_fun_prop : HasProgram (fun n : ℕ => f n) _ _ _)
+
 end ComplexityTest.SourceTranslation.FiniteTables
