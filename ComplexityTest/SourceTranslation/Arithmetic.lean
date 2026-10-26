@@ -23,27 +23,26 @@ example : less ∈ FTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by
 
 def between (x : ℕ × ℕ × ℕ) := decide (x.2.1 ≤ x.1) && decide (x.1 < x.2.2)
 
-example := (by source_fun_prop : Implementation between _ _)
+example := (by source_fun_prop : HasProgram between _ _ _)
 
-example := (by source_fun_prop : Implementation (fun x : ℕ × ℕ => decide (x.1 = x.2)) _ _)
-example := (by source_fun_prop : Implementation (fun x : ℕ × ℕ => x.1 == x.2) _ _)
+example := (by source_fun_prop : HasProgram (fun x : ℕ × ℕ => decide (x.1 = x.2)) _ _ _)
+example := (by source_fun_prop : HasProgram (fun x : ℕ × ℕ => x.1 == x.2) _ _ _)
 
 def addBelow (x : ℕ × ℕ) := if x.1 < x.2 then x.1 + x.2 else x.1
 
-example := (by source_fun_prop : Implementation addBelow _ _)
+example := (by source_fun_prop : HasProgram addBelow _ _ _)
 
 -- A propositional test retains path-sensitive growth; the unused reverse is not charged.
-example : Implementation (fun x : Bool × List Bool => if x.1 = true then x.2.reverse else x.2)
+example : HasProgram (fun x : Bool × List Bool => if x.1 = true then x.2.reverse else x.2) hole(⊢ program)
     (fun x => if x.1 then ⌜x⌝ₜ.size else 1) (fun x => ⌜x⌝ₜ.size) := by
-  source_fun_prop
+  fill_hole program in source_fun_prop
   all_goals dominated
 
 -- Boolean operations compose through ordinary source syntax.
-example := (by source_fun_prop : Implementation (fun x : Bool × Bool × Bool =>
-    (x.1 && x.2.1) || (x.2.2 && (x.1 || x.2.1))) _ _)
+example := (by source_fun_prop : HasProgram (fun x : Bool × Bool × Bool =>
+    (x.1 && x.2.1) || (x.2.2 && (x.1 || x.2.1))) _ _ _)
 
 -- Addition by one keeps the selected successor program.
-example : (by source_fun_prop : Implementation (fun n : ℕ => n + 1) _ _).program =
-    Nat.implementationSucc.program := rfl
+example := (by source_fun_prop : HasProgram (fun n : ℕ => n + 1) Nat.Code.succ _ _)
 
 end ComplexityTest.SourceTranslation.Arithmetic

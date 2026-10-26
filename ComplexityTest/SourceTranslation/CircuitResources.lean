@@ -24,9 +24,9 @@ def collect (input : CNF ℕ ×
   (gateClauses input.2).foldl (fun acc clause => clause :: acc) input.1
 
 open Complexity.TreeProgram.Source in
-@[local source] def implementationCollect :
-    Implementation collect (fun _ => 1) (fun input => ⌜input⌝ₜ.size) :=
-  implementationAccumulateGate.congr (by funext x; rfl)
+@[local source] theorem hasProgram_collect :
+    HasProgram collect programAccumulateGate (fun _ => 1) (fun input => ⌜input⌝ₜ.size) :=
+  hasProgram_accumulateGate.congr (by funext x; rfl)
 
 theorem collect_ftisp : collect ∈ FTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
   model_fun_prop
@@ -50,14 +50,13 @@ theorem collect_pair_ftisp : (fun input => (collect input, input.1)) ∈ FTISP .
 
 -- The selected program is reused as chosen.
 open Complexity.TreeProgram.Source in
-example : (by source_fun_prop : Implementation collect _ _).program =
-    implementationCollect.program := rfl
+example := (by source_fun_prop : HasProgram collect programAccumulateGate _ _)
 
 open Complexity.TreeProgram.Source in
 example : True := by
-  have := (by source_fun_prop : Implementation (fun input : Option (CNF ℕ ×
+  have := (by source_fun_prop : HasProgram (fun input : Option (CNF ℕ ×
       (Σ k, FirstOrder.Language.booleanAlgebra.Functions k × (Fin k → ℕ) × ℕ)) =>
-      match input with | none => [] | some x => collect x) _ _)
+      match input with | none => [] | some x => collect x) _ _ _)
   trivial
 
 theorem copied_ftisp : collect ∈ FTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) :=

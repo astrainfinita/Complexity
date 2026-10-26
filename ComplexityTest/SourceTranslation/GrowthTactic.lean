@@ -26,8 +26,8 @@ def advance (x : Bool × List (List Bool) × List Bool) :=
   | xs :: rest => (x.1, rest, x.1 :: x.1 :: (xs.reverse ++ x.2.2))
 
 -- Generated growth follows the source cases; the target is unfolded on request.
-example : Implementation advance chunkWork (fun x => ⌜x⌝ₜ.size + 10) := by
-  source_fun_prop
+example : HasProgram advance hole(⊢ program) chunkWork (fun x => ⌜x⌝ₜ.size + 10) := by
+  fill_hole program in source_fun_prop
   all_goals dominated [chunkWork]
 
 -- A statement in the list is instantiated at the matching terms of the pointwise comparison.

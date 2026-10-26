@@ -45,8 +45,9 @@ abbrev GatherInput := Bool × List (List Bool) × List Bool
 def chunkWork (x : GatherInput) : ℕ :=
   match x.2.1 with | [] => 1 | xs :: _ => ⌜xs⌝ₜ.size + 1
 
-def implementationAdvance : Implementation advance chunkWork (fun x => ⌜x⌝ₜ.size + 10) := by
-  source_fun_prop
+theorem hasProgram_advance : HasProgram advance hole(⊢ program) chunkWork (fun x => ⌜x⌝ₜ.size + 10) := by
+  abstract_hole program using programAdvance
+  fill_hole program in source_fun_prop
   all_goals
     apply Dominated.of_le_mul 20
     rintro ⟨tag, _ | ⟨xs, rest⟩, acc⟩
@@ -59,13 +60,16 @@ def implementationAdvance : Implementation advance chunkWork (fun x => ⌜x⌝�
 
 def gatherCheck (x : GatherInput) := !x.2.1.isEmpty
 
-def implementationGatherCheck : Implementation gatherCheck (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
-  source_fun_prop
+theorem hasProgram_gatherCheck :
+    HasProgram gatherCheck hole(⊢ program) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
+  abstract_hole program using programGatherCheck
+  fill_hole program in source_fun_prop
   all_goals dominated
 
-def implementationGatherFinish :
-    Implementation (fun x : GatherInput => x.2.2) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
-  source_fun_prop
+theorem hasProgram_gatherFinish :
+    HasProgram (fun x : GatherInput => x.2.2) hole(⊢ program) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
+  abstract_hole program using programGatherFinish
+  fill_hole program in source_fun_prop
   all_goals dominated
 
 -- The invariant permits the accumulator to grow as chunks are consumed.
@@ -89,12 +93,14 @@ theorem gather_input_size : Dominated
   omega
 
 /-- The potential is the size of the chunks still to be consumed. -/
-def implementationGatherLoop : Implementation gather
+theorem hasProgram_gatherLoop : HasProgram gather hole(⊢ program)
     (fun x => 1 + (⌜x.2.1⌝ₜ.size + 1) + 1) (fun x => ⌜x⌝ₜ.size) := by
-  refine Implementation.tailLoopPotential implementationGatherCheck implementationAdvance
-    implementationGatherFinish gatherInvariant (fun _ x => ⌜x.2.1⌝ₜ.size) (fun _ => 1)
-    (fun x => ⌜x⌝ₜ.size) ?_ (fun _ => le_rfl) ?_ gather_input_size gather_input_size ?_ ?_
-    (Dominated.const 2) ?_
+  abstract_hole program using programGatherLoop
+  fill_hole program in
+    refine HasProgram.tailLoopPotential hasProgram_gatherCheck hasProgram_advance
+      hasProgram_gatherFinish gatherInvariant (fun _ x => ⌜x.2.1⌝ₜ.size) (fun _ => 1)
+      (fun x => ⌜x⌝ₜ.size) ?_ (fun _ => le_rfl) ?_ gather_input_size gather_input_size ?_ ?_
+      (Dominated.const 2) ?_
   · rintro ⟨tag, xs, acc⟩
     cases xs <;> simp [gather, gatherCheck, advance]
   · rintro ⟨xt, original, initial⟩ ⟨tag, ys, acc⟩ hi ht
@@ -128,12 +134,14 @@ def implementationGatherLoop : Implementation gather
         (fun z : {p : GatherInput × GatherInput //
           gatherInvariant p.1 p.2 ∧ gatherCheck p.2 = true} => ⟨z.1.2, z.2.2⟩)
 
-@[source] def implementationGather : Implementation gather
-    (fun x => ⌜x⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) :=
-  implementationGatherLoop.mono (Dominated.of_le_mul 4 fun ⟨tag, xs, acc⟩ => by
-    have := Tree.size_pos ⌜(tag, xs, acc)⌝ₜ
-    simp only [size_encode_prod] at *
-    omega) (Dominated.refl _)
+@[source] theorem hasProgram_gather : HasProgram gather hole(⊢ program)
+    (fun x => ⌜x⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
+  abstract_hole program using programGather
+  fill_hole program in
+    exact hasProgram_gatherLoop.mono (Dominated.of_le_mul 4 fun ⟨tag, xs, acc⟩ => by
+      have := Tree.size_pos ⌜(tag, xs, acc)⌝ₜ
+      simp only [size_encode_prod] at *
+      omega) (Dominated.refl _)
 
 theorem gather_model : gather ∈ FTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by
   model_fun_prop
@@ -146,17 +154,19 @@ example : ⌜((true, [[]], []) : GatherInput)⌝ₜ.size <
 -- Variable rounds remain visible in the public work measure.
 example : chunkWork (true, [[]], []) < chunkWork (true, [[true]], []) := by decide
 
-example : implementationGather.program = loopCode implementationGatherCheck.program
-    implementationAdvance.program implementationGatherFinish.program := rfl
+example : programGather = loopCode programGatherCheck programAdvance programGatherFinish := rfl
 
 def keep (xs : List Bool) := xs
 
-@[source] def implementationKeep : Implementation keep (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
-  source_fun_prop using loop
-    (test := fun _ => false) (next := id) (finish := id)
-    (invariant := fun x y => y = x)
-    (measure := fun _ => 0) (step := fun _ => 1) (stop := fun _ => 1)
-    (space := fun x => ⌜x⌝ₜ.size)
+@[source] theorem hasProgram_keep :
+    HasProgram keep hole(⊢ program) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
+  abstract_hole program using programKeep
+  fill_hole program in
+    source_fun_prop using loop
+      (test := fun _ => false) (next := id) (finish := id)
+      (invariant := fun x y => y = x)
+      (measure := fun _ => 0) (step := fun _ => 1) (stop := fun _ => 1)
+      (space := fun x => ⌜x⌝ₜ.size)
   guard_tail_goals
   case equation => intro; rfl
   case initial => intro; rfl
@@ -179,8 +189,8 @@ theorem keep_loop_model : keep ∈ FTISP .tree (fun n => n ^ 0) (fun n => n ^ 1)
 -- A zero allowance cannot replace the selected loop by the ordinary identity program.
 example : True := by
   fail_if_success
-    have : Implementation keep (fun _ => 0) (fun _ => 0) := by
-      source_fun_prop
+    have : HasProgram keep hole(⊢ program) (fun _ => 0) (fun _ => 0) := by
+      fill_hole program in source_fun_prop
       all_goals exact Dominated.zero
   trivial
 

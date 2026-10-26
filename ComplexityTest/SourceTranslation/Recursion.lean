@@ -37,7 +37,7 @@ theorem length_invert (xs : List Bool) : (invert xs).length = xs.length := by
 open TreeProgram.Source
 
 -- The measured entry exposes source equations, without a guessed exact allowance.
-def implementationInvert := (by
+def hasProgram_invert := (by
   source_fun_prop using recursion
     (test := fun xs : List Bool => !xs.isEmpty) (next := List.tail)
     (finish := fun _ => []) (resume := invertResume)
@@ -53,7 +53,7 @@ def implementationInvert := (by
     rintro ⟨xs, h⟩
     cases xs with
     | nil => cases h
-    | cons => rfl : Implementation invert _ _)
+    | cons => rfl : HasProgram invert _ _ _)
 
 def endPosition (xs : List Bool) : Fin (xs.length + 1) := Fin.last xs.length
 
@@ -63,7 +63,7 @@ def positionResume : (x : {xs : List Bool // (!xs.isEmpty) = true}) →
   | ⟨_ :: _, _⟩, result => result.succ
 
 -- A dependent result still uses the public encoding view; callbacks return ordinary Fin values.
-def implementationEndPosition := (by
+def hasProgram_endPosition := (by
   source_fun_prop using recursion
     (test := fun xs : List Bool => !xs.isEmpty) (next := List.tail)
     (finish := fun _ => 0) (resume := positionResume)
@@ -79,17 +79,17 @@ def implementationEndPosition := (by
     rintro ⟨xs, h⟩
     cases xs with
     | nil => cases h
-    | cons => rfl : Implementation (fun xs => ⌜endPosition xs⌝ₜ) _ _)
+    | cons => rfl : HasProgram (fun xs => ⌜endPosition xs⌝ₜ) _ _ _)
 
 -- An unsupported callback fails before changing the selected source goal.
-example : Implementation (id : List Bool → List Bool) (fun _ => 0) (fun _ => 0) := by
+example : HasProgram (id : List Bool → List Bool) hole(⊢ program) (fun _ => 0) (fun _ => 0) := by
   fail_if_success
     source_fun_prop using recursion
       (test := fun xs => !xs.isEmpty) (next := fun xs => invert xs.tail)
       (finish := fun x => x.val) (resume := fun x _ => x.val)
       (measure := List.length)
       (decreases := by intro xs h; rw [length_invert]; cases xs <;> simp_all)
-  source_fun_prop
+  fill_hole program in source_fun_prop
 
 def drain : List Bool → Unit
   | [] => ()
@@ -105,15 +105,17 @@ def drainRecursion : TreeProgram.Source.Recursion drain where
   measure := List.length
   decreases := by intro xs h; cases xs <;> simp_all
 
-def implementationDrainFinish :
-    Implementation drainRecursion.finish (fun _ => 1) (fun _ => 1) := by
-  source_fun_prop
+theorem hasProgram_drainFinish :
+    HasProgram drainRecursion.finish hole(⊢ program) (fun _ => 1) (fun _ => 1) := by
+  abstract_hole program using programDrainFinish
+  fill_hole program in source_fun_prop
   all_goals dominated
 
-def implementationDrainResume : Implementation
-    (fun x : drainRecursion.Return => drainRecursion.resume x.1 x.2) (fun _ => 1)
+theorem hasProgram_drainResume : HasProgram
+    (fun x : drainRecursion.Return => drainRecursion.resume x.1 x.2) hole(⊢ program) (fun _ => 1)
     (fun _ => 1) := by
-  source_fun_prop
+  abstract_hole program using programDrainResume
+  fill_hole program in source_fun_prop
   all_goals dominated
 
 -- Callback growths enter the structural cost directly. No coefficient is selected in induction.
@@ -143,38 +145,42 @@ private theorem drain_cost_growth :
       (fun _ => Nat.zero_lt_one) (fun _ => Nat.zero_lt_one)
 
 /-- The test of `drain`, translated as `Bool.not` after `List.isEmpty`. -/
-def implementationDrainTest : Implementation (fun xs : List Bool => !xs.isEmpty) (fun _ => 1)
+theorem hasProgram_drainTest :
+    HasProgram (fun xs : List Bool => !xs.isEmpty) hole(⊢ program) (fun _ => 1)
     (fun xs => ⌜xs⌝ₜ.size) := by
-  source_fun_prop
+  abstract_hole program using programDrainTest
+  fill_hole program in source_fun_prop
   all_goals dominated
 
 -- The terminal allowance appears once; the stack allowance grows with recursion depth.
-def implementationDrainStructural : Implementation drain
+theorem hasProgram_drainStructural : HasProgram drain hole(⊢ program)
     (fun xs => 1 + (xs.length + 1) + 1)
-    (fun xs => (⌜xs⌝ₜ.size + (xs.length + 1) * (⌜xs⌝ₜ.size + 1)) + 1) :=
-  (drainRecursion.implementation implementationDrainTest List.implementationTail implementationDrainFinish implementationDrainResume).mono
-    (((Dominated.refl _).add drain_cost_growth.1).add (Dominated.refl _))
-    (drain_cost_growth.2.add (Dominated.refl _))
+    (fun xs => (⌜xs⌝ₜ.size + (xs.length + 1) * (⌜xs⌝ₜ.size + 1)) + 1) := by
+  abstract_hole program using programDrainStructural
+  fill_hole program in
+    exact (drainRecursion.hasProgram hasProgram_drainTest List.hasProgram_tail hasProgram_drainFinish hasProgram_drainResume).mono
+      (((Dominated.refl _).add drain_cost_growth.1).add (Dominated.refl _))
+      (drain_cost_growth.2.add (Dominated.refl _))
 
 -- The automatic entry builds the same recursive program from the same callbacks.
-example : (by
+example := (by
     source_fun_prop using recursion
       (test := fun xs : List Bool => !xs.isEmpty) (next := List.tail)
       (finish := fun _ => ()) (resume := fun _ _ => ())
       (measure := List.length)
       (decreases := by intro xs h; cases xs <;> simp_all)
-    all_goals intros; exact Subsingleton.elim _ _ : Implementation drain _ _).program =
-    implementationDrainStructural.program := rfl
+    all_goals intros; exact Subsingleton.elim _ _ : HasProgram drain programDrainStructural _ _)
 
-@[source] def implementationDrain : Implementation drain
+@[source] theorem hasProgram_drain : HasProgram drain hole(⊢ program)
     (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size ^ 2) := by
+  abstract_hole program using programDrain
   have hlen : Dominated (List.length : List Bool → ℕ) (fun xs => ⌜xs⌝ₜ.size) :=
     Dominated.of_le length_le_codeSize
   have hpos (xs : List Bool) : 0 < ⌜xs⌝ₜ.size := Tree.size_pos _
   have hc : Dominated (fun _ : List Bool => 1) (fun xs => ⌜xs⌝ₜ.size) := Dominated.one hpos
   have hs := (hlen.add_same hc).mul ((Dominated.refl _).add_same hc)
   simp only [← pow_two] at hs
-  apply implementationDrainStructural.mono
+  fill_hole program in apply hasProgram_drainStructural.mono
   · simp only [Dominated.add_iff]
     exact ⟨⟨hc, hlen, hc⟩, hc⟩
   · simp only [Dominated.add_iff]

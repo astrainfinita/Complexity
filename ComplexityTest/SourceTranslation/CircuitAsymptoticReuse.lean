@@ -11,27 +11,24 @@ open ComplexityTest.SourceTranslation.CircuitComposition
 namespace ComplexityTest.SourceTranslation.CircuitAsymptoticReuse
 
 -- Importing the selected implementation restores exactly the same program and growth.
-example : (by source_fun_prop : Implementation rewireStored _ _).program =
-    implementationRewireStored.program := rfl
-example : Implementation rewireStored (fun x => ⌜x⌝ₜ.size ^ 7) (fun x => ⌜x⌝ₜ.size ^ 4) := by
+example : HasProgram rewireStored programRewireStored (fun x => ⌜x⌝ₜ.size ^ 7)
+    (fun x => ⌜x⌝ₜ.size ^ 4) := by
   source_fun_prop
 
-example : Implementation relabelFn
-    (fun x => relabelScale x ^ 7) (fun x => relabelScale x ^ 4) := implementationRelabelFn
-example : Implementation compFn
-    (fun x => compScale x ^ 7) (fun x => compScale x ^ 4) := implementationCompFn
-example : Implementation keepFn
-    (fun x => keepScale x ^ 8) (fun x => keepScale x ^ 4) := implementationKeepFn
+example : HasProgram relabelFn programRelabelFn
+    (fun x => relabelScale x ^ 7) (fun x => relabelScale x ^ 4) := hasProgram_relabelFn
+example : HasProgram compFn programCompFn
+    (fun x => compScale x ^ 7) (fun x => compScale x ^ 4) := hasProgram_compFn
+example : HasProgram keepFn programKeepFn
+    (fun x => keepScale x ^ 8) (fun x => keepScale x ^ 4) := hasProgram_keepFn
 
 -- The ordinary composition adapter consumes the raw selected implementation.
-example {ρ : Type} [UniqueEncoding Tree ρ] {t p : ρ → ℕ}
-    (h : Implementation (fun _ : ρ => (⟨0, 0, 0, Circuit.id _ 0, Circuit.id _ 0⟩ : CompInput)) t p) :
-    (h.circuitComp).program = (h.compDep implementationCompFn).program := rfl
+example {ρ : Type} [UniqueEncoding Tree ρ] {q : Value → Code Value} {t p : ρ → ℕ}
+    (h : HasProgram (fun _ : ρ => (⟨0, 0, 0, Circuit.id _ 0, Circuit.id _ 0⟩ : CompInput)) q t p) :=
+  (h.circuitComp : type_of% (h.compDep hasProgram_compFn))
 
-example : implementationKeepFn.program =
-    (keepRecursion.implementation implementationKeepTest implementationKeepNextFn
-      implementationKeepFinishFn
-      implementationKeepResume).program := rfl
+example : programKeepFn = Recursion.code programKeepTest programKeepNextFn programKeepFinishFn
+    programKeepResume := rfl
 
 -- Binary dimensions are not bounded by code size without a hypothesis. Restrict only the
 -- external source type; mapInput reuses the same program and its all-input certificate. The
@@ -40,7 +37,8 @@ abbrev StoredComp := {x : CompInput // x.n ≤ ⌜x⌝ₜ.size}
 abbrev StoredKeep := {x : KeepInput // x.n ≤ ⌜x⌝ₜ.size}
 
 private theorem restrict_ftisp {α : Type} [UniqueEncoding Tree α] {f : α → Tree}
-    (scale : α → ℕ) (d : ℕ) (hf : Implementation f (fun x => scale x ^ d) (fun x => scale x ^ 4))
+    {program : Value → Code Value} (scale : α → ℕ) (d : ℕ)
+    (hf : HasProgram f program (fun x => scale x ^ d) (fun x => scale x ^ 4))
     (P : α → Prop)
     (size : Dominated (fun x : {x // P x} => scale x.1) (fun x => ⌜x⌝ₜ.size)) :
     (fun x : {x // P x} => f x.1) ∈ FTISP .tree (fun n => n ^ d) (fun n => n ^ 4) :=
@@ -50,7 +48,7 @@ private theorem restrict_ftisp {α : Type} [UniqueEncoding Tree α] {f : α → 
 
 example : (fun x : StoredComp => ⌜compFn x.1⌝ₜ) ∈
     FTISP .tree (fun n => n ^ 7) (fun n => n ^ 4) := by
-  apply restrict_ftisp compScale 7 (implementationCompFn.ofEncode fun _ => Tree.encode_self _)
+  apply restrict_ftisp compScale 7 (hasProgram_compFn.ofEncode fun _ => Tree.encode_self _)
   refine Dominated.of_le_mul 8 ?_
   rintro ⟨⟨n, m, k, c, d⟩, hn⟩
   have hm := c.outputs_le_size_encode
@@ -63,7 +61,7 @@ example : (fun x : StoredComp => ⌜compFn x.1⌝ₜ) ∈
 
 example : (fun x : StoredKeep => ⌜keepFn x.1⌝ₜ) ∈
     FTISP .tree (fun n => n ^ 8) (fun n => n ^ 4) := by
-  apply restrict_ftisp keepScale 8 (implementationKeepFn.ofEncode fun _ => Tree.encode_self _)
+  apply restrict_ftisp keepScale 8 (hasProgram_keepFn.ofEncode fun _ => Tree.encode_self _)
   refine Dominated.of_le_mul 5 ?_
   rintro ⟨⟨n, m, c⟩, hn⟩
   have hm := c.outputs_le_size_encode
@@ -73,9 +71,9 @@ example : (fun x : StoredKeep => ⌜keepFn x.1⌝ₜ) ∈
   omega
 
 -- Ordinary nested source calls use the selected keep implementation, retaining structural costs.
-example : Implementation preserve (fun x => ⌜x⌝ₜ.size + keepScale ⟨x.1, x.2.1, x.2.2⟩ ^ 8)
+example : HasProgram preserve hole(⊢ program) (fun x => ⌜x⌝ₜ.size + keepScale ⟨x.1, x.2.1, x.2.2⟩ ^ 8)
     (fun x => ⌜preserve x⌝ₜ.size + ⌜x⌝ₜ.size + keepScale ⟨x.1, x.2.1, x.2.2⟩ ^ 4) := by
-  source_fun_prop
+  fill_hole program in source_fun_prop
   all_goals dominated [preserve]
 
 end ComplexityTest.SourceTranslation.CircuitAsymptoticReuse

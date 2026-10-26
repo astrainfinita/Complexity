@@ -13,18 +13,18 @@ namespace ComplexityTest.SourceTranslation.Traversal
 private def mapInput : List (List Bool) := [[true, false], [], [false, true, true]]
 private def mapOutput : List (List Bool) := [[false, true], [], [true, true, false]]
 
--- The certificate stores executable model code, not an opaque existential witness.
-private def mapReverseCode := (List.implementationReverse (α := Bool)).map.program .input
+-- The program of a certificate is executable model code.
+private def mapReverseCode := List.Code.map List.Code.reverse .input
 #guard let p := mapReverseCode
   let c := ComplexityTest.TreeRun.runFrom p.compile
     (p.compile.initInput (Config := TreeMachine.Cfg p.registers _) ⌜mapInput⌝ₜ) 186
   p.compile.halt c.state && decide (c.regs 0 = ⌜mapOutput⌝ₜ)
 
 -- One long callback and many empty callbacks have linear, not quadratic, total time.
-example : Implementation
+example : HasProgram
     (fun x : List Unit × List (List Unit) => x.2.foldl (fun _ ys => ys.reverse) x.1)
-    (fun x => ⌜x⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
-  source_fun_prop
+    hole(⊢ program) (fun x => ⌜x⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
+  fill_hole program in source_fun_prop
   · apply Dominated.of_le_mul 2
     rintro ⟨a, xs⟩
     have ht := foldlTime_le_sum (f := fun _ ys : List Unit => ys.reverse)
@@ -53,20 +53,20 @@ example := (by
       (fun ys => 5 + ⌜ys⌝ₜ.size) (fun _ => by split <;> omega) [] xs
     have hs := size_encode_list xs
     simp [List.sum_map_add] at this ⊢
-    omega : Implementation reverseCaptured (fun x => ⌜x⌝ₜ.size) _)
+    omega : HasProgram reverseCaptured _ (fun x => ⌜x⌝ₜ.size) _)
 
 section DependentMap
 
 -- A runtime table and its indices share the same runtime length; the table is captured once.
 example := (by source_fun_prop :
-  Implementation (fun x : Σ n, (Fin n → ℕ) × List (Fin n) => x.2.2.map x.2.1) _ _)
+  HasProgram (fun x : Σ n, (Fin n → ℕ) × List (Fin n) => x.2.2.map x.2.1) _ _ _)
 
 -- Pointwise choices must never masquerade as one implementation for all runtime lengths.
-example (f : (n : ℕ) → Fin n → Bool) (_hf : ∀ n, Implementation (f n) (fun _ => 1) (fun _ => 1)) :
-    True := by
+example (f : (n : ℕ) → Fin n → Bool) (program : ℕ → Value → Code Value)
+    (_hf : ∀ n, HasProgram (f n) (program n) (fun _ => 1) (fun _ => 1)) : True := by
   fail_if_success
     have := (by source_fun_prop :
-      Implementation (fun x : Σ n, List (Fin n) => x.2.map (f x.1)) _ _)
+      HasProgram (fun x : Σ n, List (Fin n) => x.2.map (f x.1)) _ _ _)
   trivial
 
 end DependentMap

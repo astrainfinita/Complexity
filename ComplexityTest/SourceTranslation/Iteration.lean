@@ -11,43 +11,42 @@ open Complexity TreeProgram Complexity.TreeProgram.Source
 namespace ComplexityTest.SourceTranslation.Iteration
 
 -- The loop stores executable code and keeps the selected callback.
-example (f : Bool → Bool) {t p : Bool → ℕ} (hf : Implementation f t p) :
-    (by source_fun_prop : Implementation (fun x : ℕ × Bool => f^[x.1] x.2) _ _).program =
-      hf.iterate.program := rfl
+example (f : Bool → Bool) {qf : Value → Code Value} {t p : Bool → ℕ} (hf : HasProgram f qf t p) :=
+  (by source_fun_prop : type_of% hf.iterate)
 
 -- The growth refers to the chosen callback's growth at each visited state.
-example (f : Bool → Bool) {t p : Bool → ℕ} (_hf : Implementation f t p) :
-    Implementation (fun x : ℕ × Bool => f^[x.1] x.2) (fun x => iterateTime f t x.1 x.2 + 1)
-      (fun x => iteratePeak f p x.1 x.2) := by source_fun_prop
+example (f : Bool → Bool) {qf : Value → Code Value} {t p : Bool → ℕ} (_hf : HasProgram f qf t p) :
+    HasProgram (fun x : ℕ × Bool => f^[x.1] x.2) hole(qf ⊢ program)
+      (fun x => iterateTime f t x.1 x.2 + 1) (fun x => iteratePeak f p x.1 x.2) := by
+  fill_hole program in source_fun_prop
 
 def repeatReverse (x : ℕ × List Bool) := List.reverse^[x.1] x.2
-example := (by source_fun_prop : Implementation repeatReverse _ _)
+example := (by source_fun_prop : HasProgram repeatReverse _ _ _)
 
 def repeatAnd (x : List Unit × Bool × Bool) :=
   (fun a => x.2.1 && a)^[x.1.length] x.2.2
-example := (by source_fun_prop : Implementation repeatAnd _ _)
+example := (by source_fun_prop : HasProgram repeatAnd _ _ _)
 
 def repeatNot (x : List Unit × Bool) := Bool.not^[x.1.length] x.2
-example := (by source_fun_prop : Implementation repeatNot _ _)
+example := (by source_fun_prop : HasProgram repeatNot _ _ _)
 
 section Captured
 
 variable (f : Bool → Bool → Bool) (count : Bool → ℕ) (initial : Bool → Bool)
 
-example {ti pi : Bool → ℕ} {ts ps : Bool × Bool → ℕ}
-    (hi : Implementation (fun e => (count e, (e, initial e))) ti pi)
-    (hs : Implementation (fun x : Bool × Bool => f x.1 x.2) ts ps) :
-    (by source_fun_prop : Implementation (fun e => (f e)^[count e] (initial e)) _ _).program =
-      (hi.iterateWith hs).program := rfl
+example {qi qs : Value → Code Value} {ti pi : Bool → ℕ} {ts ps : Bool × Bool → ℕ}
+    (hi : HasProgram (fun e => (count e, (e, initial e))) qi ti pi)
+    (hs : HasProgram (fun x : Bool × Bool => f x.1 x.2) qs ts ps) :=
+  (by source_fun_prop : type_of% (hi.iterateWith hs))
 
 end Captured
 
 -- Separate implementations for each environment are not a uniform callback.
-example (f : Bool → Bool → Bool) (_h : ∀ e, Implementation (f e) (fun _ => 1) (fun _ => 1)) :
-    True := by
+example (f : Bool → Bool → Bool) (program : Bool → Value → Code Value)
+    (_h : ∀ e, HasProgram (f e) (program e) (fun _ => 1) (fun _ => 1)) : True := by
   fail_if_success
     have := (by source_fun_prop :
-      Implementation (fun x : ℕ × Bool × Bool => (f x.2.1)^[x.1] x.2.2) _ _)
+      HasProgram (fun x : ℕ × Bool × Bool => (f x.2.1)^[x.1] x.2.2) _ _ _)
   trivial
 
 -- Two iterations pay both state-dependent callbacks once, and each binary counter step.
@@ -109,12 +108,13 @@ example {α : Type*} [UniqueEncoding Tree α] {f : α → α} {t p : α → ℕ}
 
 -- Zero captured iterations charge preparation once; no callback growth remains.
 example {ρ α : Type*} [UniqueEncoding Tree ρ] [UniqueEncoding Tree α]
-    {f : ρ → α → α} {initial : ρ → α} {ti pi : ρ → ℕ} {t p : ρ × α → ℕ}
-    (hi : Implementation (fun e => ((0 : ℕ), (e, initial e))) ti pi)
-    (hs : Implementation (fun x : ρ × α => f x.1 x.2) t p) :
-    Implementation (fun e => (f e)^[0] (initial e)) (fun e => ti e + 1)
-      (fun e => max (pi e) (⌜e⌝ₜ.size + 1 + ⌜((0 : ℕ), initial e)⌝ₜ.size)) :=
-  (hi.iterateWith hs).mono (Dominated.of_le fun _ => by simp)
-    (Dominated.of_le fun _ => by simp)
+    {f : ρ → α → α} {initial : ρ → α} {qi qs : Value → Code Value} {ti pi : ρ → ℕ}
+    {t p : ρ × α → ℕ} (hi : HasProgram (fun e => ((0 : ℕ), (e, initial e))) qi ti pi)
+    (hs : HasProgram (fun x : ρ × α => f x.1 x.2) qs t p) :
+    HasProgram (fun e => (f e)^[0] (initial e)) hole(qi, qs ⊢ program) (fun e => ti e + 1)
+      (fun e => max (pi e) (⌜e⌝ₜ.size + 1 + ⌜((0 : ℕ), initial e)⌝ₜ.size)) := by
+  fill_hole program in
+    exact (hi.iterateWith hs).mono (Dominated.of_le fun _ => by simp)
+      (Dominated.of_le fun _ => by simp)
 
 end ComplexityTest.SourceTranslation.Iteration

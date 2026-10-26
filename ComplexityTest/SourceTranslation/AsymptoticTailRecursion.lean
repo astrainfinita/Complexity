@@ -16,13 +16,15 @@ namespace ComplexityTest.SourceTranslation.AsymptoticTailRecursion
 def drain (_ : List Bool) : List Bool := []
 
 -- Neither callback budgets nor a chosen credit coefficient occur in this proof.
-@[source] def implementationDrain : Implementation drain
+@[source] theorem hasProgram_drain : HasProgram drain hole(⊢ program)
     (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) := by
-  source_fun_prop using loop (test := fun xs : List Bool => !xs.isEmpty)
-    (next := List.tail) (finish := id)
-    (invariant := fun xs ys : List Bool => ys.length ≤ xs.length ∧ ⌜ys⌝ₜ.size ≤ ⌜xs⌝ₜ.size)
-    (measure := List.length) (step := fun _ => 1) (stop := fun _ => 1)
-    (space := fun xs => ⌜xs⌝ₜ.size)
+  abstract_hole program using programDrain
+  fill_hole program in
+    source_fun_prop using loop (test := fun xs : List Bool => !xs.isEmpty)
+      (next := List.tail) (finish := id)
+      (invariant := fun xs ys : List Bool => ys.length ≤ xs.length ∧ ⌜ys⌝ₜ.size ≤ ⌜xs⌝ₜ.size)
+      (measure := List.length) (step := fun _ => 1) (stop := fun _ => 1)
+      (space := fun xs => ⌜xs⌝ₜ.size)
   case equation => intro xs; cases xs <;> rfl
   case initial => exact fun _ => ⟨le_rfl, le_rfl⟩
   case next_state =>
@@ -45,10 +47,8 @@ theorem drain_ftisp : drain ∈ FTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) :=
   all_goals dominated
 
 -- The program is determined by the callbacks; tail-loop space has no stack multiplier.
-example : implementationDrain.program =
-    loopCode (by source_fun_prop : Implementation (fun xs : List Bool => !xs.isEmpty) _ _).program
-      (List.implementationTail (α := Bool)).program
-      (Implementation.identity (α := List Bool)).program := by
-  rfl
+example : ∃ test t p, programDrain = loopCode test List.programTail (fun v => pure v) ∧
+    HasProgram (fun xs : List Bool => !xs.isEmpty) test t p :=
+  ⟨_, _, _, rfl, by source_fun_prop⟩
 
 end ComplexityTest.SourceTranslation.AsymptoticTailRecursion

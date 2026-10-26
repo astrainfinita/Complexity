@@ -10,54 +10,40 @@ open Complexity TreeProgram Complexity.TreeProgram.Source
 namespace ComplexityTest.SourceTranslation.UniformProgram
 
 -- Library functions with one program at every type are used at types depending on the input.
-example : Implementation (fun x : Σ n, List (Fin n) => x.2.reverse)
+example : HasProgram (fun x : Σ n, List (Fin n) => x.2.reverse) hole(⊢ program)
     (fun x => 1 + ⌜x.2⌝ₜ.size) (fun x => max (max ⌜x⌝ₜ.size ⌜x.2⌝ₜ.size) ⌜x.2⌝ₜ.size) := by
-  source_fun_prop
+  fill_hole program in source_fun_prop
 
-example := (by source_fun_prop : Implementation (fun x : Σ n, List (Fin n) => x.2.tail.length) _ _)
+example := (by source_fun_prop : HasProgram (fun x : Σ n, List (Fin n) => x.2.tail.length) _ _ _)
 
--- The generated program is the library's program.
-example : List.programReverse = List.Code.reverse := rfl
-
--- A user's polymorphic function is implemented once, at every type, in the ordinary way.
+-- A user's polymorphic function is implemented once, at every type, in the ordinary way: a hole
+-- without context is one program at every type.
 def swapPair {α β : Type*} (x : α × β) : β × α := (x.2, x.1)
 
-@[uniform_program]
-def implementationSwapPair {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β] :=
-  (by source_fun_prop : Implementation (swapPair : α × β → β × α) _ _)
-
-example : HasProgram (swapPair : Bool × ℕ → ℕ × Bool) programSwapPair (fun _ => 1 + (1 + 1))
-    (fun x => max ⌜x⌝ₜ.size (max ⌜x⌝ₜ.size ⌜(x.2, x.1)⌝ₜ.size)) :=
-  hasProgram_swapPair
+@[fun_prop]
+theorem hasProgram_swapPair {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β] :
+    HasProgram (swapPair : α × β → β × α) hole(⊢ program) (fun _ => 1 + (1 + 1))
+      (fun x => max ⌜x⌝ₜ.size (max ⌜x⌝ₜ.size ⌜(x.2, x.1)⌝ₜ.size)) := by
+  abstract_hole program using programSwapPair
+  fill_hole program in source_fun_prop
 
 -- Its uses at types depending on the input need no rule for it.
 example := (by source_fun_prop :
-  Implementation (fun x : Σ n, Fin n × List (Fin n) => (swapPair x.2).1.reverse) _ _)
+  HasProgram (fun x : Σ n, Fin n × List (Fin n) => (swapPair x.2).1.reverse) _ _ _)
 
 -- A program that depends on a parameter is not one program at every value of it.
-def implementationReverseOf {α : Type*} [UniqueEncoding Tree α] {t p : List α → ℕ}
-    (h : Implementation (List.reverse : List α → List α) t p) :
-    Implementation (List.reverse : List α → List α) t p := h
-
 /--
-error: uniform_program: the program of implementationReverseOf depends on [α, inst✝, t, p, h]
+error: Type mismatch
+  h
+has type
+  HasProgram List.reverse program t p
+but is expected to have type
+  HasProgram List.reverse hole(⊢ uniform) t p
 -/
 #guard_msgs in
-attribute [uniform_program] implementationReverseOf
-
--- The generated names come from `implementationS`; for other names the stem is given.
-def headPairChoice {α : Type*} [UniqueEncoding Tree α] :=
-  (by source_fun_prop : Implementation (fun xs : List α => (xs.head?, xs)) _ _)
-
-/--
-error: uniform_program: name headPairChoice `N.implementationS`, or give the stem with `uniform_program N.s`
--/
-#guard_msgs in
-attribute [uniform_program] headPairChoice
-
-attribute [uniform_program headPair] headPairChoice
-
-example := (hasProgram_headPair :
-  HasProgram (fun xs : List Bool => (xs.head?, xs)) programHeadPair _ _)
+theorem hasProgram_reverseOf {α : Type*} [UniqueEncoding Tree α] {program : Value → Code Value}
+    {t p : List α → ℕ} (h : HasProgram (List.reverse : List α → List α) program t p) :
+    HasProgram (List.reverse : List α → List α) hole(⊢ uniform) t p := by
+  fill_hole uniform in exact h
 
 end ComplexityTest.SourceTranslation.UniformProgram

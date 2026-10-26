@@ -13,17 +13,20 @@ namespace ComplexityTest.SourceTranslation.Search
 section Composition
 
 -- Selected callbacks compose their growths without choosing new programs.
-example (f g : Bool → Bool) {t p u q : Bool → ℕ} (_hf : Implementation f t p)
-    (_hg : Implementation g u q) :
-    Implementation (fun x => g (f x)) (fun x => t x + u (f x)) (fun x => max (p x) (q (f x))) := by
+example (f g : Bool → Bool) {pf pg : Value → Code Value} {t p u q : Bool → ℕ}
+    (_hf : HasProgram f pf t p) (_hg : HasProgram g pg u q) :
+    HasProgram (fun x => g (f x)) (fun v => pf v >>= pg) (fun x => t x + u (f x))
+      (fun x => max (p x) (q (f x))) := by
   source_fun_prop
 
 -- Let sharing keeps the input and pays for the callback once.
-example (f : Bool → Bool) (g : Bool × Bool → Bool) {t p : Bool → ℕ} {u q : Bool × Bool → ℕ}
-    (_hf : Implementation f t p) (_hg : Implementation g u q) :
-    Implementation (fun x => let y := f x; g (x, y)) (fun x => 0 + (t x + 1) + u (x, f x))
+example (f : Bool → Bool) (g : Bool × Bool → Bool) {pf pg : Value → Code Value}
+    {t p : Bool → ℕ} {u q : Bool × Bool → ℕ} (_hf : HasProgram f pf t p)
+    (_hg : HasProgram g pg u q) :
+    HasProgram (fun x => let y := f x; g (x, y)) hole(pf, pg ⊢ program)
+      (fun x => 0 + (t x + 1) + u (x, f x))
       (fun x => max (max 0 (max (p x) ⌜(x, f x)⌝ₜ.size)) (q (x, f x))) := by
-  source_fun_prop
+  fill_hole program in source_fun_prop
 
 end Composition
 
@@ -35,19 +38,21 @@ private def unsupported : List Bool → List Bool
 
 private def chosen (xs : List Bool) := xs.reverse
 
-private def implementationAvailable :
-    Implementation chosen (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) :=
-  List.implementationReverse
+private theorem hasProgram_available :
+    HasProgram chosen hole(⊢ program) (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) := by
+  abstract_hole program using programAvailable
+  fill_hole program in
+    exact List.hasProgram_reverse
 
-private def needsRecursive (_h : Implementation unsupported (fun _ => 1) (fun _ => 1)) :
-    Implementation chosen (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) :=
-  implementationAvailable
+private theorem needsRecursive {program : Value → Code Value}
+    (_h : HasProgram unsupported program (fun _ => 1) (fun _ => 1)) :
+    HasProgram chosen programAvailable (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) :=
+  hasProgram_available
 
 -- A failed implementation premise is rolled back before another implementation rule is tried.
-attribute [local fun_prop] implementationAvailable needsRecursive
+attribute [local fun_prop] hasProgram_available needsRecursive
 
-example : (by source_fun_prop : Implementation chosen _ _).program =
-    implementationAvailable.program := rfl
+example := (by source_fun_prop : HasProgram chosen programAvailable _ _)
 
 end CandidateFailure
 
@@ -61,52 +66,64 @@ error: source translation: `ComplexityTest.SourceTranslation.Search.uncertified`
 source path: fun xs => encode Complexity.Tree (uncertified xs) → uncertified
 -/
 #guard_msgs in
-example : Implementation (fun xs => ⌜uncertified xs⌝ₜ) (fun _ => 1) (fun _ => 1) := by
-  source_fun_prop
+example : HasProgram (fun xs => ⌜uncertified xs⌝ₜ) hole(⊢ program) (fun _ => 1) (fun _ => 1) := by
+  fill_hole program in source_fun_prop
 
 section LocalPriority
 
 -- A uniform chosen implementation is reusable at each runtime iteration.
-example (f : Bool → Bool) {t p : Bool → ℕ} (_callback : Implementation f t p) :
-    Implementation (fun x : ℕ × Bool => f^[x.1] x.2) (fun x => iterateTime f t x.1 x.2 + 1)
-      (fun x => iteratePeak f p x.1 x.2) := by source_fun_prop
+example (f : Bool → Bool) {pf : Value → Code Value} {t p : Bool → ℕ}
+    (_callback : HasProgram f pf t p) :
+    HasProgram (fun x : ℕ × Bool => f^[x.1] x.2) hole(pf ⊢ program)
+      (fun x => iterateTime f t x.1 x.2 + 1) (fun x => iteratePeak f p x.1 x.2) := by
+  fill_hole program in source_fun_prop
 
 -- Local selection takes precedence over a registered default.
-example {t p : List Bool → ℕ} (h : Implementation (List.reverse : List Bool → List Bool) t p) :
-    (by source_fun_prop : Implementation (List.reverse : List Bool → List Bool) t p) = h := rfl
+example {program : Value → Code Value} {t p : List Bool → ℕ}
+    (_h : HasProgram (List.reverse : List Bool → List Bool) program t p) :
+    HasProgram (List.reverse : List Bool → List Bool) program t p := by
+  source_fun_prop
 
 private def alternative (xs : List Bool) := xs.reverse
 
-@[local fun_prop] private def implementationDefault :
-    Implementation alternative (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) :=
-  List.implementationReverse.congr rfl
+@[local fun_prop] private theorem hasProgram_default :
+    HasProgram alternative hole(⊢ program) (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) := by
+  abstract_hole program using programDefault
+  fill_hole program in
+    exact List.hasProgram_reverse.congr rfl
 
-example {t p : List Bool → ℕ} (selected : Implementation alternative t p) :
-    (by source_fun_prop : Implementation alternative t p) = selected := rfl
+example {program : Value → Code Value} {t p : List Bool → ℕ}
+    (_selected : HasProgram alternative program t p) : HasProgram alternative program t p := by
+  source_fun_prop
 
-example {t p : Bool → ℕ} (selected : Implementation (id : Bool → Bool) t p) :
-    (by source_fun_prop : Implementation (id : Bool → Bool) t p) = selected := rfl
+example {program : Value → Code Value} {t p : Bool → ℕ}
+    (_selected : HasProgram (id : Bool → Bool) program t p) :
+    HasProgram (id : Bool → Bool) program t p := by
+  source_fun_prop
 
-example {t p : Bool → ℕ} (selected : Implementation (fun _ : Bool => ()) t p) :
-    (by source_fun_prop : Implementation (fun _ : Bool => ()) t p) = selected := rfl
+example {program : Value → Code Value} {t p : Bool → ℕ}
+    (_selected : HasProgram (fun _ : Bool => ()) program t p) :
+    HasProgram (fun _ : Bool => ()) program t p := by
+  source_fun_prop
 
 private def doubleReverse (xs : List Bool) := xs.reverse.reverse
 
-@[local fun_prop] private def implementationDoubleReverseDefault : Implementation doubleReverse
-    (fun xs => ⌜xs⌝ₜ.size + ⌜xs.reverse⌝ₜ.size) (fun xs => max ⌜xs⌝ₜ.size ⌜xs.reverse⌝ₜ.size) :=
-  List.implementationReverse.comp List.implementationReverse
+@[local fun_prop] private theorem hasProgram_doubleReverseDefault :
+    HasProgram doubleReverse hole(⊢ program)
+    (fun xs => ⌜xs⌝ₜ.size + ⌜xs.reverse⌝ₜ.size) (fun xs => max ⌜xs⌝ₜ.size ⌜xs.reverse⌝ₜ.size) := by
+  abstract_hole program using programDoubleReverseDefault
+  fill_hole program in
+    exact List.hasProgram_reverse.comp List.hasProgram_reverse
 
 -- A semantic equality can expressly select a faster program; growth search never does so.
-example : (by
-    let selected : Implementation doubleReverse (fun _ => 0) (fun _ => 0) :=
-      Implementation.identity.congr (by
+example := (by
+    have _selected : HasProgram doubleReverse (fun v => pure v) (fun _ => 0) (fun _ => 0) :=
+      HasProgram.identity.congr (by
         funext xs
         exact (List.reverse_reverse xs).symm)
-    source_fun_prop : Implementation doubleReverse _ _).program =
-      (Implementation.identity (α := List Bool)).program := rfl
+    source_fun_prop : HasProgram doubleReverse (fun v => pure v) _ _)
 
-example : (by source_fun_prop : Implementation doubleReverse _ _).program =
-    implementationDoubleReverseDefault.program := rfl
+example := (by source_fun_prop : HasProgram doubleReverse programDoubleReverseDefault _ _)
 
 end LocalPriority
 
@@ -114,36 +131,43 @@ section RuleStages
 
 private def stored (x : Bool × Bool) : Bool := x.1
 
-private def implementationRebuilt : Implementation stored (fun _ => 1 + (1 + 1) + 1)
-    (fun x => max (max ⌜x⌝ₜ.size (max ⌜x⌝ₜ.size ⌜(x.1, x.2)⌝ₜ.size)) ⌜(x.1, x.2)⌝ₜ.size) :=
-  (Prod.implementationFst.pair Prod.implementationSnd).comp Prod.implementationFst
+private theorem hasProgram_rebuilt : HasProgram stored hole(⊢ program) (fun _ => 1 + (1 + 1) + 1)
+    (fun x => max (max ⌜x⌝ₜ.size (max ⌜x⌝ₜ.size ⌜(x.1, x.2)⌝ₜ.size)) ⌜(x.1, x.2)⌝ₜ.size) := by
+  abstract_hole program using programRebuilt
+  fill_hole program in
+    exact (Prod.hasProgram_fst.pair Prod.hasProgram_snd).comp Prod.hasProgram_fst
 
-private def implementationPreferred := implementationRebuilt
-private def implementationSecondary : Implementation stored (fun _ => 1) (fun x => ⌜x⌝ₜ.size) :=
-  Prod.implementationFst
-private def implementationFallback : Implementation stored (fun _ => 1) (fun x => ⌜x⌝ₜ.size) :=
-  Prod.implementationFst
+private alias hasProgram_preferred := hasProgram_rebuilt
+private theorem hasProgram_secondary :
+    HasProgram stored hole(⊢ program) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
+  abstract_hole program using programSecondary
+  fill_hole program in
+    exact Prod.hasProgram_fst
+private theorem hasProgram_fallback :
+    HasProgram stored hole(⊢ program) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
+  abstract_hole program using programFallback
+  fill_hole program in
+    exact Prod.hasProgram_fst
 
-attribute [local source_fallback] implementationFallback
+attribute [local source_fallback] hasProgram_fallback
 
 open Lean Meta Mathlib.Meta.FunProp in
 run_elab do
-  addTheorem ``implementationPreferred .local 20
-  addTheorem ``implementationSecondary .local 10
-  addTheorem ``implementationFallback .local 2000
+  addTheorem ``hasProgram_preferred .local 20
+  addTheorem ``hasProgram_secondary .local 10
+  addTheorem ``hasProgram_fallback .local 2000
 
 -- Ordinary registered rules precede structural projection, independent of their numeric cost.
-example : (by source_fun_prop : Implementation stored _ _).program = implementationPreferred.program := rfl
+example := (by source_fun_prop : HasProgram stored programRebuilt _ _)
 
-example : (implementationPreferred.program Value.input).build 1 |>.2.1 ≠
-    ((implementationSecondary.program Value.input).build 1).2.1 := by decide
+example : (programRebuilt Value.input).build 1 |>.2.1 ≠
+    ((programSecondary Value.input).build 1).2.1 := by decide
 
 section
-attribute [local source_fallback] implementationPreferred implementationSecondary
+attribute [local source_fallback] hasProgram_preferred hasProgram_secondary
 
 -- Fallback rules do not displace a structural projection.
-example : (by source_fun_prop : Implementation stored _ _).program =
-    (Prod.implementationFst (α := Bool) (β := Bool)).program := rfl
+example := (by source_fun_prop : HasProgram stored Value.left _ _)
 end
 
 end RuleStages
@@ -157,22 +181,23 @@ private def branches (x : Bool × List Bool) : List Bool :=
 /-- error: source translation: maximum number (5) of search steps exceeded -/
 #guard_msgs in
 set_option source.maxSteps 5 in
-example : Implementation branches (fun _ => 1) (fun _ => 1) := by source_calls
+example : HasProgram branches hole(⊢ program) (fun _ => 1) (fun _ => 1) := by
+  fill_hole program in source_calls
 
-example := (by source_calls : Implementation branches _ _)
+example := (by source_calls : HasProgram branches _ _ _)
 
 private opaque unavailable : Bool → Bool
 private def twice (x : Bool) := unavailable (unavailable x)
 
-@[local fun_prop] private def localScope
-    (_h : ∀ _ : Implementation unavailable (fun _ => 1) (fun _ => 1),
-      Implementation (fun x => unavailable (unavailable x)) (fun _ => 1) (fun _ => 1))
-    (g : Implementation (fun x => unavailable (unavailable x)) (fun _ => 1) (fun _ => 1)) :
-    Implementation twice (fun _ => 1) (fun _ => 1) := g
+@[local fun_prop] private theorem localScope {pu pt : Value → Code Value}
+    (_h : ∀ _ : HasProgram unavailable pu (fun _ => 1) (fun _ => 1),
+      HasProgram (fun x => unavailable (unavailable x)) pt (fun _ => 1) (fun _ => 1))
+    (g : HasProgram (fun x => unavailable (unavailable x)) pt (fun _ => 1) (fun _ => 1)) :
+    HasProgram twice pt (fun _ => 1) (fun _ => 1) := g
 
 -- A temporary local callback cannot populate a sibling premise's cache.
 example : True := by
-  fail_if_success have := (by source_fun_prop : Implementation twice _ _)
+  fail_if_success have := (by source_fun_prop : HasProgram twice _ _ _)
   trivial
 
 open Lean Meta Elab Tactic in

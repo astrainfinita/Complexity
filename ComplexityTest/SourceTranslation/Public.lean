@@ -12,18 +12,18 @@ open Complexity ComplexityTest.SourceTranslation
 
 -- The built-in implementation scope needs no namespace-opening command.
 example := (by source_fun_prop using tabulate :
-  TreeProgram.Source.Implementation (List.reverse (α := Bool)) _ _)
+  TreeProgram.Source.HasProgram (List.reverse (α := Bool)) _ _ _)
 
 -- Imported source equalities and a saved user choice are reused inside ordinary calls.
-example := (by source_fun_prop : TreeProgram.Source.Implementation
-    (fun xs : List Bool => some (Guidance.userReverse xs)) _ _)
+example := (by source_fun_prop : TreeProgram.Source.HasProgram
+    (fun xs : List Bool => some (Guidance.userReverse xs)) _ _ _)
 
 example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop :
-  TreeProgram.Source.Implementation (fun xs : List α => some (Guidance.chosenReverse xs)) _ _)
+  TreeProgram.Source.HasProgram (fun xs : List α => some (Guidance.chosenReverse xs)) _ _ _)
 
 -- A scoped interpretation is selectable from the importing module.
 example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop using Guidance.ReverseByCases :
-  TreeProgram.Source.Implementation (List.reverse (α := α)) _ _)
+  TreeProgram.Source.HasProgram (List.reverse (α := α)) _ _ _)
 
 namespace ComplexityTest.SourceTranslation.Public
 
@@ -43,10 +43,25 @@ example : (fun xs : List Bool => xs.reverse.reverse) ∈ FTISP .tree
 -- A symbolic positive power uses the saved specification and the standard power exit.
 example (m : ℕ) : (List.reverse (α := Bool)) ∈ FTISP .tree
     (fun n => n ^ (m + 1)) (fun n => n ^ 1) := by
-  apply Implementation.mem_ftisp_pow ?_ (by decide)
-  apply List.implementationReverse.mono
+  refine HasProgram.mem_ftisp_pow (List.hasProgram_reverse.mono ?_ ?_) (by decide)
   · exact Dominated.of_le fun xs => Nat.le_self_pow (by omega) _
   · simpa only [pow_one] using (Dominated.refl (fun xs : List Bool => ⌜xs⌝ₜ.size))
+
+-- Named placeholders in a `refine` take the produced program and growth.
+example : ∃ program t p, HasProgram (fun xs : List Bool => xs.reverse.reverse) program t p := by
+  refine ⟨?program, ?t, ?p, (?pair : HasProgram _ ?program ?t ?p)⟩
+  case pair => source_fun_prop
+
+-- A hole is filled only by `fill_hole`.
+/--
+error: source translation: the implementation does not match the requested source
+---
+error: (kernel) declaration has metavariables 'ComplexityTest.SourceTranslation.Public._example'
+-/
+#guard_msgs in
+example : HasProgram (List.reverse (α := Bool)) hole(⊢ program) (fun xs => ⌜xs⌝ₜ.size)
+    (fun xs => ⌜xs⌝ₜ.size) := by
+  source_fun_prop
 
 -- Ordinary model automation does not accept an exact machine-certificate goal.
 example : True := by

@@ -15,17 +15,17 @@ open ComplexityTest.SourceTranslation.TailRecursion
 open TreeProgram.Source
 
 -- Importing restores the selected loop program and its growth.
-example : (by source_fun_prop : Implementation keep _ _).program =
-    implementationKeep.program := rfl
-example : Implementation keep (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by source_fun_prop
+example := (by source_fun_prop : HasProgram keep programKeep _ _)
+example : HasProgram keep hole(⊢ program) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
+  fill_hole program in source_fun_prop
 example : keep ∈ FTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
   model_fun_prop
   all_goals dominated
 
 example : True := by
   fail_if_success
-    have : Implementation keep (fun _ => 0) (fun _ => 0) := by
-      source_fun_prop
+    have : HasProgram keep hole(⊢ program) (fun _ => 0) (fun _ => 0) := by
+      fill_hole program in source_fun_prop
       all_goals exact Dominated.zero
   trivial
 

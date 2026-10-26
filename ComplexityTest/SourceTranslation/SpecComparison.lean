@@ -16,11 +16,13 @@ namespace ComplexityTest.SourceTranslation.SpecComparison
 
 def duplicate {α : Type*} (xs : List α) := xs ++ xs
 
-def implementationDuplicate {α : Type*} [UniqueEncoding Tree α] :
-    Implementation (duplicate : List α → List α) (fun xs => xs.length + 1)
-      (fun xs => ⌜xs⌝ₜ.size + ⌜xs⌝ₜ.size) :=
-  (Implementation.identity.append Implementation.identity).mono
-    (Dominated.of_le fun _ => by simp) (Dominated.of_le fun _ => by simp)
+theorem hasProgram_duplicate {α : Type*} [UniqueEncoding Tree α] :
+    HasProgram (duplicate : List α → List α) hole(⊢ program) (fun xs => xs.length + 1)
+      (fun xs => ⌜xs⌝ₜ.size + ⌜xs⌝ₜ.size) := by
+  abstract_hole program using programDuplicate
+  fill_hole program in
+    exact (HasProgram.identity.append HasProgram.identity).mono
+      (Dominated.of_le fun _ => by simp) (Dominated.of_le fun _ => by simp)
 
 section SpecComparison
 
@@ -33,19 +35,19 @@ def source (f : List Bool → List Bool) : Source := ⟨f⟩
 abbrev Growth := (List Bool → ℕ) × (List Bool → ℕ)
 
 instance sourceWP : WP Source Growth Prop Unit where
-  wpTrans f := ⟨fun Q _ => ∃ b : Growth, Nonempty (Implementation f.fn b.1 b.2) ∧ Q b⟩
+  wpTrans f := ⟨fun Q _ => ∃ b : Growth, (∃ program, HasProgram f.fn program b.1 b.2) ∧ Q b⟩
   wp_trans_monotone _ := by
     intro Q R _ _ _ h ⟨b, hf, hQ⟩
     exact ⟨b, hf, h _ hQ⟩
 
 @[spec] theorem spec_reverse (Q : Growth → Prop) :
     Triple (source List.reverse) (Q (fun xs => ⌜xs⌝ₜ.size, fun xs => ⌜xs⌝ₜ.size)) Q () :=
-  ⟨fun h => ⟨(_, _), ⟨List.implementationReverse⟩, h⟩⟩
+  ⟨fun h => ⟨(_, _), ⟨_, List.hasProgram_reverse⟩, h⟩⟩
 
 @[spec] theorem spec_duplicate (Q : Growth → Prop) :
     Triple (source duplicate) (Q (fun xs => xs.length + 1, fun xs => ⌜xs⌝ₜ.size + ⌜xs⌝ₜ.size))
       Q () :=
-  ⟨fun h => ⟨(_, _), ⟨implementationDuplicate⟩, h⟩⟩
+  ⟨fun h => ⟨(_, _), ⟨_, hasProgram_duplicate⟩, h⟩⟩
 
 @[spec 1100] theorem spec_duplicate_lambda (Q : Growth → Prop) :
     Triple (source (fun xs : List Bool => xs ++ xs))
@@ -57,12 +59,12 @@ instance sourceWP : WP Source Growth Prop Unit where
       (wp (source f) (fun b => wp (source g) (fun c =>
         Q (fun x => b.1 x + c.1 (f x), fun x => max (b.2 x) (c.2 (f x)))) ()) ()) Q () := by
   constructor
-  change (∃ b : Growth, Nonempty (Implementation f b.1 b.2) ∧
-    ∃ c : Growth, Nonempty (Implementation g c.1 c.2) ∧
+  change (∃ b : Growth, (∃ program, HasProgram f program b.1 b.2) ∧
+    ∃ c : Growth, (∃ program, HasProgram g program c.1 c.2) ∧
       Q (fun x => b.1 x + c.1 (f x), fun x => max (b.2 x) (c.2 (f x)))) →
-      ∃ d : Growth, Nonempty (Implementation (g ∘ f) d.1 d.2) ∧ Q d
-  rintro ⟨b, ⟨hf⟩, c, ⟨hg⟩, hQ⟩
-  exact ⟨(_, _), ⟨hf.comp hg⟩, hQ⟩
+      ∃ d : Growth, (∃ program, HasProgram (g ∘ f) program d.1 d.2) ∧ Q d
+  rintro ⟨b, ⟨_, hf⟩, c, ⟨_, hg⟩, hQ⟩
+  exact ⟨(_, _), ⟨_, hf.comp hg⟩, hQ⟩
 
 def twiceExplicit : List Bool → List Bool := List.reverse ∘ List.reverse
 def twiceLet (xs : List Bool) := let ys := xs.reverse; ys.reverse
@@ -105,7 +107,7 @@ local instance : WP (List Bool → List Bool) Growth Prop Unit where
     Triple (fun xs : List Bool => xs.reverse.reverse)
       (Q (fun xs => ⌜xs⌝ₜ.size + ⌜xs.reverse⌝ₜ.size,
         fun xs => max ⌜xs⌝ₜ.size ⌜xs.reverse⌝ₜ.size)) Q () :=
-  ⟨fun h => ⟨(_, _), ⟨List.implementationReverse.comp List.implementationReverse⟩, h⟩⟩
+  ⟨fun h => ⟨(_, _), ⟨_, List.hasProgram_reverse.comp List.hasProgram_reverse⟩, h⟩⟩
 
 /-- error: No spec found for program fun xs => xs.reverse.reverse. -/
 #guard_msgs in

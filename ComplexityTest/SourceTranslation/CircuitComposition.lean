@@ -11,33 +11,31 @@ open Complexity TreeProgram Complexity.TreeProgram.Source
 namespace ComplexityTest.SourceTranslation.CircuitComposition
 
 -- The structural recursion entry keeps the previously selected callback programs.
-example : implementationCompFn.program =
-    (compRecursion.implementation implementationCompTest implementationCompNextFn
-      implementationCompFinishFn implementationCompResume).program := rfl
+example : programCompFn =
+    Recursion.code programCompTest programCompNextFn programCompFinishFn programCompResume := rfl
 
 -- Recursive certification keeps the explicitly selected terminal callback.
-example : implementationRelabelFn.program =
-    (relabelRecursion.implementation implementationRelabelTest implementationRelabelNextFn
-      implementationRelabelFinishFn implementationRelabelResume).program := rfl
-example : Implementation relabelFinishFn
-    (fun x => ⌜x⌝ₜ.size ^ 3) (fun x => ⌜x⌝ₜ.size ^ 2) := implementationRelabelFinishFn
+example : programRelabelFn = Recursion.code programRelabelTest programRelabelNextFn
+    programRelabelFinishFn programRelabelResume := rfl
+example : HasProgram relabelFinishFn programRelabelFinishFn
+    (fun x => ⌜x⌝ₜ.size ^ 3) (fun x => ⌜x⌝ₜ.size ^ 2) := hasProgram_relabelFinishFn
 
 def rewire (x : RelabelInput) : Σ n, Σ m, Circuit .booleanAlgebra n m :=
   ⟨x.k, x.m, x.circuit.relabel x.wires⟩
-example := (by source_fun_prop : Implementation rewire _ _)
+example := (by source_fun_prop : HasProgram rewire _ _ _)
 
 def pipeline (x : CompInput) : Σ n, Σ m, Circuit .booleanAlgebra n m :=
   ⟨x.n, x.k, x.first.comp x.second⟩
-example := (by source_fun_prop : Implementation pipeline _ _)
+example := (by source_fun_prop : HasProgram pipeline _ _ _)
 
 def preserve (x : Σ n, Σ m, Circuit .booleanAlgebra n m) :
     Σ n, Σ m, Circuit .booleanAlgebra n m := ⟨x.1, x.1 + x.2.1, x.2.2.keepInputs⟩
-example := (by source_fun_prop : Implementation preserve _ _)
+example := (by source_fun_prop : HasProgram preserve _ _ _)
 
 def layers (x : Σ n, Circuit .booleanAlgebra (n + 1) n × ℕ) :
     Σ n, Σ m, Circuit .booleanAlgebra n m :=
   ⟨x.1 + x.2.2, x.1, x.2.1.unroll x.2.2⟩
-example := (by source_fun_prop : Implementation layers _ _)
+example := (by source_fun_prop : HasProgram layers _ _ _)
 
 /-- Rewiring an already represented set of inputs, retaining the same input count. -/
 def rewireStored (x : Σ n, Σ m, Circuit .booleanAlgebra n m × (Fin n → Fin n)) :
@@ -46,8 +44,9 @@ def rewireStored (x : Σ n, Σ m, Circuit .booleanAlgebra n m × (Fin n → Fin 
 abbrev StoredRelabelInput := Σ n, Σ m, Circuit .booleanAlgebra n m × (Fin n → Fin n)
 
 /-- Compose the selected implementation; only the mathematical size relations remain. -/
-@[source] def implementationRewireStored : Implementation rewireStored
+@[source] theorem hasProgram_rewireStored : HasProgram rewireStored hole(⊢ program)
     (fun x => ⌜x⌝ₜ.size ^ 7) (fun x => ⌜x⌝ₜ.size ^ 4) := by
+  abstract_hole program using programRewireStored
   let u (x : Σ n, Σ m, Circuit .booleanAlgebra n m × (Fin n → Fin n)) : RelabelInput :=
     ⟨x.1, x.2.1, x.1, x.2.2.1, x.2.2.2⟩
   let S (x : Σ n, Σ m, Circuit .booleanAlgebra n m × (Fin n → Fin n)) := ⌜x⌝ₜ.size
@@ -72,7 +71,7 @@ abbrev StoredRelabelInput := Σ n, Σ m, Circuit .booleanAlgebra n m × (Fin n �
   have hS : Dominated S (fun x => S x ^ 4) :=
     Dominated.of_le fun x => Nat.le_self_pow (by decide) _
   have ho4 := ho.trans (Dominated.of_le fun x => Nat.pow_le_pow_right (hpos x) (by decide : 2 ≤ 4))
-  source_fun_prop
+  fill_hole program in source_fun_prop
   · simp only [Dominated.add_iff]
     repeat' apply And.intro
     all_goals first
@@ -91,15 +90,16 @@ abbrev StoredRelabelInput := Σ n, Σ m, Circuit .booleanAlgebra n m × (Fin n �
 
 theorem rewireStored_ftisp :
     rewireStored ∈ FTISP .tree (fun n => n ^ 7) (fun n => n ^ 4) :=
-  implementationRewireStored.mem_ftisp_pow (by decide)
+  hasProgram_rewireStored.mem_ftisp_pow (by decide)
 
 /-- Unary storage makes the number of generated layers bounded by input size. -/
 def layersStored (x : Σ n, Circuit .booleanAlgebra (n + 1) n × List Unit) :
     Σ n, Σ m, Circuit .booleanAlgebra n m :=
   ⟨x.1 + x.2.2.length, x.1, x.2.1.unroll x.2.2.length⟩
 
-@[source] def implementationLayersStored : Implementation layersStored
+@[source] theorem hasProgram_layersStored : HasProgram layersStored hole(⊢ program)
     (fun x => ⌜x⌝ₜ.size ^ 18) (fun x => ⌜x⌝ₜ.size ^ 8) := by
+  abstract_hole program using programLayersStored
   let S (x : Σ n, Circuit .booleanAlgebra (n + 1) n × List Unit) := ⌜x⌝ₜ.size
   let u (x : Σ n, Circuit .booleanAlgebra (n + 1) n × List Unit) : UnrollInput :=
     ⟨x.1, x.2.1, x.2.2.length⟩
@@ -127,10 +127,10 @@ def layersStored (x : Σ n, Circuit .booleanAlgebra (n + 1) n × List Unit) :
   have htime := hR.pow 9
   have hpeak := hR.pow 4
   simp only [← pow_mul, Function.comp_def, u] at htime hpeak
-  have hout := (Dominated.comp implementationUnroll.size_encode u).trans
+  have hout := (Dominated.comp hasProgram_unroll.size_encode u).trans
     ((hu.le_pow (by decide : 0 < 8)).max_same hpeak)
   simp only [Function.comp_def, u] at hout
-  source_fun_prop
+  fill_hole program in source_fun_prop
   all_goals
     simp only [Sigma.encode_mk, size_encode_prod, Dominated.add_iff, Dominated.max_iff]
     repeat' apply And.intro
@@ -142,6 +142,6 @@ def layersStored (x : Σ n, Circuit .booleanAlgebra (n + 1) n × List Unit) :
 
 theorem layersStored_ftisp :
     layersStored ∈ FTISP .tree (fun n => n ^ 18) (fun n => n ^ 8) :=
-  implementationLayersStored.mem_ftisp_pow (by decide)
+  hasProgram_layersStored.mem_ftisp_pow (by decide)
 
 end ComplexityTest.SourceTranslation.CircuitComposition

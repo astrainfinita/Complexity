@@ -13,30 +13,28 @@ open Complexity TreeProgram TreeProgram.Source
 namespace ComplexityTest.SourceTranslation.Encoding
 
 -- The input map need not cover all inputs of the original implementation.
-def implementationTrueOnly : Implementation (fun b : {b : Bool // b = true} => b.val) (fun _ => 0) (fun _ => 0) :=
-  Implementation.identity.mapInput Subtype.val (fun _ => rfl)
+theorem hasProgram_trueOnly : HasProgram (fun b : {b : Bool // b = true} => b.val)
+    (fun v => pure v) (fun _ => 0) (fun _ => 0) :=
+  HasProgram.identity.mapInput Subtype.val (fun _ => rfl)
 
 example : ¬Function.Surjective (Subtype.val : {b : Bool // b = true} → Bool) := by
   rintro h
   obtain ⟨b, hb⟩ := h false
   exact Bool.noConfusion (b.property.symm.trans hb)
 
-example : implementationTrueOnly.program = (Implementation.identity (α := Bool)).program := rfl
-
-def implementationSigmaIdentity : Implementation (fun p : Bool × Unit => (⟨p.1, p.2⟩ : Σ _ : Bool, Unit))
-    (fun _ => 0) (fun _ => 0) :=
-  (Implementation.identity (α := Bool × Unit)).ofEncode
+theorem hasProgram_sigmaIdentity :
+    HasProgram (fun p : Bool × Unit => (⟨p.1, p.2⟩ : Σ _ : Bool, Unit)) (fun v => pure v)
+      (fun _ => 0) (fun _ => 0) :=
+  (HasProgram.identity (α := Bool × Unit)).ofEncode
     (fun p => @Sigma.encode_mk Bool (fun _ => Unit) _ _ p.1 p.2)
-
-example : implementationSigmaIdentity.program = (Implementation.identity (α := Bool × Unit)).program := rfl
 
 -- Independent universes and arbitrary encoding instances remain supported.
 universe u v w
 
 example {α : Type u} {β : Type v} {γ : Type w}
     [UniqueEncoding Tree α] [UniqueEncoding Tree β] [UniqueEncoding Tree γ]
-    {f : α → β} {t p : α → ℕ} (hf : Implementation f t p) (o : β → γ)
-    (ho : ∀ y, ⌜o y⌝ₜ = ⌜y⌝ₜ) : Implementation (o ∘ f) t p :=
+    {f : α → β} {pf : Value → Code Value} {t p : α → ℕ} (hf : HasProgram f pf t p) (o : β → γ)
+    (ho : ∀ y, ⌜o y⌝ₜ = ⌜y⌝ₜ) : HasProgram (o ∘ f) pf t p :=
   hf.ofEncode (g := f) (fun x => ho (f x))
 
 -- Adding a logical output certificate preserves the behavior and both exact budgets.

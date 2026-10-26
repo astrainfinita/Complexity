@@ -6,10 +6,9 @@ namespace ComplexityTest.SourceTranslation.LengthKernel
 
 -- Exercise the current translator, including length, composition, and pairing.
 theorem certificate :
-    Nonempty (Implementation (fun x : List Unit × Bool => (x.1.length, x.2))
-      (fun x => ⌜x.1⌝ₜ.size ^ 2 + 1) (fun x => ⌜x⌝ₜ.size + ⌜(x.1.length, x.2)⌝ₜ.size)) := by
-  refine ⟨?_⟩
-  source_fun_prop
+    HasProgram (fun x : List Unit × Bool => (x.1.length, x.2)) hole(⊢ program)
+      (fun x => ⌜x.1⌝ₜ.size ^ 2 + 1) (fun x => ⌜x⌝ₜ.size + ⌜(x.1.length, x.2)⌝ₜ.size) := by
+  fill_hole program in source_fun_prop
   all_goals
     simp only [Dominated.add_iff, Dominated.max_iff]
     repeat' apply And.intro

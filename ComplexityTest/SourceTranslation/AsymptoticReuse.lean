@@ -16,12 +16,14 @@ open ComplexityTest.SourceTranslation.Asymptotics
 namespace ComplexityTest.SourceTranslation.AsymptoticReuse
 
 -- Loop callbacks reuse the imported selection without unfolding its evaluator.
-def implementationImportedLoop :
-    Implementation preciseIdentity (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
-  source_fun_prop using loop (test := fun _ : List Bool => false)
-    (next := preciseIdentity) (finish := preciseIdentity)
-    (invariant := fun x y => x = y) (measure := fun _ => 0)
-    (step := fun _ => 1) (stop := fun _ => 1) (space := fun x => ⌜x⌝ₜ.size)
+theorem hasProgram_importedLoop :
+    HasProgram preciseIdentity hole(⊢ program) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
+  abstract_hole program using programImportedLoop
+  fill_hole program in
+    source_fun_prop using loop (test := fun _ : List Bool => false)
+      (next := preciseIdentity) (finish := preciseIdentity)
+      (invariant := fun x y => x = y) (measure := fun _ => 0)
+      (step := fun _ => 1) (stop := fun _ => 1) (space := fun x => ⌜x⌝ₜ.size)
   case equation => intro; rfl
   case initial => intro; rfl
   case next_state => intros; contradiction
@@ -32,25 +34,29 @@ def implementationImportedLoop :
   case time => exact Dominated.const _
   all_goals intro; decide
 
-example : implementationImportedLoop.program = loopCode (by source_fun_prop :
-    Implementation (fun _ : List Bool => false) _ _).program
-    implementationPreciseIdentity.program implementationPreciseIdentity.program := rfl
+example : ∃ test t p,
+    programImportedLoop = loopCode test programPreciseIdentity programPreciseIdentity ∧
+      HasProgram (fun _ : List Bool => false) test t p :=
+  ⟨_, _, _, rfl, by source_fun_prop⟩
 
 -- Repeated calls reuse the imported growth, at every input.
-example : Implementation (fun xs => preciseIdentity (preciseIdentity xs))
-    (fun _ => 0 + 0) (fun _ => max 0 0) := by source_fun_prop
+example : HasProgram (fun xs => preciseIdentity (preciseIdentity xs)) hole(⊢ program)
+    (fun _ => 0 + 0) (fun _ => max 0 0) := by
+  fill_hole program in source_fun_prop
 
 -- An imported alias also retains the selected program and its zero growth.
-example : (by source_fun_prop : Implementation aliasedIdentity _ _).program =
-    implementationPreciseIdentity.program := rfl
+example := (by source_fun_prop : HasProgram aliasedIdentity programPreciseIdentity _ _)
 
 -- A call of the alias needs the alias's own selected implementation.
-def implementationAliasedIdentity :
-    Implementation aliasedIdentity (fun _ => 0) (fun _ => 0) := by source_fun_prop
+theorem hasProgram_aliasedIdentity :
+    HasProgram aliasedIdentity hole(⊢ program) (fun _ => 0) (fun _ => 0) := by
+  abstract_hole program using programAliasedIdentity
+  fill_hole program in source_fun_prop
 
-attribute [local source] implementationAliasedIdentity in
-example : Implementation (fun xs => aliasedIdentity (aliasedIdentity xs))
-    (fun _ => 0 + 0) (fun _ => max 0 0) := by source_fun_prop
+attribute [local source] hasProgram_aliasedIdentity in
+example : HasProgram (fun xs => aliasedIdentity (aliasedIdentity xs)) hole(⊢ program)
+    (fun _ => 0 + 0) (fun _ => max 0 0) := by
+  fill_hole program in source_fun_prop
 
 open ComplexityTest.SourceTranslation.AsymptoticTailRecursion
 
@@ -64,10 +70,9 @@ theorem drainTwice_ftisp :
   all_goals dominated [drain]
 
 -- A zero atTop conclusion on a finite type retains the positive selected callback.
-example : (by source_fun_prop : Implementation Bool.not _ _).program =
-    implementationFiniteNot.program := rfl
+example := (by source_fun_prop : HasProgram Bool.not programFiniteNot _ _)
 
-example : Implementation (fun b => !!b) (fun _ => 1 + 1) (fun _ => max 1 1) := by
-  source_fun_prop
+example : HasProgram (fun b => !!b) hole(⊢ program) (fun _ => 1 + 1) (fun _ => max 1 1) := by
+  fill_hole program in source_fun_prop
 
 end ComplexityTest.SourceTranslation.AsymptoticReuse

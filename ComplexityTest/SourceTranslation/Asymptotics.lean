@@ -104,26 +104,33 @@ example : ¬ Dominated (fun _ : ℕ => 1) id := by
 
 -- A chosen arbitrary implementation is reused with its own growth.
 example {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β] {f : α → β}
-    {t p : α → ℕ} (hf : Implementation f t p) : Implementation f t p := by source_fun_prop
+    {pf : Value → Code Value} {t p : α → ℕ} (hf : HasProgram f pf t p) : HasProgram f pf t p := by
+  source_fun_prop
 
-example {α : Type*} [UniqueEncoding Tree α] {f : α → α} {t p : α → ℕ}
-    (_hf : Implementation f t p) :
-    Implementation (fun x => f (f x)) (fun x => t x + t (f x))
-      (fun x => max (p x) (p (f x))) := by source_fun_prop
+example {α : Type*} [UniqueEncoding Tree α] {f : α → α} {pf : Value → Code Value} {t p : α → ℕ}
+    (_hf : HasProgram f pf t p) :
+    HasProgram (fun x => f (f x)) hole(pf ⊢ program) (fun x => t x + t (f x))
+      (fun x => max (p x) (p (f x))) := by
+  fill_hole program in source_fun_prop
 
 def preciseIdentity (xs : List Bool) := xs
 
-@[source] def implementationPreciseIdentity :
-    Implementation preciseIdentity (fun _ => 0) (fun _ => 0) := Implementation.identity
+@[source] theorem hasProgram_preciseIdentity :
+    HasProgram preciseIdentity hole(⊢ program) (fun _ => 0) (fun _ => 0) := by
+  abstract_hole program using programPreciseIdentity
+  fill_hole program in
+    exact HasProgram.identity
 
 -- A weaker mathematical consequence is legal, but it is not another selected implementation.
-def implementationPreciseIdentityWeaker : Implementation preciseIdentity
-    (fun x => ⌜x⌝ₜ.size ^ 2) (fun x => ⌜x⌝ₜ.size ^ 2) :=
-  implementationPreciseIdentity.mono Dominated.zero Dominated.zero
+theorem hasProgram_preciseIdentityWeaker : HasProgram preciseIdentity hole(⊢ program)
+    (fun x => ⌜x⌝ₜ.size ^ 2) (fun x => ⌜x⌝ₜ.size ^ 2) := by
+  abstract_hole program using programPreciseIdentityWeaker
+  fill_hole program in
+    exact hasProgram_preciseIdentity.mono Dominated.zero Dominated.zero
 
-/-- error: `source` already has a selected implementation of preciseIdentity: implementationPreciseIdentity; choose another one at a call with a local hypothesis or `via` -/
+/-- error: `source` already has a selected implementation of preciseIdentity: hasProgram_preciseIdentity; choose another one at a call with a local hypothesis or `via` -/
 #guard_msgs in
-attribute [local source] implementationPreciseIdentityWeaker
+attribute [local source] hasProgram_preciseIdentityWeaker
 
 -- A coarser model exit does not change the selected implementation's growth.
 theorem preciseIdentity_ftisp :
@@ -134,10 +141,10 @@ theorem preciseIdentity_ftisp :
 -- An alias of a selected implementation keeps its program and growth.
 def aliasedIdentity (xs : List Bool) := preciseIdentity xs
 
-example : (by source_fun_prop : Implementation aliasedIdentity _ _).program =
-    implementationPreciseIdentity.program := rfl
+example := (by source_fun_prop : HasProgram aliasedIdentity programPreciseIdentity _ _)
 
-example : Implementation aliasedIdentity (fun _ => 0) (fun _ => 0) := by source_fun_prop
+example : HasProgram aliasedIdentity hole(⊢ program) (fun _ => 0) (fun _ => 0) := by
+  fill_hole program in source_fun_prop
 
 theorem identity_ftisp : (id : List Bool → List Bool) ∈ FTISP .tree (fun _ => 1) id := by
   model_fun_prop
@@ -160,7 +167,7 @@ theorem via_ftisp : viaIdentity ∈ FTISP .tree (fun _ => 1) id := by
 -- The canonical general exit is also accepted directly, without a tactic wrapper.
 theorem identity_direct_ftisp :
     (id : List Bool → List Bool) ∈ FTISP .tree (fun _ => 1) id :=
-  ((Implementation.identity (α := List Bool)).mono
+  ((HasProgram.identity (α := List Bool)).mono
     (t' := fun _ => 1) (p' := fun xs => ⌜xs⌝ₜ.size) Dominated.zero Dominated.zero).mem_ftisp
       (Dominated.refl _) (Dominated.const 4)
       (Dominated.const_of_pos 2 fun _ => Tree.size_pos _)
@@ -168,7 +175,7 @@ theorem identity_direct_ftisp :
 -- The boundary keeps the actual small-input machine cost, while empty large-size fibers vanish.
 theorem finiteIdentity_ftisp :
     (id : Unit → Unit) ∈ FTISP .tree (fun _ => 0) (fun _ => 0) := by
-  apply (Implementation.identity (α := Unit)).mem_ftisp_of_sizeEnvelope
+  apply (HasProgram.identity (α := Unit)).mem_ftisp_of_sizeEnvelope
   all_goals
     refine ⟨0, eventually_atTop.mpr ⟨2, fun n hn => ?_⟩⟩
     simp only [Nat.zero_mul]
@@ -178,12 +185,14 @@ theorem finiteIdentity_ftisp :
     omega
 
 -- The selected all-input callback has positive cost even though its final size class is zero.
-@[source] def implementationFiniteNot : Implementation Bool.not (fun _ => 1) (fun _ => 1) := by
-  source_fun_prop
+@[source] theorem hasProgram_finiteNot :
+    HasProgram Bool.not hole(⊢ program) (fun _ => 1) (fun _ => 1) := by
+  abstract_hole program using programFiniteNot
+  fill_hole program in source_fun_prop
   all_goals dominated
 
 theorem finiteNot_ftisp : Bool.not ∈ FTISP .tree (fun _ => 0) (fun _ => 0) := by
-  apply implementationFiniteNot.mem_ftisp_of_sizeEnvelope
+  apply hasProgram_finiteNot.mem_ftisp_of_sizeEnvelope
   all_goals
     refine ⟨0, eventually_atTop.mpr ⟨4, fun n hn => ?_⟩⟩
     simp only [Nat.zero_mul]

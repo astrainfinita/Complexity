@@ -35,4 +35,6 @@ lean_lib Complexity where
 
 lean_lib ComplexityTest where
   globs := #[`ComplexityTest.+]
-  leanOptions := #[⟨`pp.mvars.anonymous, false⟩] -- Test stability: print `?m.37` as `?_`.
+  leanOptions := #[
+    ⟨`pp.mvars.anonymous, false⟩, -- Test stability: print `?m.37` as `?_`.
+    ⟨`linter.defProp, false⟩] -- Tests name translated programs with `def`.

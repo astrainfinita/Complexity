@@ -124,6 +124,10 @@ fun n => 4 * n
 #guard_msgs in
 #print quadrupleDef
 
+/-- info: some "The value of the hole `quadruple` of `ComplexityTest.Hole.abstracted`." -/
+#guard_msgs in
+#eval show Lean.CoreM _ from do Lean.findDocString? (← Lean.getEnv) ``quadrupleDef
+
 theorem abstractedByRfl (n : Nat) : hole(n ⊢ quintuple) = 5 * n := by
   abstract_hole quintuple using _root_.ComplexityTest.quintupleDef
   fill_hole quintuple in rfl
@@ -131,6 +135,16 @@ theorem abstractedByRfl (n : Nat) : hole(n ⊢ quintuple) = 5 * n := by
 /-- info: ComplexityTest.Hole.abstractedByRfl (n : Nat) : quintupleDef n = 5 * n -/
 #guard_msgs in
 #check abstractedByRfl
+
+-- The definition is named next to the declaration, not in the current namespace.
+theorem _root_.ComplexityTest.HoleElsewhere.abstractedElsewhere : hole(⊢ fourteen) = 14 := by
+  abstract_hole fourteen using fourteenDef
+  fill_hole fourteen := 14
+  rfl
+
+/-- info: ComplexityTest.HoleElsewhere.fourteenDef : Nat -/
+#guard_msgs in
+#check ComplexityTest.HoleElsewhere.fourteenDef
 
 /-- trace: ⊢ sixDef = 6 -/
 #guard_msgs in
