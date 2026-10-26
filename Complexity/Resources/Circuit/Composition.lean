@@ -173,56 +173,65 @@ theorem size_encode_relabelFn_le (x : RelabelInput) :
       (by dsimp [relabelScale]; omega : c.size + m + 1 ≤ relabelScale ⟨n, m, k, c, w⟩))
     (by dsimp [relabelScale]; omega : k + c.size + 1 ≤ relabelScale ⟨n, m, k, c, w⟩)
 
-def implementationRelabelTest : Implementation relabelTest
+theorem hasProgram_relabelTest : HasProgram relabelTest hole(⊢ program)
     (fun x => ⌜x⌝ₜ.size ^ 3) (fun x => ⌜x⌝ₜ.size ^ 2) := by
-  source_fun_prop
+  abstract_hole program using programRelabelTest
+  fill_hole program in source_fun_prop
   all_goals dominated
 
-def implementationRelabelNextFn : Implementation relabelNextFn
+theorem hasProgram_relabelNextFn : HasProgram relabelNextFn hole(⊢ program)
     (fun x => ⌜x⌝ₜ.size ^ 3) (fun x => ⌜x⌝ₜ.size ^ 2) := by
-  source_fun_prop
+  abstract_hole program using programRelabelNextFn
+  fill_hole program in source_fun_prop
   all_goals dominated
 
-attribute [local fun_prop] Implementation.finComp in
-def implementationRelabelFinishFn : Implementation relabelFinishFn
+attribute [local fun_prop] HasProgram.finComp in
+theorem hasProgram_relabelFinishFn : HasProgram relabelFinishFn hole(⊢ program)
     (fun x => ⌜x⌝ₜ.size ^ 3) (fun x => ⌜x⌝ₜ.size ^ 2) := by
-  source_fun_prop
+  abstract_hole program using programRelabelFinishFn
+  fill_hole program in source_fun_prop
   all_goals dominated
 
-attribute [local fun_prop] Implementation.finComp in
-def implementationRelabelResume :
-    Implementation (fun x : relabelRecursion.Return => relabelResumeFn x.1 x.2)
+attribute [local fun_prop] HasProgram.finComp in
+theorem hasProgram_relabelResume :
+    HasProgram (fun x : relabelRecursion.Return => relabelResumeFn x.1 x.2) hole(⊢ program)
       (fun x => ⌜x⌝ₜ.size ^ 3) (fun x => ⌜x⌝ₜ.size ^ 2) := by
-  source_fun_prop
+  abstract_hole program using programRelabelResume
+  fill_hole program in source_fun_prop
   all_goals dominated
 
 /-- The recursive program, with the structural cost of its callbacks bounded by its scale. -/
-@[source] def implementationRelabelFn : Implementation relabelFn
-    (fun x => relabelScale x ^ 7) (fun x => relabelScale x ^ 4) :=
+@[source] theorem hasProgram_relabelFn : HasProgram relabelFn hole(⊢ program)
+    (fun x => relabelScale x ^ 7) (fun x => relabelScale x ^ 4) := by
+  abstract_hole program using programRelabelFn
   have hsize := Dominated.of_le_mul 128 size_encode_relabelInput_le
   have hpow (d : ℕ) : Dominated (fun x : RelabelInput => ⌜x⌝ₜ.size ^ d)
       (fun x => relabelScale x ^ (2 * d)) := by simpa only [pow_mul] using hsize.pow d
   have hstop (d : ℕ) := (hpow d).comp (Subtype.val (p := fun x => relabelTest x = false))
   have hreturn := relabelRecursion.dominated_size_return relabelScale relabelScale_pos
     (fun x _ => relabelScale_next_le x) hsize (Dominated.of_le_mul 100 size_encode_relabelFn_le)
-  (relabelRecursion.implementationOfScale implementationRelabelTest implementationRelabelNextFn
-    implementationRelabelFinishFn implementationRelabelResume
-    relabelScale relabelScale_pos (fun x _ => relabelScale_next_le x) hsize (hpow 3) (hpow 2)
-    (hpow 3) (hpow 2) (hstop 3) (hstop 2) (hreturn 3) (hreturn 2)).mono
-    (by dominated [relabelScale, relabelRecursion]) (by dominated [relabelScale, relabelRecursion])
+  fill_hole program in
+    exact (relabelRecursion.hasProgramOfScale hasProgram_relabelTest
+      hasProgram_relabelNextFn hasProgram_relabelFinishFn
+      hasProgram_relabelResume
+      relabelScale relabelScale_pos (fun x _ => relabelScale_next_le x) hsize (hpow 3) (hpow 2)
+      (hpow 3) (hpow 2) (hstop 3) (hstop 2) (hreturn 3) (hreturn 2)).mono
+      (by dominated [relabelScale, relabelRecursion])
+      (by dominated [relabelScale, relabelRecursion])
 
 /-- Relabel a circuit computed by a selected implementation. -/
-def Implementation.relabel {ρ : Type} [UniqueEncoding Tree ρ]
+theorem HasProgram.relabel {ρ : Type} [UniqueEncoding Tree ρ]
     {n m k : ρ → ℕ}
     {c : (x : ρ) → Circuit .booleanAlgebra (n x) (m x)}
     {w : (x : ρ) → Fin (n x) → Fin (k x)} {t p : ρ → ℕ}
-    (h : Implementation (fun x => (⟨n x, m x, k x, c x, w x⟩ : RelabelInput)) t p) :
-    Implementation (fun x => (c x).relabel (w x))
+    {q : Value → Code Value}
+    (h : HasProgram (fun x => (⟨n x, m x, k x, c x, w x⟩ : RelabelInput)) q t p) :
+    HasProgram (fun x => (c x).relabel (w x)) (fun v => q v >>= programRelabelFn)
       (fun x => t x + relabelScale ⟨n x, m x, k x, c x, w x⟩ ^ 7)
       (fun x => max (p x) (relabelScale ⟨n x, m x, k x, c x, w x⟩ ^ 4)) :=
-  h.compDep implementationRelabelFn
+  h.compDep hasProgram_relabelFn
 
-attribute [scoped fun_prop] Implementation.relabel
+attribute [scoped fun_prop] HasProgram.relabel
 
 /-- The arguments of `Circuit.comp`. -/
 @[tree_encoding]
@@ -312,57 +321,66 @@ theorem size_encode_compFn_le (x : CompInput) : ⌜compFn x⌝ₜ.size ≤ 100 *
       c.size + d.size + k + 1 ≤ compScale ⟨n, m, k, c, d⟩))
     (by dsimp [compScale]; omega : n + (c.size + d.size) + 1 ≤ compScale ⟨n, m, k, c, d⟩)
 
-def implementationCompTest : Implementation compTest (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
-  source_fun_prop
+theorem hasProgram_compTest :
+    HasProgram compTest hole(⊢ program) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
+  abstract_hole program using programCompTest
+  fill_hole program in source_fun_prop
   all_goals dominated
 
-def implementationCompNextFn :
-    Implementation compNextFn (fun x => ⌜x⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
-  source_fun_prop
+theorem hasProgram_compNextFn :
+    HasProgram compNextFn hole(⊢ program) (fun x => ⌜x⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
+  abstract_hole program using programCompNextFn
+  fill_hole program in source_fun_prop
   all_goals dominated
 
-def implementationCompFinishFn : Implementation compFinishFn
+theorem hasProgram_compFinishFn : HasProgram compFinishFn hole(⊢ program)
     (fun x => compScale x.1 ^ 7) (fun x => ⌜x⌝ₜ.size + compScale x.1 ^ 4) := by
-  source_fun_prop
+  abstract_hole program using programCompFinishFn
+  fill_hole program in source_fun_prop
   all_goals dominated [relabelScale, compScale]
 
-def implementationCompResume :
-    Implementation (fun x : compRecursion.Return => compResumeFn x.1 x.2)
+theorem hasProgram_compResume :
+    HasProgram (fun x : compRecursion.Return => compResumeFn x.1 x.2) hole(⊢ program)
     (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
-  source_fun_prop
+  abstract_hole program using programCompResume
+  fill_hole program in source_fun_prop
   all_goals dominated
 
 /-- The terminal relabel call is paid once, so the time expression has degree seven, not eight. -/
-def implementationCompFn : Implementation compFn
-    (fun x => compScale x ^ 7) (fun x => compScale x ^ 4) :=
+theorem hasProgram_compFn : HasProgram compFn hole(⊢ program)
+    (fun x => compScale x ^ 7) (fun x => compScale x ^ 4) := by
+  abstract_hole program using programCompFn
   have hsize := Dominated.of_le_mul 256 size_encode_compInput_le
   have hpos x := Nat.pow_pos (n := 2) (compScale_pos x)
   have hreturn := compRecursion.dominated_size_return compScale compScale_pos
     (fun x _ => compScale_next_le x) hsize (Dominated.of_le_mul 100 size_encode_compFn_le) 1
-  (compRecursion.implementationOfScale implementationCompTest implementationCompNextFn
-    implementationCompFinishFn implementationCompResume compScale
-    compScale_pos (fun x _ => compScale_next_le x) hsize (Dominated.one hpos)
-    (hsize.mono_pow (by decide : 2 ≤ 4) compScale_pos) hsize
-    (hsize.mono_pow (by decide : 2 ≤ 4) compScale_pos) (Dominated.refl _)
-    (((hsize.mono_pow (by decide : 2 ≤ 4) compScale_pos).comp Subtype.val).add_same
-      (Dominated.refl _))
-    (Dominated.one fun x => hpos x.1)
-    (by simpa only [pow_one] using
-      hreturn.mono_pow (by decide : 2 * 1 ≤ 4) fun x => compScale_pos x.1)).mono
-    (by dominated [compScale, compRecursion]) (by dominated [compScale, compRecursion])
+  fill_hole program in
+    exact (compRecursion.hasProgramOfScale hasProgram_compTest
+      hasProgram_compNextFn hasProgram_compFinishFn
+      hasProgram_compResume compScale
+      compScale_pos (fun x _ => compScale_next_le x) hsize (Dominated.one hpos)
+      (hsize.mono_pow (by decide : 2 ≤ 4) compScale_pos) hsize
+      (hsize.mono_pow (by decide : 2 ≤ 4) compScale_pos) (Dominated.refl _)
+      (((hsize.mono_pow (by decide : 2 ≤ 4) compScale_pos).comp Subtype.val).add_same
+        (Dominated.refl _))
+      (Dominated.one fun x => hpos x.1)
+      (by simpa only [pow_one] using
+        hreturn.mono_pow (by decide : 2 * 1 ≤ 4) fun x => compScale_pos x.1)).mono
+      (by dominated [compScale, compRecursion]) (by dominated [compScale, compRecursion])
 
 /-- Compose circuits computed by a selected implementation. -/
-def Implementation.circuitComp {ρ : Type} [UniqueEncoding Tree ρ]
+theorem HasProgram.circuitComp {ρ : Type} [UniqueEncoding Tree ρ]
     {n m k : ρ → ℕ}
     {c : (x : ρ) → Circuit .booleanAlgebra (n x) (m x)}
     {d : (x : ρ) → Circuit .booleanAlgebra (m x) (k x)} {t p : ρ → ℕ}
-    (h : Implementation (fun x => (⟨n x, m x, k x, c x, d x⟩ : CompInput)) t p) :
-    Implementation (fun x => (c x).comp (d x))
+    {q : Value → Code Value}
+    (h : HasProgram (fun x => (⟨n x, m x, k x, c x, d x⟩ : CompInput)) q t p) :
+    HasProgram (fun x => (c x).comp (d x)) (fun v => q v >>= programCompFn)
       (fun x => t x + compScale ⟨n x, m x, k x, c x, d x⟩ ^ 7)
       (fun x => max (p x) (compScale ⟨n x, m x, k x, c x, d x⟩ ^ 4)) :=
-  h.compDep implementationCompFn
+  h.compDep hasProgram_compFn
 
-attribute [scoped fun_prop] Implementation.circuitComp
+attribute [scoped fun_prop] HasProgram.circuitComp
 
 /-- The argument of `Circuit.keepInputs`. -/
 @[tree_encoding]
@@ -458,18 +476,22 @@ theorem size_encode_keepFn_le (x : KeepInput) : ⌜keepFn x⌝ₜ.size ≤ 100 *
       c.size + (n + m) + 1 ≤ keepScale ⟨n, m, c⟩))
     (by dsimp [keepScale]; omega : n + c.size + 1 ≤ keepScale ⟨n, m, c⟩)
 
-def implementationKeepTest : Implementation keepTest (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
-  source_fun_prop
+theorem hasProgram_keepTest :
+    HasProgram keepTest hole(⊢ program) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
+  abstract_hole program using programKeepTest
+  fill_hole program in source_fun_prop
   all_goals dominated
 
-def implementationKeepNextFn :
-    Implementation keepNextFn (fun x => ⌜x⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
-  source_fun_prop
+theorem hasProgram_keepNextFn :
+    HasProgram keepNextFn hole(⊢ program) (fun x => ⌜x⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
+  abstract_hole program using programKeepNextFn
+  fill_hole program in source_fun_prop
   all_goals dominated
 
-def implementationKeepOutputsFn : Implementation keepOutputsFn
+theorem hasProgram_keepOutputsFn : HasProgram keepOutputsFn hole(⊢ program)
     (fun x => (x.n + x.m + 1) ^ 2) (fun x => (x.n + x.m + 1) ^ 2) := by
-  source_fun_prop using tabulate
+  abstract_hole program using programKeepOutputsFn
+  fill_hole program in source_fun_prop using tabulate
   all_goals dominated
 
 /-- The output table of a terminal state. -/
@@ -477,15 +499,17 @@ def keepFinishInput : {x // keepTest x = false} → KeepOutputsInput
   | ⟨⟨_, _, .gate _ _ _⟩, h⟩ => False.elim (by cases h)
   | ⟨⟨n, m, .outputs w⟩, _⟩ => ⟨n, m, w⟩
 
-def implementationKeepFinishInput :
-    Implementation keepFinishInput (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
-  source_fun_prop
+theorem hasProgram_keepFinishInput :
+    HasProgram keepFinishInput hole(⊢ program) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
+  abstract_hole program using programKeepFinishInput
+  fill_hole program in source_fun_prop
   all_goals dominated
 
-def implementationKeepFinishFn : Implementation keepFinishFn
+theorem hasProgram_keepFinishFn : HasProgram keepFinishFn hole(⊢ program)
     (fun x => keepScale x.1 ^ 2) (fun x => keepScale x.1 ^ 2) := by
-  refine ((implementationKeepFinishInput.compDep implementationKeepOutputsFn).ofEncode ?_).mono
-    ?_ ?_
+  abstract_hole program using programKeepFinishFn
+  fill_hole program in
+    refine ((hasProgram_keepFinishInput.compDep hasProgram_keepOutputsFn).ofEncode ?_).mono ?_ ?_
   · rintro ⟨⟨n, m, c⟩, h⟩
     cases c with
     | outputs _ => rfl
@@ -503,16 +527,17 @@ def implementationKeepFinishFn : Implementation keepFinishFn
     | gate _ _ _ => cases h
 
 /-- Selecting the outputs of a circuit computed by a selected implementation. -/
-def Implementation.mapOutputs {ρ : Type} [UniqueEncoding Tree ρ] {n m k : ρ → ℕ}
+theorem HasProgram.mapOutputs {ρ : Type} [UniqueEncoding Tree ρ] {n m k : ρ → ℕ}
     {c : (x : ρ) → Circuit .booleanAlgebra (n x) (m x)} {f : (x : ρ) → Fin (k x) → Fin (m x)}
     {t p : ρ → ℕ}
-    (h : Implementation (fun x => (⟨n x, m x, k x, c x, .outputs (f x)⟩ : CompInput)) t p) :
-    Implementation (fun x => (c x).mapOutputs (f x))
+    {q : Value → Code Value}
+    (h : HasProgram (fun x => (⟨n x, m x, k x, c x, .outputs (f x)⟩ : CompInput)) q t p) :
+    HasProgram (fun x => (c x).mapOutputs (f x)) (fun v => q v >>= programCompFn)
       (fun x => t x + compScale ⟨n x, m x, k x, c x, .outputs (f x)⟩ ^ 7)
       (fun x => max (p x) (compScale ⟨n x, m x, k x, c x, .outputs (f x)⟩ ^ 4)) :=
-  h.compDep implementationCompFn
+  h.compDep hasProgram_compFn
 
-attribute [scoped fun_prop] Implementation.mapOutputs
+attribute [scoped fun_prop] HasProgram.mapOutputs
 
 /-- The live return value and gate fields needed by the return callback. -/
 abbrev KeepGateInput := Σ n, Σ m, Σ k, FirstOrder.Language.booleanAlgebra.Functions k ×
@@ -526,8 +551,9 @@ def keepGateFn (x : KeepGateInput) : Circuit .booleanAlgebra x.1 (x.1 + x.2.1) :
 
 def keepGateScale (x : KeepGateInput) := x.1 + x.2.1 + x.2.2.2.2.2.size + 1
 
-def implementationKeepGateFn : Implementation keepGateFn
+theorem hasProgram_keepGateFn : HasProgram keepGateFn hole(⊢ program)
     (fun x => keepGateScale x ^ 7) (fun x => keepGateScale x ^ 4) := by
+  abstract_hole program using programKeepGateFn
   have hk : Dominated (fun x : KeepGateInput => x.2.2.1) keepGateScale :=
     (Dominated.const_of_pos 2 fun _ => Nat.succ_pos _).mono_left fun x => by
       rcases x with ⟨n, m, k, op, args, result⟩
@@ -550,7 +576,7 @@ def implementationKeepGateFn : Implementation keepGateFn
     (.of_le fun x => by dsimp [keepGateScale]; omega)
     (.of_le fun x => by simp only [Circuit.size_mapOutputs]; dsimp [keepGateScale]; omega)
     fun _ => Nat.succ_pos _
-  source_fun_prop using tabulate
+  fill_hole program in source_fun_prop using tabulate
   all_goals try simp only [Sigma.size_encode_eq, Prod.size_encode_eq]
   all_goals dominated [keepGateScale, compScale, Circuit.size_mapOutputs, Circuit.size_outputs]
 
@@ -558,23 +584,26 @@ def keepResumeInput : keepRecursion.Return → KeepGateInput
   | ⟨⟨⟨_, _, .outputs _⟩, h⟩, _⟩ => False.elim (by cases h)
   | ⟨⟨⟨n, m, .gate (k := k) op args _⟩, _⟩, result⟩ => ⟨n, m, k, op, args, result⟩
 
-def implementationKeepResumeInput :
-    Implementation keepResumeInput (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
-  source_fun_prop
+theorem hasProgram_keepResumeInput :
+    HasProgram keepResumeInput hole(⊢ program) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
+  abstract_hole program using programKeepResumeInput
+  fill_hole program in source_fun_prop
   all_goals dominated
 
 def keepReturnScale (x : keepRecursion.Return) : ℕ := x.1.1.n + x.1.1.m + x.2.size + 1
 
-def implementationKeepResume :
-    Implementation (fun x : keepRecursion.Return => keepResumeFn x.1 x.2)
+theorem hasProgram_keepResume :
+    HasProgram (fun x : keepRecursion.Return => keepResumeFn x.1 x.2) hole(⊢ program)
       (fun x => keepReturnScale x ^ 7) (fun x => ⌜x⌝ₜ.size + keepReturnScale x ^ 4) := by
+  abstract_hole program using programKeepResume
   have hscale (x : keepRecursion.Return) :
       keepGateScale (keepResumeInput x) = keepReturnScale x := by
     rcases x with ⟨⟨⟨n, m, c⟩, h⟩, result⟩
     cases c with
     | outputs _ => cases h
     | gate _ _ _ => rfl
-  refine ((implementationKeepResumeInput.compDep implementationKeepGateFn).ofEncode ?_).mono ?_ ?_
+  fill_hole program in
+    refine ((hasProgram_keepResumeInput.compDep hasProgram_keepGateFn).ofEncode ?_).mono ?_ ?_
   · rintro ⟨⟨⟨n, m, c⟩, h⟩, result⟩
     cases c with
     | outputs _ => cases h
@@ -586,8 +615,9 @@ def implementationKeepResume :
     exact Dominated.of_le fun _ => max_le (Nat.le_add_right ..) (Nat.le_add_left ..)
 
 /-- The selected recursive program for `keepInputs`, with its polynomial growth. -/
-def implementationKeepFn : Implementation keepFn
-    (fun x => keepScale x ^ 8) (fun x => keepScale x ^ 4) :=
+theorem hasProgram_keepFn : HasProgram keepFn hole(⊢ program)
+    (fun x => keepScale x ^ 8) (fun x => keepScale x ^ 4) := by
+  abstract_hole program using programKeepFn
   have hsize := Dominated.of_le_mul 128 size_encode_keepInput_le
   have hpos x := Nat.pow_pos (n := 2) (keepScale_pos x)
   have hreturn : Dominated (fun x : {x // keepRecursion.test x = true} =>
@@ -606,26 +636,29 @@ def implementationKeepFn : Implementation keepFn
         change n + m + next.keepInputs.size + 1 ≤ _
         simp only [Circuit.size_keepInputs, keepScale, Circuit.size_gate]
         omega
-  (keepRecursion.implementationOfScale implementationKeepTest implementationKeepNextFn
-    implementationKeepFinishFn implementationKeepResume keepScale
-    keepScale_pos (fun x _ => keepScale_next_le x) hsize (Dominated.one fun x =>
-      Nat.pow_pos (n := 7) (keepScale_pos x))
-    (hsize.mono_pow (by decide : 2 ≤ 4) keepScale_pos)
-    (hsize.mono_pow (by decide : 2 ≤ 7) keepScale_pos)
-    (hsize.mono_pow (by decide : 2 ≤ 4) keepScale_pos) (Dominated.refl _)
-    ((Dominated.refl _).mono_pow (by decide : 2 ≤ 4) fun x => keepScale_pos x.1) (hscale.pow 7)
-    (hreturn.add_same (hscale.pow 4))).mono
-    (by dominated [keepScale, keepRecursion]) (by dominated [keepScale, keepRecursion])
+  fill_hole program in
+    exact (keepRecursion.hasProgramOfScale hasProgram_keepTest
+      hasProgram_keepNextFn hasProgram_keepFinishFn
+      hasProgram_keepResume keepScale
+      keepScale_pos (fun x _ => keepScale_next_le x) hsize (Dominated.one fun x =>
+        Nat.pow_pos (n := 7) (keepScale_pos x))
+      (hsize.mono_pow (by decide : 2 ≤ 4) keepScale_pos)
+      (hsize.mono_pow (by decide : 2 ≤ 7) keepScale_pos)
+      (hsize.mono_pow (by decide : 2 ≤ 4) keepScale_pos) (Dominated.refl _)
+      ((Dominated.refl _).mono_pow (by decide : 2 ≤ 4) fun x => keepScale_pos x.1) (hscale.pow 7)
+      (hreturn.add_same (hscale.pow 4))).mono
+      (by dominated [keepScale, keepRecursion]) (by dominated [keepScale, keepRecursion])
 
 /-- Keep the inputs of a circuit computed by a selected implementation. -/
-def Implementation.keepInputs {ρ : Type} [UniqueEncoding Tree ρ]
+theorem HasProgram.keepInputs {ρ : Type} [UniqueEncoding Tree ρ]
     {n m : ρ → ℕ} {c : (x : ρ) → Circuit .booleanAlgebra (n x) (m x)} {t p : ρ → ℕ}
-    (h : Implementation (fun x => (⟨n x, m x, c x⟩ : KeepInput)) t p) :
-    Implementation (fun x => (c x).keepInputs)
+    {q : Value → Code Value}
+    (h : HasProgram (fun x => (⟨n x, m x, c x⟩ : KeepInput)) q t p) :
+    HasProgram (fun x => (c x).keepInputs) (fun v => q v >>= programKeepFn)
       (fun x => t x + keepScale ⟨n x, m x, c x⟩ ^ 8)
       (fun x => max (p x) (keepScale ⟨n x, m x, c x⟩ ^ 4)) :=
-  h.compDep implementationKeepFn
+  h.compDep hasProgram_keepFn
 
-attribute [scoped fun_prop] Implementation.keepInputs
+attribute [scoped fun_prop] HasProgram.keepInputs
 
 end Complexity.TreeProgram.Source

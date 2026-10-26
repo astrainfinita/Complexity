@@ -75,8 +75,9 @@ theorem iterate_unrollStep (n : ℕ) (step : Circuit .booleanAlgebra (n + 1) n) 
 def unrollStepScale (x : UnrollState) :=
   2 * x.1 + x.2.1 + x.2.2.1.size + x.2.2.2.size + 2
 
-def implementationUnrollStep : Implementation unrollStep
+theorem hasProgram_unrollStep : HasProgram unrollStep hole(⊢ program)
     (fun x => unrollStepScale x ^ 8) (fun x => unrollStepScale x ^ 4) := by
+  abstract_hole program using programUnrollStep
   -- Every circuit of a step has quadratic encoded size in the scale.
   have circuit {n m : UnrollState → ℕ}
       (c : (x : UnrollState) → Circuit .booleanAlgebra (n x) (m x))
@@ -98,7 +99,7 @@ def implementationUnrollStep : Implementation unrollStep
   have := circuit fun x : UnrollState => (x.2.2.2.relabel Fin.castSucc).keepInputs.comp
     (x.2.2.1.relabel
       (Fin.snoc (Fin.natAdd (x.1 + (x.2.1 + 1))) (Fin.castAdd x.1 (Fin.last (x.1 + x.2.1)))))
-  source_fun_prop using tabulate
+  fill_hole program in source_fun_prop using tabulate
   all_goals try simp only [Sigma.size_encode_eq, Prod.size_encode_eq]
   all_goals dominated [unrollStepScale, relabelScale, keepScale, compScale, Circuit.size_relabel,
     Circuit.size_keepInputs, Circuit.size_comp]
@@ -111,26 +112,29 @@ def unrollInitial (x : UnrollInput) : ℕ × UnrollState :=
 def unrollScale (x : UnrollInput) :=
   2 * x.1 + x.2.2 + (x.2.2 + 1) * x.2.1.size + 2
 
-def implementationUnrollInitial : Implementation unrollInitial
+theorem hasProgram_unrollInitial : HasProgram unrollInitial hole(⊢ program)
     (fun x => unrollScale x ^ 2) (fun x => unrollScale x ^ 2) := by
+  abstract_hole program using programUnrollInitial
   have := Dominated.size_encode_circuit (fun x : UnrollInput => x.2.1)
     (R := unrollScale) (.of_le fun x => by dsimp [unrollScale]; omega)
     (.of_le fun x => by dsimp [unrollScale]; omega)
     (.of_le fun x => by dsimp [unrollScale]; nlinarith) fun x => by dsimp [unrollScale]; omega
-  source_fun_prop using tabulate
+  fill_hole program in source_fun_prop using tabulate
   all_goals try simp only [Sigma.size_encode_eq, Prod.size_encode_eq]
   all_goals dominated [unrollScale, Circuit.id]
 
 /-- The result projection is selected independently of its eventual budget. -/
-def implementationUnrollResult : Implementation (fun x : UnrollState => x.2.2.2)
+theorem hasProgram_unrollResult : HasProgram (fun x : UnrollState => x.2.2.2) hole(⊢ program)
     (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
-  source_fun_prop
+  abstract_hole program using programUnrollResult
+  fill_hole program in source_fun_prop
   all_goals dominated
 
 /-- The loop sums one step allowance per layer and retains a maximum space allowance. -/
-def implementationUnroll :
-    Implementation (fun x : UnrollInput => x.2.1.unroll x.2.2)
+theorem hasProgram_unroll :
+    HasProgram (fun x : UnrollInput => x.2.1.unroll x.2.2) hole(⊢ program)
       (fun x => unrollScale x ^ 9) (fun x => unrollScale x ^ 4) := by
+  abstract_hole program using programUnroll
   have hR x : 0 < unrollScale x := by dsimp [unrollScale]; omega
   let I (x : UnrollInput) (r : ℕ) (y : UnrollState) :=
     ∃ i, i + r = x.2.2 ∧ y = ⟨x.1, i, x.2.1, x.2.1.unroll i⟩
@@ -181,21 +185,23 @@ def implementationUnroll :
       rw [iterate_unrollStep]
       exact size_unrollState_le n step t t le_rfl
   obtain ⟨htime, hpeak⟩ := hiter
-  refine ((implementationUnrollInitial.compDep
-    (implementationUnrollStep.iterate.compDep implementationUnrollResult)).ofEncode ?_).mono ?_ ?_
+  fill_hole program in
+    refine ((hasProgram_unrollInitial.compDep
+      (hasProgram_unrollStep.iterate.compDep hasProgram_unrollResult)).ofEncode ?_).mono ?_ ?_
   · rintro ⟨n, step, t⟩
     exact (congrArg (fun s : UnrollState => ⌜s.2.2.2⌝ₜ) (iterate_unrollStep n step t)).symm
   all_goals dominated [unrollScale, unrollInitial]
 
 /-- Unroll a circuit computed by a selected implementation. -/
-def Implementation.unroll {ρ : Type} [UniqueEncoding Tree ρ]
-    {n t : ρ → ℕ} {step : (x : ρ) → Circuit .booleanAlgebra (n x + 1) (n x)} {u q : ρ → ℕ}
-    (h : Implementation (fun x => (⟨n x, step x, t x⟩ : UnrollInput)) u q) :
-    Implementation (fun x => (step x).unroll (t x))
+theorem HasProgram.unroll {ρ : Type} [UniqueEncoding Tree ρ]
+    {n t : ρ → ℕ} {step : (x : ρ) → Circuit .booleanAlgebra (n x + 1) (n x)}
+    {r : Value → Code Value} {u q : ρ → ℕ}
+    (h : HasProgram (fun x => (⟨n x, step x, t x⟩ : UnrollInput)) r u q) :
+    HasProgram (fun x => (step x).unroll (t x)) (fun v => r v >>= programUnroll)
       (fun x => u x + unrollScale ⟨n x, step x, t x⟩ ^ 9)
       (fun x => max (q x) (unrollScale ⟨n x, step x, t x⟩ ^ 4)) :=
-  h.compDep implementationUnroll
+  h.compDep hasProgram_unroll
 
-attribute [scoped fun_prop] Implementation.unroll
+attribute [scoped fun_prop] HasProgram.unroll
 
 end Complexity.TreeProgram.Source

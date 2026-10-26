@@ -45,16 +45,17 @@ theorem Implements.tailLoop {α β : Type*} [UniqueEncoding Tree α] [UniqueEnco
     refine ⟨(stop_bounds x y hi.1 hi.2 ht).2, ?_⟩
     simpa only [ht, Bool.false_eq_true, ↓reduceIte] using (equation y).symm.trans hi.2
 
-namespace Implementation
+namespace HasProgram
 
 variable {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
   {test : α → Bool} {next : α → α} {finish result : α → β} {tc pc ts ps td pd : α → ℕ}
+  {qc qs qd : Value → Code Value}
 
 /-- A tail loop of selected callbacks. A remaining-work potential pays for the rounds, so round
 costs may vary between states; one coefficient covers every reachable state of every initial
 input. The terminal callback is paid once, and space is a peak over the run. -/
-def tailLoopPotential (hc : Implementation test tc pc) (hs : Implementation next ts ps)
-    (hd : Implementation finish td pd)
+theorem tailLoopPotential (hc : HasProgram test qc tc pc) (hs : HasProgram next qs ts ps)
+    (hd : HasProgram finish qd td pd)
     (I : α → α → Prop) (potential : α → α → ℕ) (stop peak : α → ℕ)
     (equation : ∀ y, result y = if test y then result (next y) else finish y)
     (initial : ∀ x, I x x)
@@ -72,99 +73,97 @@ def tailLoopPotential (hc : Implementation test tc pc) (hs : Implementation next
     (round_time : Dominated
       (fun z : {p : α × α // I p.1 p.2 ∧ test p.2 = true} => ts z.1.2 + tc (next z.1.2) + 1)
       (fun z => potential z.1.1 z.1.2 - potential z.1.1 (next z.1.2))) :
-    Implementation result (fun x => tc x + (potential x x + stop x) + 1) peak where
-  program := loopCode hc.program hs.program hd.program
-  sound := by
-    obtain ⟨bc, hbc, hct, hcp⟩ := hc.sound
-    obtain ⟨bs, hbs, hst, hsp⟩ := hs.sound
-    obtain ⟨bd, hbd, hdt, hdp⟩ := hd.sound
-    let Z := {p : α × α // I p.1 p.2}
-    have local_peak : Dominated (fun z : Z => max (bc.peak z.1.2)
-        (if test z.1.2 then bs.peak z.1.2 else bd.peak z.1.2)) (fun z => peak z.1.1) := by
-      have hc := (hcp.comp (fun z : Z => z.1.2)).trans check_peak
-      apply Dominated.of_cases (fun z : Z => test z.1.2 = true)
-      · let u (z : {z : Z // test z.1.2 = true}) :
-            {p : α × α // I p.1 p.2 ∧ test p.2 = true} := ⟨z.1.1, z.1.2, z.2⟩
-        have hs := (hsp.comp (fun z => (u z).1.2)).trans (step_peak.comp u)
-        apply ((hc.comp Subtype.val).max_same hs).mono_left
-        intro z
-        simp only [Function.comp_apply, z.2, ↓reduceIte, u]
-        exact le_rfl
-      · let u (z : {z : Z // ¬test z.1.2 = true}) :
-            {p : α × α // I p.1 p.2 ∧ test p.2 = false} := ⟨z.1.1, z.1.2, by simpa using z.2⟩
-        have hd := (hdp.comp (fun z => (u z).1.2)).trans (stop_peak.comp u)
-        apply ((hc.comp Subtype.val).max_same hd).mono_left
-        intro z
-        simp only [Function.comp_apply, z.2, Bool.false_eq_true, ↓reduceIte, u]
-        exact le_rfl
-    have stop_exact : Dominated (fun z : Z => if test z.1.2 then 0 else bd.time z.1.2 + 2)
-        (fun z => stop z.1.1) := by
-      apply Dominated.of_cases (fun z : Z => test z.1.2 = false)
-      · let f (z : {z : Z // test z.1.2 = false}) :
-            {p : α × α // I p.1 p.2 ∧ test p.2 = false} := ⟨z.1.1, z.1.2, z.2⟩
-        have hd := (hdt.comp (fun z => (f z).1.2)).add (Dominated.const 2)
-        apply (hd.trans (stop_time.comp f)).mono_left
-        intro z
-        simp only [Function.comp_def, f, z.2, Bool.false_eq_true, ↓reduceIte, le_refl]
-      · apply Dominated.of_le
-        intro z
-        have ht : test z.1.1.2 = true := Bool.eq_true_of_not_eq_false z.2
-        change (if test z.1.1.2 = true then 0 else _) ≤ _
-        rw [ite_eq_left ht]
-        exact Nat.zero_le _
-    have round_exact : Dominated
-        (fun z : Z => if test z.1.2 then bs.time z.1.2 + bc.time (next z.1.2) + 6 else 0)
-        (fun z => potential z.1.1 z.1.2 - potential z.1.1 (next z.1.2)) := by
-      apply Dominated.of_cases (fun z : Z => test z.1.2 = true)
-      · let f (z : {z : Z // test z.1.2 = true}) :
-            {p : α × α // I p.1 p.2 ∧ test p.2 = true} := ⟨z.1.1, z.1.2, z.2⟩
-        have h := ((hst.comp (fun z => (f z).1.2)).add (hct.comp (fun z => next (f z).1.2))).add
-          (Dominated.const 6)
-        apply (h.trans (round_time.comp f)).mono_left
-        intro z
-        simp only [Function.comp_def, f, z.2, ↓reduceIte, le_refl]
-      · apply Dominated.of_le
-        intro z
-        change (if test z.1.1.2 = true then _ else 0) ≤ _
-        rw [ite_eq_right z.2]
-        exact Nat.zero_le _
-    obtain ⟨Cs, hsize⟩ := input_size
-    obtain ⟨Cp, hpeak⟩ := local_peak
-    obtain ⟨Ct, hstop⟩ := stop_exact
-    obtain ⟨Cr, hround⟩ := round_exact
-    simp only [Nat.nsmul_eq_mul] at hsize hpeak hstop hround
-    let time (x y : α) := Cr * potential x y + Ct * stop x
-    let space (x : α) := (Cs + Cp) * peak x
-    refine ⟨⟨fun x => bc.time x + time x x + 4, space⟩, ?_, ?_, ?_⟩
-    · apply hbc.tailLoop hbs hbd I time space equation initial
-      · intro x y hi _
-        exact (hsize ⟨(x, y), hi⟩).trans (Nat.mul_le_mul_right _ (Nat.le_add_right _ _))
-      · intro x y hi _
-        exact ((Nat.le_max_left _ _).trans (hpeak ⟨(x, y), hi⟩)).trans
-          (Nat.mul_le_mul_right _ (Nat.le_add_left _ _))
-      · intro x y hi _ ht
-        have ht' := hstop ⟨(x, y), hi⟩
-        have hp' := hpeak ⟨(x, y), hi⟩
-        simp only [ht, Bool.false_eq_true, ↓reduceIte, Nat.max_le] at ht' hp'
-        exact ⟨ht'.trans (Nat.le_add_left _ _), hp'.2.trans
-          (Nat.mul_le_mul_right _ (Nat.le_add_left _ _))⟩
-      · intro x y hi _ ht
-        have hr := hround ⟨(x, y), hi⟩
-        have hp := hpeak ⟨(x, y), hi⟩
-        simp only [ht, ↓reduceIte, Nat.max_le] at hr hp
-        refine ⟨hp.2.trans (Nat.mul_le_mul_right _ (Nat.le_add_left _ _)),
-          next_state x y hi ht, ?_⟩
-        have := add_mul_le_mul_of_le_mul_tsub (by omega) hr
-        dsimp only [time]
-        omega
-    · exact (hct.add (((Dominated.refl (fun x => potential x x)).const_mul_left Cr).add
-        ((Dominated.refl stop).const_mul_left Ct))).add (Dominated.const 4)
-    · exact (Dominated.refl peak).const_mul_left (Cs + Cp)
+    HasProgram result (loopCode qc qs qd) (fun x => tc x + (potential x x + stop x) + 1) peak := by
+  obtain ⟨bc, hbc, hct, hcp⟩ := hc.sound
+  obtain ⟨bs, hbs, hst, hsp⟩ := hs.sound
+  obtain ⟨bd, hbd, hdt, hdp⟩ := hd.sound
+  let Z := {p : α × α // I p.1 p.2}
+  have local_peak : Dominated (fun z : Z => max (bc.peak z.1.2)
+      (if test z.1.2 then bs.peak z.1.2 else bd.peak z.1.2)) (fun z => peak z.1.1) := by
+    have hc := (hcp.comp (fun z : Z => z.1.2)).trans check_peak
+    apply Dominated.of_cases (fun z : Z => test z.1.2 = true)
+    · let u (z : {z : Z // test z.1.2 = true}) :
+          {p : α × α // I p.1 p.2 ∧ test p.2 = true} := ⟨z.1.1, z.1.2, z.2⟩
+      have hs := (hsp.comp (fun z => (u z).1.2)).trans (step_peak.comp u)
+      apply ((hc.comp Subtype.val).max_same hs).mono_left
+      intro z
+      simp only [Function.comp_apply, z.2, ↓reduceIte, u]
+      exact le_rfl
+    · let u (z : {z : Z // ¬test z.1.2 = true}) :
+          {p : α × α // I p.1 p.2 ∧ test p.2 = false} := ⟨z.1.1, z.1.2, by simpa using z.2⟩
+      have hd := (hdp.comp (fun z => (u z).1.2)).trans (stop_peak.comp u)
+      apply ((hc.comp Subtype.val).max_same hd).mono_left
+      intro z
+      simp only [Function.comp_apply, z.2, Bool.false_eq_true, ↓reduceIte, u]
+      exact le_rfl
+  have stop_exact : Dominated (fun z : Z => if test z.1.2 then 0 else bd.time z.1.2 + 2)
+      (fun z => stop z.1.1) := by
+    apply Dominated.of_cases (fun z : Z => test z.1.2 = false)
+    · let f (z : {z : Z // test z.1.2 = false}) :
+          {p : α × α // I p.1 p.2 ∧ test p.2 = false} := ⟨z.1.1, z.1.2, z.2⟩
+      have hd := (hdt.comp (fun z => (f z).1.2)).add (Dominated.const 2)
+      apply (hd.trans (stop_time.comp f)).mono_left
+      intro z
+      simp only [Function.comp_def, f, z.2, Bool.false_eq_true, ↓reduceIte, le_refl]
+    · apply Dominated.of_le
+      intro z
+      have ht : test z.1.1.2 = true := Bool.eq_true_of_not_eq_false z.2
+      change (if test z.1.1.2 = true then 0 else _) ≤ _
+      rw [ite_eq_left ht]
+      exact Nat.zero_le _
+  have round_exact : Dominated
+      (fun z : Z => if test z.1.2 then bs.time z.1.2 + bc.time (next z.1.2) + 6 else 0)
+      (fun z => potential z.1.1 z.1.2 - potential z.1.1 (next z.1.2)) := by
+    apply Dominated.of_cases (fun z : Z => test z.1.2 = true)
+    · let f (z : {z : Z // test z.1.2 = true}) :
+          {p : α × α // I p.1 p.2 ∧ test p.2 = true} := ⟨z.1.1, z.1.2, z.2⟩
+      have h := ((hst.comp (fun z => (f z).1.2)).add (hct.comp (fun z => next (f z).1.2))).add
+        (Dominated.const 6)
+      apply (h.trans (round_time.comp f)).mono_left
+      intro z
+      simp only [Function.comp_def, f, z.2, ↓reduceIte, le_refl]
+    · apply Dominated.of_le
+      intro z
+      change (if test z.1.1.2 = true then _ else 0) ≤ _
+      rw [ite_eq_right z.2]
+      exact Nat.zero_le _
+  obtain ⟨Cs, hsize⟩ := input_size
+  obtain ⟨Cp, hpeak⟩ := local_peak
+  obtain ⟨Ct, hstop⟩ := stop_exact
+  obtain ⟨Cr, hround⟩ := round_exact
+  simp only [Nat.nsmul_eq_mul] at hsize hpeak hstop hround
+  let time (x y : α) := Cr * potential x y + Ct * stop x
+  let space (x : α) := (Cs + Cp) * peak x
+  refine ⟨⟨fun x => bc.time x + time x x + 4, space⟩, ?_, ?_, ?_⟩
+  · apply hbc.tailLoop hbs hbd I time space equation initial
+    · intro x y hi _
+      exact (hsize ⟨(x, y), hi⟩).trans (Nat.mul_le_mul_right _ (Nat.le_add_right _ _))
+    · intro x y hi _
+      exact ((Nat.le_max_left _ _).trans (hpeak ⟨(x, y), hi⟩)).trans
+        (Nat.mul_le_mul_right _ (Nat.le_add_left _ _))
+    · intro x y hi _ ht
+      have ht' := hstop ⟨(x, y), hi⟩
+      have hp' := hpeak ⟨(x, y), hi⟩
+      simp only [ht, Bool.false_eq_true, ↓reduceIte, Nat.max_le] at ht' hp'
+      exact ⟨ht'.trans (Nat.le_add_left _ _), hp'.2.trans
+        (Nat.mul_le_mul_right _ (Nat.le_add_left _ _))⟩
+    · intro x y hi _ ht
+      have hr := hround ⟨(x, y), hi⟩
+      have hp := hpeak ⟨(x, y), hi⟩
+      simp only [ht, ↓reduceIte, Nat.max_le] at hr hp
+      refine ⟨hp.2.trans (Nat.mul_le_mul_right _ (Nat.le_add_left _ _)),
+        next_state x y hi ht, ?_⟩
+      have := add_mul_le_mul_of_le_mul_tsub (by omega) hr
+      dsimp only [time]
+      omega
+  · exact (hct.add (((Dominated.refl (fun x => potential x x)).const_mul_left Cr).add
+      ((Dominated.refl stop).const_mul_left Ct))).add (Dominated.const 4)
+  · exact (Dominated.refl peak).const_mul_left (Cs + Cp)
 
 /-- A decreasing measure with one round allowance: the potential is
 `measure state * step initial`. -/
-def tailLoop (hc : Implementation test tc pc) (hs : Implementation next ts ps)
-    (hd : Implementation finish td pd)
+theorem tailLoop (hc : HasProgram test qc tc pc) (hs : HasProgram next qs ts ps)
+    (hd : HasProgram finish qd td pd)
     (I : α → α → Prop) (measure step stop peak : α → ℕ)
     (equation : ∀ y, result y = if test y then result (next y) else finish y)
     (initial : ∀ x, I x x)
@@ -180,7 +179,8 @@ def tailLoop (hc : Implementation test tc pc) (hs : Implementation next ts ps)
       (fun z => step z.1.1))
     (stop_time : Dominated (fun z : {p : α × α // I p.1 p.2} => td z.1.2) (fun z => stop z.1.1))
     (step_pos : ∀ x, 0 < step x) (stop_pos : ∀ x, 0 < stop x) :
-    Implementation result (fun x => tc x + (measure x * step x + stop x) + 1) peak :=
+    HasProgram result (loopCode qc qs qd) (fun x => tc x + (measure x * step x + stop x) + 1)
+      peak :=
   tailLoopPotential hc hs hd I (fun x y => measure y * step x) stop peak equation initial
     next_state input_size check_peak
     (step_peak.comp (fun z : {p : α × α // I p.1 p.2 ∧ test p.2 = true} => ⟨z.1, z.2.1⟩))
@@ -198,7 +198,7 @@ def tailLoop (hc : Implementation test tc pc) (hs : Implementation next ts ps)
       have := decreases z.1.1 z.1.2 z.2.1 z.2.2
       exact Nat.le_mul_of_pos_left _ (by omega))
 
-end Implementation
+end HasProgram
 
 end Complexity.TreeProgram.Source
 
@@ -244,15 +244,15 @@ private def proveMeasuredLoop (method : TSyntax `sourceMeasuredLoop) (scope : Op
   for (name, callback) in #[(`test, test), (`next, next), (`finish, finish)] do
     let impl ← certifyCallback session `loop name callback
     let type := (← whnfR (← inferType impl)).getAppArgs
-    unless type.size == 7 do
-      throwError "source loop: unexpected callback implementation type {← inferType impl}"
+    unless type.size == 8 do
+      throwError "source loop: unexpected callback program type {← inferType impl}"
     callbacks := callbacks.push impl
-    growth := growth.push type[5]! |>.push type[6]!
+    growth := growth.push type[6]! |>.push type[7]!
   -- The loop's output type is that of `finish`, fixed by unification.
   let parameters := #[some args[0]!, none, some args[2]!, none] ++
-    ((#[test, next, finish, source] ++ growth ++ callbacks ++
-      #[inv, measure, step, stop, peak]).map some)
-  let mut result ← mkAppOptM ``Implementation.tailLoop parameters
+    ((#[test, next, finish, source] ++ growth).map some) ++ #[none, none, none] ++
+    ((callbacks ++ #[inv, measure, step, stop, peak]).map some)
+  let mut result ← mkAppOptM ``HasProgram.tailLoop parameters
   let mut obligations := []
   let context ← Simp.mkContext
     (config := { iota := false, zeta := false, zetaDelta := false })
@@ -263,7 +263,7 @@ private def proveMeasuredLoop (method : TSyntax `sourceMeasuredLoop) (scope : Op
     let h ← mkFreshExprSyntheticOpaqueMVar obligation (tag := tag)
     result := mkApp result h
     obligations := obligations ++ [h.mvarId!]
-  let comparisons ← finishImplementation goal result
+  let comparisons ← finishProgram goal result
   setGoals rest
   return obligations ++ comparisons
 

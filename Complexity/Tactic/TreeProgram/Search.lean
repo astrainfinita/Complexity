@@ -168,15 +168,18 @@ partial def isProjectionOf (x e : Expr) : MetaM Bool := do
   isProjectionOf x e.appArg!
 
 /-- fun_prop's composition theorem has one result type. A result whose type depends on the
-intermediate value is composed from the implementations of the two parts with
-`Implementation.compDep`, proved after this file. -/
+intermediate value is composed from the programs of the two parts with `HasProgram.compDep`,
+proved after this file. -/
 private def dependentComposition (outer inner : Expr) : FunPropM (Option Result) := do
-  let rule := `Complexity.TreeProgram.Source.Implementation.compDep
+  let rule := `Complexity.TreeProgram.Source.HasProgram.compDep
   unless (← getEnv).contains rule do return none
   let goalOf (f : Expr) : MetaM Expr := do
     let growth ← mkArrow (← whnf (← inferType f)).bindingDomain! (mkConst ``Nat)
-    mkAppM `Complexity.TreeProgram.Source.Implementation
-      #[f, ← mkFreshExprMVar growth, ← mkFreshExprMVar growth]
+    let value := mkConst `Complexity.TreeProgram.Value
+    let program ← mkFreshExprMVar
+      (← mkArrow value (mkApp (mkConst `Complexity.TreeProgram.Code) value))
+    mkAppM `Complexity.TreeProgram.Source.HasProgram
+      #[f, program, ← mkFreshExprMVar growth, ← mkFreshExprMVar growth]
   let some ho ← search (← goalOf outer) | return none
   let some hi ← search (← goalOf inner) | return none
   return some ⟨← mkAppM rule #[hi.proof, ho.proof]⟩

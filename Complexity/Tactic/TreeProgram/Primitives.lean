@@ -25,46 +25,59 @@ theorem dominated_size_encode_bool {α : Type*} [UniqueEncoding Tree α] (f : α
   (Dominated.refl _).max_same ((Dominated.const_of_pos 3 fun _ => Tree.size_pos _).mono_left
     fun _ => size_encode_bool_le _)
 
-def _root_.Bool.implementationNot : Implementation Bool.not (fun _ => 1) (fun x => ⌜x⌝ₜ.size) :=
-  .ofEncode (by intro x; cases x <;> rfl)
-    (by source_cases; exact dominated_size_encode_bool _ :
-      Implementation (fun x => match x with | false => true | true => false)
-        (fun _ => 1) (fun x => ⌜x⌝ₜ.size))
+theorem _root_.Bool.hasProgram_not :
+    HasProgram Bool.not hole(⊢ program) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
+  abstract_hole program using programNot
+  fill_hole program in
+    exact .ofEncode (by intro x; cases x <;> rfl)
+      (by source_cases; exact dominated_size_encode_bool _ :
+        HasProgram (fun x => match x with | false => true | true => false) _
+          (fun _ => 1) (fun x => ⌜x⌝ₜ.size))
 
-def implementationBoolAnd :
-    Implementation (fun x : Bool × Bool => x.1 && x.2) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) :=
-  .ofEncode (by rintro ⟨a, b⟩; cases a <;> cases b <;> rfl)
-    (by source_cases; exact dominated_size_encode_bool _ :
-      Implementation (fun x : Bool × Bool => match x.1 with | false => false | true => x.2)
-        (fun _ => 1) (fun x => ⌜x⌝ₜ.size))
+theorem hasProgram_boolAnd : HasProgram (fun x : Bool × Bool => x.1 && x.2) hole(⊢ program)
+    (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
+  abstract_hole program using programBoolAnd
+  fill_hole program in
+    exact .ofEncode (by rintro ⟨a, b⟩; cases a <;> cases b <;> rfl)
+      (by source_cases; exact dominated_size_encode_bool _ :
+        HasProgram (fun x : Bool × Bool => match x.1 with | false => false | true => x.2) _
+          (fun _ => 1) (fun x => ⌜x⌝ₜ.size))
 
-def implementationBoolOr :
-    Implementation (fun x : Bool × Bool => x.1 || x.2) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) :=
-  .ofEncode (by rintro ⟨a, b⟩; cases a <;> cases b <;> rfl)
-    (by source_cases; exact dominated_size_encode_bool _ :
-      Implementation (fun x : Bool × Bool => match x.1 with | false => x.2 | true => true)
-        (fun _ => 1) (fun x => ⌜x⌝ₜ.size))
+theorem hasProgram_boolOr : HasProgram (fun x : Bool × Bool => x.1 || x.2) hole(⊢ program)
+    (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
+  abstract_hole program using programBoolOr
+  fill_hole program in
+    exact .ofEncode (by rintro ⟨a, b⟩; cases a <;> cases b <;> rfl)
+      (by source_cases; exact dominated_size_encode_bool _ :
+        HasProgram (fun x : Bool × Bool => match x.1 with | false => x.2 | true => true) _
+          (fun _ => 1) (fun x => ⌜x⌝ₜ.size))
 
-def implementationBoolXor :
-    Implementation (fun x : Bool × Bool => xor x.1 x.2) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) :=
-  .ofEncode (by rintro ⟨a, b⟩; cases a <;> cases b <;> rfl)
-    (by source_cases; exact dominated_size_encode_bool _ :
-      Implementation (fun x : Bool × Bool => match x.1 with | false => x.2 | true => !x.2)
-        (fun _ => 1) (fun x => ⌜x⌝ₜ.size))
+theorem hasProgram_boolXor : HasProgram (fun x : Bool × Bool => xor x.1 x.2) hole(⊢ program)
+    (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
+  abstract_hole program using programBoolXor
+  fill_hole program in
+    exact .ofEncode (by rintro ⟨a, b⟩; cases a <;> cases b <;> rfl)
+      (by source_cases; exact dominated_size_encode_bool _ :
+        HasProgram (fun x : Bool × Bool => match x.1 with | false => x.2 | true => !x.2) _
+          (fun _ => 1) (fun x => ⌜x⌝ₜ.size))
 
-def implementationBoolBeq :
-    Implementation (fun x : Bool × Bool => x.1 == x.2) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) :=
-  (Implementation.ofEncode (by rintro ⟨a, b⟩; cases a <;> cases b <;> rfl)
-    (implementationBoolXor.comp Bool.implementationNot)).mono (Dominated.const 2)
-    (dominated_size_encode_bool _)
+theorem hasProgram_boolBeq : HasProgram (fun x : Bool × Bool => x.1 == x.2) hole(⊢ program)
+    (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
+  abstract_hole program using programBoolBeq
+  fill_hole program in
+    exact (HasProgram.ofEncode (by rintro ⟨a, b⟩; cases a <;> cases b <;> rfl)
+      (hasProgram_boolXor.comp Bool.hasProgram_not)).mono (Dominated.const 2)
+      (dominated_size_encode_bool _)
 
 /-- Testing a list for emptiness inspects its root. -/
-@[uniform_program] def _root_.List.implementationIsEmpty {α : Type*} [UniqueEncoding Tree α] :
-    Implementation (List.isEmpty : List α → Bool) (fun _ => 1) (fun xs => ⌜xs⌝ₜ.size) := by
-  source_fun_prop
+theorem _root_.List.hasProgram_isEmpty {α : Type*} [UniqueEncoding Tree α] :
+    HasProgram (List.isEmpty : List α → Bool) hole(⊢ program) (fun _ => 1)
+      (fun xs => ⌜xs⌝ₜ.size) := by
+  abstract_hole program using programIsEmpty
+  fill_hole program in source_fun_prop
   all_goals dominated
 
-attribute [scoped fun_prop] Bool.implementationNot implementationBoolAnd implementationBoolOr
-  implementationBoolXor implementationBoolBeq List.implementationIsEmpty
+attribute [scoped fun_prop] Bool.hasProgram_not hasProgram_boolAnd hasProgram_boolOr
+  hasProgram_boolXor hasProgram_boolBeq List.hasProgram_isEmpty
 
 end Complexity.TreeProgram.Source

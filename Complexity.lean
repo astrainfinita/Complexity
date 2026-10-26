@@ -157,7 +157,6 @@ public import Complexity.Tactic.TreeProgram.Iteration
 public import Complexity.Tactic.TreeProgram.Library
 public import Complexity.Tactic.TreeProgram.Primitives
 public import Complexity.Tactic.TreeProgram.Recursion
-public import Complexity.Tactic.TreeProgram.Registration
 public import Complexity.Tactic.TreeProgram.Rules
 public import Complexity.Tactic.TreeProgram.Search
 public import Complexity.Tactic.TreeProgram.TailRecursion

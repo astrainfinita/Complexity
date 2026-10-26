@@ -22,7 +22,8 @@ does not, unlike `?a`, and `?a` written in a term is a new metavariable.
 * `fill_hole a := e` fills the hole `a` with `e`, written in the hole's context.
 * `fill_hole a in tac` runs `tac` with the hole `a` open to unification; `tac` must fill it.
 * `abstract_hole a using N` makes the value of the hole `a` a definition `N`, taking the hole's
-  context variables, which stands for the hole in the statement. The hole may be filled later.
+  context variables, which stands for the hole in the statement. `N` is named next to the
+  declaration whose statement has the hole. The hole may be filled later.
 
 In goals a hole shows its context as written, with `x := t` where the goal replaced `x` by `t`.
 
@@ -113,13 +114,15 @@ def getOpen (a : Ident) : TermElabM (MVarId × Info) := do
   return (m, info)
 
 /-- Fills the hole `a` with `v`, a value over its context, or with the definition named for it. -/
-def assign (a : Ident) (m : MVarId) (info : Info) (v : Expr) : MetaM Unit := do
+def assign (a : Ident) (m : MVarId) (info : Info) (v : Expr) : TermElabM Unit := do
   let v ← instantiateMVars v
   if v.hasExprMVar then throwErrorAt a "the hole `{a}` is only partly filled:{indentExpr v}"
   let some (n, ref) := info.definition? | m.assign v
   withExporting (isExporting := info.exported) do
     m.assign (← mkAuxDefinition n (← m.getType) v)
   addDeclarationRangesFromSyntax n ref
+  if let some decl ← getDeclName? then
+    addDocStringCore n s!"The value of the hole `{a.getId}` of `{decl}`."
 
 /-- `fill_hole a := e` fills the hole `a` with `e`, written in the hole's context.
 `fill_hole a in tac` runs `tac` with the hole `a` open to unification; `tac` must fill it. -/
@@ -148,13 +151,17 @@ elab (name := fillHoleIn) "fill_hole " a:ident " in " tac:tacticSeq : tactic => 
   assign a m info (.mvar m)
 
 /-- `abstract_hole a using N` makes the value of the hole `a` a definition `N`, taking the hole's
-context variables, which stands for the hole in the statement. The hole may be filled later. -/
+context variables, which stands for the hole in the statement. `N` is named next to the
+declaration whose statement has the hole. The hole may be filled later. -/
 elab (name := abstractHole) "abstract_hole " a:ident " using " n:ident : tactic => do
   let (m, info) ← get a
   if info.definition?.isSome then throwErrorAt a "the hole `{a}` is already abstracted"
-  -- Public or private like the statement mentioning it.
+  -- Next to the declaration whose statement has the hole, public or private like the statement.
+  let space ← match ← getDeclName? with
+    | some decl => pure (privateToUserName decl).getPrefix
+    | none => getCurrNamespace
   let (name, _) ← withExporting (isExporting := info.exported) do
-    mkDeclName (← getCurrNamespace) {} n.getId
+    mkDeclName space {} n.getId
   let info := { info with definition? := some (name, n) }
   modifyEnv (infoExt.modifyState · (·.insert m info))
   if ← m.isAssigned then assign a m info (.mvar m)

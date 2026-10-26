@@ -27,9 +27,10 @@ theorem gateClauses_size_le {α : Type*} [UniqueEncoding Tree α]
   rcases x with ⟨k, op, args, out⟩
   exact CNF.size_encode_ofGate_le op args out
 
-@[source] def implementationGateClauses {α : Type*} [UniqueEncoding Tree α] :
-    Implementation (gateClauses (α := α)) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
-  source_fun_prop
+@[source] theorem hasProgram_gateClauses {α : Type*} [UniqueEncoding Tree α] :
+    HasProgram (gateClauses (α := α)) hole(⊢ program) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
+  abstract_hole program using programGateClauses
+  fill_hole program in source_fun_prop
   exact (Dominated.refl _).max_same (Dominated.of_le_mul _ gateClauses_size_le)
 
 theorem gateClauses_ftisp {α : Type*} [UniqueEncoding Tree α] :
@@ -47,13 +48,14 @@ def accumulateGate
 abbrev AccumulateInput := CNF ℕ ×
   (Σ k, FirstOrder.Language.booleanAlgebra.Functions k × (Fin k → ℕ) × ℕ)
 
-@[source] def implementationAccumulateGate :
-    Implementation accumulateGate (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
+@[source] theorem hasProgram_accumulateGate :
+    HasProgram accumulateGate hole(⊢ program) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
+  abstract_hole program using programAccumulateGate
   have : Dominated (fun x : AccumulateInput => (gateClauses x.2).length) (fun _ => 1) :=
     Dominated.of_le_mul 3 (fun x => by
       simpa only [gateClauses, Nat.mul_one] using
         CNF.length_ofGate_le x.2.2.1 x.2.2.2.1 x.2.2.2.2)
-  source_fun_prop
+  fill_hole program in source_fun_prop
   all_goals dominated [gateClauses_size_le]
 
 theorem accumulateGate_ftisp :
@@ -88,9 +90,10 @@ theorem size_encode_val_comp {n k : ℕ} (args : Fin k → Fin n) :
     ⌜Fin.val ∘ args⌝ₜ.size = ⌜args⌝ₜ.size := by
   simpa only [encode_fin_function] using congrArg Tree.size (encode_fin_values args)
 
-@[source] def implementationCircuitStep :
-    Implementation circuitStep (fun x => ⌜x.1⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
-  source_fun_prop
+@[source] theorem hasProgram_circuitStep :
+    HasProgram circuitStep hole(⊢ program) (fun x => ⌜x.1⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
+  abstract_hole program using programCircuitStep
+  fill_hole program in source_fun_prop
   all_goals dominated [accumulateGate_size, gateClauses_size_le, size_encode_val_comp,
     size_encode_nat_succ_le]
 
@@ -151,9 +154,10 @@ theorem tseitinLoop_state_size (x y : TseitinState)
   change ⌜((m, d), bs)⌝ₜ.size ≤ 10 * ⌜((n, c), acc)⌝ₜ.size ^ 2
   omega
 
-@[source] def implementationCircuitContinues :
-    Implementation circuitContinues (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
-  source_fun_prop
+@[source] theorem hasProgram_circuitContinues :
+    HasProgram circuitContinues hole(⊢ program) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
+  abstract_hole program using programCircuitContinues
+  fill_hole program in source_fun_prop
   all_goals dominated
 
 theorem circuitContinues_ftisp :
@@ -161,9 +165,10 @@ theorem circuitContinues_ftisp :
   model_fun_prop
   all_goals dominated
 
-@[source] def implementationCircuitFinish :
-    Implementation circuitFinish (fun x => ⌜x⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
-  source_fun_prop
+@[source] theorem hasProgram_circuitFinish :
+    HasProgram circuitFinish hole(⊢ program) (fun x => ⌜x⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
+  abstract_hole program using programCircuitFinish
+  fill_hole program in source_fun_prop
   all_goals dominated [CNF.Literal.pos]
 
 theorem circuitFinish_ftisp :
@@ -183,14 +188,17 @@ theorem circuitStep_circuit_size_lt
       Circuit.encode_gate, size_encode_unit]
     omega
 
-def implementationTseitinLoop : Implementation (fun x : TseitinState => tseitinLoop x.1 x.2)
-    (fun x => ⌜x⌝ₜ.size ^ 2) (fun x => ⌜x⌝ₜ.size ^ 2) := by
-  source_fun_prop using loop
-    (test := circuitContinues) (next := circuitStep) (finish := circuitFinish)
-    (invariant := fun x y => ⌜y.1⌝ₜ.size ≤ ⌜x.1⌝ₜ.size ∧
-      tseitinLoop y.1 y.2 = tseitinLoop x.1 x.2)
-    (measure := fun x => ⌜x.1⌝ₜ.size) (step := fun x => ⌜x⌝ₜ.size)
-    (stop := fun x => ⌜x⌝ₜ.size ^ 2) (space := fun x => ⌜x⌝ₜ.size ^ 2)
+theorem hasProgram_tseitinLoop :
+    HasProgram (fun x : TseitinState => tseitinLoop x.1 x.2) hole(⊢ program)
+      (fun x => ⌜x⌝ₜ.size ^ 2) (fun x => ⌜x⌝ₜ.size ^ 2) := by
+  abstract_hole program using programTseitinLoop
+  fill_hole program in
+    source_fun_prop using loop
+      (test := circuitContinues) (next := circuitStep) (finish := circuitFinish)
+      (invariant := fun x y => ⌜y.1⌝ₜ.size ≤ ⌜x.1⌝ₜ.size ∧
+        tseitinLoop y.1 y.2 = tseitinLoop x.1 x.2)
+      (measure := fun x => ⌜x.1⌝ₜ.size) (step := fun x => ⌜x⌝ₜ.size)
+      (stop := fun x => ⌜x⌝ₜ.size ^ 2) (space := fun x => ⌜x⌝ₜ.size ^ 2)
   case equation => exact tseitinLoop_step
   case initial => intro x; exact ⟨le_rfl, rfl⟩
   case next_state =>
@@ -208,9 +216,9 @@ def implementationTseitinLoop : Implementation (fun x : TseitinState => tseitinL
 theorem tseitinLoop_ftisp :
     (fun x : TseitinState => tseitinLoop x.1 x.2) ∈
       FTISP .tree (fun n => n ^ 2) (fun n => n ^ 2) :=
-  implementationTseitinLoop.mem_ftisp_pow (by decide)
+  hasProgram_tseitinLoop.mem_ftisp_pow (by decide)
 
-attribute [source] implementationTseitinLoop
+attribute [source] hasProgram_tseitinLoop
 
 @[local source] theorem tseitin_source :
     (fun input : Σ n, Circuit .booleanAlgebra n 1 => input.2.tseitin) =

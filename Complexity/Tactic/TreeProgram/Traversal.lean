@@ -404,16 +404,15 @@ theorem Implements.foldl {α β : Type*} [UniqueEncoding Tree α] [UniqueEncodin
         simpa (disch := omega) using hf j (by omega)
 
 /-- Fold a callback; its growth is charged at every actual intermediate accumulator. -/
-def Implementation.foldl {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
-    {f : β → α → β} {t p : β × α → ℕ} (hf : Implementation (Function.uncurry f) t p) :
-    Implementation (fun x : β × List α => x.2.foldl f x.1)
+theorem HasProgram.foldl {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
+    {f : β → α → β} {pf : Value → Code Value} {t p : β × α → ℕ}
+    (hf : HasProgram (Function.uncurry f) pf t p) :
+    HasProgram (fun x : β × List α => x.2.foldl f x.1) (Traversal.foldProgram pf)
       (fun x => foldlTime f t x.1 x.2 + x.2.length + 1)
-      (fun x => max ⌜x⌝ₜ.size (foldlPeak f p x.1 x.2)) where
-  program := Traversal.foldProgram hf.program
-  sound := by
-    obtain ⟨b, h, hbt, hbp⟩ := hf.sound
-    exact ⟨_, h.foldl, ((hbt.foldlTime (f := f)).add
-      ((Dominated.refl _).const_mul_left 13)).add (Dominated.const 10),
-      (Dominated.refl _).max (hbp.foldlPeak (f := f))⟩
+      (fun x => max ⌜x⌝ₜ.size (foldlPeak f p x.1 x.2)) := by
+  obtain ⟨b, h, hbt, hbp⟩ := hf.sound
+  exact ⟨_, h.foldl, ((hbt.foldlTime (f := f)).add
+    ((Dominated.refl _).const_mul_left 13)).add (Dominated.const 10),
+    (Dominated.refl _).max (hbp.foldlPeak (f := f))⟩
 
 end Complexity.TreeProgram.Source

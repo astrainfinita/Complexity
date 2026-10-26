@@ -78,15 +78,17 @@ def typedSourceProof (type proof : Lean.Expr) : MetaM Lean.Expr := do
   if ← withReducible (isDefEq type (← inferType proof)) then return proof
   mkAuxTheorem type proof
 open Lean Meta Elab Tactic in
-/-- The arguments of a goal `Implementation f time peak`, with its implicit types and encodings. -/
+/-- The arguments of a goal `HasProgram f program time peak`, with its implicit types and
+encodings. -/
 def sourceGoalArgs (goal : MVarId) : MetaM (Array Lean.Expr) := do
   let target := (← instantiateMVars (← goal.getType)).consumeMData
-  unless target.isAppOfArity ``Implementation 7 do
-    throwError "source translation: expected Implementation, got {target}"
+  unless target.isAppOfArity ``HasProgram 8 do
+    throwError "source translation: expected HasProgram, got {target}"
   return target.getAppArgs
 open Lean Meta in
-/-- Assign a translation result, unifying the requested growth with the produced one. -/
-private def assignImplementation (goal : MVarId) (value : Lean.Expr) : MetaM Unit := do
+/-- Assign a translation result, unifying the requested program and growth with the produced
+ones. -/
+private def assignResult (goal : MVarId) (value : Lean.Expr) : MetaM Unit := do
   unless ← isDefEq (← goal.getType) (← inferType value) do
     Search.unsupported m!"source translation: the produced growth does not match the request"
   goal.assign value
@@ -335,7 +337,7 @@ on the input tree select the case, and the output is built from constants and in
 def sourceCases : TacticM Unit := withMainContext do
   let goal ← getMainGoal
   let rest := (← getGoals).tail
-  let #[inputType, outputType, inputInst, outputInst, f, _, _] ← sourceGoalArgs goal |
+  let #[inputType, outputType, inputInst, outputInst, f, _, _, _] ← sourceGoalArgs goal |
     throwError "source cases: invalid source arguments"
   if let .const name _ := f.eta.getAppFn then
     if ← isRecursiveDefinition name then
@@ -378,19 +380,19 @@ def sourceCases : TacticM Unit := withMainContext do
     (simp +contextual (disch := omega)
       [Code.Bounded, Code.block, sourcePair, *] <;> omega)))
   let proof ← typedSourceProof (← instantiateMVars type) (← instantiateMVars certificate)
-  let implementation ← mkAppOptM ``Implementation.ofImplements #[some inputType, some outputType,
-    some inputInst, some outputInst, some f, some program, some bounds, some proof]
+  let certified ← mkAppM ``HasProgram.ofImplements #[bounds, proof]
   -- The fixed number of controller steps is absorbed into the hidden coefficient.
-  let value ← mkAppM ``Implementation.mono #[implementation,
+  let value ← mkAppM ``HasProgram.mono #[certified,
     ← mkAppOptM ``Dominated.const #[some inputType, some time], ← mkAppM ``Dominated.refl #[peak]]
-  assignImplementation goal value
+  assignResult goal value
   setGoals rest
 
 /-- Certify a finite source case split with structural branch results. -/
 syntax (name := sourceCasesTactic) "source_cases" : tactic
 private structure Call where
   argument : TreeProgram.Expr Unit
-  implementation : Lean.Expr
+  certificate : Lean.Expr
+  program : Lean.Expr
 
 private structure CallCase where
   tests : List (List Bool × Bool)
@@ -573,9 +575,10 @@ private partial def compileCalls (p : Dispatch Call) (v : Term) :
     TermElabM (Term × Term) := do
   match p with
   | .leaf c =>
-    let h ← Term.exprToSyntax c.implementation
+    let h ← Term.exprToSyntax c.certificate
+    let program ← Term.exprToSyntax c.program
     let e ← exprSyntax c.argument v
-    return (← `(callCode ($h).program $e), ← `(fun n => ($h).callCode_fresh $e n))
+    return (← `(callCode $program $e), ← `(fun n => ($h).callCode_fresh $e n))
   | .branch e yes no =>
     let (yes, fresh) ← compileCalls yes v
     let (no, _) ← compileCalls no v
@@ -586,6 +589,15 @@ private partial def compileCalls (p : Dispatch Call) (v : Term) :
         (Code.block (($no).build n).2.2)])⟩ : Code Value)),
       ← ``(fun n => Nat.le_trans (($fresh) n) (Nat.le_max_left _ _)))
 
+open Lean Meta in
+/-- The branches are verified from the certificates `h` of the callees alone: the programs of the
+callees become variables, which `simp` does not look into. -/
+private def generalizePrograms (goal : MVarId) (callees : Array (Call × Ident)) :
+    MetaM MVarId := goal.withContext do
+  let certificates ← callees.mapM fun (_, h) => return (← getLocalDeclFromUserName h.getId).fvarId
+  let programs := callees.map fun (c, _) => ({ expr := c.program } : GeneralizeArg)
+  return (← goal.generalizeHyp programs certificates).2.2
+
 /-- Each branch is charged its callee's growth at the branch argument. The certificate scales
 all callees and fixed controller steps by one coefficient chosen after the callees'. -/
 def sourceCalls (roots : NameSet) (certify : Lean.Expr → MetaM Lean.Expr) :
@@ -593,7 +605,7 @@ def sourceCalls (roots : NameSet) (certify : Lean.Expr → MetaM Lean.Expr) :
   trace[source.translation] "analyze call branches"
   let goal ← getMainGoal
   let rest := (← getGoals).tail
-  let #[inputType, outputType, inputInst, outputInst, f, _, _] ← sourceGoalArgs goal |
+  let #[inputType, outputType, inputInst, outputInst, f, _, _, _] ← sourceGoalArgs goal |
     throwError "source calls: invalid source arguments"
   if let .const name _ := f.eta.getAppFn then
     if ← isRecursiveDefinition name then
@@ -642,14 +654,14 @@ def sourceCalls (roots : NameSet) (certify : Lean.Expr → MetaM Lean.Expr) :
         return (branch, ← mkLambdaFVars free value,
           fields.map fun (_, source, values) => (source, values))
       trace[source.translation] "certify branch callback"
-      let implementation ← withLCtx outer outerInstances (certify branch)
-      let specification ← inferType implementation
-      unless specification.isAppOfArity ``Implementation 7 do
-        throwError "source calls: expected a certified implementation"
+      let certificate ← withLCtx outer outerInstances (certify branch)
+      let specification ← inferType certificate
+      unless specification.isAppOfArity ``HasProgram 8 do
+        throwError "source calls: expected a certified program"
       let escapes := fun e : Lean.Expr =>
         (collectFVars {} e).fvarIds.any (!outer.contains ·)
-      if escapes specification || escapes implementation then
-        for e in #[specification, implementation] do
+      if escapes specification || escapes certificate then
+        for e in #[specification, certificate] do
           for id in (collectFVars {} e).fvarSet do
             unless outer.contains id do
               trace[source.translation] "escaping variable: {mkFVar id} : {← inferType (mkFVar id)}"
@@ -657,7 +669,7 @@ def sourceCalls (roots : NameSet) (certify : Lean.Expr → MetaM Lean.Expr) :
       -- Shown without the type ascriptions of the packed environment.
       let shown := (value.beta (fields.map (·.1))).replace fun e =>
         if e.isAppOfArity ``id 2 then some e.appArg! else none
-      tails.modify (·.push (some (implementation, ← mkLambdaFVars vars shown)))
+      tails.modify (·.push (some (certificate, ← mkLambdaFVars vars shown)))
       for leaf in leaves, i in [0:leaves.length] do
         leaf.goal.withContext do
         -- A variable without a value in the leaf leaves its own name, which is then rejected.
@@ -674,30 +686,31 @@ def sourceCalls (roots : NameSet) (certify : Lean.Expr → MetaM Lean.Expr) :
         -- The callee's growth is charged at its argument. Stored input and argument sizes are
         -- kept apart from the callee's peak, which alone is scaled by the coefficient.
         let time ← mkAppM ``HAdd.hAdd
-          #[(mkApp specification.getAppArgs[5]! value).headBeta, mkNatLit 1]
+          #[(mkApp specification.getAppArgs[6]! value).headBeta, mkNatLit 1]
         let storage ← mkAppM ``max
           #[← mkAppM ``Tree.size #[leaf.inputCode], ← mkAppM ``Tree.size #[code]]
-        let peak := (mkApp specification.getAppArgs[6]! value).headBeta
+        let peak := (mkApp specification.getAppArgs[7]! value).headBeta
         let cost ← mkAppM ``Prod.mk #[time, ← mkAppM ``Prod.mk #[storage, peak]]
         leaf.goal.assign cost
         choices.modify (·.push
-          ⟨tests, ⟨argument, implementation⟩, leaf.goal, value, leaf.inputCode, leaf.output, cost⟩)
-      mkAppM ``HAdd.hAdd #[(mkApp specification.getAppArgs[5]! shown).headBeta, mkNatLit 1]
+          ⟨tests, ⟨argument, certificate, specification.getAppArgs[5]!⟩, leaf.goal, value,
+            leaf.inputCode, leaf.output, cost⟩)
+      mkAppM ``HAdd.hAdd #[(mkApp specification.getAppArgs[6]! shown).headBeta, mkNatLit 1]
     let time ← mkLambdaFVars #[x] (← alongBranches roots callee none (f.beta #[x]) #[x] leaves)
     -- The other components revisit the same branches, which now have their callees.
     let along (component : Lean.Expr → Lean.Expr → MetaM Lean.Expr) : MetaM Lean.Expr := do
       let next ← IO.mkRef 0
       let tail (_ : Lean.Expr) (vars : Array Lean.Expr) (_ : List CallLeaf) := do
-        let some (implementation, value) := (← tails.get)[← next.modifyGet fun i => (i, i + 1)]! |
+        let some (certificate, value) := (← tails.get)[← next.modifyGet fun i => (i, i + 1)]! |
           return mkNatLit 0
-        component (← inferType implementation) (value.beta vars)
+        component (← inferType certificate) (value.beta vars)
       mkLambdaFVars #[x] (← alongBranches roots tail none (f.beta #[x]) #[x] leaves)
     let storage ← along fun _ value => do
       let input ← mkAppOptM ``encode
         #[some (mkConst ``Tree), some inputType, some inputInst, some x]
       mkAppM ``max #[← mkAppM ``Tree.size #[input],
         ← mkAppM ``Tree.size #[← mkAppM ``encode #[mkConst ``Tree, value]]]
-    let calls ← along fun spec value => pure (mkApp spec.getAppArgs[6]! value).headBeta
+    let calls ← along fun spec value => pure (mkApp spec.getAppArgs[7]! value).headBeta
     return (time, storage, calls)
   let choices ← choices.get
   let tree ← dispatchCases (choices.map fun c => (c.tests, c.call))
@@ -711,26 +724,25 @@ def sourceCalls (roots : NameSet) (certify : Lean.Expr → MetaM Lean.Expr) :
   let peak ← withLocalDeclD `x inputType fun x => do
     mkLambdaFVars #[x] (← mkAppM ``max #[(mkApp storage x).headBeta, (mkApp calls x).headBeta])
   let program ← Term.elabTerm (← `(fun $v : Value => $body)) none
-  let constructor ← mkAppOptM ``Implementation.mk #[some inputType, some outputType, some inputInst,
-    some outputInst, some f, some time, some peak, some program]
-  let soundGoal ← mkFreshExprSyntheticOpaqueMVar (← whnf (← inferType constructor)).bindingDomain!
+  let soundGoal ← mkFreshExprSyntheticOpaqueMVar (← mkAppOptM ``HasProgram #[some inputType,
+    some outputType, some inputInst, some outputInst, some f, some program, some time, some peak])
   -- One coefficient covers every callee and every fixed controller step.
-  let mut callees : Array (Lean.Expr × Ident) := #[]
+  let mut callees : Array (Call × Ident) := #[]
   for c in choices do
-    unless callees.any (·.1 == c.call.implementation) do
-      callees := callees.push (c.call.implementation, mkIdent (← mkFreshUserName `source_call))
+    unless callees.any (·.1.certificate == c.call.certificate) do
+      callees := callees.push (c.call, mkIdent (← mkFreshUserName `source_call))
   let coefficients ← callees.mapM fun _ => return mkIdent (← mkFreshUserName `source_coeff)
   setGoals [soundGoal.mvarId!]
   let storageTerm ← Term.exprToSyntax storage
   let callsTerm ← Term.exprToSyntax calls
   evalTactic (← `(tactic|
-    refine Implementation.sound_of_mul_max (s := $storageTerm) (q := $callsTerm) ?_))
-  for (implementation, h) in callees, C in coefficients do
+    refine HasProgram.of_mul_max (s := $storageTerm) (q := $callsTerm) ?_))
+  for (call, h) in callees, C in coefficients do
     -- Eliminate the existential directly: `obtain` would re-elaborate the callee and
     -- re-check the large program goal, which is very slow for dependent input types.
-    let type ← whnfR (← inferType implementation)
-    let coefficient ← mkAppOptM ``Implementation.exists_implements_mul
-      ((type.getAppArgs.push implementation).map some)
+    let type ← whnfR (← inferType call.certificate)
+    let coefficient ← mkAppOptM ``HasProgram.exists_implements_mul
+      ((type.getAppArgs.push call.certificate).map some)
     let some (_, predicate) := (← whnfR (← inferType coefficient)).app2? ``Exists |
       throwError "source calls: unexpected callee coefficient {coefficient}"
     let goal ← getMainGoal
@@ -754,7 +766,8 @@ def sourceCalls (roots : NameSet) (certify : Lean.Expr → MetaM Lean.Expr) :
     let [freshGoal, correctGoal] ← getGoals | throwError "source calls: unexpected goals"
     setGoals [freshGoal]
     evalTactic (← `(tactic| intro $v n hv; exact ⟨(Nat.le_succ _).trans (($fresh) n), ($fresh) n⟩))
-    let (locals, correctGoal) ← correctGoal.introN 6 [`v, `n, `s, `x, `hv, inputName]
+    let (locals, correctGoal) ←
+      (← generalizePrograms correctGoal callees).introN 6 [`v, `n, `s, `x, `hv, inputName]
     let replayed ← replayCases (← splits.get) budgetRoot correctGoal
       (({} : FVarSubst).insert x (mkFVar locals[3]!))
     let proofCases ← choices.mapM fun branch => do
@@ -777,7 +790,7 @@ def sourceCalls (roots : NameSet) (certify : Lean.Expr → MetaM Lean.Expr) :
         let target := mkAppN target.getAppFn
           (target.getAppArgs.set! 4 time |>.set! 5 space)
         let g ← g.replaceTargetDefEq target
-        let some (_, h) := callees.find? (·.1 == branch.call.implementation) |
+        let some (_, h) := callees.find? (·.1.certificate == branch.call.certificate) |
           throwError "source calls: missing callee certificate"
         return (g, branch.call, h, subst.apply branch.value, space, inputCode, equations)
     let lemmas ← caseLemmas
@@ -836,7 +849,7 @@ def sourceCalls (roots : NameSet) (certify : Lean.Expr → MetaM Lean.Expr) :
         fun ex =>
           Search.unsupported m!"source calls: branch verification failed: {ex.toMessageData}"
       unless (← getGoals).isEmpty do throwError "source calls: failed to verify branch"
-  assignImplementation goal (mkApp constructor (← instantiateMVars soundGoal))
+  assignResult goal (← instantiateMVars soundGoal)
   setGoals rest
 
 end FiniteCases
