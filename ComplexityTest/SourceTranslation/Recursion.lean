@@ -62,7 +62,7 @@ def positionResume : (x : {xs : List Bool // (!xs.isEmpty) = true}) →
   | ⟨[], h⟩, _ => False.elim (by simp at h)
   | ⟨_ :: _, _⟩, result => result.succ
 
--- A dependent result still uses the public encoding view; callbacks return ordinary Fin values.
+-- A dependent result is implemented at its own type; callbacks return ordinary Fin values.
 def hasProgram_endPosition := (by
   source_fun_prop using recursion
     (test := fun xs : List Bool => !xs.isEmpty) (next := List.tail)
@@ -79,7 +79,7 @@ def hasProgram_endPosition := (by
     rintro ⟨xs, h⟩
     cases xs with
     | nil => cases h
-    | cons => rfl : HasProgram (fun xs => ⌜endPosition xs⌝ₜ) _ _ _)
+    | cons => rfl : HasProgram endPosition _ _ _)
 
 -- An unsupported callback fails before changing the selected source goal.
 example : HasProgram (id : List Bool → List Bool) hole(⊢ program) (fun _ => 0) (fun _ => 0) := by

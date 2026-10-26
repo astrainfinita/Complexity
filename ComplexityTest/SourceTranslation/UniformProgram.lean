@@ -11,10 +11,24 @@ namespace ComplexityTest.SourceTranslation.UniformProgram
 
 -- Library functions with one program at every type are used at types depending on the input.
 example : HasProgram (fun x : Σ n, List (Fin n) => x.2.reverse) hole(⊢ program)
-    (fun x => 1 + ⌜x.2⌝ₜ.size) (fun x => max (max ⌜x⌝ₜ.size ⌜x.2⌝ₜ.size) ⌜x.2⌝ₜ.size) := by
+    (fun x => 1 + ⌜x.2⌝ₜ.size) (fun x => max ⌜x⌝ₜ.size ⌜x.2⌝ₜ.size) := by
   fill_hole program in source_fun_prop
 
 example := (by source_fun_prop : HasProgram (fun x : Σ n, List (Fin n) => x.2.tail.length) _ _ _)
+
+-- Functions of several arguments are applied to the tuple of their arguments.
+example := (by source_fun_prop :
+  HasProgram (fun x : Σ n, List (Fin n) × List (Fin n) => x.2.1 ++ x.2.2) _ _ _)
+
+example := (by source_fun_prop : HasProgram (fun x : Σ n, List (Fin n) × ℕ => x.2.1[x.2.2]?) _ _ _)
+
+-- The composition for a family of arguments follows from the fact at every type.
+example {α : Type} {β : α → Type} [UniqueEncoding Tree α] [∀ x, UniqueEncoding Tree (β x)]
+    {f g : (x : α) → List (β x)} {pf pg : Value → Code Value} {t p u q : α → ℕ}
+    (hf : HasProgram f pf t p) (hg : HasProgram g pg u q) :=
+  (by source_fun_prop : HasProgram (fun x => f x ++ g x)
+    (fun v => (do let w ← pf v; let z ← pg v; Value.pair w z) >>=
+      fun v => do let w ← Value.left v; let z ← Value.right v; List.Code.append w z) _ _)
 
 -- A user's polymorphic function is implemented once, at every type, in the ordinary way: a hole
 -- without context is one program at every type.

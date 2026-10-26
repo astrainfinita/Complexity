@@ -48,7 +48,9 @@ theorem drain_ftisp : drain ∈ FTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) :=
 
 -- The program is determined by the callbacks; tail-loop space has no stack multiplier.
 example : ∃ test t p, programDrain = loopCode test List.programTail (fun v => pure v) ∧
-    HasProgram (fun xs : List Bool => !xs.isEmpty) test t p :=
-  ⟨_, _, _, rfl, by source_fun_prop⟩
+    HasProgram (fun xs : List Bool => !xs.isEmpty) test t p := by
+  -- The callback's program is read off the loop first, then translated.
+  refine ⟨_, ?t, ?p, rfl, ?callback⟩
+  case callback => source_fun_prop
 
 end ComplexityTest.SourceTranslation.AsymptoticTailRecursion

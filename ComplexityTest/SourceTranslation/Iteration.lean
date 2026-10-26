@@ -37,7 +37,7 @@ variable (f : Bool → Bool → Bool) (count : Bool → ℕ) (initial : Bool →
 example {qi qs : Value → Code Value} {ti pi : Bool → ℕ} {ts ps : Bool × Bool → ℕ}
     (hi : HasProgram (fun e => (count e, (e, initial e))) qi ti pi)
     (hs : HasProgram (fun x : Bool × Bool => f x.1 x.2) qs ts ps) :=
-  (by source_fun_prop : type_of% (hi.iterateWith hs))
+  (by source_fun_prop : type_of% (hi.iterate_with hs))
 
 end Captured
 
@@ -114,7 +114,7 @@ example {ρ α : Type*} [UniqueEncoding Tree ρ] [UniqueEncoding Tree α]
     HasProgram (fun e => (f e)^[0] (initial e)) hole(qi, qs ⊢ program) (fun e => ti e + 1)
       (fun e => max (pi e) (⌜e⌝ₜ.size + 1 + ⌜((0 : ℕ), initial e)⌝ₜ.size)) := by
   fill_hole program in
-    exact (hi.iterateWith hs).mono (Dominated.of_le fun _ => by simp)
+    exact (hi.iterate_with hs).mono (Dominated.of_le fun _ => by simp)
       (Dominated.of_le fun _ => by simp)
 
 end ComplexityTest.SourceTranslation.Iteration

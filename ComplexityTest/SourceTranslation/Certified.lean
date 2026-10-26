@@ -12,7 +12,7 @@ namespace ComplexityTest.SourceTranslation.Certified
 attribute [local fun_prop] HasProgram.identity HasProgram.comp
   List.hasProgram_reverse HasProgram.map HasProgram.ite Prod.hasProgram_fst
   Prod.hasProgram_snd
-  HasProgram.pair HasProgram.append
+  HasProgram.pair List.hasProgram_append
 
 theorem hasProgram_reverse : HasProgram (List.reverse : List Bool → List Bool) hole(⊢ program)
     (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) := by

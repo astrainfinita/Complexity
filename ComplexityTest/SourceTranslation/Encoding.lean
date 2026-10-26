@@ -15,7 +15,7 @@ namespace ComplexityTest.SourceTranslation.Encoding
 -- The input map need not cover all inputs of the original implementation.
 theorem hasProgram_trueOnly : HasProgram (fun b : {b : Bool // b = true} => b.val)
     (fun v => pure v) (fun _ => 0) (fun _ => 0) :=
-  HasProgram.identity.mapInput Subtype.val (fun _ => rfl)
+  HasProgram.identity.map_input Subtype.val (fun _ => rfl)
 
 example : ¬Function.Surjective (Subtype.val : {b : Bool // b = true} → Bool) := by
   rintro h
@@ -25,7 +25,7 @@ example : ¬Function.Surjective (Subtype.val : {b : Bool // b = true} → Bool) 
 theorem hasProgram_sigmaIdentity :
     HasProgram (fun p : Bool × Unit => (⟨p.1, p.2⟩ : Σ _ : Bool, Unit)) (fun v => pure v)
       (fun _ => 0) (fun _ => 0) :=
-  (HasProgram.identity (α := Bool × Unit)).ofEncode
+  (HasProgram.identity (α := Bool × Unit)).of_encode
     (fun p => @Sigma.encode_mk Bool (fun _ => Unit) _ _ p.1 p.2)
 
 -- Independent universes and arbitrary encoding instances remain supported.
@@ -35,7 +35,7 @@ example {α : Type u} {β : Type v} {γ : Type w}
     [UniqueEncoding Tree α] [UniqueEncoding Tree β] [UniqueEncoding Tree γ]
     {f : α → β} {pf : Value → Code Value} {t p : α → ℕ} (hf : HasProgram f pf t p) (o : β → γ)
     (ho : ∀ y, ⌜o y⌝ₜ = ⌜y⌝ₜ) : HasProgram (o ∘ f) pf t p :=
-  hf.ofEncode (g := f) (fun x => ho (f x))
+  hf.of_encode (g := f) (fun x => ho (f x))
 
 -- Adding a logical output certificate preserves the behavior and both exact budgets.
 example {Data α β : Type*} [Encoding Data α] [UniqueEncoding Data β]

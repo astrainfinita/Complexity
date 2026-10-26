@@ -54,7 +54,7 @@ example : ∃ program t p, HasProgram (fun xs : List Bool => xs.reverse.reverse)
 
 -- A hole is filled only by `fill_hole`.
 /--
-error: source translation: the implementation does not match the requested source
+error: source translation: the program is the hole `program`; write `fill_hole program in` before the tactic
 ---
 error: (kernel) declaration has metavariables 'ComplexityTest.SourceTranslation.Public._example'
 -/

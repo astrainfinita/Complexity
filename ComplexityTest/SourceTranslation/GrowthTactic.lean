@@ -13,6 +13,10 @@ namespace ComplexityTest.SourceTranslation.GrowthTactic
 example : Dominated (fun x : List Bool × List Bool => 1 + ⌜x.2⌝ₜ.size + (x.2.reverse.length + 1))
     (fun x => ⌜x⌝ₜ.size) := by dominated
 
+-- A difference equal to the target is compared as stated, before its minuend.
+example : Dominated (fun xs : List Bool => ⌜xs⌝ₜ.size - 1) (fun xs => ⌜xs⌝ₜ.size - 1) := by
+  dominated
+
 -- A coefficient is found without being written by the user.
 example : Dominated (fun xs : List Bool => ⌜(xs, xs.reverse, xs)⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) := by
   dominated

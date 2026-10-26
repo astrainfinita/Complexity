@@ -36,8 +36,10 @@ theorem hasProgram_importedLoop :
 
 example : ∃ test t p,
     programImportedLoop = loopCode test programPreciseIdentity programPreciseIdentity ∧
-      HasProgram (fun _ : List Bool => false) test t p :=
-  ⟨_, _, _, rfl, by source_fun_prop⟩
+      HasProgram (fun _ : List Bool => false) test t p := by
+  -- The callback's program is read off the loop first, then translated.
+  refine ⟨_, ?t, ?p, rfl, ?callback⟩
+  case callback => source_fun_prop
 
 -- Repeated calls reuse the imported growth, at every input.
 example : HasProgram (fun xs => preciseIdentity (preciseIdentity xs)) hole(⊢ program)

@@ -97,7 +97,7 @@ theorem hasProgram_gatherLoop : HasProgram gather hole(⊢ program)
     (fun x => 1 + (⌜x.2.1⌝ₜ.size + 1) + 1) (fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programGatherLoop
   fill_hole program in
-    refine HasProgram.tailLoopPotential hasProgram_gatherCheck hasProgram_advance
+    refine HasProgram.tail_loop_potential hasProgram_gatherCheck hasProgram_advance
       hasProgram_gatherFinish gatherInvariant (fun _ x => ⌜x.2.1⌝ₜ.size) (fun _ => 1)
       (fun x => ⌜x⌝ₜ.size) ?_ (fun _ => le_rfl) ?_ gather_input_size gather_input_size ?_ ?_
       (Dominated.const 2) ?_

@@ -30,13 +30,16 @@ private theorem size_encode_map_le {α β : Type*}
     nlinarith [h.1]
 
 -- A shared let computes the reversal once; the unshared source reverses twice.
-example : HasProgram sharePlain hole(⊢ program) (fun xs => ⌜xs⌝ₜ.size + (0 + (0 + (xs.reverse.length + 1))))
-    (fun xs => max ⌜xs⌝ₜ.size (max 0 (max 0 (⌜xs.reverse⌝ₜ.size + ⌜xs.reverse⌝ₜ.size)))) := by
+example : HasProgram sharePlain hole(⊢ program)
+    (fun xs => ⌜xs⌝ₜ.size + (0 + (0 + 1) + (xs.reverse.length + 1)))
+    (fun xs => max ⌜xs⌝ₜ.size (max (max 0 (max 0 ⌜(xs.reverse, xs.reverse)⌝ₜ.size))
+      ⌜(xs.reverse, xs.reverse)⌝ₜ.size)) := by
   fill_hole program in source_fun_prop
 
 example : HasProgram unshared hole(⊢ program)
-    (fun xs => ⌜xs⌝ₜ.size + (⌜xs⌝ₜ.size + (xs.reverse.length + 1)))
-    (fun xs => max ⌜xs⌝ₜ.size (max ⌜xs⌝ₜ.size (⌜xs.reverse⌝ₜ.size + ⌜xs.reverse⌝ₜ.size))) := by
+    (fun xs => ⌜xs⌝ₜ.size + (⌜xs⌝ₜ.size + 1) + (xs.reverse.length + 1))
+    (fun xs => max (max ⌜xs⌝ₜ.size (max ⌜xs⌝ₜ.size ⌜(xs.reverse, xs.reverse)⌝ₜ.size))
+      ⌜(xs.reverse, xs.reverse)⌝ₜ.size) := by
   fill_hole program in source_fun_prop
 
 -- Local implementations also work, without exposing or naming the model implementation.
@@ -84,7 +87,7 @@ private theorem encode_liftWires (x : Σ n, Σ k, Fin n → Fin k) :
     simp [Function.comp_def]
   simp only [liftWires, Sigma.encode_mk, encode_prod, he]
 
-def hasProgram_liftWires := HasProgram.ofEncode encode_liftWires (by source_fun_prop :
+def hasProgram_liftWires := HasProgram.of_encode encode_liftWires (by source_fun_prop :
   HasProgram (fun x : Σ n, Σ k, Fin n → Fin k =>
     (x.1 + 1, x.2.1 + 1, List.ofFn (Fin.val ∘ x.2.2) ++ [x.2.1])) _ _ _)
 

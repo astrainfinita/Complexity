@@ -21,8 +21,8 @@ theorem hasProgram_duplicate {α : Type*} [UniqueEncoding Tree α] :
       (fun xs => ⌜xs⌝ₜ.size + ⌜xs⌝ₜ.size) := by
   abstract_hole program using programDuplicate
   fill_hole program in
-    exact (HasProgram.identity.append HasProgram.identity).mono
-      (Dominated.of_le fun _ => by simp) (Dominated.of_le fun _ => by simp)
+    refine ((HasProgram.identity.pair HasProgram.identity).comp List.hasProgram_append).mono
+      ?_ ?_ <;> dominated
 
 section SpecComparison
 
