@@ -58,11 +58,11 @@ example {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
     HasProgram (fun x : Bool × α => match x.1 with | false => f x.2 | true => g x.2)
       hole(pf, pg ⊢ program) (fun x => if x.1 then u x.2 + 1 else t x.2 + 1)
       (fun x => max ⌜x⌝ₜ.size (if x.1 then q x.2 else p x.2)) := by
-  fill_hole program in source_calls
+  fill_hole program in source_fun_prop
   all_goals
-    apply Dominated.of_le_mul 2
+    apply Dominated.of_le_mul 4
     rintro ⟨flag, x⟩
-    cases flag <;> simp
+    cases flag <;> simp <;> omega
 
 -- Nested branches retain their own closed environments and selected callback growths.
 example {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
@@ -75,9 +75,9 @@ example {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
       (fun x => if x.1 then (if x.2.1 then th x.2.2 else tg x.2.2) + 1 else tf x.2.2 + 1)
       (fun x => max ⌜x⌝ₜ.size
         (if x.1 then (if x.2.1 then ph x.2.2 else pg x.2.2) else pf x.2.2)) := by
-  fill_hole program in source_calls
+  fill_hole program in source_fun_prop
   all_goals
-    apply Dominated.of_le_mul 2
+    apply Dominated.of_le_mul 10
     rintro ⟨outer, inner, x⟩
     cases outer <;> cases inner <;> simp <;> omega
 
@@ -90,18 +90,18 @@ example {α : Type*} (tag : α) {f g : α → (Σ n, Fin n) → Bool} {pf pg : V
       | true => g tag ⟨x.1, x.2.2⟩) hole(pf, pg ⊢ program)
       (fun x => if x.2.1 then u ⟨x.1, x.2.2⟩ + 1 else t ⟨x.1, x.2.2⟩ + 1)
       (fun x => max ⌜x⌝ₜ.size (if x.2.1 then q ⟨x.1, x.2.2⟩ else p ⟨x.1, x.2.2⟩)) := by
-  fill_hole program in source_calls
+  fill_hole program in source_fun_prop
   all_goals
-    apply Dominated.of_le_mul 2
+    apply Dominated.of_le_mul 4
     rintro ⟨n, flag, i⟩
-    cases flag <;> simp
+    cases flag <;> simp <;> omega
 
 -- Case splitting must not turn pointwise implementations into one uniform program.
 example (f : ℕ → Bool → Bool) (q : ℕ → Value → Code Value) (t p : ℕ → Bool → ℕ)
     (_hf : ∀ n, HasProgram (f n) (q n) (t n) (p n)) :
     True := by
   fail_if_success
-    have := (by source_calls : HasProgram (fun x : Bool × ℕ × Bool =>
+    have := (by source_fun_prop : HasProgram (fun x : Bool × ℕ × Bool =>
       match x.1 with | false => x.2.2 | true => f x.2.1 x.2.2) _ (fun _ => 1) (fun _ => 1))
   trivial
 

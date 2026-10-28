@@ -36,8 +36,8 @@ def swapPair {α β : Type*} (x : α × β) : β × α := (x.2, x.1)
 
 @[fun_prop]
 theorem hasProgram_swapPair {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β] :
-    HasProgram (swapPair : α × β → β × α) hole(⊢ program) (fun _ => 1 + (1 + 1))
-      (fun x => max ⌜x⌝ₜ.size (max ⌜x⌝ₜ.size ⌜(x.2, x.1)⌝ₜ.size)) := by
+    HasProgram (swapPair : α × β → β × α) hole(⊢ program) (fun _ => 1)
+      (fun x => max ⌜x⌝ₜ.size ⌜swapPair x⌝ₜ.size) := by
   abstract_hole program using programSwapPair
   fill_hole program in source_fun_prop
 

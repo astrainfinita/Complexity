@@ -49,7 +49,7 @@ example := (by
     apply Dominated.of_le_mul 6
     rintro ⟨b, xs⟩
     have := foldlTime_le_sum (f := fun _ ys : List Unit => if b then ys.reverse else ys)
-      (t := fun z => 1 + 1 + (if b = true then 1 + 1 + ⌜z.2⌝ₜ.size else 1 + 1) + 1)
+      (t := fun z => 1 + (if b = true then 1 + ⌜z.2⌝ₜ.size else 1) + 1)
       (fun ys => 5 + ⌜ys⌝ₜ.size) (fun _ => by split <;> omega) [] xs
     have hs := size_encode_list xs
     simp [List.sum_map_add] at this ⊢

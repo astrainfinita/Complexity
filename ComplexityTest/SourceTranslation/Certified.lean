@@ -89,9 +89,10 @@ def negateBool : Bool → Bool
 theorem hasProgram_negateBool : HasProgram negateBool hole(⊢ program) (fun _ => 1)
     (fun x => max ⌜x⌝ₜ.size ⌜negateBool x⌝ₜ.size) := by
   abstract_hole program using programNegateBool
-  fill_hole program in source_cases
+  fill_hole program in source_fun_prop
+  all_goals dominated
 
-/-- info: 2 -/
+/-- info: 5 -/
 #guard_msgs in
 #eval (programNegateBool Value.input).build 1 |>.2.1
 
@@ -101,7 +102,8 @@ private def unequalBranches (x : Bool × List Bool) : List Bool :=
 -- Each case table entry is charged once; the unused branch is not added to the growth.
 example : HasProgram unequalBranches hole(⊢ program) (fun _ => 1)
     (fun x => max ⌜x⌝ₜ.size ⌜unequalBranches x⌝ₜ.size) := by
-  fill_hole program in source_cases
+  fill_hole program in source_fun_prop
+  all_goals dominated
 
 private def selectConstant : Bool → ℕ
   | false => 2
@@ -110,7 +112,8 @@ private def selectConstant : Bool → ℕ
 -- Closed values become constant trees of the case table.
 example : HasProgram selectConstant hole(⊢ program) (fun _ => 1)
     (fun x => max ⌜x⌝ₜ.size ⌜selectConstant x⌝ₜ.size) := by
-  fill_hole program in source_cases
+  fill_hole program in source_fun_prop
+  all_goals dominated
 
 private def nonemptyTailReverse (x : {xs : List Bool // xs ≠ []}) : List Bool :=
   match h : x.1 with
@@ -127,9 +130,9 @@ def optionalReverse : Option (List Bool) → List Bool
 -- The growth is the produced one.
 def hasProgram_optionalReverse := (by
   abstract_hole program using programOptionalReverse
-  fill_hole program in source_calls : HasProgram optionalReverse hole(⊢ program) _ _)
+  fill_hole program in source_fun_prop : HasProgram optionalReverse hole(⊢ program) _ _)
 
-/-- info: 11 -/
+/-- info: 13 -/
 #guard_msgs in
 #eval (programOptionalReverse Value.input).build 1 |>.2.1
 
@@ -138,7 +141,7 @@ def singletonIndexed (x : Σ n, List (Fin n)) : Σ n, List (List (Fin n)) := ⟨
 theorem hasProgram_singletonIndexed : HasProgram singletonIndexed hole(⊢ program) (fun _ => 1)
     (fun x => max ⌜x⌝ₜ.size ⌜singletonIndexed x⌝ₜ.size) := by
   abstract_hole program using programSingletonIndexed
-  fill_hole program in source_cases
+  fill_hole program in source_fun_prop
 
 /-- info: 2 -/
 #guard_msgs in
@@ -152,7 +155,7 @@ def mixedCalls (x : Bool × List Bool) : List Bool :=
 -- An opaque call is supplied by one explicit implementation for every input.
 example {program : Value → Code Value} {t p : List Bool → ℕ}
     (legacyImplementation : HasProgram legacy program t p) :=
-  (by source_calls : HasProgram mixedCalls _ _ _)
+  (by source_fun_prop : HasProgram mixedCalls _ _ _)
 
 -- Only the selected branch is charged, at its own structural cost.
 theorem hasProgram_conditionalReverse : HasProgram

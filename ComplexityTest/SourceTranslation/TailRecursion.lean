@@ -55,6 +55,7 @@ theorem hasProgram_advance : HasProgram advance hole(⊢ program) chunkWork (fun
     · have := size_encode_list_append xs.reverse acc
       have := length_le_codeSize xs
       have := size_encode_bool_le tag
+      have := Tree.size_pos ⌜xs⌝ₜ
       simp [chunkWork, size_encode_prod] at *
       try omega
 
@@ -70,7 +71,6 @@ theorem hasProgram_gatherFinish :
     HasProgram (fun x : GatherInput => x.2.2) hole(⊢ program) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programGatherFinish
   fill_hole program in source_fun_prop
-  all_goals dominated
 
 -- The invariant permits the accumulator to grow as chunks are consumed.
 def gatherInvariant (x y : GatherInput) : Prop :=

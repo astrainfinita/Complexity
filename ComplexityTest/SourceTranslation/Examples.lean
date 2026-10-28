@@ -32,7 +32,7 @@ private theorem size_encode_map_le {α β : Type*}
 -- A shared let computes the reversal once; the unshared source reverses twice.
 example : HasProgram sharePlain hole(⊢ program)
     (fun xs => ⌜xs⌝ₜ.size + (0 + (0 + 1) + (xs.reverse.length + 1)))
-    (fun xs => max ⌜xs⌝ₜ.size (max (max 0 (max 0 ⌜(xs.reverse, xs.reverse)⌝ₜ.size))
+    (fun xs => max ⌜xs⌝ₜ.size (max (max ⌜xs.reverse⌝ₜ.size ⌜(xs.reverse, xs.reverse)⌝ₜ.size)
       ⌜(xs.reverse, xs.reverse)⌝ₜ.size)) := by
   fill_hole program in source_fun_prop
 
@@ -330,10 +330,17 @@ theorem emitGate_ftisp : emitGate ∈ FTISP .tree (fun n => n ^ 1) (fun n => n ^
     | exact Dominated.refl _
     | exact Dominated.const_of_pos _ hS
 
--- The compiler uses structural equations, without a rule for each particular datatype.
+-- The compiler uses structural equations, without a rule for each particular datatype; a
+-- referenced definition is translated once and selected.
 def tailOrEmpty {α : Type*} : List α → List α
   | [] => []
   | _ :: xs => xs
+
+@[local source] theorem hasProgram_tailOrEmpty {α : Type*} [UniqueEncoding Tree α] :
+    HasProgram (tailOrEmpty (α := α)) hole(⊢ program) (fun _ => 1) (fun xs => ⌜xs⌝ₜ.size) := by
+  abstract_hole program using programTailOrEmpty
+  fill_hole program in source_fun_prop
+  all_goals dominated
 
 example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop :
     HasProgram (fun xs : List α => (tailOrEmpty xs).reverse) _ _ _)

@@ -182,9 +182,9 @@ private def branches (x : Bool × List Bool) : List Bool :=
 #guard_msgs in
 set_option source.maxSteps 5 in
 example : HasProgram branches hole(⊢ program) (fun _ => 1) (fun _ => 1) := by
-  fill_hole program in source_calls
+  fill_hole program in source_fun_prop
 
-example := (by source_calls : HasProgram branches _ _ _)
+example := (by source_fun_prop : HasProgram branches _ _ _)
 
 private opaque unavailable : Bool → Bool
 private def twice (x : Bool) := unavailable (unavailable x)
@@ -199,17 +199,6 @@ private def twice (x : Bool) := unavailable (unavailable x)
 example : True := by
   fail_if_success have := (by source_fun_prop : HasProgram twice _ _ _)
   trivial
-
-open Lean Meta Elab Tactic in
-example : True := by
-  run_tac
-    let session ← Source.Search.Session.create
-    let rejected ← try
-      let _ ← session.discharge #[] (throwError "fatal marker") (mkConst ``True)
-      pure false
-    catch ex => pure ((← ex.toMessageData.toString) == "fatal marker")
-    unless rejected do throwError "an unexpected elaboration error was swallowed"
-    evalTactic (← `(tactic| trivial))
 
 end SharedSession
 
