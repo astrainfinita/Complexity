@@ -6,7 +6,8 @@ Authors: Yuyang Zhao
 module
 
 public import Complexity.ModelTheory.Algebra.BooleanAlgebra.Basic
-public import Complexity.Models.TreeMachine.Language.Derive
+public import Complexity.Encoding.Sigma
+public import Complexity.Encoding.Nat
 
 /-! # Structural encodings and source operations for Boolean gates
 

@@ -33,13 +33,13 @@ def borrowFinish (x : List Bool × List Bool) : List Bool :=
 theorem hasProgram_borrowContinues :
     HasProgram borrowContinues hole(⊢ program) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programBorrowContinues
-  fill_hole program in source_cases
+  fill_hole program in source_fun_prop
   all_goals dominated
 
 theorem hasProgram_borrowStep :
     HasProgram borrowStep hole(⊢ program) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programBorrowStep
-  fill_hole program in source_cases
+  fill_hole program in source_fun_prop
   all_goals dominated [borrowStep]
 
 def borrow (x : List Bool × List Bool) := x.2.reverse ++ BitList.decrement x.1
@@ -160,7 +160,7 @@ attribute [local fun_prop] hasProgram_addContinues
 theorem hasProgram_addStep :
     HasProgram addStep hole(⊢ program) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programAddStep
-  fill_hole program in source_calls
+  fill_hole program in source_fun_prop
   all_goals dominated [addStep]
 
 
@@ -266,7 +266,7 @@ attribute [local fun_prop] hasProgram_leContinues
 theorem hasProgram_leStep :
     HasProgram leStep hole(⊢ program) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programLeStep
-  fill_hole program in source_calls
+  fill_hole program in source_fun_prop
   all_goals dominated [leStep]
 
 

@@ -8,6 +8,7 @@ module
 public import Complexity.Encoding.Tree
 public import Complexity.Encoding.Option
 public import Complexity.Models.TreeMachine.Language.Verification
+public import Complexity.Models.TreeMachine.Language.CaseView
 public meta import Lean.Elab.Deriving.Util
 public meta import Lean.Meta.Inductive
 public meta import Lean.Meta.Match.Basic
@@ -155,6 +156,7 @@ private inductive Shape where
   | nil
   | field (i : Nat)
   | pair (a b : Shape)
+  deriving BEq
 
 private def tag : Nat → Shape
   | 0 => .nil
@@ -164,6 +166,9 @@ private def fields : List Nat → Shape
   | [] => .nil
   | [i] => .field i
   | i :: is => .pair (.field i) (fields is)
+
+/-- The shape of a tuple of `n` fields. -/
+private def fields' (n : Nat) : Shape := fields (List.range n)
 
 private def ctorShape (ind : InductiveVal) (ctor : ConstructorVal) : MetaM Shape := do
   if ind.name == ``List then
@@ -459,15 +464,219 @@ private def mkCases (target : Target) : TermElabM (Array Command) := do
     @[expose, simp] def $(rootIdent matchName):ident ($v : Value)
       $valueBinders:bracketedBinder* : Code Value := $joinedBody)]
 
+/-- The decision on codes between constructors: tests of the roots of layout nodes, never of
+encoded field data. -/
+private partial def caseTree (choices : Array (Shape × Term)) : TermElabM Term := do
+  let some first := choices[0]? | throwError "cannot dispatch an empty type"
+  if choices.size = 1 then return first.2
+  for path in first.1.sites do
+    let nodes := choices.map fun (s, _) => s.nodeAt path
+    if nodes.all (·.isSome) && nodes.contains (some true) && nodes.contains (some false) then
+      let yes ← caseTree (choices.filter fun (s, _) => s.nodeAt path == some true)
+      let no ← caseTree (choices.filter fun (s, _) => s.nodeAt path == some false)
+      return ← ``(CaseTree.test $(quote path) $yes $no)
+  throwError "constructor layouts cannot be distinguished without inspecting encoded fields"
+
+/-- The tuple type of a constructor's data fields: dependent pairs where a later field depends on
+an earlier one, products otherwise. -/
+private def payloadType (u : Level) : List (Lean.Expr × Lean.Expr) → MetaM Lean.Expr
+  | [] => return mkConst ``PUnit [.succ u]
+  | [(_, t)] => return t
+  | (v, t) :: rest => do
+    let r ← payloadType u rest
+    if r.containsFVar v.fvarId! then mkAppM ``Sigma #[← mkLambdaFVars #[v] r]
+    else mkAppM ``Prod #[t, r]
+
+/-- The case view of a type with several constructors: the payload of a constructor is the tuple
+of its data fields, which the encoding stores at one subtree. -/
+private def mkCaseView (target : Target) : TermElabM (Option Command) := do
+  let ind := target.ind
+  let k := ind.ctors.length
+  if k < 2 then return none
+  -- A constructor at a closed index exists at that index only.
+  for c in ind.ctors do
+    if (← indexFields ind (← getConstInfoCtor c)).any (·.isNone) then return none
+  let header ← mkHeader 0 target
+  let params := (header.argNames.extract 0 ind.numParams).map mkIdent
+  let some payloads ← Term.elabBinders (header.binders.map (·.raw)) fun _ => do
+      let T ← instantiateMVars (← Term.elabTerm header.targetType none)
+      let .sort (.succ u) ← whnf (← inferType T) | return none
+      let source ← withTransparency .default (whnf T)
+      let args := source.getAppArgs
+      let mut payloads := #[]
+      for c in ind.ctors do
+        let ctor ← getConstInfoCtor c
+        let indices ← indexFields ind ctor
+        let data ← dataFields ind ctor
+        let ctorType ← instantiateForall (← inferType (mkConst c source.getAppFn.constLevels!))
+          (args.extract 0 ind.numParams)
+        let some P ← forallTelescopeReducing ctorType fun fs _ => do
+            -- Fields fixed by the result indices are the type's indices.
+            let fixed := indices.zipIdx.filterMap fun (f, j) =>
+              f.map fun f => (fs[f]!, args[ind.numParams + j]!)
+            let types ← data.mapM fun i => do
+              return (fs[i]!, (← inferType fs[i]!).replaceFVars (fixed.map (·.1)) (fixed.map (·.2)))
+            let P ← payloadType u types.toList
+            let .sort (.succ v) ← whnf (← inferType P) | return none
+            if ← isLevelDefEq u v then return some (P, false)
+            -- Fields in a smaller universe are lifted to the type's universe.
+            let lifted := mkApp (mkConst ``ULift [u, v]) P
+            let .sort (.succ w) ← whnf (← inferType lifted) | return none
+            unless ← isLevelDefEq u w do return none
+            return some (lifted, true)
+          | return none
+        payloads := payloads.push (← withOptions (·.setBool `pp.funBinderTypes true) do
+          PrettyPrinter.delab P.1, P.2)
+      return some payloads
+    | return none
+  let mut payloadAlts := #[]
+  let mut encodingAlts := #[]
+  let mut ofPayloadAlts := #[]
+  let mut constructorAlts := #[]
+  let mut elimAlts := #[]
+  let mut rflAlts := #[]
+  let mut choices := #[]
+  for c in ind.ctors, (P, lifted) in payloads do
+    let ctor ← getConstInfoCtor c
+    let i := Syntax.mkNumLit (toString ctor.cidx)
+    let data ← dataFields ind ctor
+    let names ← data.mapM fun _ => return mkIdent (← mkFreshUserName `a)
+    let mut tuple ← match names.toList with
+      | [] => `(PUnit.unit)
+      | [a] => pure a
+      | _ => `(⟨$names,*⟩)
+    let mut pattern ← match names.toList with
+      | [] => `(_)
+      | _ => pure tuple
+    if lifted then
+      tuple ← `(⟨$tuple⟩)
+      pattern ← `(⟨$pattern⟩)
+    let mut fields : Array Term := #[]
+    let mut next := 0
+    for j in [:ctor.numFields] do
+      if data.contains j then
+        fields := fields.push names[next]!
+        next := next + 1
+      else fields := fields.push (← `(_))
+    let underscores ← (List.range ctor.numParams).toArray.mapM fun _ => `(_)
+    let value ← `(@$(mkCIdent c):ident $params:term* $fields:term*)
+    let ctorPattern ← `(@$(mkCIdent c):ident $underscores:term* $fields:term*)
+    payloadAlts := payloadAlts.push (← `(matchAltExpr| | $i:num => $P))
+    encodingAlts := encodingAlts.push
+      (← `(matchAltExpr| | $i:num => inferInstanceAs (UniqueEncoding Tree $P)))
+    ofPayloadAlts := ofPayloadAlts.push (← `(matchAltExpr| | $i:num, $pattern => $value))
+    constructorAlts := constructorAlts.push
+      (← `(matchAltExpr| | $ctorPattern => ⟨$i:num, $tuple, rfl⟩))
+    elimAlts := elimAlts.push (← `(matchAltExpr| | $ctorPattern => g $i:num $tuple h))
+    rflAlts := rflAlts.push (← `(matchAltExpr| | $i:num, $pattern => rfl))
+    let shape ← ctorShape ind ctor
+    -- The fields are the whole code, or the subtree after the tag.
+    let path := if shape == fields' data.size then [] else [true]
+    choices := choices.push (shape, ← ``(CaseTree.leaf $i:num $(quote path)))
+  let dispatch ← caseTree choices
+  return some (← `(command|
+    instance $(rootIdent (target.ns ++ `caseView)):ident $header.binders:bracketedBinder* :
+        CaseView $header.targetType $(Syntax.mkNumLit (toString k)) where
+      Payload i := match i with $payloadAlts:matchAlt*
+      encoding i := match i with $encodingAlts:matchAlt*
+      ofPayload i p := match i, p with $ofPayloadAlts:matchAlt*
+      exists_ofPayload t := match t with $constructorAlts:matchAlt*
+      elim t g := match (generalizing := false) h : t with $elimAlts:matchAlt*
+      elim_ofPayload i p _ := match i, p with $rflAlts:matchAlt*
+      dispatch := $dispatch
+      select_encode i p := match i, p with $rflAlts:matchAlt*))
+
+/-- The case view of a family whose constructors exist at fixed indices, such as function
+symbols by arity, paired with data at the index: `Σ i, T i × R i`. A branch fixes the index, so
+data at the index needs no transport. Constructors with fields are not supported. -/
+private def mkIndexedCaseView (target : Target) : TermElabM (Option Command) := do
+  let ind := target.ind
+  let k := ind.ctors.length
+  unless k ≥ 2 && ind.numParams == 0 && ind.numIndices == 1 && target.arguments.size == 1 &&
+      (← getEnv).contains `Sigma.treeEncoding do
+    return none
+  let i := mkIdent (← mkFreshUserName `i)
+  let family ← target.app #[] #[i]
+  let some indexType ← forallTelescopeReducing ind.type fun xs _ => do
+      let type ← inferType xs[0]!
+      -- The index is stored with the data.
+      if (← synthInstance? (← mkAppM ``UniqueEncoding #[mkConst ``Tree, type])).isNone then
+        return none
+      return some (← PrettyPrinter.delab type)
+    | return none
+  let mut ofPayloadAlts := #[]
+  let mut constructorAlts := #[]
+  let mut elimAlts := #[]
+  let mut rflAlts := #[]
+  let mut payloadAlts := #[]
+  let mut encodingAlts := #[]
+  let mut choices := #[]
+  for c in ind.ctors do
+    let ctor ← getConstInfoCtor c
+    unless (← dataFields ind ctor).isEmpty do return none
+    let some index ← forallTelescopeReducing ctor.type fun _ result => do
+        let index := result.getAppArgs[ind.numParams]!
+        if index.hasFVar then return none
+        return some (← PrettyPrinter.delab index)
+      | return none
+    let j := Syntax.mkNumLit (toString ctor.cidx)
+    let r := mkIdent (← mkFreshUserName `r)
+    let value ← `(⟨$index, @$(mkCIdent c):ident, $r⟩)
+    payloadAlts := payloadAlts.push (← `(matchAltExpr| | $j:num => R $index))
+    encodingAlts := encodingAlts.push
+      (← `(matchAltExpr| | $j:num => inferInstanceAs (UniqueEncoding Tree (R $index))))
+    ofPayloadAlts := ofPayloadAlts.push (← `(matchAltExpr| | $j:num, $r:ident => $value))
+    constructorAlts := constructorAlts.push (← `(matchAltExpr| | $value => ⟨$j:num, $r, rfl⟩))
+    elimAlts := elimAlts.push (← `(matchAltExpr| | $value => g $j:num $r h))
+    rflAlts := rflAlts.push (← `(matchAltExpr| | $j:num, _ => rfl))
+    choices := choices.push (Shape.pair (.field 0) (.pair (← ctorShape ind ctor) (.field 1)),
+      ← ``(CaseTree.leaf $j:num [true, true]))
+  let dispatch ← caseTree choices
+  return some (← `(command|
+    instance $(rootIdent (target.ns ++ `caseViewIndexed)):ident {R : $indexType → Type _}
+        [∀ i, UniqueEncoding Tree (R i)] :
+        CaseView (Σ $i:ident, $family × R $i) $(Syntax.mkNumLit (toString k)) where
+      Payload j := match j with $payloadAlts:matchAlt*
+      encoding j := match j with $encodingAlts:matchAlt*
+      ofPayload j p := match j, p with $ofPayloadAlts:matchAlt*
+      exists_ofPayload t := match t with $constructorAlts:matchAlt*
+      elim t g := match (generalizing := false) h : t with $elimAlts:matchAlt*
+      elim_ofPayload j p _ := match j, p with $rflAlts:matchAlt*
+      dispatch := $dispatch
+      select_encode j p := match j, p with $rflAlts:matchAlt*))
+
+/-- The code of each field of a structure as a subtree of the structure's code,
+`T.encode_field`, by which a field is read. -/
+private def mkFieldEquations (target : Target) : TermElabM (Array Command) := do
+  let ind := target.ind
+  let some info := getStructureInfo? (← getEnv) ind.name | return #[]
+  -- Through a type expression, the generated names are not the structure's.
+  unless target.ns == privateToUserName ind.name do return #[]
+  let ctor ← getConstInfoCtor ind.ctors[0]!
+  let data ← dataFields ind ctor
+  let header ← mkHeader 1 target
+  let x := mkIdent header.targetNames[0]!
+  (← ctorShape ind ctor).projections.toArray.mapM fun (j, path) => do
+    let field := info.fieldNames[data[j]!]!
+    let name := target.ns ++ .mkSimple s!"encode_{field}"
+    `(theorem $(rootIdent name):ident $header.binders:bracketedBinder* :
+        encode Tree ($(mkCIdent (ind.name ++ field)) $x) = (encode Tree $x).subtree $(quote path) :=
+      rfl)
+
 private def deriveOperations (target : Target) (equations := true) : CommandElabM Unit := do
   let ind := target.ind
+  withScope (fun sc => { sc with
+      levelNames := ind.levelParams ++ sc.levelNames.filter (!ind.levelParams.contains ·) }) do
   let cmds ← liftTermElabM do
     let mut cmds := #[]
     for c in ind.ctors do
       let ctor ← getConstInfoCtor c
       cmds := cmds.push (← mkConstructor target ctor)
       if equations then cmds := cmds.push (← mkEncodeEquation target ctor)
-    return cmds ++ (← mkCases target)
+    if equations then cmds := cmds ++ (← mkFieldEquations target)
+    let view ← mkCaseView target
+    let indexed ← if view.isNone then mkIndexedCaseView target else pure none
+    return cmds ++ (← mkCases target) ++ view.toArray ++ indexed.toArray
   for cmd in cmds do elabCommand cmd
 
 private def derive (target : Target) : CommandElabM Unit := do
@@ -563,6 +772,8 @@ end
 public section
 
 run_cmd do
+  -- Fields in a smaller universe than their type are lifted, keeping their codes.
+  Complexity.TreeProgram.Deriving.derive (← Complexity.TreeProgram.Deriving.nativeTarget ``ULift)
   for name in [``List, ``Option, ``Bool] do
     Complexity.TreeProgram.Deriving.deriveOperations
       (← Complexity.TreeProgram.Deriving.nativeTarget name) false

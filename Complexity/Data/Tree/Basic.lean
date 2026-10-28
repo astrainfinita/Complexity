@@ -46,6 +46,17 @@ def root : Tree → Bool
   | nil => false
   | pair _ _ => true
 
+/-- The subtree at a path of `false` (left) and `true` (right) steps. -/
+def subtree (t : Tree) : List Bool → Tree
+  | [] => t
+  | r :: path => (if r then t.right else t.left).subtree path
+
+theorem subtree_append (t : Tree) (p q : List Bool) :
+    t.subtree (p ++ q) = (t.subtree p).subtree q := by
+  induction p generalizing t with
+  | nil => rfl
+  | cons r p ih => exact ih _
+
 @[simp] theorem root_nil : root nil = false := rfl
 
 @[simp] theorem root_pair (a b : Tree) : root (pair a b) = true := rfl
@@ -70,6 +81,15 @@ theorem size_left_le (a : Tree) : size a.left ≤ size a := by
 
 theorem size_right_le (a : Tree) : size a.right ≤ size a := by
   cases a <;> simp only [right, BinaryTree.right, size] <;> omega
+
+theorem size_subtree_le (a : Tree) (path : List Bool) : size (a.subtree path) ≤ size a := by
+  induction path generalizing a with
+  | nil => exact Nat.le_refl _
+  | cons r path ih =>
+    refine Nat.le_trans (ih _) ?_
+    cases r
+    · exact size_left_le a
+    · exact size_right_le a
 
 end Tree
 

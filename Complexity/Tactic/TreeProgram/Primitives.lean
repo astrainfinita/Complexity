@@ -30,7 +30,7 @@ theorem _root_.Bool.hasProgram_not :
   abstract_hole program using programNot
   fill_hole program in
     exact .of_encode (by intro x; cases x <;> rfl)
-      (by source_cases; exact dominated_size_encode_bool _ :
+      (by source_fun_prop; all_goals dominated :
         HasProgram (fun x => match x with | false => true | true => false) _
           (fun _ => 1) (fun x => ⌜x⌝ₜ.size))
 
@@ -39,7 +39,7 @@ theorem hasProgram_boolAnd : HasProgram (fun x : Bool × Bool => x.1 && x.2) hol
   abstract_hole program using programBoolAnd
   fill_hole program in
     exact .of_encode (by rintro ⟨a, b⟩; cases a <;> cases b <;> rfl)
-      (by source_cases; exact dominated_size_encode_bool _ :
+      (by source_fun_prop; all_goals dominated :
         HasProgram (fun x : Bool × Bool => match x.1 with | false => false | true => x.2) _
           (fun _ => 1) (fun x => ⌜x⌝ₜ.size))
 
@@ -48,16 +48,17 @@ theorem hasProgram_boolOr : HasProgram (fun x : Bool × Bool => x.1 || x.2) hole
   abstract_hole program using programBoolOr
   fill_hole program in
     exact .of_encode (by rintro ⟨a, b⟩; cases a <;> cases b <;> rfl)
-      (by source_cases; exact dominated_size_encode_bool _ :
+      (by source_fun_prop; all_goals dominated :
         HasProgram (fun x : Bool × Bool => match x.1 with | false => x.2 | true => true) _
           (fun _ => 1) (fun x => ⌜x⌝ₜ.size))
 
+attribute [local fun_prop] Bool.hasProgram_not in
 theorem hasProgram_boolXor : HasProgram (fun x : Bool × Bool => xor x.1 x.2) hole(⊢ program)
     (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programBoolXor
   fill_hole program in
     exact .of_encode (by rintro ⟨a, b⟩; cases a <;> cases b <;> rfl)
-      (by source_cases; exact dominated_size_encode_bool _ :
+      (by source_fun_prop; all_goals dominated :
         HasProgram (fun x : Bool × Bool => match x.1 with | false => x.2 | true => !x.2) _
           (fun _ => 1) (fun x => ⌜x⌝ₜ.size))
 

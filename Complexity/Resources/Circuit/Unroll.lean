@@ -128,7 +128,6 @@ theorem hasProgram_unrollResult : HasProgram (fun x : UnrollState => x.2.2.2) ho
     (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programUnrollResult
   fill_hole program in source_fun_prop
-  all_goals dominated
 
 /-- The loop sums one step allowance per layer and retains a maximum space allowance. -/
 theorem hasProgram_unroll :

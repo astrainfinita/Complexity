@@ -25,6 +25,9 @@ instance {R : Type*} [c : UniqueEncoding R ℕ] {n : ℕ} : UniqueEncoding R (Fi
 theorem encode_fin {R : Type*} [UniqueEncoding R ℕ] {n : ℕ} (i : Fin n) :
     encode R i = encode R i.val := rfl
 
+theorem _root_.Fin.encode_val [UniqueEncoding Tree ℕ] {n : ℕ} (i : Fin n) :
+    ⌜i.val⌝ₜ = ⌜i⌝ₜ.subtree [] := rfl
+
 /-- Recover a finite tuple from a list of the required length. -/
 def List.decodeFinFunction {α : Type*} (n : ℕ) (xs : List α) : Option (Fin n → α) :=
   if h : xs.length = n then some (fun i => xs.get (Fin.cast h.symm i)) else none
@@ -116,9 +119,23 @@ theorem encode_fin_function_congr {α β : Type*}
     ⌜Fin.castSucc ∘ f⌝ₜ = ⌜f⌝ₜ :=
   encode_fin_function_congr _ _ fun _ => rfl
 
-theorem size_encode_fin_apply_le {α : Type*} [UniqueEncoding Tree α] {n : ℕ}
+/-- An entry of a table is part of the table's code. -/
+@[dominated] theorem size_encode_fin_apply_le {α : Type*} [UniqueEncoding Tree α] {n : ℕ}
     (f : Fin n → α) (i : Fin n) : ⌜f i⌝ₜ.size ≤ ⌜f⌝ₜ.size :=
   size_encode_le_list_of_mem (List.mem_ofFn.mpr ⟨i, rfl⟩)
+
+/-- The code of an entry of a table is a subtree of the table's code, at a path fixed by its
+index. -/
+theorem encode_fin_apply {α : Type*} [UniqueEncoding Tree α] {n : ℕ} (f : Fin n → α)
+    (i : Fin n) : ⌜f i⌝ₜ = ⌜f⌝ₜ.subtree (List.replicate i.val true ++ [false]) := by
+  rw [encode_fin_function]
+  induction n with
+  | zero => exact i.elim0
+  | succ n ih =>
+    rw [List.ofFn_succ, encode_list_cons]
+    cases i using Fin.cases with
+    | zero => rfl
+    | succ i => exact ih (fun j => f j.succ) i
 
 /-- An index stored in a table, as a number, fits in the table. -/
 @[dominated] theorem size_encode_val_apply_le [UniqueEncoding Tree ℕ] {n m : ℕ}

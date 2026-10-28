@@ -8,6 +8,7 @@ module
 public import Complexity.Tactic.TreeProgram.Rules
 public import Complexity.Encoding.TreeSize
 public import Complexity.Tactic.TreeProgram.GrowthFacts
+public import Complexity.Tactic.TreeProgram.Match
 public meta import Lean.Elab.Tactic.Omega.Frontend
 
 /-! # Closing growth comparisons
@@ -34,6 +35,38 @@ public meta section
 open Lean Meta Elab Tactic
 
 namespace Complexity.TreeProgram.Source.Growth
+
+/-- The code of a pair, of a constructor application with a derived encoding, or of a value
+transported along an equation (`encode_eqRec`), by its parts. The equations are instantiated at
+default transparency: the type of a dependent field, or of a transported value, can agree with
+the stated one only after unfolding, which `simp`'s matching does not do. -/
+def expandParts (e : Lean.Expr) : SimpM Simp.Step := withTransparency .default do
+  unless e.isAppOfArity ``UniqueEncoding.encode 4 do return .continue
+  let value := e.appArg!
+  let some name := value.getAppFn.constName? | return .continue
+  let instantiate (equation : Name) : MetaM (Option Lean.Expr) := do
+    let c ← mkConstWithFreshMVarLevels equation
+    let (xs, _, type) ← forallMetaTelescopeReducing (← inferType c)
+    let some (_, lhs, _) := type.eq? | return none
+    unless ← isDefEq lhs e do return none
+    return some (← instantiateMVars (mkAppN c xs))
+  let some proof ← (if value.isAppOfArity ``Eq.rec 6 then do
+      let args := value.getAppArgs
+      some <$> mkAppOptM ``encode_eqRec
+        #[args[0]!, args[1]!, args[2]!, none, args[3]!, args[4]!, args[5]!]
+    else do
+      unless (← getEnv).isConstructor name do return none
+      let equation := if name == ``Prod.mk then ``encode_prod
+        else name.getPrefix ++ .mkSimple ("encode_" ++ name.getString!)
+      unless (← getEnv).contains equation do return none
+      instantiate equation) | return .continue
+  let some (_, lhs, rhs) := (← inferType proof).eq? | return .continue
+  unless ← isDefEq lhs e do return .continue
+  let rhs ← Core.betaReduce (← instantiateMVars rhs)
+  return .visit { expr := rhs, proof? := some (← mkExpectedTypeHint proof (← mkEq e rhs)) }
+
+/-- Rewrite a code by its parts (`expandParts`). -/
+simproc_decl encodeParts (encode Tree _) := expandParts
 
 /-- The two sides of a statement `l ≤ r`, `l < r` or `l = r`. -/
 def sides? (e : Lean.Expr) : Option (Lean.Expr × Lean.Expr) :=
@@ -320,10 +353,10 @@ def dsimpOwn (ctx : Simp.Context) (goal : MVarId) (outer : Option FVarIdSet := n
     return (← dsimpGoal goal ctx (fvarIdsToSimp := fvars)).1
   catch _ => return some goal
 
-/-- Use the equations left by splitting a `match`: an equation between constructor applications
-is substituted, and the goal is closed when `cases` on an equation leaves no cases, as for a
-branch that contradicts the test selecting it. A heterogeneous equation between variables, left
-by generalizing a dependent discriminant, is substituted. -/
+/-- Use the equations left by splitting a `match`: an equation between constructor applications,
+or of a variable to one, is substituted, and the goal is closed when `cases` on an equation
+leaves no cases, as for a branch that contradicts the test selecting it. A heterogeneous equation
+between variables, left by generalizing a dependent discriminant, is substituted. -/
 partial def casesEquations (outer : FVarIdSet) (goal : MVarId) : MetaM (Array MVarId) :=
   goal.withContext do
   for decl in ← getLCtx do
@@ -339,7 +372,9 @@ partial def casesEquations (outer : FVarIdSet) (goal : MVarId) : MetaM (Array MV
     let constructor (e : Lean.Expr) : MetaM Bool := do
       let some name := (← whnfR e).getAppFn.constName? | return false
       return (← getEnv).find? name |>.any (·.isCtor)
-    let injective := (← constructor type.appFn!.appArg!) && (← constructor type.appArg!)
+    -- A variable equal to a constructor, as a `match h : x with` leaves, is substituted too.
+    let injective := (← constructor type.appArg!) &&
+      (type.appFn!.appArg!.isFVar || (← constructor type.appFn!.appArg!))
     let saved ← saveState
     try
       let goals ← goal.cases decl.fvarId
@@ -779,14 +814,17 @@ elab_rules : tactic
       if decl.isImplementationDetail then continue
       let type := (← instantiateMVars decl.type).consumeMData
       if type.isAppOf ``Dominated then facts := facts.push (decl.toExpr, ← unfoldComp type)
-    let sizes ← simpContext #[``Function.comp_apply, ``Nat.mul_one] (attrs := #[`dominated_simp])
+    let sizes ← simpContext #[``Function.comp_apply, ``Nat.mul_one, ``Tree.size_pair]
+      (attrs := #[`dominated_simp])
     let sizesMul ← simpContext
       #[``Function.comp_apply, ``Nat.mul_add, ``Nat.mul_one, ``Nat.mul_zero]
       (attrs := #[`dominated_simp])
     let expand ← simpContext (simpOnlyBuiltins.toArray ++ #[``Function.comp_apply, ``max_le_iff,
+      ``Tree.size_pair,
       ``List.map_const', ``List.sum_replicate, ``smul_eq_mul, ``pow_zero]) unfolds
       (attrs := #[`dominated_simp, `dominated_expand])
-    let numerals := #[← (← ({} : Simp.Simprocs).add ``Nat.reduceMul true).add ``Nat.reduceAdd true]
+    let numerals := #[← (← (← ({} : Simp.Simprocs).add ``Nat.reduceMul true).add ``Nat.reduceAdd
+      true).add ``encodeParts true]
     let ctx : Context :=
       { statements := ← factTree lemmas, premises := ← premiseTree, facts, sizes, sizesMul,
         expand, numerals }

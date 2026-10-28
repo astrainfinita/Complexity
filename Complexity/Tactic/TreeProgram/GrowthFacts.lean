@@ -12,11 +12,11 @@ public import Complexity.Tactic.TreeProgram.Attributes
 
 /-! # Statements about encodings used by the automation
 
-`dominated` and finite source cases know encodings only through registrations: the normalization
-of encoded sizes (`dominated_simp`, and `dominated_expand` for the pointwise expansion), the size
-facts instantiated at matching terms (`dominated`) and at hypotheses (`dominated_forward`), the
-encoding equations of finite source cases (`source_case_simp`), and the types stored as a field with
-the field's operations (`source_view`). Lemmas of this library are
+`dominated` and the source translation know encodings only through registrations: the
+normalization of encoded sizes (`dominated_simp`, and `dominated_expand` for the pointwise
+expansion), the size facts instantiated at matching terms (`dominated`) and at hypotheses
+(`dominated_forward`), and the types stored as a field with the field's operations
+(`source_view`). Lemmas of this library are
 registered where they are stated; this file registers those from Lean and Mathlib and those whose
 files do not import the tactic layer. -/
 
@@ -35,8 +35,6 @@ attribute [dominated_expand] UniqueEncoding.encode_subtype encode_bool_true enco
 /- A tree is its own code, so a source building trees leaves `Tree.nil` and `Tree.pair` in a
 growth; their sizes are the defining equations of `Tree.size`. -/
 attribute [dominated_expand] Tree.encode_self Tree.size_nil Tree.size_pair
-
-attribute [source_case_simp] encode_unit encode_prod List.ofFn_succ encode_vector Vector.toList_ofFn
 
 attribute [source_view] Fin.val_castSucc Fin.val_castAdd Fin.val_natAdd Fin.val_succ Fin.val_last
   Fin.val_zero Vector.toList_push Vector.toList_append encode_ofFn encode_fin_function_codes

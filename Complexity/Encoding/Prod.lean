@@ -20,8 +20,9 @@ namespace Complexity
 
 scoped notation "⌜" x "⌝ₜ" => encode Tree x
 
-instance : UniqueEncoding Tree Unit :=
-  UniqueEncoding.ofOption (fun _ ↦ .nil) (fun t ↦ if t = .nil then some () else none)
+/-- The unit of every universe is the empty tree. -/
+instance : UniqueEncoding Tree PUnit :=
+  UniqueEncoding.ofOption (fun _ ↦ .nil) (fun t ↦ if t = .nil then some .unit else none)
     (by intro a t; cases a; by_cases h : t = .nil <;> simp [h, eq_comm])
 
 instance {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β] :
@@ -37,16 +38,16 @@ instance {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β] :
 a lemma rewriting a unit value to `()` would have a variable as its left side and cannot be used
 by `simp`. -/
 
-theorem encode_unit (u : Unit) : ⌜u⌝ₜ = .nil := rfl
+theorem encode_unit (u : PUnit) : ⌜u⌝ₜ = .nil := rfl
 theorem encode_prod {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
     (a : α) (b : β) : ⌜(a, b)⌝ₜ = .pair ⌜a⌝ₜ ⌜b⌝ₜ := rfl
 
-@[simp] theorem root_encode_unit (u : Unit) : ⌜u⌝ₜ.root = false := rfl
-@[simp] theorem left_encode_unit (u : Unit) : ⌜u⌝ₜ.left = ⌜()⌝ₜ := rfl
-@[simp] theorem right_encode_unit (u : Unit) : ⌜u⌝ₜ.right = ⌜()⌝ₜ := rfl
-@[simp] theorem size_encode_unit (u : Unit) : ⌜u⌝ₜ.size = 1 := rfl
-@[simp] theorem eq_encode_unit (u : Unit) (t : Tree) : t = ⌜u⌝ₜ ↔ t = .nil := Iff.rfl
-@[simp] theorem encode_unit_eq (u : Unit) (t : Tree) : ⌜u⌝ₜ = t ↔ .nil = t := Iff.rfl
+@[simp] theorem root_encode_unit (u : PUnit) : ⌜u⌝ₜ.root = false := rfl
+@[simp] theorem left_encode_unit (u : PUnit) : ⌜u⌝ₜ.left = ⌜()⌝ₜ := rfl
+@[simp] theorem right_encode_unit (u : PUnit) : ⌜u⌝ₜ.right = ⌜()⌝ₜ := rfl
+@[simp] theorem size_encode_unit (u : PUnit) : ⌜u⌝ₜ.size = 1 := rfl
+@[simp] theorem eq_encode_unit (u : PUnit) (t : Tree) : t = ⌜u⌝ₜ ↔ t = .nil := Iff.rfl
+@[simp] theorem encode_unit_eq (u : PUnit) (t : Tree) : ⌜u⌝ₜ = t ↔ .nil = t := Iff.rfl
 
 variable {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
 
@@ -82,5 +83,15 @@ theorem size_encode_snd_le (x : α × β) : ⌜x.2⌝ₜ.size ≤ ⌜x⌝ₜ.siz
 @[simp] theorem encode_prod_eq_pair (a : α) (b : β) (l r : Tree) :
     ⌜(a, b)⌝ₜ = Tree.pair l r ↔ ⌜a⌝ₜ = l ∧ ⌜b⌝ₜ = r := by
   simp only [encode_prod, BinaryTree.node.injEq, true_and]
+
+/-! The code of a field is a subtree of the structure's code, stated as `T.encode_field`;
+`@[tree_encoding]` states it for the structures it derives. -/
+
+theorem _root_.Prod.encode_fst (x : α × β) : ⌜x.1⌝ₜ = ⌜x⌝ₜ.subtree [false] := rfl
+
+theorem _root_.Prod.encode_snd (x : α × β) : ⌜x.2⌝ₜ = ⌜x⌝ₜ.subtree [true] := rfl
+
+theorem _root_.Subtype.encode_val {p : α → Prop} (x : {a // p a}) :
+    ⌜x.1⌝ₜ = ⌜x⌝ₜ.subtree [] := rfl
 
 end Complexity

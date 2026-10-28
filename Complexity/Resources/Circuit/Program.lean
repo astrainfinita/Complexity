@@ -31,7 +31,7 @@ theorem gateClauses_size_le {α : Type*} [UniqueEncoding Tree α]
     HasProgram (gateClauses (α := α)) hole(⊢ program) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programGateClauses
   fill_hole program in source_fun_prop
-  exact (Dominated.refl _).max_same (Dominated.of_le_mul _ gateClauses_size_le)
+  all_goals dominated
 
 theorem gateClauses_ftisp {α : Type*} [UniqueEncoding Tree α] :
     gateClauses (α := α) ∈ FTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by

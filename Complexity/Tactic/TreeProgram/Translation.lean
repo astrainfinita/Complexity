@@ -17,8 +17,11 @@ public import Complexity.Classes.Functions.Basic
 public import Complexity.Encoding.TreeSize
 public meta import Lean.Meta.Match.MatcherApp.Transform
 public meta import Lean.Meta.RecExt
-public meta import Complexity.Tactic.TreeProgram.FiniteCases
 public meta import Complexity.Tactic.Hole
+public import Complexity.Tactic.TreeProgram.Match
+public meta import Complexity.Tactic.TreeProgram.Match
+public import Complexity.Tactic.TreeProgram.Assembly
+public meta import Complexity.Tactic.TreeProgram.Assembly
 
 /-! # Certified translation of Lean source functions
 
@@ -131,12 +134,34 @@ public meta section
 
 namespace Complexity.TreeProgram.Source
 
-/-- Certify source branches with previously registered function implementations. -/
-syntax (name := sourceCalls) "source_calls" : tactic
 /-- Compose source-function implementations and their growth.
 `using ns` activates the namespace's scoped rules for this translation and its callbacks. -/
 syntax (name := sourceFunProp) "source_fun_prop" (" using " ident)?
   (" via " term)? : tactic
+
+open Lean Meta in
+/-- `proof` as a proof of `type`: itself when the types agree reducibly, otherwise an auxiliary
+theorem stated at `type`, which the kernel checks. -/
+def typedSourceProof (type proof : Lean.Expr) : MetaM Lean.Expr := do
+  if ← withReducible (isDefEq type (← inferType proof)) then return proof
+  mkAuxTheorem type proof
+
+open Lean Meta in
+/-- The arguments of a goal `HasProgram f program time peak`, with its implicit types and
+encodings. -/
+def sourceGoalArgs (goal : MVarId) : MetaM (Array Lean.Expr) := do
+  let target := (← instantiateMVars (← goal.getType)).consumeMData
+  unless target.isAppOfArity ``HasProgram 8 do
+    throwError "source translation: expected HasProgram, got {target}"
+  return target.getAppArgs
+
+open Lean Meta in
+/-- Unfold a definition being translated; any other definition only as notation (reducible
+definitions and instances), since its cost is that of its own selected implementation. -/
+private def unfoldSource? (roots : NameSet) (e : Lean.Expr) : MetaM (Option Lean.Expr) := do
+  let some name := e.getAppFn.constName? | return none
+  if roots.contains name then unfoldDefinition? e
+  else withReducibleAndInstances (unfoldDefinition? e)
 
 open Lean Meta in
 /-- A program request whose program and growth are left to the selected rules. -/
@@ -191,14 +216,6 @@ def finishProgram (goal : MVarId) (result : Lean.Expr) : MetaM (List MVarId) :=
   goal.assign value
   return obligations
 
-open Lean Meta Elab Tactic in
-private def sourceCallsWith (roots : NameSet) (query : Lean.Expr → MetaM (Option Lean.Expr)) :
-    TacticM Unit :=
-  FiniteCases.sourceCalls roots fun f => do
-    let some implementation ← query (← programGoal f) |
-      Search.unsupported m!"source calls: no implementation for branch {f}"
-    instantiateMVars implementation
-
 open Lean Meta Mathlib.Meta.FunProp in
 private def sourceQuery (search : Lean.Expr → FunPropM (Option Result))
     (context : Mathlib.Meta.FunProp.Context) (target : Lean.Expr) : MetaM (Option Lean.Expr) := do
@@ -242,56 +259,6 @@ private def implementationKey (goal : Lean.Expr) : Lean.Expr :=
   if goal.isAppOfArity ``HasProgram 8 then mkAppN goal.getAppFn (goal.getAppArgs.extract 0 5)
   else goal
 
-open Lean Meta in
-/-- The components of a right-nested tuple. -/
-private partial def tupleComponents (e : Lean.Expr) : List Lean.Expr :=
-  if e.isAppOfArity ``Prod.mk 4 then e.appFn!.appArg! :: tupleComponents e.appArg! else [e]
-
-open Lean Meta in
-/-- The first equation of `thms` rewriting `e` at the root only, to an encoding if `encoding`,
-that `accept` takes, given the right side, the equation and whether the left side applies a
-variable. -/
-private def rootEquation {α : Type} (thms : SimpTheorems) (e : Lean.Expr) (encoding : Bool)
-    (accept : Lean.Expr → Lean.Expr → Bool → MetaM (Option α)) : MetaM (Option α) := do
-  let candidates ← thms.post.getMatch e
-  for thm in candidates.qsort (·.priority > ·.priority) do
-    let value ← thm.getValue
-    let (args, _, type) ← forallMetaTelescopeReducing (← inferType value)
-    let some (_, l, r) := type.eq? | continue
-    if encoding && !r.isAppOfArity ``UniqueEncoding.encode 4 then continue
-    let arg := if encoding then l.appArg! else l
-    let applied := arg.isApp && arg.getAppFn.isMVar
-    unless ← isDefEq l e do continue
-    let r ← instantiateMVars r
-    let proof ← instantiateMVars (mkAppN value args)
-    if r.hasMVar || proof.hasMVar || r == e then continue
-    if let some a ← accept r (← mkExpectedTypeHint proof (← mkEq e r)) applied then return some a
-  return none
-
-open Lean Meta in
-/-- The structural encoding `⌜C a⌝ₜ = ⌜v⌝ₜ` of a constructor application, with the components of
-`v` and their declared types. The equation is found for the constructor alone, its fields being
-local variables, and the actual fields are substituted afterwards. -/
-private def constructorEncoding (body : Lean.Expr) :
-    MetaM (Option (Lean.Expr × List (Lean.Expr × Lean.Expr))) := do
-  let .const name _ := body.getAppFn | return none
-  let some (.ctorInfo ctor) := (← getEnv).find? name | return none
-  if name == ``Prod.mk then return none
-  let args := body.getAppArgs
-  unless args.size == ctor.numParams + ctor.numFields do return none
-  let head := mkAppN body.getAppFn (args.extract 0 ctor.numParams)
-  let fields := args.extract ctor.numParams args.size
-  forallBoundedTelescope (← inferType head) ctor.numFields fun ys type => do
-    let some inst ← synthInstance? (← mkAppM ``UniqueEncoding #[mkConst ``Tree, type]) |
-      return none
-    let some (r, proof) ← rootEquation (← getSimpTheorems)
-        (← mkAppOptM ``encode #[mkConst ``Tree, type, inst, mkAppN head ys]) true
-        fun r h _ => return some (r, h) |
-      return none
-    let substitute (e : Lean.Expr) := do return (← mkLambdaFVars ys e).beta fields
-    return some (← substitute proof, ← (tupleComponents r.appArg!).mapM fun c => do
-      return (← substitute c, ← substitute (← inferType c)))
-
 open Lean Meta Mathlib.Meta.FunProp in
 /-- A constructor applied to computed fields, through its structural encoding: the fields are
 computed in turn and paired, after a constant tag if the encoding starts with one. The growth
@@ -314,21 +281,12 @@ private def constructorRule (search : Lean.Expr → FunPropM (Option Result)) (g
     -- The value is encoded at the requested type.
     let code ← mkAppOptM ``encode
       #[mkConst ``Tree, (goal.getArg! 1).beta #[x], (goal.getArg! 3).beta #[x], body]
-    -- A closed value whose code is the empty tree is computed by no step, like `()`.
-    unless body.containsFVar x.fvarId! do
-      let some T ← FiniteCases.closedTree code | return none
-      unless T.isConstOf ``Tree.nil do return none
-      let unit ← mkAppOptM ``HasProgram.unit #[← inferType x, none]
-      let empty ← mkExpectedTypeHint (← mkEqRefl code)
-        (← mkEq code (← encodeTree (mkConst ``Unit.unit)))
-      return some ⟨← mkAppM ``HasProgram.of_encode #[← mkLambdaFVars #[x] empty, unit]⟩
     let some (proof, components) ← constructorEncoding body | return none
     let (tag, fields) ← match components with
       | (first, type) :: rest@(_ :: _) =>
-        if first.hasFVar then pure (none, components)
-        else if let some T ← FiniteCases.closedTree (← encodeAs type first) then
-          pure (some (first, T), rest)
-        else pure (none, components)
+        -- A closed tag is written as its code, without computing it.
+        if first.hasFVar || first.hasMVar then pure (none, components)
+        else pure (some (first, ← encodeAs type first), rest)
       | _ => pure (none, components)
     if fields.isEmpty then return none
     let growth ← mkArrow (← inferType x) (mkConst ``Nat)
@@ -535,17 +493,27 @@ private def codesComposition (search : Lean.Expr → FunPropM (Option Result))
   return some ⟨← mkAppM ``HasProgram.mono #[result, comparisons[0]!, comparisons[1]!]⟩
 
 open Lean Meta in
-/-- Whether a value is built by constructors from the input, its projections and closed values,
-so that its code is assembled from subtrees of the input's code. -/
-private partial def isAtHand (x e : Lean.Expr) : MetaM Bool := do
-  if !e.containsFVar x.fvarId! then return true
-  if ← Search.isProjectionOf x e then return true
-  let some name := e.getAppFn.constName? | return false
-  let some (.ctorInfo ctor) := (← getEnv).find? name | return false
-  (e.getAppArgs.extract ctor.numParams e.getAppNumArgs).allM (isAtHand x)
+/-- Record the definition a source function is, up to eta, uncurrying and an encoder: `g`,
+`fun x => g x.1 x.2` or `fun x => ⌜g x⌝ₜ`, whose explicit arguments are the input or its
+projections. Calling `g` on anything else is a use of `g`, which needs its own selected
+implementation. -/
+def addSourceRoot (session : Search.Session) (f : Lean.Expr) : MetaM Unit := do
+  if let some name := f.eta.getAppFn.constName? then
+    session.roots.modify (·.insert name)
+    return
+  let some name ← lambdaTelescope f fun xs body => do
+      let body := if body.isAppOfArity ``UniqueEncoding.encode 4 then body.appArg! else body
+      let some name := body.getAppFn.constName? | return none
+      let #[x] := xs | return none
+      let info ← getFunInfoNArgs body.getAppFn body.getAppNumArgs
+      for arg in body.getAppArgs, param in info.paramInfo do
+        if param.isExplicit && !(← Search.isProjectionOf x arg) then return none
+      return some name
+    | return
+  session.roots.modify (·.insert name)
 
 open Lean Meta Elab Tactic Mathlib.Meta.FunProp in
-private partial def sourceSearch (session : Search.Session) (nested : Bool)
+private partial def sourceSearch (session : Search.Session)
     (ancestors : Array Lean.Expr) (goal : Lean.Expr) : FunPropM (Option Result) := do
   let goal ← instantiateMVars goal
   trace[source.translation] "implementation query: {goal}"
@@ -556,7 +524,7 @@ private partial def sourceSearch (session : Search.Session) (nested : Bool)
   if let some { proof? := some proof, .. } := (← get).cache.find? key then
     if ← isDefEq goal (← inferType proof) then return some ⟨proof⟩
   -- Auxiliary theorems of a failed attempt are rolled back; results using them are recomputed.
-  if let some proof := (← session.results.get)[(key, nested)]? then
+  if let some proof := (← session.results.get)[key]? then
     if proof.getUsedConstants.all (← getEnv).contains then
       if ← isDefEq goal (← inferType proof) then return some ⟨proof⟩
   -- Only requests with unconstrained growth are failures of the source function itself.
@@ -567,29 +535,16 @@ private partial def sourceSearch (session : Search.Session) (nested : Bool)
   let ancestors := ancestors.push key
   increaseSteps
   let restore ← Search.checkpoint
-  let search := sourceSearch session true ancestors
+  let search := sourceSearch session ancestors
   let context ← read
   -- A branch has a different local context: only fuel, path and diagnostics cross this boundary.
   let query := sourceQuery search context
-  let structural : FunPropM (Option Result) := Search.attempt do
-    -- A speculative lambda rule may leave an unencodable function-valued result.
-    -- Such a premise cannot be compiled structurally, but another candidate may apply.
-    for encoder in goal.getAppArgs.extract 2 4 do
-      let encoder ← instantiateMVars encoder
-      -- The output encoder is a family over the input.
-      if (if encoder.isLambda then encoder.bindingBody! else encoder).getAppFn.isMVar then
-        let some encoderProof ← synthInstance? (← inferType encoder) | return none
-        unless ← isDefEq encoder encoderProof do return none
-    for action in [FiniteCases.sourceCases, sourceCallsWith (← session.roots.get) query] do
-      if let some proof ← session.discharge ancestors action goal then
-        return some ⟨proof⟩
-    return none
   let finish (result : Option Result) : FunPropM (Option Result) := do
     if let some r := result then
       let proof ← instantiateMVars
         (← typedSourceImplementation (← instantiateMVars goal) (← instantiateMVars r.proof))
       unless key.hasFVar || key.hasMVar || proof.hasFVar || proof.hasMVar do
-        session.results.modify (·.insert (key, nested) proof)
+        session.results.modify (·.insert key proof)
       return some (← cacheResult key { r with proof })
     restore
     if unconstrained then cacheFailure key
@@ -607,6 +562,10 @@ private partial def sourceSearch (session : Search.Session) (nested : Bool)
   let some (decl, f) ← getFunProp? goal | return ← finish none
   -- Certify a specified source; a speculative rule must not invent missing callbacks.
   if f.hasExprMVar then return ← finish none
+  -- A field of a field of the input is a subtree of its code; a closed value is a constant.
+  if goal.isAppOfArity ``HasProgram 8 then
+    if let some r ← Search.attempt (fieldRule goal) then return ← finish (some r)
+    if let some r ← Search.attempt (closedRule goal) then return ← finish (some r)
   -- Encoding an unsupported source call is not an instruction to translate its encoder.
   let encodedCall ← lambdaTelescope f fun _ body => do
     unless body.isAppOfArity ``UniqueEncoding.encode 4 do return none
@@ -635,7 +594,19 @@ private partial def sourceSearch (session : Search.Session) (nested : Bool)
             return some result
         return none
       -- This driver owns every stage; queries and certificate adapters do not schedule work.
+      let info? ← match d.fn with
+        | .const name _ => pure (some (← getConstInfo name))
+        | _ => pure none
+      -- A constructor of values at hand, such as a pair, is assembled from subtrees of the input's
+      -- code; a constructor has no implementation to select.
+      if info?.any (·.isCtor) then
+        if let some r ← Search.attempt (assembleRule goal (target.getArg! decl.funArgId)) then
+          return some r
       if let some r ← rules false then return some r
+      -- A `match` on a part of the input is eliminated by its type's elimination rule.
+      if let .const name _ := d.fn then
+        if (← getMatcherInfo? name).isSome || isCasesOnLike env name || isRecCore env name then
+          if let some r ← Search.attempt (casesRule search target) then return some r
       -- A function with one program at every type, at an argument whose type depends on the input.
       if let .const name _ := d.fn then
         unless (← getTheoremsForFunction name ``HasProgram).isEmpty do
@@ -644,25 +615,15 @@ private partial def sourceSearch (session : Search.Session) (nested : Bool)
       if let some r ← Search.attempt (viewRule search target) then return some r
       if let some name := encodedCall then
         if let some r ← rules true then return some r
-        session.reject ancestors (Search.recursionMessage name) .specification (some name)
+        session.reject ancestors (Search.recursionMessage name)
         return none
-      let info? ← match d.fn with
-        | .const name _ => pure (some (← getConstInfo name))
-        | _ => pure none
-      -- A nested constructor of values at hand is assembled from subtrees of the input's code.
-      let atHand ← if nested && info?.any (·.isCtor) then
-          lambdaTelescope (target.getArg! 4) fun xs body => do
-            let #[x] := xs | return false
-            isAtHand x body
-        else pure false
-      if atHand then
-        if let some r ← structural then return some r
-      -- Otherwise a constructor is built from its fields, also as the value of a definition.
+      -- So is a definition whose value is such a constructor, after its selected implementations;
+      -- otherwise a constructor is built from its fields, also as the value of a definition.
       if info?.any fun info => info.isCtor || info.isDefinition then
+        if info?.any (·.isDefinition) then
+          if let some r ← Search.attempt (assembleRule goal (target.getArg! decl.funArgId)) then
+            return some r
         if let some r ← Search.attempt (constructorRule search target) then return some r
-      -- A nonmatching candidate must not block structural field extraction.
-      if !atHand && (nested || !candidates.isEmpty) then
-        if let some r ← structural then return some r
       -- Subcall specifications need structural decomposition before their fallback rules:
       -- otherwise lookup of a composite table can recursively request rebuilding that table.
       if let some r ← rules true then return some r
@@ -672,7 +633,6 @@ private partial def sourceSearch (session : Search.Session) (nested : Bool)
       if d.fn.isConstOf ``UniqueEncoding.encode then
         session.reject ancestors m!"source translation: no implementation for the encoded result; \
           select a rule scope with `using`, or register a function equality with `[source]`"
-          .specification
         return none
       let decomposition ← d.decomposition
       if let .failed := decomposition then
@@ -683,29 +643,34 @@ private partial def sourceSearch (session : Search.Session) (nested : Bool)
               Search.lambdaRules search decl .comp target (some (outer, inner)) then
             return some r
       if let some f ← d.unfoldHeadFVar? then
-        return ← sourceSearch session nested ancestors (target.setArg decl.funArgId f)
+        return ← sourceSearch session ancestors (target.setArg decl.funArgId f)
+      -- A local function is implemented only by a local certificate.
+      if d.fn.isFVar && d.fn != d.mainVar then
+        session.reject ancestors m!"source translation: `{d.fn}` needs an implementation (a \
+          `HasProgram` hypothesis)"
+        return none
       if let .const name _ := d.fn then
         if ← isRecursiveDefinition name then
-          session.reject ancestors (Search.recursionMessage name) .specification (some name)
+          session.reject ancestors (Search.recursionMessage name)
           return none
         unless (← getMatcherInfo? name).isSome do
-          if let some body ← FiniteCases.unfoldSource? (← session.roots.get)
+          if let some body ← unfoldSource? (← session.roots.get)
               (Mor.mkAppN d.fn d.args) then
-            return ← sourceSearch session nested ancestors
-              (target.setArg decl.funArgId (← mkLambdaFVars #[d.mainVar] body))
+            let f ← mkLambdaFVars #[d.mainVar] body
+            -- A source that is another definition up to uncurrying is translated as that one.
+            if (← session.roots.get).contains name then addSourceRoot session f
+            return ← sourceSearch session ancestors (target.setArg decl.funArgId f)
           if (← getConstInfo name).isDefinition then
             session.reject ancestors m!"source translation: `{.ofConstName name}` needs a \
               selected implementation (register one with `[source]`, or choose replacement \
-              source with `via`)" .specification (some name)
+              source with `via`)"
             return none
       if let .comp outer inner := decomposition then
         if let some r ← Search.lambdaRules search decl .comp target
             (some (outer, inner)) then
           return some r
       return none
-  if result.isSome then return ← finish result
-  restore
-  return ← finish (← structural)
+  finish result
 
 open Lean Meta Elab Tactic Mathlib.Meta.FunProp in
 open Lean Meta Elab Tactic Mathlib.Meta.FunProp in
@@ -725,26 +690,6 @@ private def sourceContext : MetaM Mathlib.Meta.FunProp.Context := do
   let config := { maxSteps := source.maxSteps.get (← getOptions) : Mathlib.Meta.FunProp.Config }
   return { disch := tacticToDischarge tactic, config }
 
-open Lean Meta in
-/-- Record the definition a source function is, up to eta, uncurrying and an encoder: `g`,
-`fun x => g x.1 x.2` or `fun x => ⌜g x⌝ₜ`, whose explicit arguments are the input or its
-projections. Calling `g` on anything else is a use of `g`, which needs its own selected
-implementation. -/
-def addSourceRoot (session : Search.Session) (f : Lean.Expr) : MetaM Unit := do
-  if let some name := f.eta.getAppFn.constName? then
-    session.roots.modify (·.insert name)
-    return
-  let some name ← lambdaTelescope f fun xs body => do
-      let body := if body.isAppOfArity ``UniqueEncoding.encode 4 then body.appArg! else body
-      let some name := body.getAppFn.constName? | return none
-      let #[x] := xs | return none
-      let info ← getFunInfoNArgs body.getAppFn body.getAppNumArgs
-      for arg in body.getAppArgs, param in info.paramInfo do
-        if param.isExplicit && !(← Search.isProjectionOf x arg) then return none
-      return some name
-    | return
-  session.roots.modify (·.insert name)
-
 open Lean Meta Elab Tactic Mathlib.Meta.FunProp in
 /-- Certify a callback named in a method syntax completely, sharing the method's session.
 The source rules in scope are those activated by `withSourceSpecs`. -/
@@ -754,7 +699,7 @@ def certifyCallback (session : Search.Session) (method name : Name) (callback : 
     throwError "source {method}: provide a concrete `{name}` callback"
   addSourceRoot session callback
   session.failure.set none
-  let some proof ← sourceQuery (sourceSearch session false #[]) (← sourceContext)
+  let some proof ← sourceQuery (sourceSearch session #[]) (← sourceContext)
       (← programGoal callback) |
     try session.report catch ex => throwError "source {method} `{name}`: {ex.toMessageData}"
   let proof ← instantiateMVars proof
@@ -798,7 +743,7 @@ private def proveSource (scope : Option Ident := none) (replacement : Option Ter
     let program ← mkFreshExprMVar (← inferType original.getAppArgs[5]!)
     let target := (original.setArg 4 source).setArg 5 program
       |>.setArg 6 (← mkFreshExprMVar growth) |>.setArg 7 (← mkFreshExprMVar growth)
-    let some result ← sourceQuery (sourceSearch session false #[]) context target |
+    let some result ← sourceQuery (sourceSearch session #[]) context target |
       session.report
     let result ← match equality with
       | none => pure result
@@ -885,36 +830,6 @@ elab_rules : tactic
   | `(tactic| source_fun_prop $[using $scope:ident]? $[via $replacement]?) => do
     let obligations ← proveSource scope replacement
     setGoals (obligations ++ (← getGoals))
-open Lean Meta Elab Tactic in
-/-- Run a structural translation for the main goal's source function, then compare its growth
-with the stated one. -/
-private def withFreshGrowth (action : TacticM Unit) : TacticM Unit := withMainContext do
-  let goal ← getMainGoal
-  let rest := (← getGoals).tail
-  let target := (← instantiateMVars (← goal.getType)).consumeMData
-  unless target.isAppOfArity ``HasProgram 8 do
-    throwError "expected a HasProgram goal, got {target}"
-  let growth ← mkArrow target.getAppArgs[0]! (mkConst ``Nat)
-  let program ← mkFreshExprMVar (← inferType target.getAppArgs[5]!)
-  let fresh ← mkFreshExprSyntheticOpaqueMVar ((target.setArg 5 program).setArg 6
-    (← mkFreshExprMVar growth) |>.setArg 7 (← mkFreshExprMVar growth))
-  setGoals [fresh.mvarId!]
-  action
-  let obligations ← finishProgram goal (← instantiateMVars fresh)
-  setGoals (obligations ++ rest)
-open Lean Meta Elab Tactic in
-elab_rules : tactic
-  | `(tactic| source_cases) => withFreshGrowth FiniteCases.sourceCases
-  | `(tactic| source_calls) => withSourceSpecs none <| withFreshGrowth <| withMainContext do
-    let session ← Search.Session.create
-    let goal ← getMainGoal
-    let target ← goal.getType
-    if target.isAppOfArity ``HasProgram 8 then addSourceRoot session target.getAppArgs[4]!
-    let query := sourceQuery (sourceSearch session true #[target]) (← sourceContext)
-    let some proof ← session.discharge #[target] (sourceCallsWith (← session.roots.get) query)
-      target | session.report
-    goal.assign proof
-    replaceMainGoal []
 open Lean Meta Elab Tactic in
 /-- Translate a source function and reduce its model time-space bound to arithmetic goals. -/
 private def modelFunPropCore (translate : TacticM (List Lean.MVarId)) : TacticM Unit := do

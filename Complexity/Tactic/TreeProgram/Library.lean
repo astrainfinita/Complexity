@@ -16,6 +16,15 @@ open Complexity TreeProgram
 
 namespace Complexity.TreeProgram.Source
 
+theorem _root_.List.hasProgram_tail {α : Type*} [UniqueEncoding Tree α] :
+    HasProgram (List.tail : List α → List α) hole(⊢ program)
+      (fun _ => 1) (fun xs => ⌜xs⌝ₜ.size) := by
+  abstract_hole program using programTail
+  fill_hole program in source_fun_prop
+  all_goals dominated
+
+attribute [scoped fun_prop] List.hasProgram_tail
+
 def lookupContinues {α : Type*} (x : ℕ × List α) : Bool :=
   match x.2 with | [] => false | _ :: _ => !x.1.bits.isEmpty
 
@@ -371,15 +380,6 @@ run_elab do
 end tabulate
 
 namespace Complexity.TreeProgram.Source
-
-theorem _root_.List.hasProgram_tail {α : Type*} [UniqueEncoding Tree α] :
-    HasProgram (List.tail : List α → List α) hole(⊢ program)
-      (fun _ => 1) (fun xs => ⌜xs⌝ₜ.size) := by
-  abstract_hole program using programTail
-  fill_hole program in source_fun_prop
-  all_goals dominated
-
-attribute [scoped fun_prop] List.hasProgram_tail
 
 abbrev FinCompInput := Σ n, Σ k, Σ m, (Fin n → Fin k) × (Fin k → Fin m)
 

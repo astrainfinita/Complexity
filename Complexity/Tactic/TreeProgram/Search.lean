@@ -27,26 +27,13 @@ register_option source.maxSteps : Nat := {
 namespace Complexity.TreeProgram.Source.Search
 open Lean Meta Mathlib.Meta.FunProp
 
-/-- An expected unsupported source form, as opposed to an elaboration or implementation error. -/
-def unsupported {m : Type → Type} {α : Type} [Monad m] [MonadError m]
-    (message : MessageData) : m α :=
-  Lean.throwError (.tagged `sourceCandidateFailure message)
-
 def recursionMessage (name : Name) : MessageData :=
   m!"source translation: `{privateToUserName name}` needs a registered implementation \
     (choose replacement source with `via`, or register a function equality with `[source]`)"
 
-/-- Which part of a candidate could not be certified. -/
-inductive FailureStage where
-  | structure
-  | specification
-  deriving BEq
-
 /-- A rejected candidate retains its source path independently of message formatting. -/
 structure Failure where
-  stage : FailureStage
   sourcePath : Array MessageData
-  declaration : Option Name
   message : MessageData
 
 /-- One user request shares fuel, diagnostics and its closed results. -/
@@ -57,9 +44,9 @@ structure Session where
   failure : IO.Ref (Option Failure)
   /-- The limit is read once at the outer entry. -/
   maxSteps : Nat
-  /-- Results mentioning no local or metavariables, by request and whether it is nested.
-  They hold in every query of the request, including branch callbacks. -/
-  results : IO.Ref (Std.HashMap (Expr × Bool) Expr)
+  /-- Results mentioning no local or metavariables, by request. They hold in every query of the
+  request, including branch callbacks. -/
+  results : IO.Ref (Std.HashMap Expr Expr)
   /-- The definitions this request translates: the source function and the callbacks of its
   method. Any other definition needs its own selected implementation. -/
   roots : IO.Ref NameSet
@@ -76,14 +63,13 @@ def Session.step (session : Session) : MetaM Unit := do
     throwError "source translation: maximum number ({session.maxSteps}) of search steps exceeded"
   session.steps.set (steps + 1)
 
-/-- Keep a missing-specification diagnostic in preference to a structural fallback rejection. -/
-def Session.reject (session : Session) (path : Array Expr) (message : MessageData)
-    (stage := FailureStage.structure) (declaration : Option Name := none) : MetaM Unit := do
-  if let some previous ← session.failure.get then
-    if previous.stage == .specification || stage != .specification then return
+/-- Keep the first missing-specification diagnostic. -/
+def Session.reject (session : Session) (path : Array Expr) (message : MessageData) :
+    MetaM Unit := do
+  if (← session.failure.get).isSome then return
   let path ← path.mapM fun goal =>
     addMessageContext (MessageData.ofExpr (goal.getAppArgs[4]?.getD goal))
-  session.failure.set (some ⟨stage, path, declaration, ← addMessageContext message⟩)
+  session.failure.set (some ⟨path, ← addMessageContext message⟩)
 
 /-- Report the remembered reason only after all candidates have failed. -/
 def Session.report {α : Type} (session : Session) : MetaM α := do
@@ -93,32 +79,6 @@ def Session.report {α : Type} (session : Session) : MetaM α := do
   let message := if path.size ≤ 1 then failure.message else
     m!"{failure.message}\nsource path: {MessageData.joinSep path.toList " → "}"
   throwError message
-
-/-- Run a structural proof attempt, catching only explicitly unsupported source forms. -/
-def Session.discharge (session : Session) (path : Array Expr)
-    (action : Elab.Tactic.TacticM Unit) (target : Expr) : MetaM (Option Expr) := do
-  let saved ← saveState
-  try
-    let goal ← mkFreshExprSyntheticOpaqueMVar target
-    let run : Elab.TermElabM Unit := Elab.Term.withSynthesize (postpone := .no) do
-      discard <| Elab.Tactic.run goal.mvarId! (action *> Elab.Tactic.pruneSolvedGoals)
-    discard <| run.run {} {}
-    let proof ← instantiateMVars goal
-    if proof.hasExprMVar || proof.hasSorry then
-      trace[source.translation] "unfinished structural certificate: \
-        metavariables={proof.hasExprMVar}, sorry={proof.hasSorry}"
-      for mvar in ← getMVars proof do
-        trace[source.translation] "remaining obligation: {← mvar.getType}"
-      saved.restore
-      return none
-    return some proof
-  catch ex =>
-    saved.restore
-    if ex.toMessageData.kind == `sourceCandidateFailure then
-      trace[source.translation] "rejected structure: {ex.toMessageData}"
-      session.reject path ex.toMessageData
-      return none
-    throw ex
 
 /-- Restore failed attempts without refunding their search steps. -/
 def checkpoint : FunPropM (FunPropM Unit) := do
