@@ -125,6 +125,42 @@ example := (by
 
 example := (by source_fun_prop : HasProgram doubleReverse programDoubleReverseDefault _ _)
 
+private def duplicate (x : Bool) : Bool × Bool := (x, x)
+
+-- A definition whose value is a constructor is assembled only without a selected implementation:
+-- inside a tuple, a constructor or a branch, the selected one is used.
+example {program : Value → Code Value} {t p : Bool → ℕ}
+    (_selected : HasProgram duplicate program t p) :=
+  (by source_fun_prop : HasProgram (fun x => (duplicate x, x))
+    (fun v => do let w ← program v; let z ← pure v; w.pair z) _ _)
+
+example {program : Value → Code Value} {t p : Bool → ℕ}
+    (_selected : HasProgram duplicate program t p) :=
+  (by source_fun_prop : HasProgram (fun x => some (duplicate x))
+    (fun v => do let w ← program v; Code.eval ((Expr.ofTree ⌜()⌝ₜ).pair w.expression)) _ _)
+
+private def duplicateBranch (x : Bool × Bool) :=
+  match x.1 with | true => (duplicate x.2, x.1) | false => ((x.2, x.2), x.1)
+
+-- Assembled in one step, the branch takes constant time; with the selected implementation, its
+-- time `t` is charged and no constant bounds it.
+example : ∃ q u, HasProgram duplicateBranch q (fun _ => 1) u := by
+  refine ⟨?q, ?u, ?h⟩
+  case h =>
+    source_fun_prop
+    all_goals dominated
+
+example {program : Value → Code Value} {t p : Bool → ℕ}
+    (_selected : HasProgram duplicate program t p) : True := by
+  fail_if_success
+    have : ∃ q u, HasProgram duplicateBranch q (fun _ => 1) u := by
+      refine ⟨?q, ?u, ?h⟩
+      case h =>
+        source_fun_prop
+        all_goals dominated
+        done
+  trivial
+
 end LocalPriority
 
 section RuleStages
