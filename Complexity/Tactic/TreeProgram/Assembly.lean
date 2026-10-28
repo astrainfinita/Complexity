@@ -309,11 +309,24 @@ def closedRule (goal : Lean.Expr) : MetaM (Option Result) := do
     if body.hasFVar then return none
     return some ⟨← mkAppOptM ``HasProgram.const #[α, instα, type, inst, body]⟩
 
+open Lean Meta Mathlib.Meta.FunProp in
+/-- Whether a function has a selected implementation: a registered one, or a local hypothesis. -/
+private def hasSelectedImplementation (name : Name) : MetaM Bool := do
+  unless (← getTheoremsForFunction name ``HasProgram).isEmpty do return true
+  (← getLCtx).anyM fun decl => do
+    if decl.isImplementationDetail then return false
+    let type ← instantiateMVars decl.type
+    unless type.isAppOfArity ``HasProgram 8 do return false
+    lambdaTelescope (type.getArg! 4) fun _ body => return body.getAppFn.isConstOf name
+
 open Lean Meta in
 /-- An assembly of the code of `e` from the code `code` of the input `x`, with the equation
 `A.eval code = ⌜e⌝ₜ`: a field of a field of the input is read, a closed value is a constant, and a
-constructor assembles its fields by its encoding equation. -/
-private partial def assembly? (x code e : Lean.Expr) : MetaM (Option (Lean.Expr × Lean.Expr)) := do
+constructor assembles its fields by its encoding equation. A definition whose value is a
+constructor is unfolded at the `root`, where its selected implementations have been tried, and
+inside only if it has none; otherwise the search computes it by them. -/
+private partial def assembly? (x code e : Lean.Expr) (root := false) :
+    MetaM (Option (Lean.Expr × Lean.Expr)) := do
   let encoded ← mkAppM ``encode #[mkConst ``Tree, e]
   let stated (A proof : Lean.Expr) := do
     return some (A, ← mkExpectedTypeHint proof
@@ -331,6 +344,9 @@ private partial def assembly? (x code e : Lean.Expr) : MetaM (Option (Lean.Expr 
   let some (proof, _) ← constructorEncoding e |
     -- A definition whose value is a constructor application is unfolded once, as by
     -- `constructorRule`.
+    if !root then
+      let some name := e.getAppFn.constName? | return none
+      if ← hasSelectedImplementation name then return none
     let some value ← withTransparency .default <| unfoldDefinition? e | return none
     let value := value.headBeta
     unless ← isConstructorApp value do return none
@@ -347,7 +363,7 @@ def assembleRule (goal source : Lean.Expr) : MetaM (Option Result) := do
   let #[α, β, instα, instβ, f, _, _, _] := goal.getAppArgs | return none
   atInput source fun x body => do
     let code ← mkAppOptM ``encode #[mkConst ``Tree, α, instα, x]
-    let some (A, h) ← assembly? x code body.headBeta | return none
+    let some (A, h) ← assembly? x code body.headBeta (root := true) | return none
     return some ⟨← mkAppOptM ``HasProgram.assemble
       #[α, β, instα, instβ, f, A, ← mkLambdaFVars #[x] h]⟩
 
