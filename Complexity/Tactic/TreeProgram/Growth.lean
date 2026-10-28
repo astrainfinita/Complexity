@@ -610,10 +610,16 @@ def viaRule (rule : Name) (type : Lean.Expr)
 def domainOf (f : Lean.Expr) : MetaM Lean.Expr := do
   return (← whnf (← inferType f)).bindingDomain!
 
+/-- `e` without metadata. -/
+partial def eraseMData (e : Lean.Expr) : Lean.Expr :=
+  e.replace fun | .mdata _ b => some (eraseMData b) | _ => none
+
 /-- Close one case of the pointwise step by `omega` with the size and power facts, expanding the
 encoded sizes that splitting has exposed. -/
 def closeCase (outer : FVarIdSet) (goal : MVarId) : DominatedM Bool := do
   let ctx ← read
+  -- `omega` takes a term under metadata, as the alternatives of a `match` carry, for an atom.
+  let goal ← goal.replaceTargetDefEq (eraseMData (← instantiateMVars (← goal.getType)))
   closes goal do
     let some g ← simpOwn outer ctx.expand
         (← addSizeFacts outer ctx.statements ctx.premises goal) ctx.numerals
@@ -820,7 +826,7 @@ elab_rules : tactic
       #[``Function.comp_apply, ``Nat.mul_add, ``Nat.mul_one, ``Nat.mul_zero]
       (attrs := #[`dominated_simp])
     let expand ← simpContext (simpOnlyBuiltins.toArray ++ #[``Function.comp_apply, ``max_le_iff,
-      ``Tree.size_pair,
+      ``Tree.size_pair, ``not_true_eq_false,
       ``List.map_const', ``List.sum_replicate, ``smul_eq_mul, ``pow_zero]) unfolds
       (attrs := #[`dominated_simp, `dominated_expand])
     let numerals := #[← (← (← ({} : Simp.Simprocs).add ``Nat.reduceMul true).add ``Nat.reduceAdd

@@ -673,7 +673,6 @@ private partial def sourceSearch (session : Search.Session)
   finish result
 
 open Lean Meta Elab Tactic Mathlib.Meta.FunProp in
-open Lean Meta Elab Tactic Mathlib.Meta.FunProp in
 def withSourceSpecs {α : Type} (scope : Option Ident) (action : TacticM α) : TacticM α := do
   pushScope
   try

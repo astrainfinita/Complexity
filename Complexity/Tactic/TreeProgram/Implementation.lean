@@ -186,55 +186,6 @@ theorem map_input {α γ : Type*} {β : α → Type*} [UniqueEncoding Tree α]
 
 end Implements
 
-/-- Evaluate an encoded argument and call a program, returning in a shared slot.
-Branch-local allocations can start afresh at the same supply. -/
-def callCode (p : Value → Code Value) (e : Expr ℕ) : Code Value :=
-  ⟨fun n =>
-    let c := do
-      let a ← Code.eval e
-      let z ← p a
-      Code.write ⟨n⟩ z
-    (.var n, (c.build (n + 1)).2)⟩
-
-namespace Implements
-
-variable {α : Type*} {β : α → Type*} [UniqueEncoding Tree α] [∀ x, UniqueEncoding Tree (β x)]
-  {p : Value → Code Value} {f : (x : α) → β x} {b : Bounds α}
-
-@[simp] theorem callCode_result (p : Value → Code Value) (e : Expr ℕ) (n : ℕ) :
-    ((callCode p e).build n).1 = .var n := rfl
-
-theorem callCode_fresh (hp : Implements p f b) (e : Expr ℕ) (n : ℕ) :
-    n + 1 ≤ ((callCode p e).build n).2.1 := by
-  have h := (hp.1 (.var (n + 1)) (n + 2) le_rfl).1
-  exact (Nat.le_succ _).trans h
-
-theorem callCode_bounded (hp : Implements p f b) (e : Expr ℕ)
-    (n : ℕ) (s : ℕ → Tree) (x : α) {space : ℕ}
-    (he : e.eval s = ⌜x⌝ₜ) (hs : e.maxSize s ≤ space) (hb : b.peak x ≤ space) :
-    (callCode p e).Bounded n s (e.assignSteps + b.time x + 2) space
-      (fun v t => v.eval t = ⌜f x⌝ₜ ∧ ∀ j < n, t j = s j) := by
-  have hout : ⌜f x⌝ₜ.size ≤ space := hp.size_le x |>.trans
-    (max_le (he ▸ e.size_eval_le_maxSize s |>.trans hs) hb)
-  have hr := (hp.2 (.var (n + 1)) (n + 2)
-    (Function.update s (n + 1) (e.eval s)) x le_rfl (by simp [he])).mono
-      le_rfl hb (fun _ _ h => h)
-  have hrun : (do
-      let a ← Code.eval e
-      let z ← p a
-      Code.write ⟨n⟩ z).Bounded (n + 1) s (e.assignSteps + (b.time x + 2)) space
-      (fun _ t => t n = ⌜f x⌝ₜ ∧ ∀ j < n, t j = s j) := by
-    simp only [Code.bounded_eval_bind_iff, Nat.le_add_right, true_and, Nat.add_sub_cancel_left]
-    refine ⟨hs, Code.Bounded.bind hr ?_⟩
-    intro z t ⟨hz, ht⟩
-    simp only [Code.bounded_write_iff]
-    refine ⟨z.assignSteps_le, hz ▸ hout, by simp [hz], ?_⟩
-    intro j hj
-    simpa [Nat.ne_of_lt hj, show j ≠ n + 1 by omega] using ht j (by omega)
-  simpa only [Code.Bounded, callCode, Value.eval_var, Nat.add_assoc] using hrun
-
-end Implements
-
 /-- `f` is implemented by `program`, whose exact budgets grow at most like `time` and `peak`. The
 hidden coefficient is uniform over all inputs, including repeated calls on small inputs. The
 program is a parameter, as the derivative is in `HasDerivAt`, so that one program at every type is
@@ -270,34 +221,6 @@ theorem size_encode (hf : HasProgram f program t p) :
     Dominated (fun x => ⌜f x⌝ₜ.size) (fun x => max ⌜x⌝ₜ.size (p x)) := by
   obtain ⟨b, h, -, hbp⟩ := hf.sound
   exact ((Dominated.refl _).max hbp).mono_left h.size_le
-
-/-- One coefficient, and every larger one, scales the growth into certified exact budgets. -/
-theorem exists_implements_mul (hf : HasProgram f program t p) :
-    ∃ C, ∀ D, C ≤ D → Implements program f ⟨fun x => D * t x, fun x => D * p x⟩ := by
-  obtain ⟨b, h, hbt, hbp⟩ := hf.sound
-  obtain ⟨C₁, h₁⟩ := dominated_iff.mp hbt
-  obtain ⟨C₂, h₂⟩ := dominated_iff.mp hbp
-  refine ⟨C₁ + C₂, fun D hD => h.mono fun x => ⟨?_, ?_⟩⟩
-  · exact (by simpa only [smul_eq_mul] using h₁ x : b.time x ≤ C₁ * t x).trans
-      (Nat.mul_le_mul_right _ (by omega))
-  · exact (by simpa only [smul_eq_mul] using h₂ x : b.peak x ≤ C₂ * p x).trans
-      (Nat.mul_le_mul_right _ (by omega))
-
-/-- Certify a program whose calls are scaled by one coefficient chosen after its callees';
-storage of its own inputs and arguments is not scaled. -/
-theorem of_mul_max {s q : α → ℕ}
-    (h : ∃ K, Implements program f ⟨fun x => K * t x, fun x => max (s x) (K * q x)⟩) :
-    HasProgram f program t (fun x => max (s x) (q x)) := by
-  obtain ⟨K, hK⟩ := h
-  refine ⟨_, hK, Dominated.of_le_mul K fun _ => le_rfl, Dominated.of_le_mul (K + 1) fun x => ?_⟩
-  exact max_le ((le_max_left _ _).trans (Nat.le_mul_of_pos_left _ (Nat.succ_pos K)))
-    ((Nat.mul_le_mul_right _ (Nat.le_succ K)).trans
-      (Nat.mul_le_mul_left _ (le_max_right _ _)))
-
-theorem callCode_fresh (hf : HasProgram f program t p) (e : Expr ℕ) (n : ℕ) :
-    n + 1 ≤ ((callCode program e).build n).2.1 := by
-  obtain ⟨b, h, -⟩ := hf.sound
-  exact h.callCode_fresh e n
 
 /-- Change the source function by equality, retaining the program and growth. -/
 theorem congr (hf : HasProgram f program t p) {g : (x : α) → β x} (h : f = g) :

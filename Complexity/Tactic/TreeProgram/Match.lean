@@ -76,13 +76,13 @@ theorem HasProgram.cases (D : CaseTree k) (hD : ∀ x, dispatch (T := T x) = D)
       (fun v => do let w ← qd v; D.run w fun i a => do let e ← Value.pair v a; q i e)
       (fun x => td x + atBranch d t x + 1)
       (fun x => max (pd x)
-        (atBranch d (fun i y => max (⌜y.1.1⌝ₜ.size + ⌜y.1.2⌝ₜ.size + 1) (p i y)) x)) := by
+        (atBranch d (fun i y => max (1 + ⌜y.1.1⌝ₜ.size + ⌜y.1.2⌝ₜ.size) (p i y)) x)) := by
   obtain ⟨bd, hbd, hdt, hdp⟩ := hd.sound
   choose b hb hbt hbp using fun i => (hb i).sound
   have h := hbd.bind_input (r := fun w v => D.run w fun i a => do let e ← Value.pair v a; q i e)
     (g := f) (time := fun x => 1 + atBranch d (fun i => (b i).time) x + D.cost)
     (peak := fun x => max ⌜d x⌝ₜ.size
-      (atBranch d (fun i y => max (⌜y.1.1⌝ₜ.size + ⌜y.1.2⌝ₜ.size + 1) ((b i).peak y)) x))
+      (atBranch d (fun i y => max (1 + ⌜y.1.1⌝ₜ.size + ⌜y.1.2⌝ₜ.size) ((b i).peak y)) x))
     (fun u v n hu _ => D.run_fresh (fun i a m ha => by
       have := ((hb i).1 (.var m) (m + 1) le_rfl)
       simp only [Value.pair, Code.build_bind, Code.eval_build]
@@ -91,7 +91,7 @@ theorem HasProgram.cases (D : CaseTree k) (hD : ∀ x, dispatch (T := T x) = D)
     · exact ((hdt.add (Dominated.atBranch d hbt)).add
         (Dominated.const (1 + D.cost))).mono_left fun x => by dsimp only; omega
     · refine (hdp.max (Dominated.atBranch d fun i =>
-        (Dominated.refl fun y : Branch d i => ⌜y.1.1⌝ₜ.size + ⌜y.1.2⌝ₜ.size + 1).max
+        (Dominated.refl fun y : Branch d i => 1 + ⌜y.1.1⌝ₜ.size + ⌜y.1.2⌝ₜ.size).max
           (hbp i))).mono_left fun x => ?_
       obtain ⟨i, pl, hpl⟩ := exists_ofPayload (d x)
       have := hbd.size_le x
@@ -105,8 +105,7 @@ theorem HasProgram.cases (D : CaseTree k) (hD : ∀ x, dispatch (T := T x) = D)
       rw [hux, ← hD x, ← select_encode, hpl]
     rw [atBranch_eq d _ hpl.symm, atBranch_eq d _ hpl.symm]
     set y : Branch d i := ⟨⟨x, pl⟩, hpl.symm⟩
-    have hy : ⌜y⌝ₜ.size = ⌜x⌝ₜ.size + ⌜pl⌝ₜ.size + 1 := by
-      simp only [y, UniqueEncoding.encode_subtype, Sigma.encode_mk, size_encode_prod]; omega
+    have hy : ⌜y⌝ₜ.size = 1 + ⌜x⌝ₜ.size + ⌜pl⌝ₜ.size := rfl
     have hY := (hb i).size_le y
     rw [hy] at hY
     apply (D.run_bounded hu (Y := ⌜f x⌝ₜ) (time := 1 + (b i).time y)
@@ -244,7 +243,8 @@ private partial def finCases (motive : Lean.Expr) (k : Nat) (values : List Lean.
 
 open Lean Meta in
 /-- A growth stated by branches, written as a `match` on the value whose constructor selects the
-branch: `atBranch` and the view's `elim` are unfolded, and each branch's growth is applied. -/
+branch: `atBranch` and the view's `elim` are unfolded, and each branch's growth is applied, with
+the size of the branch's input stated by the input and the fields. -/
 private def readableBranches (e : Lean.Expr) : MetaM Lean.Expr := do
   let literal? (i : Lean.Expr) : MetaM (Option Nat) := do
     if i.isAppOfArity ``Fin.mk 3 then return ← evalNat (i.getArg! 1) |>.run
@@ -277,7 +277,22 @@ private def readableBranches (e : Lean.Expr) : MetaM Lean.Expr := do
       if let some inst ← synthInstance? (← mkAppM ``UniqueEncoding #[args[0]!, args[1]!]) then
         if inst != args[2]! then return .done (mkAppN e.getAppFn (args.set! 2 inst))
     return .done e)
-  reduceProjections e
+  -- The input of a branch at a constructor is the input with the fields: the size of its code is
+  -- stated by theirs, and a unit has size one.
+  Meta.transform (← reduceProjections e) (post := fun e => do
+    unless e.isAppOfArity ``Tree.size 1 && e.appArg!.isAppOfArity ``UniqueEncoding.encode 4 do
+      return .done e
+    let v := e.appArg!.appArg!
+    if v.isAppOf ``PUnit.unit then return .done (mkNatLit 1)
+    unless v.isAppOfArity ``Subtype.mk 4 && (v.getArg! 2).isAppOfArity ``Sigma.mk 4 do
+      return .done e
+    let size (a : Lean.Expr) := do
+      mkAppM ``Tree.size #[← mkAppOptM ``UniqueEncoding.encode #[mkConst ``Tree, none, none, a]]
+    let some r ← observing? do
+        mkAppM ``HAdd.hAdd #[← mkAppM ``HAdd.hAdd #[mkNatLit 1, ← size ((v.getArg! 2).getArg! 2)],
+          ← size ((v.getArg! 2).getArg! 3)]
+      | return .done e
+    return .visit r)
 
 /-- A `match` on a part of the input of a source function, with the type's `CaseView`. -/
 private structure CaseSplit where
