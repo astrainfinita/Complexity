@@ -47,7 +47,7 @@ private def scanned (xs : List Bool) (n : ℕ) (hn : n ≤ xs.length) : Cfg (Fin
   workPos := fun i ↦ Fin.elim0 i
   output := input (xs.take n)
 
-private theorem at_zero (xs : List Bool) : scanned xs 0 (Nat.zero_le _) = (copier.initInput (Config := Cfg (Fin 0) Symbol Bool (xs.map some).toArray) (xs.map some)) := by
+private theorem at_zero (xs : List Bool) : scanned xs 0 (Nat.zero_le _) = copier.initInput (Config := Cfg (Fin 0) Symbol Bool (xs.map some).toArray) (xs.map some) := by
   apply Cfg.ext
   · rfl
   · rfl

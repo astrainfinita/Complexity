@@ -32,7 +32,7 @@ inductive Recursive : Bool → Type where
 
 open Complexity TreeProgram TreeProgram.Code FirstOrder
 
-example : decode (Fixed false) (Complexity.Tree.nil) = Part.none := rfl
+example : decode (Fixed false) Complexity.Tree.nil = Part.none := rfl
 
 example {α : Type*} [UniqueEncoding Tree α] (a : α) :
     decode (Mixed α 1 true) (encode Tree (Mixed.fixed a)) = Part.none := rfl

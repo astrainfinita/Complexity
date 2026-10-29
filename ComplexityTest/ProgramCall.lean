@@ -61,7 +61,7 @@ example : ((Program.compile (Program.callFrom machine true)).run (Input := List 
   rfl
 example : ((Program.compile (Program.call machine)).run (Input := List Bool) (Cfg (Fin 1) Bool ((Program.call machine).State ⊕ (Program.call machine).Exit) [].toArray) [] 1).output = #[false] := by
   change ((Program.compile (Program.call machine)).step
-    ((Program.compile (Program.call machine)).initInput (Input := List Bool) (Config := Cfg (Fin 1) Bool ((Program.call machine).State ⊕ (Program.call machine).Exit) [].toArray) [])).output = _
+    ((Program.compile (Program.call machine)).initInput (Config := Cfg (Fin 1) Bool ((Program.call machine).State ⊕ (Program.call machine).Exit) [].toArray) [])).output = _
   rw [TM.step_eq]
   simp [Program.call, Program.compile, Program.callFrom, Program.callBlock, Program.blockRoute,
     Program.callControl, Program.Syntax.toControl,
@@ -69,13 +69,13 @@ example : ((Program.compile (Program.call machine)).run (Input := List Bool) (Cf
     machine, Action.mapState]
   rfl
 
-#guard ((Program.compile demo).run (Input := List Bool) (Cfg (Fin 1) Bool ((demo).State ⊕ (demo).Exit) [].toArray) [] 4).output == #[false, true]
-#guard (((Program.compile demo).run (Input := List Bool) (Cfg (Fin 1) Bool ((demo).State ⊕ (demo).Exit) [].toArray) [] 4).workTapes 0)[(0 : ℤ)]
+#guard ((Program.compile demo).run (Input := List Bool) (Cfg (Fin 1) Bool (demo.State ⊕ demo.Exit) [].toArray) [] 4).output == #[false, true]
+#guard (((Program.compile demo).run (Input := List Bool) (Cfg (Fin 1) Bool (demo.State ⊕ demo.Exit) [].toArray) [] 4).workTapes 0)[(0 : ℤ)]
 
 theorem demo_spec : Triple (demo.verify (Program.cfgSemantics #[]))
     (fun c b ↦ c = (rawExecution []).init () ∧ b = 4)
     (fun a c _ ↦ a = true ∧ c.output = #[false, true] ∧ c.workPos 0 = 0) () := by
-  have hc := Program.cfg_spec_call machine ((machine.initInput (Input := List Bool) (Config := Cfg (Fin 1) Bool Bool [].toArray) [])) 1 3 rfl (by rfl)
+  have hc := Program.cfg_spec_call machine (machine.initInput (Input := List Bool) (Config := Cfg (Fin 1) Bool Bool [].toArray) []) 1 3 rfl (by rfl)
   unfold demo
   vcgen [hc]
   all_goals simp_all only [machine_run_one]

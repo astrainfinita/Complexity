@@ -44,7 +44,7 @@ local instance : UniqueEncoding ℕ {n // p n} := (UniqueEncoding.refl ℕ).subt
 
 -- No DecidablePred instance is needed for this promise on the input.
 example (n : ℕ) (h : p n) : decode {n // p n} n = Part.some (⟨n, h⟩ : {n // p n}) :=
-  UniqueEncoding.decode_encode (R := ℕ) (⟨n, h⟩ : {n // p n})
+  UniqueEncoding.decode_encode (⟨n, h⟩ : {n // p n})
 
 example (n : ℕ) (h : ¬p n) : ¬(decode {n // p n} n).Dom := by
   rw [UniqueEncoding.dom_decode_iff]

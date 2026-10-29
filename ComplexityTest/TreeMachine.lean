@@ -112,9 +112,9 @@ def fork : TreeMachine BinaryChoice 1 Bool where
   halt := id
   transition _ _ _ := Action.assign true (.pair 0 0 0)
 
-#guard ((fork.runWith (Cfg 1 Bool) Multiset Tree.nil 5).map (fun c ↦ c.regs 0)) = ↑[a, a]
-#guard ((fork.runHistoryWith (Cfg 1 Bool) Multiset Tree.nil 5).map
-  (fun h ↦ h.actionSum Action.sizeCost)) = ↑[3, 3]
+#guard (fork.runWith (Cfg 1 Bool) Multiset Tree.nil 5).map (fun c ↦ c.regs 0) = ↑[a, a]
+#guard (fork.runHistoryWith (Cfg 1 Bool) Multiset Tree.nil 5).map
+  (fun h ↦ h.actionSum Action.sizeCost) = ↑[3, 3]
 
 -- Two `nop` branches remain distinct effects, even though their resulting banks agree.
 def forkNop : TreeMachine BinaryChoice 1 Bool where
@@ -122,9 +122,9 @@ def forkNop : TreeMachine BinaryChoice 1 Bool where
   halt := id
   transition _ _ _ := Action.assign true .nop
 
-#guard ((forkNop.runWith (Cfg 1 Bool) Multiset b 5).map (fun c ↦ c.regs 0)) = ↑[b, b]
-#guard ((forkNop.runHistoryWith (Cfg 1 Bool) Multiset b 5).map
-  (fun h ↦ h.actionSum Action.sizeCost)) = ↑[1, 1]
+#guard (forkNop.runWith (Cfg 1 Bool) Multiset b 5).map (fun c ↦ c.regs 0) = ↑[b, b]
+#guard (forkNop.runHistoryWith (Cfg 1 Bool) Multiset b 5).map
+  (fun h ↦ h.actionSum Action.sizeCost) = ↑[1, 1]
 
 -- A projection pays for the entire source, including the child it discards.
 #guard Action.sizeCost (Action.assign true (.left 0 0)) c = 5
@@ -135,8 +135,8 @@ def sameEndpoint : TreeMachine BinaryChoice 3 Bool where
   halt := id
   transition _ _ i := if i = 0 then Action.keep true else Action.assign true (.pair 0 1 2)
 
-#guard ((sameEndpoint.runHistoryFromWith Multiset c 5).map
-  (fun h ↦ (h.last.state, h.last.regs 0, h.actionSum Action.sizeCost))) = ↑[(true, b, 1), (true, b, 5)]
+#guard (sameEndpoint.runHistoryFromWith Multiset c 5).map
+  (fun h ↦ (h.last.state, h.last.regs 0, h.actionSum Action.sizeCost)) = ↑[(true, b, 1), (true, b, 5)]
 
 -- Two fresh choices reach all four leaves, including paths 01 and 10.
 def twoChoices : TreeMachine BinaryChoice 0 (Fin 7) where
@@ -144,8 +144,8 @@ def twoChoices : TreeMachine BinaryChoice 0 (Fin 7) where
   halt q := decide (3 ≤ q.val)
   transition q _ i := Action.keep ⟨(2 * q.val + 1 + i.val) % 7, Nat.mod_lt _ (by decide)⟩
 
-#guard ((twoChoices.runFromWith Multiset (Cfg.mk twoChoices.q₀ Fin.elim0) 2).map
-  (fun c ↦ c.state.val)) = ↑[3, 4, 5, 6]
+#guard (twoChoices.runFromWith Multiset (Cfg.mk twoChoices.q₀ Fin.elim0) 2).map
+  (fun c ↦ c.state.val) = ↑[3, 4, 5, 6]
 
 -- A successful `nop` is different from failure in `Option`.
 def optionNop : TreeMachine Option 0 Bool where
@@ -155,24 +155,24 @@ def optionNop : TreeMachine Option 0 Bool where
 
 #guard (optionNop.runFromWith Option
   (Cfg.mk optionNop.q₀ Fin.elim0) 1).isSome
-#guard ((optionNop.runHistoryFromWith Option
+#guard (optionNop.runHistoryFromWith Option
   (Cfg.mk optionNop.q₀ Fin.elim0) 1).map
-  (fun h ↦ (h.last.state, h.length))) = some (true, 1)
+  (fun h ↦ (h.last.state, h.length)) = some (true, 1)
 
 def abort : TreeMachine Option 0 Bool where
   q₀ := false
   halt := id
   transition _ _ := none
 
-#guard ((abort.runHistoryFromWith Option
-  (Cfg.mk abort.q₀ Fin.elim0) 0).map (fun h ↦ (h.last.state, h.length))) = some (false, 0)
+#guard (abort.runHistoryFromWith Option
+  (Cfg.mk abort.q₀ Fin.elim0) 0).map (fun h ↦ (h.last.state, h.length)) = some (false, 0)
 #guard (abort.runFromWith Option
   (Cfg.mk abort.q₀ Fin.elim0) 1).isNone
 #guard (abort.runHistoryFromWith Option
   (Cfg.mk abort.q₀ Fin.elim0) 1).isNone
 #guard (abort.runFromWith Option
   (⟨true, Fin.elim0⟩ : Cfg 0 Bool) 10).isSome
-#guard ((abort.runHistoryFromWith Option
-  (⟨true, Fin.elim0⟩ : Cfg 0 Bool) 10).map (fun h ↦ h.length)) = some 0
+#guard (abort.runHistoryFromWith Option
+  (⟨true, Fin.elim0⟩ : Cfg 0 Bool) 10).map (fun h ↦ h.length) = some 0
 
 end Complexity.TreeMachineTest

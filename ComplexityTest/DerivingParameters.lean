@@ -55,11 +55,11 @@ example (mode : Bool) {α : Type u} [UniqueEncoding Tree α] (a : α) :
 
 example (mode : Bool) {α : Type u} [UniqueEncoding Tree α]
     (p : (signature mode α).Data) (t : Tree) :
-    p ∈ decode ((signature mode α).Data) t ↔ encode Tree p = t :=
+    p ∈ decode (signature mode α).Data t ↔ encode Tree p = t :=
   UniqueEncoding.mem_decode_iff
 
 example (mode : Bool) :
-    decode ((signature mode Bool).Data) (Complexity.Tree.pair .nil (.pair .nil .nil)) = Part.none := by
+    decode (signature mode Bool).Data (Complexity.Tree.pair .nil (.pair .nil .nil)) = Part.none := by
   apply Part.eq_none_iff.mpr
   intro p hp
   have h := UniqueEncoding.mem_decode_iff.mp hp
@@ -81,7 +81,7 @@ example {α : Type u} [UniqueEncoding Tree α] (witness a : α) :
 
 example {α : Type u} [UniqueEncoding Tree α] (witness : α)
     (p : (dependentSignature α witness).Data) :
-    decode ((dependentSignature α witness).Data) (encode Tree p) = Part.some p :=
+    decode (dependentSignature α witness).Data (encode Tree p) = Part.some p :=
   UniqueEncoding.decode_encode p
 
 end DependentCaptured

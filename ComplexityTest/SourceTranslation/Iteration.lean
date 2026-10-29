@@ -68,7 +68,7 @@ example {α : Type*} [UniqueEncoding Tree α] {f : α → α} {t p : α → ℕ}
     max (max ⌜((2 : ℕ), x)⌝ₜ.size
       (max ⌜((1 : ℕ), f x)⌝ₜ.size ⌜((0 : ℕ), f (f x))⌝ₜ.size))
       (max (p x) (p (f x)))
-  have bounds := Dominated.iterate_of_potential (f := f) (t := t) (p := p) I (fun _ => 2) id
+  have bounds := Dominated.iterate_of_potential (t := t) (p := p) I (fun _ => 2) id
     remaining peak (fun _ => Or.inl ⟨rfl, rfl⟩) (fun x n a hi => by
       rcases hi with ⟨hn, rfl⟩ | ⟨hn, rfl⟩ | ⟨hn, _⟩
       · exact Or.inr (Or.inl ⟨by omega, rfl⟩)

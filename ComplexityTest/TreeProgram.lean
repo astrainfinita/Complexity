@@ -148,7 +148,7 @@ private theorem reverseBody_total (rest acc : Var) (n : ℕ)
     simp only [he, Tree.size_pair] at hn
     simp only [Var.get] at *
     simp_all [ha.ne, ha.ne.symm, hne'.symm, reverseAux]
-    simpa (disch := omega) [hI] using (show Tree.size tail < k by omega)
+    simpa (disch := omega) [hI] using show Tree.size tail < k by omega
 
 private theorem reverseLoop_total (rest acc : Var) (n : ℕ)
     (ha : acc.index < n) (hne : rest ≠ acc) (y : Tree) :

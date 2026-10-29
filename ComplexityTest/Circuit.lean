@@ -132,7 +132,7 @@ example : ¬sumFour.FanInAtMost 3 := by decide
 example : sumFour.depth = 1 := by decide
 
 -- Nullary operations also compile from terms without a nonempty input context.
-example : (Circuit.ofTerm (Term.func (L := sumLanguage) (.sum 0) Fin.elim0 :
+example : (Circuit.ofTerm (Term.func (.sum 0) Fin.elim0 :
     sumLanguage.Term (Fin 0))).evalVector #v[] = #v[0] := by decide
 
 -- A gate basis can be interpreted differently before and after compilation.

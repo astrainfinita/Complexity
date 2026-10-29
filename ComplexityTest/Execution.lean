@@ -61,8 +61,7 @@ private instance : Controller.Observe (Bool × ℕ) Unit where
 private instance : Controller.Apply (Bool × ℕ) Unit where
   apply _ cfg := (true, cfg.2 + 1)
 
-private instance : Controller.Execution (Bool × ℕ) Bool
-    (Output := ℕ) (input := ()) where
+private instance : Controller.Execution (Bool × ℕ) Bool ℕ () where
   init q := (q, 0)
   state_init _ := rfl
   HasOutput cfg n := cfg.2 = n
@@ -88,8 +87,7 @@ example : oneAction.ComputesWith (Config := Bool × ℕ)
   Controller.computesWith_unit_iff.mpr ⟨rfl, rfl, by decide⟩
 
 -- The standard output type is inferred from the execution instance.
-example : Controller.Execution.HasOutput (Config := Bool × ℕ)
-    (input := ()) (false, 1) 1 := rfl
+example : Controller.Execution.HasOutput (Config := Bool × ℕ) () (false, 1) 1 := rfl
 
 -- Configuration capabilities support independent universes and can be supplied separately.
 example : Controller.HasState (ULift.{1} Unit) Unit where
@@ -105,12 +103,11 @@ example : Controller.Apply Unit (ULift.{1} Unit) where
   apply _ config := config
 
 example : Controller.Execution (TreeMachine.Cfg 1 (ULift.{1} Bool)) (ULift.{1} Bool)
-    (Output := Tree) (input := Tree.nil) := inferInstance
+    Tree Tree.nil := inferInstance
 
 example : Controller.Execution
     (TM.Cfg (ULift.{1} Unit) (ULift.{2} Bool) (ULift.{3} Bool)
       (#[] : Array (ULift.{2} Bool)))
-    (ULift.{3} Bool) (Output := List (ULift.{2} Bool))
-    (input := ([] : List (ULift.{2} Bool))) := inferInstance
+    (ULift.{3} Bool) (List (ULift.{2} Bool)) ([] : List (ULift.{2} Bool)) := inferInstance
 
 end Complexity.ExecutionTest

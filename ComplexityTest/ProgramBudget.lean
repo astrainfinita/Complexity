@@ -20,7 +20,7 @@ def model : Program.Semantics Unit Unit Unit (fun _ : Unit ↦ Unit) Unit where
 
 -- A successful primitive cannot be verified with a zero time budget.
 example (Q : Unit → Unit → ℕ → Prop) :
-    ¬(Program.perform (O := Unit) (A := Unit) (Ret := fun _ : Unit ↦ Unit) ()).Total model Q () 0 := by
+    ¬(Program.perform ()).Total model Q () 0 := by
   rintro ⟨n, a, t, hn, h, _⟩
   have : n = 0 := by omega
   subst n

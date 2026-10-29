@@ -37,7 +37,7 @@ theorem twice_spec :
   split <;> omega
 
 theorem twice_exec : twice.Exec model () 2 () () := by
-  obtain ⟨n, a, s, hn, he, hb⟩ := Program.exec_of_spec twice_spec (s := ()) rfl
+  obtain ⟨n, a, s, hn, he, hb⟩ := Program.exec_of_spec twice_spec rfl
   have h : n = 2 := by omega
   subst n
   cases a

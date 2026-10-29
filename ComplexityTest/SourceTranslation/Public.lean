@@ -30,7 +30,7 @@ namespace ComplexityTest.SourceTranslation.Public
 open TreeProgram.Source
 
 -- The ordinary entry needs no coefficient, internal namespace or implementation tree.
-example : (List.reverse (α := Bool)) ∈ FTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by
+example : List.reverse (α := Bool) ∈ FTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by
   model_fun_prop
 
 -- Nested calls reuse the same reversal specification; only output size is rewritten.
@@ -39,11 +39,11 @@ example : (fun xs : List Bool => xs.reverse.reverse) ∈ FTISP .tree
   model_fun_prop
 
 -- A symbolic positive power uses the saved specification and the standard power exit.
-example (m : ℕ) : (List.reverse (α := Bool)) ∈ FTISP .tree
+example (m : ℕ) : List.reverse (α := Bool) ∈ FTISP .tree
     (fun n => n ^ (m + 1)) (fun n => n ^ 1) := by
   refine HasProgram.mem_ftisp_pow (List.hasProgram_reverse.mono ?_ ?_) (by decide)
   · exact Dominated.of_le fun xs => Nat.le_self_pow (by omega) _
-  · simpa only [pow_one] using (Dominated.refl (fun xs : List Bool => ⌜xs⌝ₜ.size))
+  · simpa only [pow_one] using Dominated.refl (fun xs : List Bool => ⌜xs⌝ₜ.size)
 
 -- Named placeholders in a `refine` take the produced program and growth.
 example : ∃ program t p, HasProgram (fun xs : List Bool => xs.reverse.reverse) program t p := by

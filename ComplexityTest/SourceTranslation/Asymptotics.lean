@@ -158,15 +158,14 @@ theorem via_ftisp : viaIdentity ∈ FTISP .tree (fun _ => 1) id := by
 -- The canonical general exit is also accepted directly, without a tactic wrapper.
 theorem identity_direct_ftisp :
     (id : List Bool → List Bool) ∈ FTISP .tree (fun _ => 1) id :=
-  ((HasProgram.identity (α := List Bool)).mono
-    (t' := fun _ => 1) (p' := fun xs => ⌜xs⌝ₜ.size) Dominated.zero Dominated.zero).mem_ftisp
+  (HasProgram.identity.mono Dominated.zero Dominated.zero).mem_ftisp
       (Dominated.refl _) (Dominated.const 4)
       (Dominated.const_of_pos 2 fun _ => Tree.size_pos _)
 
 -- The boundary keeps the actual small-input machine cost, while empty large-size fibers vanish.
 theorem finiteIdentity_ftisp :
     (id : Unit → Unit) ∈ FTISP .tree (fun _ => 0) (fun _ => 0) := by
-  apply (HasProgram.identity (α := Unit)).mem_ftisp_of_sizeEnvelope
+  apply HasProgram.identity.mem_ftisp_of_sizeEnvelope
   all_goals
     refine ⟨0, eventually_atTop.mpr ⟨2, fun n hn => ?_⟩⟩
     simp only [Nat.zero_mul]

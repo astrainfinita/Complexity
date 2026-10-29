@@ -65,8 +65,7 @@ private instance : Controller.Apply ℕ ℕ where
 -- Halting freezes the three paths without collapsing their repeated endpoint.
 example (n : ℕ) (hn : 1 ≤ n) :
     threeChoices.runFromWith Multiset 0 n = ↑[1, 1, 2] := by
-  apply threeChoices.runFromWith_eq_of_forall_halted 0
-    (n := 1) (hn := hn)
+  apply threeChoices.runFromWith_eq_of_forall_halted 0 (hn := hn)
   intro d hd
   change d ∈ (↑[1, 1, 2] : Multiset ℕ) at hd
   simp only [Multiset.mem_coe, List.mem_cons, List.not_mem_nil, or_false] at hd

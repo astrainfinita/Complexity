@@ -87,7 +87,7 @@ example : accumulateGate ∈ FTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
   model_fun_prop
 
 example {α : Type*} [UniqueEncoding Tree α] :
-    (gateClauses (α := α)) ∈ FTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
+    gateClauses (α := α) ∈ FTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
   model_fun_prop
 
 -- Polynomial substitution combines growth, rather than expanding old million-sized budgets.

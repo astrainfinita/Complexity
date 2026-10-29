@@ -93,7 +93,7 @@ private theorem inv_next (xs : List Bool)
     {s : Cfg (Fin 0) Symbol Unit (input xs)}
     {b : ℕ} (h : Inv xs s (b + 1)) (ha : s.inputSymbol ≠ none) :
     Inv xs (apply { Program.idle (κ := Fin 0) (Γ := Symbol) with inputMove := 1 }
-      (apply { Program.idle (κ := Fin 0) (Γ := Symbol) with output := some s.inputSymbol } s))
+      (apply { Program.idle (κ := Fin 0) with output := some s.inputSymbol } s))
       (b - 3) := by
   obtain ⟨i, hi, hs, hb⟩ := h
   rw [hs] at ha

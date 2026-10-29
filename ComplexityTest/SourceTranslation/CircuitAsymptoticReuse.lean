@@ -42,7 +42,7 @@ private theorem restrict_ftisp {α : Type} [UniqueEncoding Tree α] {f : α → 
     (P : α → Prop)
     (size : Dominated (fun x : {x // P x} => scale x.1) (fun x => ⌜x⌝ₜ.size)) :
     (fun x : {x // P x} => f x.1) ∈ FTISP .tree (fun n => n ^ d) (fun n => n ^ 4) :=
-  ((hf.map_input (γ := {x // P x}) Subtype.val
+  ((hf.map_input Subtype.val
     (fun x => (UniqueEncoding.encode_subtype x).symm)).mono (size.pow d) (size.pow 4)).mem_ftisp_pow
       (by decide)
 

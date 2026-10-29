@@ -109,8 +109,8 @@ def fork : TM BinaryChoice (Fin 0) Γ Bool where
     let a : Action (Fin 0) Γ Bool := ⟨.zero, Fin.elim0, some .one, true⟩
     fun _ ↦ a
 
-#guard (fork.runWith (Cfg (Fin 0) Γ (Bool) #[]) Multiset ([] : List Γ) 1).map (·.output) = ↑[#[Γ.one], #[Γ.one]]
-#guard (fork.runWith (Cfg (Fin 0) Γ (Bool) #[]) Multiset ([] : List Γ) 5).map (·.output) = ↑[#[Γ.one], #[Γ.one]]
+#guard (fork.runWith (Cfg (Fin 0) Γ Bool #[]) Multiset ([] : List Γ) 1).map (·.output) = ↑[#[Γ.one], #[Γ.one]]
+#guard (fork.runWith (Cfg (Fin 0) Γ Bool #[]) Multiset ([] : List Γ) 5).map (·.output) = ↑[#[Γ.one], #[Γ.one]]
 
 #guard (fork.runHistoryWith (Cfg (Fin 0) Γ Bool #[]) Multiset ([] : List Γ) 2).map (fun h ↦ h.space) = ↑[0, 0]
 
@@ -120,8 +120,8 @@ def abort : TM Option (Fin 0) Γ Bool where
   halt := id
   transition _ _ := none
 
-#guard (abort.runWith (Cfg (Fin 0) Γ (Bool) #[]) Option ([] : List Γ) 1).isNone
-#guard (abort.runWith (Cfg (Fin 0) Γ (Bool) #[]) Option ([] : List Γ) 0).isSome
+#guard (abort.runWith (Cfg (Fin 0) Γ Bool #[]) Option ([] : List Γ) 1).isNone
+#guard (abort.runWith (Cfg (Fin 0) Γ Bool #[]) Option ([] : List Γ) 0).isSome
 #guard (abort.runFromWith Option { (abort.initInput (Input := List Γ) (Config := Cfg (Fin 0) Γ Bool [].toArray) []) with state := true } 10).isSome
 
 -- Halting is allowed already at time zero, and the transition is never executed.
