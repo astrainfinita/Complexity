@@ -31,8 +31,7 @@ def advance (x : Bool × List (List Bool) × List Bool) :=
 
 -- Generated growth follows the source cases; the target is unfolded on request.
 example : HasProgram advance hole(⊢ program) chunkWork (fun x => ⌜x⌝ₜ.size + 10) := by
-  fill_hole program in source_fun_prop
-  all_goals dominated [chunkWork]
+  fill_hole program in source_fun_prop (disch := dominated [chunkWork])
 
 -- A statement in the list is instantiated at the matching terms of the pointwise comparison.
 example (f : List Bool → List Bool) (hf : ∀ xs, ⌜f xs⌝ₜ.size ≤ 3 * ⌜xs⌝ₜ.size) :

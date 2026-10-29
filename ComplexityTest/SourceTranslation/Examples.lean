@@ -132,7 +132,6 @@ def hasProgram_optionalReverse {α : Type*} [UniqueEncoding Tree α] :=
 theorem optionalReverse_ftisp {α : Type*} [UniqueEncoding Tree α] :
     optionalReverse (α := α) ∈ FTISP .tree (fun n => n) (fun n => n) := by
   model_fun_prop
-  all_goals dominated
 
 def reverseWithPrefix {α : Type*} (input : List α × Option (List α)) : List α :=
   match input.2 with
@@ -167,7 +166,6 @@ example (_f : List Bool → List Bool) : True := by
 -- The retained input and the reversal are both stored; both resources stay linear.
 example : HasProgram retainsInput hole(⊢ program) (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) := by
   fill_hole program in source_fun_prop
-  all_goals dominated
 
 def nested (xs : List Bool) :=
   let ys := xs.reverse
@@ -176,7 +174,6 @@ def nested (xs : List Bool) :=
 
 example : HasProgram nested hole(⊢ program) (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) := by
   fill_hole program in source_fun_prop
-  all_goals dominated
 
 -- Source and output types can differ without another representation class.
 example {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β] := (by source_fun_prop :
@@ -245,7 +242,6 @@ example {α : Type*} [UniqueEncoding Tree α] :
     HasProgram (fun x : α => [Tagged.one x, Tagged.both x x]) hole(⊢ program) (fun _ => 1)
       (fun x => ⌜x⌝ₜ.size) := by
   fill_hole program in source_fun_prop
-  all_goals dominated
 
 -- A missing opaque implementation is not silently compiled or assumed free.
 opaque hidden (xs : List Bool) : List Bool := xs.reverse
@@ -266,7 +262,6 @@ example :
 
 theorem branch_ftisp : branch ∈ FTISP .tree (fun n => n) (fun n => n) := by
   model_fun_prop
-  all_goals dominated
 
 -- The condition is charged, and only the selected branch contributes its running time.
 example {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
@@ -340,7 +335,6 @@ def tailOrEmpty {α : Type*} : List α → List α
     HasProgram (tailOrEmpty (α := α)) hole(⊢ program) (fun _ => 1) (fun xs => ⌜xs⌝ₜ.size) := by
   abstract_hole program using programTailOrEmpty
   fill_hole program in source_fun_prop
-  all_goals dominated
 
 example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop :
     HasProgram (fun xs : List α => (tailOrEmpty xs).reverse) _ _ _)
@@ -416,16 +410,6 @@ theorem mapGateClauses_ftisp {α : Type*} [UniqueEncoding Tree α] :
     (length_le_codeSize : ∀ xs : List (Σ k, FirstOrder.Language.booleanAlgebra.Functions k ×
       (Fin k → α) × α), xs.length ≤ ⌜xs⌝ₜ.size)
   model_fun_prop
-  all_goals
-    simp only [pow_one, List.map_const', List.sum_replicate, Nat.nsmul_eq_mul, Nat.mul_one,
-      Dominated.add_iff, Dominated.max_iff]
-    repeat' apply And.intro
-  all_goals with_reducible first
-    | assumption
-    | exact Dominated.refl _
-    | exact Dominated.const_of_pos _ (fun _ => Tree.size_pos _)
-    | apply Dominated.list_foldr_max_le
-      exact Dominated.of_le fun z => size_encode_le_list_of_mem z.2
 
 example {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
     {f : α → β} {q : Value → Code Value} {t p : α → ℕ} (hf : HasProgram f q t p) := (by source_fun_prop :
@@ -449,7 +433,6 @@ example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop :
 theorem foldReverse_ftisp {α : Type*} [UniqueEncoding Tree α] :
     foldReverse (α := α) ∈ FTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by
   model_fun_prop
-  all_goals dominated
 
 def collectStep {α : Type*} (acc : List α) (x : α) := x :: acc
 
@@ -507,12 +490,6 @@ def repeatFlag (x : Bool × List Unit) : List Bool := x.2.map (fun _ => x.1)
 
 theorem repeatFlag_ftisp : repeatFlag ∈ FTISP .tree (fun n => n) (fun n => n) := by
   model_fun_prop
-  · apply Dominated.of_le_mul 8
-    rintro ⟨b, xs⟩
-    have := length_le_codeSize xs
-    have := Tree.size_pos ⌜xs⌝ₜ
-    simp [size_encode_prod]
-    omega
   · have hs : Dominated (fun x : Bool × List Unit => ⌜x.2⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) :=
       Dominated.of_le size_encode_snd_le
     have hout : Dominated (fun x : Bool × List Unit => ⌜x.2.map (fun _ => x.1)⌝ₜ.size)
@@ -539,11 +516,9 @@ theorem repeatFlag_ftisp : repeatFlag ∈ FTISP .tree (fun n => n) (fun n => n) 
 theorem accumulateGate_ftisp :
     accumulateGate ∈ FTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
   model_fun_prop
-  all_goals dominated
 
 theorem circuitStep_ftisp :
     circuitStep ∈ FTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by
   model_fun_prop
-  all_goals dominated
 
 end ComplexityTest.SourceTranslation.Examples

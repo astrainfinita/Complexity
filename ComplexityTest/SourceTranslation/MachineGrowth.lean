@@ -16,7 +16,6 @@ namespace ComplexityTest.SourceTranslation.MachineGrowth
 theorem identity_machine : TimeSpaceModel.tree.ComputableWithGrowth
     (id : List Bool → List Bool) (fun xs => xs.length + 1) (fun xs => ⌜xs⌝ₜ.size) := by
   model_fun_prop
-  all_goals dominated
 
 -- A local implementation is used by the machine exit.
 example {program : Value → Code Value}
@@ -24,7 +23,6 @@ example {program : Value → Code Value}
     TimeSpaceModel.tree.ComputableWithGrowth (id : List Bool → List Bool)
       (fun _ => 1) (fun xs => ⌜xs⌝ₜ.size) := by
   model_fun_prop
-  all_goals dominated
 
 -- Loading and running still cost time: a zero machine allowance cannot replace the program.
 example : True := by

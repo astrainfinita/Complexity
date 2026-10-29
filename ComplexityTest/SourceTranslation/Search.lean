@@ -148,7 +148,6 @@ example : ∃ q u, HasProgram duplicateBranch q (fun _ => 1) u := by
   refine ⟨?q, ?u, ?h⟩
   case h =>
     source_fun_prop
-    all_goals dominated
 
 example {program : Value → Code Value} {t p : Bool → ℕ}
     (_selected : HasProgram duplicate program t p) : True := by
@@ -157,7 +156,6 @@ example {program : Value → Code Value} {t p : Bool → ℕ}
       refine ⟨?q, ?u, ?h⟩
       case h =>
         source_fun_prop
-        all_goals dominated
         done
   trivial
 

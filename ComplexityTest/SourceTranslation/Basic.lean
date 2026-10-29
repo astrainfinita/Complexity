@@ -59,7 +59,6 @@ example {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
       hole(pf, pg ⊢ program) (fun x => if x.1 then u x.2 + 1 else t x.2 + 1)
       (fun x => max ⌜x⌝ₜ.size (if x.1 then q x.2 else p x.2)) := by
   fill_hole program in source_fun_prop
-  all_goals dominated
 
 -- Nested branches retain their own closed environments and selected callback growths.
 example {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
@@ -73,7 +72,6 @@ example {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
       (fun x => max ⌜x⌝ₜ.size
         (if x.1 then (if x.2.1 then ph x.2.2 else pg x.2.2) else pf x.2.2)) := by
   fill_hole program in source_fun_prop
-  all_goals dominated
 
 -- Runtime dependent indices are packed; a static parameter need not itself be encodable.
 example {α : Type*} (tag : α) {f g : α → (Σ n, Fin n) → Bool} {pf pg : Value → Code Value}
@@ -85,7 +83,6 @@ example {α : Type*} (tag : α) {f g : α → (Σ n, Fin n) → Bool} {pf pg : V
       (fun x => if x.2.1 then u ⟨x.1, x.2.2⟩ + 1 else t ⟨x.1, x.2.2⟩ + 1)
       (fun x => max ⌜x⌝ₜ.size (if x.2.1 then q ⟨x.1, x.2.2⟩ else p ⟨x.1, x.2.2⟩)) := by
   fill_hole program in source_fun_prop
-  all_goals dominated
 
 -- Case splitting must not turn pointwise implementations into one uniform program.
 example (f : ℕ → Bool → Bool) (q : ℕ → Value → Code Value) (t p : ℕ → Bool → ℕ)

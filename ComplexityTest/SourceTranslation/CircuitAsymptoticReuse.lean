@@ -73,7 +73,6 @@ example : (fun x : StoredKeep => ⌜keepFn x.1⌝ₜ) ∈
 -- Ordinary nested source calls use the selected keep implementation, retaining structural costs.
 example : HasProgram preserve hole(⊢ program) (fun x => ⌜x⌝ₜ.size + keepScale ⟨x.1, x.2.1, x.2.2⟩ ^ 8)
     (fun x => ⌜preserve x⌝ₜ.size + ⌜x⌝ₜ.size + keepScale ⟨x.1, x.2.1, x.2.2⟩ ^ 4) := by
-  fill_hole program in source_fun_prop
-  all_goals dominated [preserve]
+  fill_hole program in source_fun_prop (disch := dominated [preserve])
 
 end ComplexityTest.SourceTranslation.CircuitAsymptoticReuse

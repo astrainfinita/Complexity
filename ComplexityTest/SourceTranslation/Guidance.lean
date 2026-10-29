@@ -32,7 +32,6 @@ example : HasProgram (List.reverse (α := Bool)) hole(⊢ program) (fun xs => �
     (fun xs => ⌜xs⌝ₜ.size) := by
   fill_hole program in source_fun_prop via reverseByCases
   case source_eq => funext xs; cases xs <;> simp [reverseByCases]
-  all_goals dominated
 
 example : HasProgram (userReverse (α := Bool)) hole(⊢ program) (fun xs => ⌜xs⌝ₜ.size)
     (fun xs => ⌜xs⌝ₜ.size) := by
@@ -101,7 +100,6 @@ theorem hasProgram_customReverse {α : Type*} [UniqueEncoding Tree α] :
       (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) := by
   abstract_hole program using programCustomReverse
   fill_hole program in source_fun_prop using ReverseByCases
-  all_goals dominated
 
 open scoped ReverseByCases in
 example {α : Type*} [UniqueEncoding Tree α] :=
@@ -113,13 +111,6 @@ example : HasProgram (userReverse (α := Bool)) hole(⊢ program) (fun xs => ⌜
     (fun xs => ⌜xs⌝ₜ.size) := by
   fill_hole program in source_fun_prop using ReverseByCases via List.reverse
   case source_eq => exact userReverse_eq
-  all_goals
-    apply Dominated.of_le_mul 4
-    rintro (_ | ⟨x, xs⟩)
-    · simp
-    · have := size_encode_list xs
-      simp
-      omega
 
 def chosenReverse {α : Type*} : List α → List α := List.reverse
 

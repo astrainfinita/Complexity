@@ -51,12 +51,12 @@ theorem hasProgram_advance : HasProgram advance hole(⊢ program) chunkWork (fun
   all_goals
     apply Dominated.of_le_mul 20
     rintro ⟨tag, _ | ⟨xs, rest⟩, acc⟩
-    · simp [chunkWork, size_encode_prod] <;> omega
+    · simp [chunkWork]
     · have := size_encode_list_append xs.reverse acc
       have := length_le_codeSize xs
       have := size_encode_bool_le tag
       have := Tree.size_pos ⌜xs⌝ₜ
-      simp [chunkWork, size_encode_prod] at *
+      simp [chunkWork] at *
       try omega
 
 def gatherCheck (x : GatherInput) := !x.2.1.isEmpty
@@ -65,7 +65,6 @@ theorem hasProgram_gatherCheck :
     HasProgram gatherCheck hole(⊢ program) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programGatherCheck
   fill_hole program in source_fun_prop
-  all_goals dominated
 
 theorem hasProgram_gatherFinish :
     HasProgram (fun x : GatherInput => x.2.2) hole(⊢ program) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
@@ -145,7 +144,6 @@ theorem hasProgram_gatherLoop : HasProgram gather hole(⊢ program)
 
 theorem gather_model : gather ∈ FTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by
   model_fun_prop
-  all_goals dominated
 
 -- The accumulator really grows; no decreasing-space condition is hidden in the interface.
 example : ⌜((true, [[]], []) : GatherInput)⌝ₜ.size <
@@ -173,18 +171,10 @@ def keep (xs : List Bool) := xs
   case next_state => simp
   case decreases => simp
   case input_size => exact Dominated.of_le (fun z => by rw [z.2])
-  case check_peak => exact Dominated.zero
-  case step_peak => exact Dominated.zero
-  case stop_peak => exact Dominated.zero
-  case step_time => exact Dominated.zero
-  case check_time => exact Dominated.const _
-  case stop_time => exact Dominated.zero
-  case time => exact Dominated.const _
   all_goals intro; decide
 
 theorem keep_loop_model : keep ∈ FTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
   model_fun_prop
-  all_goals dominated
 
 -- A zero allowance cannot replace the selected loop by the ordinary identity program.
 example : True := by

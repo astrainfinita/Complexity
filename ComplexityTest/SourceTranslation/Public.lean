@@ -32,13 +32,11 @@ open TreeProgram.Source
 -- The ordinary entry needs no coefficient, internal namespace or implementation tree.
 example : (List.reverse (α := Bool)) ∈ FTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by
   model_fun_prop
-  all_goals dominated
 
 -- Nested calls reuse the same reversal specification; only output size is rewritten.
 example : (fun xs : List Bool => xs.reverse.reverse) ∈ FTISP .tree
     (fun n => n ^ 1) (fun n => n ^ 1) := by
   model_fun_prop
-  all_goals dominated
 
 -- A symbolic positive power uses the saved specification and the standard power exit.
 example (m : ℕ) : (List.reverse (α := Bool)) ∈ FTISP .tree

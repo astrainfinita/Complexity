@@ -138,7 +138,6 @@ def layersStored (x : Σ n, Circuit .booleanAlgebra (n + 1) n × List Unit) :
     | assumption
     | exact Dominated.const_of_pos _ (fun x => Nat.pow_pos (hS x))
     | exact Dominated.le_pow (g := S) (by first | assumption | exact Dominated.refl _) (by decide)
-    | exact Dominated.mono_pow (hxs.pow 2) (by decide) hS
 
 theorem layersStored_ftisp :
     layersStored ∈ FTISP .tree (fun n => n ^ 18) (fun n => n ^ 8) :=

@@ -109,14 +109,12 @@ theorem hasProgram_drainFinish :
     HasProgram drainRecursion.finish hole(⊢ program) (fun _ => 1) (fun _ => 1) := by
   abstract_hole program using programDrainFinish
   fill_hole program in source_fun_prop
-  all_goals dominated
 
 theorem hasProgram_drainResume : HasProgram
     (fun x : drainRecursion.Return => drainRecursion.resume x.1 x.2) hole(⊢ program) (fun _ => 1)
     (fun _ => 1) := by
   abstract_hole program using programDrainResume
   fill_hole program in source_fun_prop
-  all_goals dominated
 
 -- Callback growths enter the structural cost directly. No coefficient is selected in induction.
 private theorem drain_cost_growth :
@@ -150,7 +148,6 @@ theorem hasProgram_drainTest :
     (fun xs => ⌜xs⌝ₜ.size) := by
   abstract_hole program using programDrainTest
   fill_hole program in source_fun_prop
-  all_goals dominated
 
 -- The terminal allowance appears once; the stack allowance grows with recursion depth.
 theorem hasProgram_drainStructural : HasProgram drain hole(⊢ program)
@@ -188,7 +185,6 @@ example := (by
 
 theorem drain_model : drain ∈ FTISP .tree (fun n => n ^ 1) (fun n => n ^ 2) := by
   model_fun_prop
-  all_goals dominated
 
 -- A terminal callback is paid only in the stop equation, not at every recursive step.
 example (bc bs : Bounds (List Bool))
@@ -210,6 +206,5 @@ example (bc bs : Bounds (List Bool))
 example : drain ∈ FTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
   model_fun_prop via (fun _ : List Bool => ())
   case source_eq => funext xs; exact Subsingleton.elim _ _
-  all_goals dominated
 
 end ComplexityTest.SourceTranslation.Recursion

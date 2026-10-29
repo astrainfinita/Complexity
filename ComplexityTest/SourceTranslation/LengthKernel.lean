@@ -9,15 +9,6 @@ theorem certificate :
     HasProgram (fun x : List Unit × Bool => (x.1.length, x.2)) hole(⊢ program)
       (fun x => ⌜x.1⌝ₜ.size ^ 2 + 1) (fun x => ⌜x⌝ₜ.size + ⌜(x.1.length, x.2)⌝ₜ.size) := by
   fill_hole program in source_fun_prop
-  all_goals
-    simp only [Dominated.add_iff, Dominated.max_iff]
-    repeat' apply And.intro
-    all_goals first
-      | exact Dominated.const_of_pos _ (fun _ => Nat.zero_lt_succ _)
-      | apply Dominated.of_le
-        intro x
-        have := size_encode_fst_le x
-        omega
 
 -- Recheck the generated proof with a kernel-only allocation limit, independent of tactic cost
 -- and machine speed. The benchmark records current raw heartbeats separately.

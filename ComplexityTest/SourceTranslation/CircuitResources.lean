@@ -30,15 +30,11 @@ open Complexity.TreeProgram.Source in
 
 theorem collect_ftisp : collect ∈ FTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
   model_fun_prop
-  all_goals dominated
 
 -- Pairing reuses the selected growth and needs only the genuine output-size relation.
 theorem collect_pair_ftisp : (fun input => (collect input, input.1)) ∈ FTISP .tree
     (fun n => n ^ 0) (fun n => n ^ 1) := by
   model_fun_prop
-  · simp only [pow_zero, Dominated.add_iff]
-    repeat' apply And.intro
-    all_goals exact Dominated.const_of_pos _ (fun _ => Nat.zero_lt_one)
   · apply Dominated.of_le_mul 5
     intro input
     have ho := accumulateGate_size input
@@ -70,7 +66,6 @@ attribute [local source] copied_ftisp
 example : collect ∈ FTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
   model_fun_prop via accumulateGate
   case source_eq => rfl
-  all_goals dominated
 
 example : True := by
   fail_if_success
@@ -90,12 +85,10 @@ example (acc xs : List Bool) :
 -- Ordinary nested calls use saved specifications without choosing a numerical coefficient.
 example : accumulateGate ∈ FTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
   model_fun_prop
-  all_goals dominated
 
 example {α : Type*} [UniqueEncoding Tree α] :
     (gateClauses (α := α)) ∈ FTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
   model_fun_prop
-  all_goals dominated
 
 -- Polynomial substitution combines growth, rather than expanding old million-sized budgets.
 example {s R : ℕ → ℕ} (hs : Dominated s (fun n => R n ^ 2))

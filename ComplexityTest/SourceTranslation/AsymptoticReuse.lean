@@ -29,9 +29,6 @@ theorem hasProgram_importedLoop :
   case next_state => intros; contradiction
   case decreases => intros; contradiction
   case input_size => exact Dominated.of_le fun z => by rw [z.2]
-  case check_peak | step_peak | stop_peak | step_time | check_time | stop_time =>
-    exact Dominated.zero
-  case time => exact Dominated.const _
   all_goals intro; decide
 
 example : ∃ test t p,
@@ -68,8 +65,7 @@ def drainTwice (xs : List Bool) : List Bool := drain (drain xs)
 -- Neither model overhead nor the loop's callback construction appears in these goals.
 theorem drainTwice_ftisp :
     drainTwice ∈ FTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by
-  model_fun_prop
-  all_goals dominated [drain]
+  model_fun_prop (disch := dominated [drain])
 
 -- A zero atTop conclusion on a finite type retains the positive selected callback.
 example := (by source_fun_prop : HasProgram Bool.not programFiniteNot _ _)

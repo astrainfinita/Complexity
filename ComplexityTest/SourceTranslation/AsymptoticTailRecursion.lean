@@ -32,19 +32,10 @@ def drain (_ : List Bool) : List Bool := []
     cases ys <;> simp_all [encode_list_cons, size_encode_prod]
     omega
   case decreases => intro xs ys _ ht; cases ys <;> simp_all
-  case input_size => exact Dominated.of_le fun z => z.2.2
-  case check_peak => dominated
-  case step_peak => exact Dominated.of_le fun z => z.2.2
-  case stop_peak => exact Dominated.of_le fun _ => Nat.zero_le _
-  case step_time => exact Dominated.refl _
-  case check_time => dominated
-  case stop_time => exact Dominated.of_le fun _ => Nat.zero_le _
-  case time => dominated
   all_goals intro; decide
 
 theorem drain_ftisp : drain ∈ FTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by
   model_fun_prop
-  all_goals dominated
 
 -- The program is determined by the callbacks; tail-loop space has no stack multiplier.
 example : ∃ test t p, programDrain = loopCode test List.programTail (fun v => pure v) ∧

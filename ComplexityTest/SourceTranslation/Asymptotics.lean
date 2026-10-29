@@ -136,7 +136,6 @@ attribute [local source] hasProgram_preciseIdentityWeaker
 theorem preciseIdentity_ftisp :
     preciseIdentity ∈ FTISP .tree (fun n => n ^ 2) (fun n => n ^ 2) := by
   model_fun_prop
-  all_goals dominated
 
 -- An alias of a selected implementation keeps its program and growth.
 def aliasedIdentity (xs : List Bool) := preciseIdentity xs
@@ -148,7 +147,6 @@ example : HasProgram aliasedIdentity hole(⊢ program) (fun _ => 0) (fun _ => 0)
 
 theorem identity_ftisp : (id : List Bool → List Bool) ∈ FTISP .tree (fun _ => 1) id := by
   model_fun_prop
-  all_goals dominated
 
 def viaIdentity (xs : List Bool) := xs
 
@@ -156,13 +154,6 @@ def viaIdentity (xs : List Bool) := xs
 theorem via_ftisp : viaIdentity ∈ FTISP .tree (fun _ => 1) id := by
   model_fun_prop via (id : List Bool → List Bool)
   case source_eq => rfl
-  case time =>
-    exact Dominated.of_forall_eq fun _ _ => rfl
-  case peak =>
-    have h : Dominated (fun xs : List Bool => ⌜xs⌝ₜ.size + 2) (fun xs => ⌜xs⌝ₜ.size) :=
-      (Dominated.refl _).add_same
-        ((Dominated.const 2).trans (Dominated.one fun _ => Tree.size_pos _))
-    simpa only [Function.comp_apply, Nat.max_self, Nat.max_zero, id_eq] using h
 
 -- The canonical general exit is also accepted directly, without a tactic wrapper.
 theorem identity_direct_ftisp :
@@ -189,7 +180,6 @@ theorem finiteIdentity_ftisp :
     HasProgram Bool.not hole(⊢ program) (fun _ => 1) (fun _ => 1) := by
   abstract_hole program using programFiniteNot
   fill_hole program in source_fun_prop
-  all_goals dominated
 
 theorem finiteNot_ftisp : Bool.not ∈ FTISP .tree (fun _ => 0) (fun _ => 0) := by
   apply hasProgram_finiteNot.mem_ftisp_of_sizeEnvelope

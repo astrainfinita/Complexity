@@ -20,7 +20,6 @@ example : HasProgram keep hole(⊢ program) (fun _ => 1) (fun x => ⌜x⌝ₜ.si
   fill_hole program in source_fun_prop
 example : keep ∈ FTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
   model_fun_prop
-  all_goals dominated
 
 example : True := by
   fail_if_success
@@ -36,4 +35,3 @@ def optionalGather : Option (Bool × List (List Bool) × List Bool) → List Boo
 -- Ordinary nested calls consume gather's linear selected growth.
 example : optionalGather ∈ FTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by
   model_fun_prop
-  all_goals dominated

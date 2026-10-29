@@ -90,7 +90,6 @@ theorem hasProgram_negateBool : HasProgram negateBool hole(⊢ program) (fun _ =
     (fun x => max ⌜x⌝ₜ.size ⌜negateBool x⌝ₜ.size) := by
   abstract_hole program using programNegateBool
   fill_hole program in source_fun_prop
-  all_goals dominated
 
 /-- info: 5 -/
 #guard_msgs in
@@ -103,7 +102,6 @@ private def unequalBranches (x : Bool × List Bool) : List Bool :=
 example : HasProgram unequalBranches hole(⊢ program) (fun _ => 1)
     (fun x => max ⌜x⌝ₜ.size ⌜unequalBranches x⌝ₜ.size) := by
   fill_hole program in source_fun_prop
-  all_goals dominated
 
 private def selectConstant : Bool → ℕ
   | false => 2
@@ -113,7 +111,6 @@ private def selectConstant : Bool → ℕ
 example : HasProgram selectConstant hole(⊢ program) (fun _ => 1)
     (fun x => max ⌜x⌝ₜ.size ⌜selectConstant x⌝ₜ.size) := by
   fill_hole program in source_fun_prop
-  all_goals dominated
 
 private def nonemptyTailReverse (x : {xs : List Bool // xs ≠ []}) : List Bool :=
   match h : x.1 with

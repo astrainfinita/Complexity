@@ -21,7 +21,6 @@ def nested (xs : List Bool) := id (id xs)
 theorem nested_machine : TimeSpaceModel.tree.ComputableWithGrowth nested
     (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) := by
   model_fun_prop
-  all_goals dominated
 
 -- The selected linear program, not the zero-cost identity, runs inside the nested calls.
 example : True := by
@@ -30,7 +29,7 @@ example : True := by
         (fun _ => 1) (fun xs => ⌜xs⌝ₜ.size) := by
       model_fun_prop
       all_goals
-        simp only [Dominated.add_iff, Dominated.max_iff]
+        simp only [Dominated.add_iff]
         repeat' apply And.intro
       all_goals first
         | exact Dominated.refl _

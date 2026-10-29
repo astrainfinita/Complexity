@@ -73,7 +73,6 @@ example : ∃ q p, HasProgram (fun e => Fin.append (f e) (g e)) q
   refine ⟨?q, ?p, ?h⟩
   case h =>
     source_fun_prop
-    all_goals dominated
 
 end FinAppendImplementation
 
@@ -84,7 +83,6 @@ example {α : Type*} [UniqueEncoding Tree α] : ∃ q p, HasProgram
   refine ⟨?q, ?p, ?h⟩
   case h =>
     source_fun_prop
-    all_goals dominated
 
 -- Selecting the enumeration scope must preserve the polymorphic append implementation.
 example {α : Type*} [UniqueEncoding Tree α] : ∃ q p, HasProgram
@@ -93,21 +91,18 @@ example {α : Type*} [UniqueEncoding Tree α] : ∃ q p, HasProgram
   refine ⟨?q, ?p, ?h⟩
   case h =>
     source_fun_prop using tabulate
-    all_goals dominated
 
 example {α : Type*} [UniqueEncoding Tree α] : ∃ q p, HasProgram
     (fun x : Σ n, (Fin n → α) × α => ⌜Fin.snoc x.2.1 x.2.2⌝ₜ) q (fun x => x.1 + 4) p := by
   refine ⟨?q, ?p, ?h⟩
   case h =>
     source_fun_prop
-    all_goals dominated
 
 example {α : Type*} [UniqueEncoding Tree α] : ∃ q p, HasProgram
     (fun x : Σ n, (Fin n → α) × α => ⌜Fin.snoc x.2.1 x.2.2⌝ₜ) q (fun x => x.1 + 4) p := by
   refine ⟨?q, ?p, ?h⟩
   case h =>
     source_fun_prop using tabulate
-    all_goals dominated
 
 def successorWires (n : ℕ) : Σ n, Fin n → Fin (n + 1) := ⟨n, Fin.castSucc⟩
 
@@ -151,7 +146,6 @@ attribute [local fun_prop] HasProgram.fin_comp in
 theorem composeWires_ftisp :
     composeWires ∈ FTISP .tree (fun n => n ^ 3) (fun n => n ^ 2) := by
   model_fun_prop
-  all_goals dominated
 
 -- A represented table and a single callback implement one algorithm for every runtime index.
 -- Pointwise existence must not be mistaken for such a callback.

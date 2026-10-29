@@ -13,13 +13,11 @@ def add (x : ℕ × ℕ) := x.1 + x.2
 
 example : add ∈ FTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by
   model_fun_prop
-  all_goals dominated
 
 def less (x : ℕ × ℕ) := decide (x.1 < x.2)
 
 example : less ∈ FTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by
   model_fun_prop
-  all_goals dominated
 
 def between (x : ℕ × ℕ × ℕ) := decide (x.2.1 ≤ x.1) && decide (x.1 < x.2.2)
 
@@ -36,7 +34,6 @@ example := (by source_fun_prop : HasProgram addBelow _ _ _)
 example : HasProgram (fun x : Bool × List Bool => if x.1 = true then x.2.reverse else x.2) hole(⊢ program)
     (fun x => if x.1 then ⌜x⌝ₜ.size else 1) (fun x => ⌜x⌝ₜ.size) := by
   fill_hole program in source_fun_prop
-  all_goals dominated
 
 -- Boolean operations compose through ordinary source syntax.
 example := (by source_fun_prop : HasProgram (fun x : Bool × Bool × Bool =>
