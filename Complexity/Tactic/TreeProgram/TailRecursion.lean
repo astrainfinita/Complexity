@@ -214,8 +214,12 @@ syntax "loop" " (" &"test" " := " term ")" " (" &"next" " := " term ")"
   " (" &"finish" " := " term ")" " (" &"invariant" " := " term ")"
   " (" &"measure" " := " term ")" " (" &"step" " := " term ")"
   " (" &"stop" " := " term ")" " (" &"space" " := " term ")" : sourceMeasuredLoop
-syntax "model_fun_prop" " using " sourceMeasuredLoop (" using " ident)? : tactic
-syntax "source_fun_prop" " using " sourceMeasuredLoop (" using " ident)? : tactic
+@[tactic_alt modelFunPropStx]
+syntax "model_fun_prop" (Lean.Parser.Tactic.discharger)? " using " sourceMeasuredLoop
+  (" using " ident)? : tactic
+@[tactic_alt sourceFunProp]
+syntax "source_fun_prop" (Lean.Parser.Tactic.discharger)? " using " sourceMeasuredLoop
+  (" using " ident)? : tactic
 
 open Lean Meta Elab Tactic in
 private def proveMeasuredLoop (method : TSyntax `sourceMeasuredLoop) (scope : Option Ident) :
@@ -269,10 +273,11 @@ private def proveMeasuredLoop (method : TSyntax `sourceMeasuredLoop) (scope : Op
 
 open Lean Elab Tactic in
 elab_rules : tactic
-  | `(tactic| source_fun_prop using $method:sourceMeasuredLoop $[using $scope:ident]?) => do
-    let obligations ← proveMeasuredLoop method scope
+  | `(tactic| source_fun_prop $[$disch]? using $method:sourceMeasuredLoop
+      $[using $scope:ident]?) => do
+    let obligations ← dischargeGrowth disch (← proveMeasuredLoop method scope)
     setGoals (obligations ++ (← getGoals))
-  | `(tactic| model_fun_prop using $method:sourceMeasuredLoop $[using $scope:ident]?) =>
-    modelFunProp (proveMeasuredLoop method scope)
+  | `(tactic| model_fun_prop $[$disch]? using $method:sourceMeasuredLoop $[using $scope:ident]?) =>
+    modelFunProp disch (proveMeasuredLoop method scope)
 
 end Complexity.TreeProgram.Source

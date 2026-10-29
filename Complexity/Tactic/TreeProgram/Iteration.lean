@@ -220,7 +220,6 @@ theorem Iteration.hasProgram_continues {α : Type*} [UniqueEncoding Tree α] :
       (fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programContinues
   fill_hole program in source_fun_prop
-  all_goals dominated
 
 /-- One counter step and one callback, with the counter's binary size charged. -/
 theorem HasProgram.iteration_step {α : Type*} [UniqueEncoding Tree α] {f : α → α}

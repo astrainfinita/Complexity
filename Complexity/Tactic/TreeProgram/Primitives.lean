@@ -30,7 +30,7 @@ theorem _root_.Bool.hasProgram_not :
   abstract_hole program using programNot
   fill_hole program in
     exact .of_encode (by intro x; cases x <;> rfl)
-      (by source_fun_prop; all_goals dominated :
+      (by source_fun_prop :
         HasProgram (fun x => match x with | false => true | true => false) _
           (fun _ => 1) (fun x => ⌜x⌝ₜ.size))
 
@@ -39,7 +39,7 @@ theorem hasProgram_boolAnd : HasProgram (fun x : Bool × Bool => x.1 && x.2) hol
   abstract_hole program using programBoolAnd
   fill_hole program in
     exact .of_encode (by rintro ⟨a, b⟩; cases a <;> cases b <;> rfl)
-      (by source_fun_prop; all_goals dominated :
+      (by source_fun_prop :
         HasProgram (fun x : Bool × Bool => match x.1 with | false => false | true => x.2) _
           (fun _ => 1) (fun x => ⌜x⌝ₜ.size))
 
@@ -48,7 +48,7 @@ theorem hasProgram_boolOr : HasProgram (fun x : Bool × Bool => x.1 || x.2) hole
   abstract_hole program using programBoolOr
   fill_hole program in
     exact .of_encode (by rintro ⟨a, b⟩; cases a <;> cases b <;> rfl)
-      (by source_fun_prop; all_goals dominated :
+      (by source_fun_prop :
         HasProgram (fun x : Bool × Bool => match x.1 with | false => x.2 | true => true) _
           (fun _ => 1) (fun x => ⌜x⌝ₜ.size))
 
@@ -58,7 +58,7 @@ theorem hasProgram_boolXor : HasProgram (fun x : Bool × Bool => xor x.1 x.2) ho
   abstract_hole program using programBoolXor
   fill_hole program in
     exact .of_encode (by rintro ⟨a, b⟩; cases a <;> cases b <;> rfl)
-      (by source_fun_prop; all_goals dominated :
+      (by source_fun_prop :
         HasProgram (fun x : Bool × Bool => match x.1 with | false => x.2 | true => !x.2) _
           (fun _ => 1) (fun x => ⌜x⌝ₜ.size))
 
@@ -76,7 +76,6 @@ theorem _root_.List.hasProgram_isEmpty {α : Type*} [UniqueEncoding Tree α] :
       (fun xs => ⌜xs⌝ₜ.size) := by
   abstract_hole program using programIsEmpty
   fill_hole program in source_fun_prop
-  all_goals dominated
 
 attribute [scoped fun_prop] Bool.hasProgram_not hasProgram_boolAnd hasProgram_boolOr
   hasProgram_boolXor hasProgram_boolBeq List.hasProgram_isEmpty

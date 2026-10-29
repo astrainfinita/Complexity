@@ -31,12 +31,10 @@ theorem gateClauses_size_le {α : Type*} [UniqueEncoding Tree α]
     HasProgram (gateClauses (α := α)) hole(⊢ program) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programGateClauses
   fill_hole program in source_fun_prop
-  all_goals dominated
 
 theorem gateClauses_ftisp {α : Type*} [UniqueEncoding Tree α] :
     gateClauses (α := α) ∈ FTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
   model_fun_prop
-  all_goals dominated
 
 /-- Add a gate's clauses to the reversed clause accumulator. -/
 def accumulateGate
@@ -55,13 +53,11 @@ abbrev AccumulateInput := CNF ℕ ×
     Dominated.of_le_mul 3 (fun x => by
       simpa only [gateClauses, Nat.mul_one] using
         CNF.length_ofGate_le x.2.2.1 x.2.2.2.1 x.2.2.2.2)
-  fill_hole program in source_fun_prop
-  all_goals dominated [gateClauses_size_le]
+  fill_hole program in source_fun_prop (disch := dominated [gateClauses_size_le])
 
 theorem accumulateGate_ftisp :
     accumulateGate ∈ FTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
   model_fun_prop
-  all_goals dominated
 
 /-- Output size is an ordinary property of the list fold, independent of its certification. -/
 theorem accumulateGate_size (input : CNF ℕ ×
@@ -93,14 +89,13 @@ theorem size_encode_val_comp {n k : ℕ} (args : Fin k → Fin n) :
 @[source] theorem hasProgram_circuitStep :
     HasProgram circuitStep hole(⊢ program) (fun x => ⌜x.1⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programCircuitStep
-  fill_hole program in source_fun_prop
-  all_goals dominated [accumulateGate_size, gateClauses_size_le, size_encode_val_comp,
-    size_encode_nat_succ_le]
+  fill_hole program in
+    source_fun_prop (disch := dominated [accumulateGate_size, gateClauses_size_le,
+      size_encode_val_comp, size_encode_nat_succ_le])
 
 theorem circuitStep_ftisp :
     circuitStep ∈ FTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by
   model_fun_prop
-  all_goals dominated
 
 /-- Whether the circuit still has a gate to process. -/
 def circuitContinues (input : TseitinState) : Bool :=
@@ -158,23 +153,19 @@ theorem tseitinLoop_state_size (x y : TseitinState)
     HasProgram circuitContinues hole(⊢ program) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programCircuitContinues
   fill_hole program in source_fun_prop
-  all_goals dominated
 
 theorem circuitContinues_ftisp :
     circuitContinues ∈ FTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
   model_fun_prop
-  all_goals dominated
 
 @[source] theorem hasProgram_circuitFinish :
     HasProgram circuitFinish hole(⊢ program) (fun x => ⌜x⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programCircuitFinish
   fill_hole program in source_fun_prop
-  all_goals dominated [CNF.Literal.pos]
 
 theorem circuitFinish_ftisp :
     circuitFinish ∈ FTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by
   model_fun_prop
-  all_goals dominated
 
 theorem circuitStep_circuit_size_lt
     (x : TseitinState) (ht : circuitContinues x = true) :
@@ -206,11 +197,8 @@ theorem hasProgram_tseitinLoop :
     refine ⟨(circuitStep_circuit_size_lt y ht).le.trans hi.1, ?_⟩
     simpa only [tseitinLoop_step y, ht, ↓reduceIte] using hi.2
   case decreases => intro x y _ ht; exact circuitStep_circuit_size_lt y ht
-  case step_time => dominated
-  case check_time => exact Dominated.const_of_pos _ (fun _ => Tree.size_pos _)
   case step_pos => exact fun _ => Tree.size_pos _
   case stop_pos => exact fun _ => Nat.pow_pos (Tree.size_pos _)
-  case time => dominated
   all_goals exact Dominated.of_le_mul _ (fun z => tseitinLoop_state_size z.1.1 z.1.2 z.2)
 
 theorem tseitinLoop_ftisp :
@@ -228,6 +216,5 @@ theorem _root_.Complexity.Circuit.tseitin_ftisp :
     (fun input : Σ n, Circuit .booleanAlgebra n 1 => input.2.tseitin) ∈
       FTISP .tree (fun n => n ^ 2) (fun n => n ^ 2) := by
   model_fun_prop
-  all_goals dominated
 
 end Complexity.TreeProgram.Source

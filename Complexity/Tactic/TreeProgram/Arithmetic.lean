@@ -34,13 +34,11 @@ theorem hasProgram_borrowContinues :
     HasProgram borrowContinues hole(⊢ program) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programBorrowContinues
   fill_hole program in source_fun_prop
-  all_goals dominated
 
 theorem hasProgram_borrowStep :
     HasProgram borrowStep hole(⊢ program) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programBorrowStep
   fill_hole program in source_fun_prop
-  all_goals dominated [borrowStep]
 
 def borrow (x : List Bool × List Bool) := x.2.reverse ++ BitList.decrement x.1
 
@@ -48,7 +46,6 @@ theorem hasProgram_borrowFinish :
     HasProgram borrowFinish hole(⊢ program) (fun x => ⌜x⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programBorrowFinish
   fill_hole program in source_fun_prop
-  all_goals dominated
 
 
 attribute [scoped fun_prop] hasProgram_borrowContinues hasProgram_borrowStep
@@ -88,12 +85,9 @@ theorem hasProgram_borrow :
   case check_peak => exact borrowInvariant_size
   case step_peak => exact borrowInvariant_size
   case stop_peak => exact borrowInvariant_size
-  case step_time => exact Dominated.refl _
-  case check_time => exact Dominated.refl _
   case stop_time => exact borrowInvariant_size
   case step_pos => exact fun _ => Nat.zero_lt_one
   case stop_pos => exact fun _ => Tree.size_pos _
-  case time => dominated
 
 theorem _root_.Complexity.BitList.hasProgram_decrement :
     HasProgram BitList.decrement hole(⊢ program) (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) := by
@@ -101,7 +95,6 @@ theorem _root_.Complexity.BitList.hasProgram_decrement :
   have hb := hasProgram_borrow
   fill_hole program in source_fun_prop via (fun xs => borrow (xs, []))
   case source_eq => funext xs; simp [borrow]
-  all_goals dominated
 
 theorem _root_.Nat.hasProgram_pred :
     HasProgram Nat.pred hole(⊢ program) (fun n => ⌜n⌝ₜ.size) (fun n => ⌜n⌝ₜ.size) := by
@@ -131,7 +124,6 @@ theorem hasProgram_carryFinish :
     HasProgram carryFinish hole(⊢ program) (fun x => ⌜x⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programCarryFinish
   fill_hole program in source_fun_prop
-  all_goals dominated
 
 
 attribute [local fun_prop] hasProgram_carryFinish
@@ -151,7 +143,6 @@ theorem hasProgram_addContinues :
       Dominated (fun x => ⌜f x⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) :=
     (Dominated.const_of_pos 3 fun _ => Tree.size_pos _).mono_left fun x => size_encode_bool_le _
   fill_hole program in source_fun_prop
-  all_goals dominated
 
 
 attribute [local fun_prop] hasProgram_addContinues
@@ -161,7 +152,6 @@ theorem hasProgram_addStep :
     HasProgram addStep hole(⊢ program) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programAddStep
   fill_hole program in source_fun_prop
-  all_goals dominated [addStep]
 
 
 attribute [local fun_prop] hasProgram_addStep
@@ -183,7 +173,6 @@ theorem hasProgram_addFinish :
       (x.1, if x.2.1.isEmpty then x.2.2.1 else x.2.1))).trans
       (hcarryInput.max_same hcarryInput)
   fill_hole program in source_fun_prop
-  all_goals dominated
 
 
 attribute [local fun_prop] hasProgram_addFinish
@@ -221,12 +210,9 @@ theorem hasProgram_addResult :
   case check_peak => exact addCount_size_growth
   case step_peak => exact addCount_size_growth
   case stop_peak => exact addCount_size_growth
-  case step_time => exact Dominated.refl _
-  case check_time => exact Dominated.refl _
   case stop_time => exact addCount_size_growth
   case step_pos => exact fun _ => Nat.zero_lt_one
   case stop_pos => exact fun _ => Tree.size_pos _
-  case time => dominated
 
 theorem hasProgram_add :
     HasProgram (fun x : ℕ × ℕ => x.1 + x.2) hole(⊢ program)
@@ -236,7 +222,7 @@ theorem hasProgram_add :
   fill_hole program in
     exact HasProgram.of_encode (g := fun x : ℕ × ℕ => addResult (false, x.1.bits, x.2.bits, []))
       (by rintro ⟨m, n⟩; simp [addResult, BitList.addCarry_bits, encode_nat_tree])
-      (by source_fun_prop; all_goals dominated)
+      (by source_fun_prop)
 
 def leContinues (x : Bool × List Bool × List Bool) :=
   !(x.2.1.isEmpty && x.2.2.isEmpty)
@@ -257,7 +243,6 @@ theorem hasProgram_leContinues :
       Dominated (fun x => ⌜f x⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) :=
     (Dominated.const_of_pos 3 fun _ => Tree.size_pos _).mono_left fun x => size_encode_bool_le _
   fill_hole program in source_fun_prop
-  all_goals dominated
 
 
 attribute [local fun_prop] hasProgram_leContinues
@@ -267,7 +252,6 @@ theorem hasProgram_leStep :
     HasProgram leStep hole(⊢ program) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programLeStep
   fill_hole program in source_fun_prop
-  all_goals dominated [leStep]
 
 
 attribute [local fun_prop] hasProgram_leStep
@@ -304,9 +288,6 @@ theorem hasProgram_leResult :
   case check_peak => exact compareCount_size_growth
   case step_peak => exact compareCount_size_growth
   case stop_peak => exact compareCount_size_growth
-  case step_time => exact Dominated.refl _
-  case check_time => exact Dominated.refl _
-  case stop_time => exact Dominated.refl _
   case step_pos => exact fun _ => Nat.zero_lt_one
   case stop_pos => exact fun _ => Nat.zero_lt_one
   case time => dominated [compareCount]
@@ -318,7 +299,7 @@ theorem hasProgram_ble :
   have hle := hasProgram_leResult
   fill_hole program in
     refine HasProgram.of_encode (g := fun x : ℕ × ℕ => leResult (true, x.1.bits, x.2.bits)) ?_
-      (by source_fun_prop; all_goals dominated)
+      (by source_fun_prop)
   rintro ⟨m, n⟩
   congr 1
   apply Bool.eq_iff_iff.mpr
@@ -331,7 +312,7 @@ theorem hasProgram_lt :
   have hle := hasProgram_leResult
   fill_hole program in
     refine HasProgram.of_encode (g := fun x : ℕ × ℕ => leResult (false, x.1.bits, x.2.bits)) ?_
-      (by source_fun_prop; all_goals dominated)
+      (by source_fun_prop)
   rintro ⟨m, n⟩
   congr 1
   apply Bool.eq_iff_iff.mpr
@@ -348,7 +329,6 @@ theorem hasProgram_natBeq :
     funext ⟨m, n⟩
     apply Bool.eq_iff_iff.mpr
     simp [Nat.le_antisymm_iff]
-  all_goals dominated
 
 attribute [scoped fun_prop] hasProgram_natBeq
 

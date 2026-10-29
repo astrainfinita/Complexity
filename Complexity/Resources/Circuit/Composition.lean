@@ -183,20 +183,17 @@ theorem hasProgram_relabelTest : HasProgram relabelTest hole(⊢ program)
     (fun x => ⌜x⌝ₜ.size ^ 3) (fun x => ⌜x⌝ₜ.size ^ 2) := by
   abstract_hole program using programRelabelTest
   fill_hole program in source_fun_prop
-  all_goals dominated
 
 theorem hasProgram_relabelNextFn : HasProgram relabelNextFn hole(⊢ program)
     (fun x => ⌜x⌝ₜ.size ^ 3) (fun x => ⌜x⌝ₜ.size ^ 2) := by
   abstract_hole program using programRelabelNextFn
   fill_hole program in source_fun_prop
-  all_goals dominated
 
 attribute [local fun_prop] HasProgram.fin_comp in
 theorem hasProgram_relabelFinishFn : HasProgram relabelFinishFn hole(⊢ program)
     (fun x => ⌜x⌝ₜ.size ^ 3) (fun x => ⌜x⌝ₜ.size ^ 2) := by
   abstract_hole program using programRelabelFinishFn
   fill_hole program in source_fun_prop
-  all_goals dominated
 
 attribute [local fun_prop] HasProgram.fin_comp in
 theorem hasProgram_relabelResume :
@@ -204,7 +201,6 @@ theorem hasProgram_relabelResume :
       (fun x => ⌜x⌝ₜ.size ^ 3) (fun x => ⌜x⌝ₜ.size ^ 2) := by
   abstract_hole program using programRelabelResume
   fill_hole program in source_fun_prop
-  all_goals dominated
 
 /-- The recursive program, with the structural cost of its callbacks bounded by its scale. -/
 @[source] theorem hasProgram_relabelFn : HasProgram relabelFn hole(⊢ program)
@@ -331,26 +327,22 @@ theorem hasProgram_compTest :
     HasProgram compTest hole(⊢ program) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programCompTest
   fill_hole program in source_fun_prop
-  all_goals dominated
 
 theorem hasProgram_compNextFn :
     HasProgram compNextFn hole(⊢ program) (fun x => ⌜x⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programCompNextFn
   fill_hole program in source_fun_prop
-  all_goals dominated
 
 theorem hasProgram_compFinishFn : HasProgram compFinishFn hole(⊢ program)
     (fun x => compScale x.1 ^ 7) (fun x => ⌜x⌝ₜ.size + compScale x.1 ^ 4) := by
   abstract_hole program using programCompFinishFn
-  fill_hole program in source_fun_prop
-  all_goals dominated [relabelScale, compScale]
+  fill_hole program in source_fun_prop (disch := dominated [relabelScale, compScale])
 
 theorem hasProgram_compResume :
     HasProgram (fun x : compRecursion.Return => compResumeFn x.1 x.2) hole(⊢ program)
     (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programCompResume
   fill_hole program in source_fun_prop
-  all_goals dominated
 
 /-- The terminal relabel call is paid once, so the time expression has degree seven, not eight. -/
 theorem hasProgram_compFn : HasProgram compFn hole(⊢ program)
@@ -486,19 +478,16 @@ theorem hasProgram_keepTest :
     HasProgram keepTest hole(⊢ program) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programKeepTest
   fill_hole program in source_fun_prop
-  all_goals dominated
 
 theorem hasProgram_keepNextFn :
     HasProgram keepNextFn hole(⊢ program) (fun x => ⌜x⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programKeepNextFn
   fill_hole program in source_fun_prop
-  all_goals dominated
 
 theorem hasProgram_keepOutputsFn : HasProgram keepOutputsFn hole(⊢ program)
     (fun x => (x.n + x.m + 1) ^ 2) (fun x => (x.n + x.m + 1) ^ 2) := by
   abstract_hole program using programKeepOutputsFn
   fill_hole program in source_fun_prop using tabulate
-  all_goals dominated
 
 /-- The output table of a terminal state. -/
 def keepFinishInput : {x // keepTest x = false} → KeepOutputsInput
@@ -509,7 +498,6 @@ theorem hasProgram_keepFinishInput :
     HasProgram keepFinishInput hole(⊢ program) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programKeepFinishInput
   fill_hole program in source_fun_prop
-  all_goals dominated
 
 theorem hasProgram_keepFinishFn : HasProgram keepFinishFn hole(⊢ program)
     (fun x => keepScale x.1 ^ 2) (fun x => keepScale x.1 ^ 2) := by
@@ -583,9 +571,9 @@ theorem hasProgram_keepGateFn : HasProgram keepGateFn hole(⊢ program)
     (.of_le fun x => by dsimp [keepGateScale]; omega)
     (.of_le fun x => by simp only [Circuit.size_mapOutputs]; dsimp [keepGateScale]; omega)
     fun _ => Nat.succ_pos _
-  fill_hole program in source_fun_prop using tabulate
-  all_goals try simp only [Sigma.size_encode_eq, Prod.size_encode_eq]
-  all_goals dominated [keepGateScale, compScale, Circuit.size_mapOutputs, Circuit.size_outputs]
+  fill_hole program in
+    source_fun_prop (disch := (try simp only [Sigma.size_encode_eq, Prod.size_encode_eq]); dominated
+      [keepGateScale, compScale, Circuit.size_mapOutputs, Circuit.size_outputs]) using tabulate
 
 def keepResumeInput : keepRecursion.Return → KeepGateInput
   | ⟨⟨⟨_, _, .outputs _⟩, h⟩, _⟩ => False.elim (by cases h)
@@ -595,7 +583,6 @@ theorem hasProgram_keepResumeInput :
     HasProgram keepResumeInput hole(⊢ program) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programKeepResumeInput
   fill_hole program in source_fun_prop
-  all_goals dominated
 
 def keepReturnScale (x : keepRecursion.Return) : ℕ := x.1.1.n + x.1.1.m + x.2.size + 1
 

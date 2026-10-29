@@ -135,9 +135,14 @@ public meta section
 namespace Complexity.TreeProgram.Source
 
 /-- Compose source-function implementations and their growth.
-`using ns` activates the namespace's scoped rules for this translation and its callbacks. -/
-syntax (name := sourceFunProp) "source_fun_prop" (" using " ident)?
-  (" via " term)? : tactic
+`using ns` activates the namespace's scoped rules for this translation and its callbacks;
+`via g` translates `g` instead and leaves the equality with the source as a goal;
+`using recursion (…)` and `using loop (…)` compile the source by that method from the given
+callbacks, leaving the method's obligations as goals. The growth comparisons left are closed by
+`dominated` when it closes them completely, or by the discharger given as `(disch := tac)`,
+such as `(disch := dominated [f])`; the others remain as goals. -/
+syntax (name := sourceFunProp) "source_fun_prop" (Lean.Parser.Tactic.discharger)?
+  (" using " ident)? (" via " term)? : tactic
 
 open Lean Meta in
 /-- `proof` as a proof of `type`: itself when the types agree reducibly, otherwise an auxiliary
@@ -824,14 +829,34 @@ private def proveRecursion (method : TSyntax `sourceRecursion) (scope : Option I
   trace[source.translation] "source recursion: program combined"
   setGoals rest
   return obligations ++ comparisons
+open Lean Elab Tactic in
+/-- Close the growth comparisons among `goals` by the discharger, `dominated` unless one is given;
+a comparison it does not close completely is left unchanged. -/
+def dischargeGrowth (disch : Option (TSyntax ``Lean.Parser.Tactic.discharger))
+    (goals : List MVarId) : TacticM (List MVarId) := do
+  let tac ← match disch with
+    | none => `(tacticSeq| dominated)
+    | some d => match d with
+      | `(Lean.Parser.Tactic.discharger| (discharger := $tac)) => pure tac
+      | _ => throwUnsupportedSyntax
+  goals.filterM fun goal => do
+    unless (← instantiateMVars (← goal.getType)).consumeMData.isAppOf ``Dominated do return true
+    let saved ← saveState
+    try
+      if (← evalTacticAt tac goal).isEmpty then return false
+    catch _ => pure ()
+    saved.restore
+    return true
+
 open Lean Meta Elab Tactic in
 elab_rules : tactic
-  | `(tactic| source_fun_prop $[using $scope:ident]? $[via $replacement]?) => do
-    let obligations ← proveSource scope replacement
+  | `(tactic| source_fun_prop $[$disch]? $[using $scope:ident]? $[via $replacement]?) => do
+    let obligations ← dischargeGrowth disch (← proveSource scope replacement)
     setGoals (obligations ++ (← getGoals))
 open Lean Meta Elab Tactic in
 /-- Translate a source function and reduce its model time-space bound to arithmetic goals. -/
-private def modelFunPropCore (translate : TacticM (List Lean.MVarId)) : TacticM Unit := do
+private def modelFunPropCore (disch : Option (TSyntax ``Lean.Parser.Tactic.discharger))
+    (translate : TacticM (List Lean.MVarId)) : TacticM Unit := do
   let originalGoals ← getGoals
   setGoals (originalGoals.take 1)
   let target ← (← getMainGoal).getType
@@ -869,29 +894,39 @@ private def modelFunPropCore (translate : TacticM (List Lean.MVarId)) : TacticM 
   setGoals [implementation]
   let obligations ← translate
   let remaining ← (pending.erase implementation).filterM fun g => return !(← g.isAssigned)
-  setGoals (obligations ++ remaining ++ originalGoals.drop 1)
+  setGoals ((← dischargeGrowth disch (obligations ++ remaining)) ++ originalGoals.drop 1)
 
 open Lean Elab Tactic in
-def modelFunProp (translate : TacticM (List Lean.MVarId)) : TacticM Unit := do
+def modelFunProp (disch : Option (TSyntax ``Lean.Parser.Tactic.discharger))
+    (translate : TacticM (List Lean.MVarId)) : TacticM Unit := do
   let saved ← saveState
-  try modelFunPropCore translate
+  try modelFunPropCore disch translate
   catch ex => saved.restore; throw ex
-syntax "model_fun_prop" (" using " ident)? (" via " term)? : tactic
+
+/-- Reduce a model time-space bound of a source function to its translation and arithmetic goals;
+the options and methods are those of `source_fun_prop`, and the growth comparisons left are
+discharged as there. -/
+syntax (name := modelFunPropStx) "model_fun_prop" (Lean.Parser.Tactic.discharger)?
+  (" using " ident)? (" via " term)? : tactic
 
 open Lean Elab Tactic in
 elab_rules : tactic
-  | `(tactic| model_fun_prop $[using $scope:ident]? $[via $replacement]?) =>
-    modelFunProp (proveSource scope replacement)
+  | `(tactic| model_fun_prop $[$disch]? $[using $scope:ident]? $[via $replacement]?) =>
+    modelFunProp disch (proveSource scope replacement)
 
-syntax "model_fun_prop" " using " sourceRecursion (" using " ident)? : tactic
-syntax "source_fun_prop" " using " sourceRecursion (" using " ident)? : tactic
+@[tactic_alt modelFunPropStx]
+syntax "model_fun_prop" (Lean.Parser.Tactic.discharger)? " using " sourceRecursion
+  (" using " ident)? : tactic
+@[tactic_alt sourceFunProp]
+syntax "source_fun_prop" (Lean.Parser.Tactic.discharger)? " using " sourceRecursion
+  (" using " ident)? : tactic
 
 open Lean Elab Tactic in
 elab_rules : tactic
-  | `(tactic| model_fun_prop using $method:sourceRecursion $[using $scope:ident]?) =>
-    modelFunProp (proveRecursion method scope)
-  | `(tactic| source_fun_prop using $method:sourceRecursion $[using $scope:ident]?) => do
-    let obligations ← proveRecursion method scope
+  | `(tactic| model_fun_prop $[$disch]? using $method:sourceRecursion $[using $scope:ident]?) =>
+    modelFunProp disch (proveRecursion method scope)
+  | `(tactic| source_fun_prop $[$disch]? using $method:sourceRecursion $[using $scope:ident]?) => do
+    let obligations ← dischargeGrowth disch (← proveRecursion method scope)
     setGoals (obligations ++ (← getGoals))
 open Lean Meta in
 private def withSourceEncodings (parameters : List Lean.Expr) (action : MetaM Unit) :

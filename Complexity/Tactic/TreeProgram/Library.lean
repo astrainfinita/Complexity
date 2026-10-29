@@ -21,7 +21,6 @@ theorem _root_.List.hasProgram_tail {α : Type*} [UniqueEncoding Tree α] :
       (fun _ => 1) (fun xs => ⌜xs⌝ₜ.size) := by
   abstract_hole program using programTail
   fill_hole program in source_fun_prop
-  all_goals dominated
 
 attribute [scoped fun_prop] List.hasProgram_tail
 
@@ -34,7 +33,6 @@ theorem hasProgram_lookupContinues {α : Type*} [UniqueEncoding Tree α] :
     HasProgram (lookupContinues (α := α)) hole(⊢ program) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programLookupContinues
   fill_hole program in source_fun_prop
-  all_goals dominated
 
 theorem hasProgram_lookupStep {α : Type*} [UniqueEncoding Tree α] :
     HasProgram (lookupStep (α := α)) hole(⊢ program)
@@ -42,14 +40,12 @@ theorem hasProgram_lookupStep {α : Type*} [UniqueEncoding Tree α] :
   abstract_hole program using programLookupStep
   have := Nat.hasProgram_pred.size_encode.comp (fun x : ℕ × List α => x.1)
   fill_hole program in source_fun_prop
-  all_goals dominated
 
 theorem hasProgram_lookupFinish {α : Type*} [UniqueEncoding Tree α] :
     HasProgram (fun x : ℕ × List α => x.2.head?) hole(⊢ program)
       (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programLookupFinish
   fill_hole program in source_fun_prop
-  all_goals dominated
 
 def lookupInvariant {α : Type*} [UniqueEncoding Tree α] (x y : ℕ × List α) :=
   y.1.bits.length ≤ x.1.bits.length ∧ ⌜y.2⌝ₜ.size ≤ ⌜x.2⌝ₜ.size ∧ y.2[y.1]? = x.2[x.1]?
@@ -126,7 +122,6 @@ theorem hasProgram_someValue {β : Type*} [UniqueEncoding Tree β] :
     HasProgram (someValue (β := β)) hole(⊢ program) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programSomeValue
   fill_hole program in source_fun_prop
-  all_goals dominated
 
 attribute [scoped fun_prop] hasProgram_someValue
 
@@ -186,14 +181,12 @@ theorem hasProgram_rangeContinues :
     HasProgram rangeContinues hole(⊢ program) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programRangeContinues
   fill_hole program in source_fun_prop
-  all_goals dominated
 
 theorem hasProgram_rangeStep :
     HasProgram rangeStep hole(⊢ program) (fun x => ⌜x.1⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programRangeStep
   have := Nat.hasProgram_pred.size_encode.comp (fun x : ℕ × List ℕ => x.1)
   fill_hole program in source_fun_prop
-  all_goals dominated
 
 def rangeLoop (x : ℕ × List ℕ) := List.range x.1 ++ x.2
 
@@ -266,7 +259,6 @@ theorem _root_.List.hasProgram_range :
   let hr := hasProgram_rangeLoop
   fill_hole program in source_fun_prop via (fun n => rangeLoop (n, []))
   case source_eq => funext n; simp [rangeLoop]
-  all_goals dominated
 
 attribute [scoped fun_prop] List.hasProgram_range
 
@@ -275,14 +267,12 @@ theorem hasProgram_lengthStep {α : Type*} [UniqueEncoding Tree α] :
       (fun x => ⌜x.1⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programLengthStep
   fill_hole program in source_fun_prop
-  all_goals dominated
 
 theorem hasProgram_lengthInitial {α : Type*} [UniqueEncoding Tree α] :
     HasProgram (fun xs : List α => (0, xs)) hole(⊢ program)
       (fun _ => 1) (fun xs => ⌜xs⌝ₜ.size) := by
   abstract_hole program using programLengthInitial
   fill_hole program in source_fun_prop
-  all_goals dominated
 
 /-- Count with the existing binary successor along a structural fold. -/
 theorem _root_.List.hasProgram_length {α : Type*} [UniqueEncoding Tree α] :
@@ -389,7 +379,6 @@ theorem hasProgram_finCompStep :
       (fun z => ⌜z.1⌝ₜ.size ^ 2) (fun z => ⌜z.1⌝ₜ.size ^ 2) := by
   abstract_hole program using programFinCompStep
   fill_hole program in source_fun_prop
-  all_goals dominated
 
 /-- Stored table composition directly enumerates its selected lookup callback. -/
 theorem hasProgram_finComp :
