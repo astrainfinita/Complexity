@@ -174,3 +174,9 @@ example (a : Bool) (as : List Bool) : ⌜a :: as⌝ₜ = ⌜(a, as)⌝ₜ := by 
 example (a : Bool) (as : List Bool) : ⌜a :: as⌝ₜ.right = ⌜as⌝ₜ := by simp
 
 end Complexity.EncodingTest
+
+-- Outside the namespace mathlib's deprecated `_root_.Tree` makes `Tree` ambiguous and the type
+-- prints qualified; codes still print with their notation.
+/-- info: fun xs => (⌜xs⌝ₜ, ⌜xs⌝₂) : List Bool → Complexity.Tree × RawWord Bool -/
+#guard_msgs in
+#check fun xs : List Bool => (⌜xs⌝ₜ, ⌜xs⌝₂)
