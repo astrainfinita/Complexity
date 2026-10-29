@@ -128,13 +128,6 @@ theorem HasProgram.cases (D : CaseTree k) (hD : ∀ x, dispatch (T := T x) = D)
       intro r w ⟨hr, hw⟩
       exact ⟨hr, fun j hj => (hw j (by omega)).trans (by simp [Nat.ne_of_lt hj])⟩
 
-/-- A value transported along an equation of the input's parts keeps its code, as a branch's
-input rebuilt with a constructor transports what depends on the replaced part. -/
-@[source_view low] theorem encode_eqRec {γ : Sort*} {a : γ} {B : (b : γ) → a = b → Type*}
-    [∀ b h, UniqueEncoding Tree (B b h)] (v : B a rfl) {b : γ} (h : a = b) :
-    ⌜(Eq.rec (motive := B) v h : B b h)⌝ₜ = ⌜v⌝ₜ := by
-  subst h; rfl
-
 /-- A branch no input reaches, such as a constructor excluded by a subtype, has every program. -/
 theorem HasProgram.of_false {f : (x : α) → β x} (h : α → False) :
     HasProgram f (fun _ => pure .nil) (fun _ => 0) (fun _ => 0) :=

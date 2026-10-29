@@ -7,7 +7,8 @@ module
 
 public import Complexity.Tactic.TreeProgram.Rules
 public import Complexity.Tactic.TreeProgram.Recursion
-public import Complexity.Tactic.TreeProgram.Growth
+public import Complexity.Tactic.Dominated.Basic
+public import Complexity.Tactic.TreeProgram.Views
 public meta import Complexity.Tactic.TreeProgram.Search
 public meta import Complexity.Tactic.TreeProgram.Environment
 public import Complexity.Models.TreeMachine.Language.Derive

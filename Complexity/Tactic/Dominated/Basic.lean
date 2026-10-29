@@ -5,41 +5,62 @@ Authors: Yuyang Zhao
 -/
 module
 
-public import Complexity.Tactic.TreeProgram.Rules
-public import Complexity.Encoding.TreeSize
-public import Complexity.Tactic.TreeProgram.GrowthFacts
-public import Complexity.Tactic.TreeProgram.Match
+public import Complexity.Asymptotics.Nat
+public import Complexity.Tactic.Dominated.Facts
 public meta import Lean.Elab.Tactic.Omega.Frontend
 
 /-! # Closing growth comparisons
 
 `dominated` proves `Dominated f g` when both sides are given, as left by `source_fun_prop` and
-`model_fun_prop`. It never changes either side. Sums and maxima on the left are split; each
-summand is compared with the target pointwise after destructuring the input, splitting the
-source cases, expanding encoded sizes and adding size facts for `omega`; powers and products are
-compared through their bases. Maxima over lists and sums over tables are compared entry by entry.
-The coefficient is a hidden witness. The list names definitions to unfold in the pointwise
-goals, and statements `a ≤ b`, `a < b` or `a = b` to instantiate there, as for those registered
-with `@[dominated]`: each is instantiated at the matching terms it is about (its left side, or its
-right side when the left side is a variable or a literal), and the terms of its other side are
-looked at in the next round. Statements registered with `@[dominated_forward]` are instantiated at
-matching hypotheses. Encoded sizes are normalized with `@[dominated_simp]` and expanded pointwise
-with `@[dominated_expand]`. Facts that are genuine properties of the source function are
-`Dominated` hypotheses, matched reducibly. Like `omega`, the pointwise step reads the other
-hypotheses without changing them. Every comparison is settled once per call.
-A difference is compared through its minuend. Summands that cannot be proved are left as goals.
+`model_fun_prop`, whose default discharger it is. It never changes either side. Sums and maxima on
+the left are split; each summand is compared with the target pointwise after destructuring the
+input, splitting the source cases, expanding encoded sizes and adding size facts for `omega`; powers
+and products are compared through their bases. Maxima over lists and sums over tables are compared
+entry by entry. The coefficient is a hidden witness. The list names definitions to unfold in the
+pointwise goals, and statements `a ≤ b`, `a < b` or `a = b` to instantiate there, as for those
+registered with `@[dominated]`: each is instantiated at the matching terms it is about (its left
+side, or its right side when the left side is a variable or a literal), and the terms of its other
+side are looked at in the next round. Statements registered with `@[dominated_forward]` are
+instantiated at matching hypotheses. Encoded sizes are normalized with `@[dominated_simp]` and
+expanded pointwise with `@[dominated_expand]`. Facts that are genuine properties of the source
+function are `Dominated` hypotheses, matched reducibly. Like `omega`, the pointwise step reads the
+other hypotheses without changing them. Every comparison is settled once per call. A difference is
+compared through its minuend. Summands that cannot be proved are left as goals.
 -/
+
+@[expose] public section
+
+namespace Complexity.Tactic.Dominated
+
+/-- A product of two quantities, each within a multiple of `c`, is within a multiple of `c ^ e`. -/
+theorem mul_le_mul_pow_of_le_mul {a b c ka kb e : ℕ} (ha : a ≤ ka * c) (hb : b ≤ kb * c)
+    (he : 2 ≤ e) (hc : 0 < c) : a * b ≤ ka * kb * c ^ e :=
+  (Nat.mul_le_mul ha hb).trans (by
+    rw [Nat.mul_mul_mul_comm, ← pow_two]
+    exact Nat.mul_le_mul_left _ (Nat.pow_le_pow_right hc he))
+
+/-- A quantity within a multiple of `c`, times one within a multiple of `c ^ d`, is within a
+multiple of `c ^ e` for `d < e`. -/
+theorem mul_le_mul_pow_of_le_mul_pow {a b c ka kb d e : ℕ} (ha : a ≤ ka * c)
+    (hb : b ≤ kb * c ^ d) (he : d + 1 ≤ e) (hc : 0 < c) : a * b ≤ ka * kb * c ^ e :=
+  (Nat.mul_le_mul ha hb).trans (by
+    rw [Nat.mul_mul_mul_comm, ← pow_succ']
+    exact Nat.mul_le_mul_left _ (Nat.pow_le_pow_right hc he))
+
+end Complexity.Tactic.Dominated
+
+end
 
 public meta section
 
 open Lean Meta Elab Tactic
 
-namespace Complexity.TreeProgram.Source.Growth
+namespace Complexity.Tactic.Dominated
 
 /-- The code of a pair, of a constructor application with a derived encoding, or of a value
-transported along an equation (`encode_eqRec`), by its parts. The equations are instantiated at
-default transparency: the type of a dependent field, or of a transported value, can agree with
-the stated one only after unfolding, which `simp`'s matching does not do. -/
+transported along an equation (`UniqueEncoding.encode_eqRec`), by its parts. The equations are
+instantiated at default transparency: the type of a dependent field, or of a transported value, can
+agree with the stated one only after unfolding, which `simp`'s matching does not do. -/
 def expandParts (e : Lean.Expr) : SimpM Simp.Step := withTransparency .default do
   unless e.isAppOfArity ``UniqueEncoding.encode 4 do return .continue
   let value := e.appArg!
@@ -52,8 +73,8 @@ def expandParts (e : Lean.Expr) : SimpM Simp.Step := withTransparency .default d
     return some (← instantiateMVars (mkAppN c xs))
   let some proof ← (if value.isAppOfArity ``Eq.rec 6 then do
       let args := value.getAppArgs
-      some <$> mkAppOptM ``encode_eqRec
-        #[args[0]!, args[1]!, args[2]!, none, args[3]!, args[4]!, args[5]!]
+      some <$> mkAppOptM ``UniqueEncoding.encode_eqRec
+        #[mkConst ``Tree, args[0]!, args[1]!, args[2]!, none, args[3]!, args[4]!, args[5]!]
     else do
       unless (← getEnv).isConstructor name do return none
       let equation := if name == ``Prod.mk then ``encode_prod
@@ -840,4 +861,4 @@ elab_rules : tactic
     goal.assign (← mkExpectedTypeHint proof target)
     replaceMainGoal (state.left.map (·.2)).toList
 
-end Complexity.TreeProgram.Source.Growth
+end Complexity.Tactic.Dominated

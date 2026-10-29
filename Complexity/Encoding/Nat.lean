@@ -8,7 +8,7 @@ module
 public import Complexity.Encoding.Tree
 public import Complexity.Encoding.Composition
 public import Complexity.Data.BitList.Nat
-public import Complexity.Tactic.TreeProgram.Attributes
+public import Complexity.Tactic.Dominated.Attr
 
 /-! # Binary natural-number encodings
 

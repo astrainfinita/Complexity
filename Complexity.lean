@@ -147,13 +147,14 @@ public import Complexity.Resources.TreeMachine.Composition
 public import Complexity.Resources.TreeMachine.Program
 public import Complexity.Resources.TreeMachine.StackMachine
 public import Complexity.Resources.TuringMachine
+public import Complexity.Tactic.Dominated.Attr
+public import Complexity.Tactic.Dominated.Basic
+public import Complexity.Tactic.Dominated.Facts
 public import Complexity.Tactic.Hole
 public import Complexity.Tactic.TreeProgram.Arithmetic
 public import Complexity.Tactic.TreeProgram.Assembly
 public import Complexity.Tactic.TreeProgram.Attributes
 public import Complexity.Tactic.TreeProgram.Environment
-public import Complexity.Tactic.TreeProgram.Growth
-public import Complexity.Tactic.TreeProgram.GrowthFacts
 public import Complexity.Tactic.TreeProgram.Implementation
 public import Complexity.Tactic.TreeProgram.Iteration
 public import Complexity.Tactic.TreeProgram.Library
@@ -165,3 +166,4 @@ public import Complexity.Tactic.TreeProgram.Search
 public import Complexity.Tactic.TreeProgram.TailRecursion
 public import Complexity.Tactic.TreeProgram.Translation
 public import Complexity.Tactic.TreeProgram.Traversal
+public import Complexity.Tactic.TreeProgram.Views

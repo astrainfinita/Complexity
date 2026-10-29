@@ -212,6 +212,12 @@ instance {p : α → Prop} [c : UniqueEncoding R α] : UniqueEncoding R {a // p 
 @[simp] theorem encode_subtype {p : α → Prop} [UniqueEncoding R α] (a : {a // p a}) :
     encode R a = encode R a.val := rfl
 
+/-- A value transported along an equation keeps its code. -/
+theorem encode_eqRec {γ : Sort*} {a : γ} {B : (b : γ) → a = b → Type*}
+    [∀ b h, UniqueEncoding R (B b h)] (v : B a rfl) {b : γ} (h : a = b) :
+    encode R (Eq.rec (motive := B) v h : B b h) = encode R v := by
+  subst h; rfl
+
 end UniqueEncoding
 
 namespace Encoding

@@ -9,7 +9,7 @@ public import Complexity.Encoding.Prod
 public import Complexity.Data.Tree.List
 public import Mathlib.Algebra.Order.BigOperators.Group.List
 public import Mathlib.Algebra.Order.Group.Nat
-public import Complexity.Tactic.TreeProgram.Attributes
+public import Complexity.Tactic.Dominated.Attr
 
 /-! # Tree encodings of lists -/
 

@@ -9,7 +9,7 @@ public import Complexity.Encoding.Vector
 public import Mathlib.Data.Fin.Basic
 public import Mathlib.Data.List.OfFn
 public import Mathlib.Data.List.FinRange
-public import Complexity.Tactic.TreeProgram.Attributes
+public import Complexity.Tactic.Dominated.Attr
 
 /-! # Encodings of bounded indices and finite tuples -/
 
