@@ -8,6 +8,7 @@ module
 public import Complexity.Encoding.Tree
 public import Complexity.Encoding.Composition
 public import Complexity.Data.RawWord
+meta import Mathlib.Util.Notation3
 
 /-! # Raw words and serialized tree encodings
 
@@ -46,12 +47,13 @@ instance (priority := low) {α : Type*} [e : Encoding Tree α] : Encoding (RawWo
 instance (priority := 1100) {α : Type*} [e : UniqueEncoding Tree α] :
     UniqueEncoding (RawWord Bool) α := RawWord.treeEncoding.comp e
 
-scoped notation "⌜" x "⌝₂" => encode (RawWord Bool) x
+/-- The serialized tree code of a value, as a raw Boolean word. -/
+scoped notation3 "⌜" x "⌝₂" => encode (RawWord Bool) x
 
 theorem encode_rawWord {α : Type*} [UniqueEncoding Tree α] (a : α) :
     ⌜a⌝₂ = RawWord.ofList (BitList.encodeTree ⌜a⌝ₜ) := rfl
 
-@[simp] theorem length_encode_rawWord {α : Type*} [UniqueEncoding Tree α] (a : α) :
+theorem length_encode_rawWord {α : Type*} [UniqueEncoding Tree α] (a : α) :
     ⌜a⌝₂.length = ⌜a⌝ₜ.size :=
   RawWord.length_treeEncoding _
 

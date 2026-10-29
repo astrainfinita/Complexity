@@ -7,6 +7,7 @@ module
 
 public import Complexity.Encoding.Basic
 public import Complexity.Data.Tree.Basic
+meta import Mathlib.Util.Notation3
 
 /-! # Basic structured tree codes
 
@@ -18,7 +19,8 @@ layouts are explicit lemmas; observations and equality simplify without unfoldin
 
 namespace Complexity
 
-scoped notation "⌜" x "⌝ₜ" => encode Tree x
+/-- The tree code of a value. -/
+scoped notation3 "⌜" x "⌝ₜ" => encode Tree x
 
 /-- The unit of every universe is the empty tree. -/
 instance : UniqueEncoding Tree PUnit :=
