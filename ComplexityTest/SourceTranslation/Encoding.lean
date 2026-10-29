@@ -46,8 +46,8 @@ example {Data α β : Type*} [Encoding Data α] [UniqueEncoding Data β]
 
 example {Data α β : Type*} [Encoding Data α] [UniqueEncoding Data β]
     {model : TimeSpaceModel Id Data} {f : α → β} {T S : ℕ → ℕ}
-    (hf : f ∈ FTISP model T S) (P : β → Prop) (hP : ∀ x, P (f x)) :
-    (fun x => (⟨f x, hP x⟩ : {y // P y})) ∈ FTISP model T S :=
-  FTISP.of_encode hf (fun _ => rfl)
+    (hf : f ∈ FDTISP model T S) (P : β → Prop) (hP : ∀ x, P (f x)) :
+    (fun x => (⟨f x, hP x⟩ : {y // P y})) ∈ FDTISP model T S :=
+  FDTISP.of_encode hf (fun _ => rfl)
 
 end ComplexityTest.SourceTranslation.Encoding

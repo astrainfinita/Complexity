@@ -183,7 +183,7 @@ example := (by
   · simp only [Dominated.add_iff]
     exact ⟨⟨(Dominated.refl _).le_pow (by decide), hs⟩, hc.le_pow (by decide)⟩
 
-theorem drain_model : drain ∈ FTISP .tree (fun n => n ^ 1) (fun n => n ^ 2) := by
+theorem drain_model : drain ∈ FDTISP .tree (fun n => n ^ 1) (fun n => n ^ 2) := by
   model_fun_prop
 
 -- A terminal callback is paid only in the stop equation, not at every recursive step.
@@ -203,7 +203,7 @@ example (bc bs : Bounds (List Bool))
     (Nat.le_max_right ..)))
 
 -- A different explicitly requested program can compute this function in constant time.
-example : drain ∈ FTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
+example : drain ∈ FDTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
   model_fun_prop via (fun _ : List Bool => ())
   case source_eq => funext xs; exact Subsingleton.elim _ _
 

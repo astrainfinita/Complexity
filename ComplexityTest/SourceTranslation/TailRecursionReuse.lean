@@ -18,7 +18,7 @@ open TreeProgram.Source
 example := (by source_fun_prop : HasProgram keep programKeep _ _)
 example : HasProgram keep hole(⊢ program) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   fill_hole program in source_fun_prop
-example : keep ∈ FTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
+example : keep ∈ FDTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
   model_fun_prop
 
 example : True := by
@@ -33,5 +33,5 @@ def optionalGather : Option (Bool × List (List Bool) × List Bool) → List Boo
   | some x => gather x
 
 -- Ordinary nested calls consume gather's linear selected growth.
-example : optionalGather ∈ FTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by
+example : optionalGather ∈ FDTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by
   model_fun_prop

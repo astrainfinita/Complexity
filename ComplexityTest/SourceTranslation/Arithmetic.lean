@@ -11,12 +11,12 @@ namespace ComplexityTest.SourceTranslation.Arithmetic
 
 def add (x : ℕ × ℕ) := x.1 + x.2
 
-example : add ∈ FTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by
+example : add ∈ FDTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by
   model_fun_prop
 
 def less (x : ℕ × ℕ) := decide (x.1 < x.2)
 
-example : less ∈ FTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by
+example : less ∈ FDTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by
   model_fun_prop
 
 def between (x : ℕ × ℕ × ℕ) := decide (x.2.1 ≤ x.1) && decide (x.1 < x.2.2)

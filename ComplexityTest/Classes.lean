@@ -26,7 +26,7 @@ private theorem bit_spec : TM.Computes bit (id : Bool → Bool) (fun _ => 4) (fu
     exact ⟨rfl, rfl, by simp [Controller.History.space]⟩
 
 private theorem bit_fp : (id : Bool → Bool) ∈ FP .tm := by
-  exact FP.of_time_le (FTISP.subset_time (bit_spec.computableWithin.mem_ftisp (T := fun _ => 4) (S := fun _ => 0)))
+  exact FP.of_time_le (FDTISP.subset_time (bit_spec.computableWithin.mem_fdtisp (T := fun _ => 4) (S := fun _ => 0)))
     4 0 (by intro n; simp)
 
 -- The same function covers both acceptance and rejection, with no work tapes.
@@ -57,7 +57,7 @@ example : TimeSpaceModel.ntm.NDecidableWithGrowth (fun b : Bool => b = true)
 
 -- The exact proof supplies a single machine for both asymptotic bounds.
 example : (fun b : Bool => b = true) ∈ DTISP .tm (fun _ => 4) (fun _ => 0) :=
-  DTISP.of_decides bit_spec.computableWithin.mem_ftisp
+  DTISP.of_decides bit_spec.computableWithin.mem_fdtisp
     (fun _ => Iff.rfl)
 
 -- A halted tree machine already has the Boolean result in its input/output register.
@@ -75,7 +75,7 @@ private theorem tree_spec :
   · simp [TreeMachine.Cfg.mass]
 
 private theorem tree_fp : (id : Bool → Bool) ∈ FP .sizeCostTree := by
-  exact FP.of_time_le (FTISP.subset_time (tree_spec.computableWithin.mem_ftisp (T := fun _ => 0) (S := id)))
+  exact FP.of_time_le (FDTISP.subset_time (tree_spec.computableWithin.mem_fdtisp (T := fun _ => 0) (S := id)))
     0 0 (by intro n; simp)
 
 example : (fun b : Bool => b = true) ∈ P .sizeCostTree := by
@@ -84,7 +84,7 @@ example : (fun b : Bool => b = true) ∈ P .sizeCostTree := by
   rfl
 
 example : (fun b : Bool => b = true) ∈ DTISP .sizeCostTree (fun _ => 0) id :=
-  DTISP.of_decides tree_spec.computableWithin.mem_ftisp
+  DTISP.of_decides tree_spec.computableWithin.mem_fdtisp
     (fun _ => Iff.rfl)
 
 -- Tree input storage counts toward space even when no transition is executed.
@@ -97,7 +97,7 @@ example : ¬TreeMachine.Computes tree (id : Bool → Bool) (fun _ => 0) (fun _ =
 
 -- Eventual size bounds may ignore the finitely many legal sizes of a finite encoded type.
 -- This does not turn the all-input machine specification above into a zero-space one.
-example : (id : Bool → Bool) ∈ FTISP .sizeCostTree (fun _ => 0) (fun _ => 0) := by
+example : (id : Bool → Bool) ∈ FDTISP .sizeCostTree (fun _ => 0) (fun _ => 0) := by
   have h : TimeSpaceModel.sizeCostTree.ComputableWithSizeBudgets (id : Bool → Bool)
       (fun _ => 0) (fun n => if n ≤ 3 then n else 0) := by
     obtain ⟨R, hR, h⟩ := tree_spec.computableWithin
@@ -107,7 +107,7 @@ example : (id : Bool → Bool) ∈ FTISP .sizeCostTree (fun _ => 0) (fun _ => 0)
       (if (encode Tree a).size ≤ 3 then (encode Tree a).size else 0)
     rw [ite_eq_left (size_encode_bool_le a)]
     exact h a (encode Tree a) (UniqueEncoding.mem_decode_iff.mpr rfl)
-  exact h.mem_ftisp_of_dominated (DominatedAtTop.refl _)
+  exact h.mem_fdtisp_of_dominated (DominatedAtTop.refl _)
     (dominatedAtTop_iff.mpr ⟨1, 4, fun n hn => by simp [show ¬n ≤ 3 by omega]⟩)
 
 -- The abstract interface stays in Type, without storing a type of machine witnesses.
@@ -145,13 +145,13 @@ private theorem codeCost_spec :
   cases a
   exact ⟨0, Part.mem_some_iff.mpr rfl, le_rfl⟩
 
-example : (id : Unit → Unit) ∈ FTISP codeCost id (fun _ => 0) :=
-  codeCost_spec.mem_ftisp
+example : (id : Unit → Unit) ∈ FDTISP codeCost id (fun _ => 0) :=
+  codeCost_spec.mem_fdtisp
 
 -- The size certificate keeps its all-input n+1 budget; only the class comparison ignores n=0.
-example : (id : Unit → Unit) ∈ FTIME codeCost id := by
+example : (id : Unit → Unit) ∈ FDTIME codeCost id := by
   have h := codeCost_spec.mono (fun n => Nat.le_succ n) (fun _ => le_rfl)
-  exact h.mem_ftime_of_dominated
+  exact h.mem_fdtime_of_dominated
     (dominatedAtTop_iff.mpr ⟨2, 1, fun n hn => by dsimp; omega⟩)
 
 -- The public value-budget API rejects a value whose legal codes have unbounded costs.
@@ -191,20 +191,20 @@ private def resourceTradeoff : TimeSpaceModel Id ℕ where
     · exact h.trans hs
     · exact h.trans ht
 
-example : (id : Unit → Unit) ∈ FTIME resourceTradeoff (fun _ => 0) ∩
-    FSPACE resourceTradeoff (fun _ => 0) := by
+example : (id : Unit → Unit) ∈ FDTIME resourceTradeoff (fun _ => 0) ∩
+    FDSPACE resourceTradeoff (fun _ => 0) := by
   constructor
-  · apply TimeSpaceModel.ComputableWithSizeBudgets.mem_ftime (s := fun _ => 1)
+  · apply TimeSpaceModel.ComputableWithSizeBudgets.mem_fdtime (s := fun _ => 1)
     refine ⟨_, Or.inl rfl, fun a _ _ => ?_⟩
     cases a
     exact ⟨0, Part.mem_some_iff.mpr rfl, le_rfl⟩
-  · apply TimeSpaceModel.ComputableWithSizeBudgets.mem_fspace (t := fun _ => 1)
+  · apply TimeSpaceModel.ComputableWithSizeBudgets.mem_fdspace (t := fun _ => 1)
     refine ⟨_, Or.inr rfl, fun a _ _ => ?_⟩
     cases a
     exact ⟨0, Part.mem_some_iff.mpr rfl, le_rfl⟩
 
 -- Joint bounds cannot borrow time from one machine and space from another.
-example : (id : Unit → Unit) ∉ FTISP resourceTradeoff (fun _ => 0) (fun _ => 0) := by
+example : (id : Unit → Unit) ∉ FDTISP resourceTradeoff (fun _ => 0) (fun _ => 0) := by
   rintro ⟨t, s, ⟨R, hR, h⟩, ht, hs⟩
   obtain ⟨C, N, ht⟩ := dominatedAtTop_iff.mp ht
   obtain ⟨D, M, hs⟩ := dominatedAtTop_iff.mp hs
@@ -225,7 +225,7 @@ end Nonunique
 -- In particular, the other resource is still a size function outside all input quantifiers.
 example {Data α β : Type*} [Encoding Data α] [Encoding Data β]
     (model : TimeSpaceModel Id Data) (f : α → β) (T : ℕ → ℕ) :
-    f ∈ FTIME model T ↔
+    f ∈ FDTIME model T ↔
       ∃ t, (∃ s : ℕ → ℕ, ∃ R ∈ model.behaviors,
         ∀ src a, a ∈ decode α src →
           ∃ dst, f a ∈ decode β dst ∧
@@ -239,7 +239,7 @@ example {Data α β : Type*} [Encoding Data α] [Encoding Data β]
 
 example {Data α β : Type*} [Encoding Data α] [Encoding Data β]
     (model : TimeSpaceModel Id Data) (f : α → β) (S : ℕ → ℕ) :
-    f ∈ FSPACE model S ↔
+    f ∈ FDSPACE model S ↔
       ∃ s, (∃ t : ℕ → ℕ, ∃ R ∈ model.behaviors,
         ∀ src a, a ∈ decode α src →
           ∃ dst, f a ∈ decode β dst ∧
@@ -253,7 +253,7 @@ example {Data α β : Type*} [Encoding Data α] [Encoding Data β]
 
 example {Data α β : Type*} [Encoding Data α] [Encoding Data β]
     (model : TimeSpaceModel Id Data) (f : α → β) (T S : ℕ → ℕ) :
-    f ∈ FTISP model T S ↔
+    f ∈ FDTISP model T S ↔
       ∃ t s, (∃ R ∈ model.behaviors,
         ∀ src a, a ∈ decode α src →
           ∃ dst, f a ∈ decode β dst ∧

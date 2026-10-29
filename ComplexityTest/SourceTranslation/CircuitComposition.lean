@@ -88,9 +88,9 @@ abbrev StoredRelabelInput := Σ n, Σ m, Circuit .booleanAlgebra n m × (Fin n �
     simp only [Sigma.encode_mk, RelabelInput.encode_mk, size_encode_prod]
     omega
 
-theorem rewireStored_ftisp :
-    rewireStored ∈ FTISP .tree (fun n => n ^ 7) (fun n => n ^ 4) :=
-  hasProgram_rewireStored.mem_ftisp_pow (by decide)
+theorem rewireStored_fdtisp :
+    rewireStored ∈ FDTISP .tree (fun n => n ^ 7) (fun n => n ^ 4) :=
+  hasProgram_rewireStored.mem_fdtisp_pow (by decide)
 
 /-- Unary storage makes the number of generated layers bounded by input size. -/
 def layersStored (x : Σ n, Circuit .booleanAlgebra (n + 1) n × List Unit) :
@@ -139,8 +139,8 @@ def layersStored (x : Σ n, Circuit .booleanAlgebra (n + 1) n × List Unit) :
     | exact Dominated.const_of_pos _ (fun x => Nat.pow_pos (hS x))
     | exact Dominated.le_pow (by first | assumption | exact Dominated.refl _) (by decide)
 
-theorem layersStored_ftisp :
-    layersStored ∈ FTISP .tree (fun n => n ^ 18) (fun n => n ^ 8) :=
-  hasProgram_layersStored.mem_ftisp_pow (by decide)
+theorem layersStored_fdtisp :
+    layersStored ∈ FDTISP .tree (fun n => n ^ 18) (fun n => n ^ 8) :=
+  hasProgram_layersStored.mem_fdtisp_pow (by decide)
 
 end ComplexityTest.SourceTranslation.CircuitComposition

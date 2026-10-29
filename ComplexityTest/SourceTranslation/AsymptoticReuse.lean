@@ -63,8 +63,8 @@ def drainTwice (xs : List Bool) : List Bool := drain (drain xs)
 
 -- The ordinary model entry recognizes positive powers and reuses the imported loop.
 -- Neither model overhead nor the loop's callback construction appears in these goals.
-theorem drainTwice_ftisp :
-    drainTwice ∈ FTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by
+theorem drainTwice_fdtisp :
+    drainTwice ∈ FDTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by
   model_fun_prop (disch := dominated [drain])
 
 -- A zero atTop conclusion on a finite type retains the positive selected callback.

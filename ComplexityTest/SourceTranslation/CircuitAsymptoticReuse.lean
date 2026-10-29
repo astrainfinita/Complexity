@@ -36,19 +36,18 @@ example : programKeepFn = Recursion.code programKeepTest programKeepNextFn progr
 abbrev StoredComp := {x : CompInput // x.n ≤ ⌜x⌝ₜ.size}
 abbrev StoredKeep := {x : KeepInput // x.n ≤ ⌜x⌝ₜ.size}
 
-private theorem restrict_ftisp {α : Type} [UniqueEncoding Tree α] {f : α → Tree}
+private theorem restrict_fdtisp {α : Type} [UniqueEncoding Tree α] {f : α → Tree}
     {program : Value → Code Value} (scale : α → ℕ) (d : ℕ)
     (hf : HasProgram f program (fun x => scale x ^ d) (fun x => scale x ^ 4))
     (P : α → Prop)
     (size : Dominated (fun x : {x // P x} => scale x.1) (fun x => ⌜x⌝ₜ.size)) :
-    (fun x : {x // P x} => f x.1) ∈ FTISP .tree (fun n => n ^ d) (fun n => n ^ 4) :=
-  ((hf.map_input Subtype.val
-    (fun x => (UniqueEncoding.encode_subtype x).symm)).mono (size.pow d) (size.pow 4)).mem_ftisp_pow
-      (by decide)
+    (fun x : {x // P x} => f x.1) ∈ FDTISP .tree (fun n => n ^ d) (fun n => n ^ 4) :=
+  ((hf.map_input Subtype.val (fun x => (UniqueEncoding.encode_subtype x).symm)).mono
+    (size.pow d) (size.pow 4)).mem_fdtisp_pow (by decide)
 
 example : (fun x : StoredComp => ⌜compFn x.1⌝ₜ) ∈
-    FTISP .tree (fun n => n ^ 7) (fun n => n ^ 4) := by
-  apply restrict_ftisp compScale 7 (hasProgram_compFn.of_encode fun _ => Tree.encode_self _)
+    FDTISP .tree (fun n => n ^ 7) (fun n => n ^ 4) := by
+  apply restrict_fdtisp compScale 7 (hasProgram_compFn.of_encode fun _ => Tree.encode_self _)
   refine Dominated.of_le_mul 8 ?_
   rintro ⟨⟨n, m, k, c, d⟩, hn⟩
   have hm := c.outputs_le_size_encode
@@ -60,8 +59,8 @@ example : (fun x : StoredComp => ⌜compFn x.1⌝ₜ) ∈
   omega
 
 example : (fun x : StoredKeep => ⌜keepFn x.1⌝ₜ) ∈
-    FTISP .tree (fun n => n ^ 8) (fun n => n ^ 4) := by
-  apply restrict_ftisp keepScale 8 (hasProgram_keepFn.of_encode fun _ => Tree.encode_self _)
+    FDTISP .tree (fun n => n ^ 8) (fun n => n ^ 4) := by
+  apply restrict_fdtisp keepScale 8 (hasProgram_keepFn.of_encode fun _ => Tree.encode_self _)
   refine Dominated.of_le_mul 5 ?_
   rintro ⟨⟨n, m, c⟩, hn⟩
   have hm := c.outputs_le_size_encode

@@ -142,7 +142,7 @@ theorem hasProgram_gatherLoop : HasProgram gather hole(⊢ program)
       simp only [size_encode_prod] at *
       omega) (Dominated.refl _)
 
-theorem gather_model : gather ∈ FTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by
+theorem gather_model : gather ∈ FDTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by
   model_fun_prop
 
 -- The accumulator really grows; no decreasing-space condition is hidden in the interface.
@@ -173,7 +173,7 @@ def keep (xs : List Bool) := xs
   case input_size => exact Dominated.of_le (fun z => by rw [z.2])
   all_goals intro; decide
 
-theorem keep_loop_model : keep ∈ FTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
+theorem keep_loop_model : keep ∈ FDTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
   model_fun_prop
 
 -- A zero allowance cannot replace the selected loop by the ordinary identity program.

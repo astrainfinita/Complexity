@@ -9,5 +9,5 @@ example : HasProgram drain hole(⊢ program) (fun xs => ⌜xs⌝ₜ.size) (fun x
   fill_hole program in source_fun_prop
 
 example : (fun xs : List Bool => (drain xs, xs)) ∈
-    FTISP .tree (fun n => n ^ 1) (fun n => n ^ 2) := by
+    FDTISP .tree (fun n => n ^ 1) (fun n => n ^ 2) := by
   model_fun_prop

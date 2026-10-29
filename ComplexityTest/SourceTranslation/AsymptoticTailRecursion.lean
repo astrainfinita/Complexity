@@ -34,7 +34,7 @@ def drain (_ : List Bool) : List Bool := []
   case decreases => intro xs ys _ ht; cases ys <;> simp_all
   all_goals intro; decide
 
-theorem drain_ftisp : drain ∈ FTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by
+theorem drain_fdtisp : drain ∈ FDTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by
   model_fun_prop
 
 -- The program is determined by the callbacks; tail-loop space has no stack multiplier.

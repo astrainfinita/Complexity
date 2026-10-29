@@ -28,11 +28,11 @@ open Complexity.TreeProgram.Source in
     HasProgram collect programAccumulateGate (fun _ => 1) (fun input => ⌜input⌝ₜ.size) :=
   hasProgram_accumulateGate.congr (by funext x; rfl)
 
-theorem collect_ftisp : collect ∈ FTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
+theorem collect_fdtisp : collect ∈ FDTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
   model_fun_prop
 
 -- Pairing reuses the selected growth and needs only the genuine output-size relation.
-theorem collect_pair_ftisp : (fun input => (collect input, input.1)) ∈ FTISP .tree
+theorem collect_pair_fdtisp : (fun input => (collect input, input.1)) ∈ FDTISP .tree
     (fun n => n ^ 0) (fun n => n ^ 1) := by
   model_fun_prop
   · apply Dominated.of_le_mul 5
@@ -55,21 +55,21 @@ example : True := by
       match input with | none => [] | some x => collect x) _ _ _)
   trivial
 
-theorem copied_ftisp : collect ∈ FTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) :=
-  collect_ftisp
+theorem copied_fdtisp : collect ∈ FDTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) :=
+  collect_fdtisp
 
 /-- error: `source` expects a function equality or a named implementation -/
 #guard_msgs in
-attribute [local source] copied_ftisp
+attribute [local source] copied_fdtisp
 
 -- A one-off source choice leaves its ordinary equation and growth comparisons.
-example : collect ∈ FTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
+example : collect ∈ FDTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
   model_fun_prop via accumulateGate
   case source_eq => rfl
 
 example : True := by
   fail_if_success
-    have : collect ∈ FTISP .tree (fun _ => 0) (fun _ => 0) := by
+    have : collect ∈ FDTISP .tree (fun _ => 0) (fun _ => 0) := by
       model_fun_prop
   trivial
 
@@ -83,11 +83,11 @@ example (acc xs : List Bool) :
   omega
 
 -- Ordinary nested calls use saved specifications without choosing a numerical coefficient.
-example : accumulateGate ∈ FTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
+example : accumulateGate ∈ FDTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
   model_fun_prop
 
 example {α : Type*} [UniqueEncoding Tree α] :
-    gateClauses (α := α) ∈ FTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
+    gateClauses (α := α) ∈ FDTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
   model_fun_prop
 
 -- Polynomial substitution combines growth, rather than expanding old million-sized budgets.

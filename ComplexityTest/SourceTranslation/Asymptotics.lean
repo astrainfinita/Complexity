@@ -15,7 +15,7 @@ open Complexity TreeProgram Complexity.TreeProgram.Source Filter
 
 namespace ComplexityTest.SourceTranslation.Asymptotics
 
--- The FTISP source endpoint must not bring the optional analysis bridge back into scope.
+-- The FDTISP source endpoint must not bring the optional analysis bridge back into scope.
 open Lean Elab in
 run_elab do
   let env ← getEnv
@@ -133,8 +133,8 @@ theorem hasProgram_preciseIdentityWeaker : HasProgram preciseIdentity hole(⊢ p
 attribute [local source] hasProgram_preciseIdentityWeaker
 
 -- A coarser model exit does not change the selected implementation's growth.
-theorem preciseIdentity_ftisp :
-    preciseIdentity ∈ FTISP .tree (fun n => n ^ 2) (fun n => n ^ 2) := by
+theorem preciseIdentity_fdtisp :
+    preciseIdentity ∈ FDTISP .tree (fun n => n ^ 2) (fun n => n ^ 2) := by
   model_fun_prop
 
 -- An alias of a selected implementation keeps its program and growth.
@@ -145,27 +145,27 @@ example := (by source_fun_prop : HasProgram aliasedIdentity programPreciseIdenti
 example : HasProgram aliasedIdentity hole(⊢ program) (fun _ => 0) (fun _ => 0) := by
   fill_hole program in source_fun_prop
 
-theorem identity_ftisp : (id : List Bool → List Bool) ∈ FTISP .tree (fun _ => 1) id := by
+theorem identity_fdtisp : (id : List Bool → List Bool) ∈ FDTISP .tree (fun _ => 1) id := by
   model_fun_prop
 
 def viaIdentity (xs : List Bool) := xs
 
 -- Source replacement still leaves its equality obligation ahead of the two growth goals.
-theorem via_ftisp : viaIdentity ∈ FTISP .tree (fun _ => 1) id := by
+theorem via_fdtisp : viaIdentity ∈ FDTISP .tree (fun _ => 1) id := by
   model_fun_prop via (id : List Bool → List Bool)
   case source_eq => rfl
 
 -- The canonical general exit is also accepted directly, without a tactic wrapper.
-theorem identity_direct_ftisp :
-    (id : List Bool → List Bool) ∈ FTISP .tree (fun _ => 1) id :=
-  (HasProgram.identity.mono Dominated.zero Dominated.zero).mem_ftisp
+theorem identity_direct_fdtisp :
+    (id : List Bool → List Bool) ∈ FDTISP .tree (fun _ => 1) id :=
+  (HasProgram.identity.mono Dominated.zero Dominated.zero).mem_fdtisp
       (Dominated.refl _) (Dominated.const 4)
       (Dominated.const_of_pos 2 fun _ => Tree.size_pos _)
 
 -- The boundary keeps the actual small-input machine cost, while empty large-size fibers vanish.
-theorem finiteIdentity_ftisp :
-    (id : Unit → Unit) ∈ FTISP .tree (fun _ => 0) (fun _ => 0) := by
-  apply HasProgram.identity.mem_ftisp_of_sizeEnvelope
+theorem finiteIdentity_fdtisp :
+    (id : Unit → Unit) ∈ FDTISP .tree (fun _ => 0) (fun _ => 0) := by
+  apply HasProgram.identity.mem_fdtisp_of_sizeEnvelope
   all_goals
     refine ⟨0, eventually_atTop.mpr ⟨2, fun n hn => ?_⟩⟩
     simp only [Nat.zero_mul]
@@ -180,8 +180,8 @@ theorem finiteIdentity_ftisp :
   abstract_hole program using programFiniteNot
   fill_hole program in source_fun_prop
 
-theorem finiteNot_ftisp : Bool.not ∈ FTISP .tree (fun _ => 0) (fun _ => 0) := by
-  apply hasProgram_finiteNot.mem_ftisp_of_sizeEnvelope
+theorem finiteNot_fdtisp : Bool.not ∈ FDTISP .tree (fun _ => 0) (fun _ => 0) := by
+  apply hasProgram_finiteNot.mem_fdtisp_of_sizeEnvelope
   all_goals
     refine ⟨0, eventually_atTop.mpr ⟨4, fun n hn => ?_⟩⟩
     simp only [Nat.zero_mul]

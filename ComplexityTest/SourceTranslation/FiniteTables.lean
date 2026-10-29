@@ -143,8 +143,8 @@ def composeWires (x : Σ n, Σ k, Σ m, (Fin n → Fin k) × (Fin k → Fin m)) 
 example := (by source_fun_prop using tabulate : HasProgram composeWires _ _ _)
 
 attribute [local fun_prop] HasProgram.fin_comp in
-theorem composeWires_ftisp :
-    composeWires ∈ FTISP .tree (fun n => n ^ 3) (fun n => n ^ 2) := by
+theorem composeWires_fdtisp :
+    composeWires ∈ FDTISP .tree (fun n => n ^ 3) (fun n => n ^ 2) := by
   model_fun_prop
 
 -- A represented table and a single callback implement one algorithm for every runtime index.

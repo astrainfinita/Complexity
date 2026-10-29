@@ -129,8 +129,8 @@ def optionalReverse {α : Type*} : Option (List α) → List α
 def hasProgram_optionalReverse {α : Type*} [UniqueEncoding Tree α] :=
   (by source_fun_prop : HasProgram (optionalReverse (α := α)) _ _ _)
 
-theorem optionalReverse_ftisp {α : Type*} [UniqueEncoding Tree α] :
-    optionalReverse (α := α) ∈ FTISP .tree (fun n => n) (fun n => n) := by
+theorem optionalReverse_fdtisp {α : Type*} [UniqueEncoding Tree α] :
+    optionalReverse (α := α) ∈ FDTISP .tree (fun n => n) (fun n => n) := by
   model_fun_prop
 
 def reverseWithPrefix {α : Type*} (input : List α × Option (List α)) : List α :=
@@ -260,7 +260,7 @@ example :
   intro f q t p hf
   source_fun_prop
 
-theorem branch_ftisp : branch ∈ FTISP .tree (fun n => n) (fun n => n) := by
+theorem branch_fdtisp : branch ∈ FDTISP .tree (fun n => n) (fun n => n) := by
   model_fun_prop
 
 -- The condition is charged, and only the selected branch contributes its running time.
@@ -306,7 +306,7 @@ def emitGate
 example := (by source_fun_prop :
     HasProgram emitGate _ _ _)
 
-theorem emitGate_ftisp : emitGate ∈ FTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by
+theorem emitGate_fdtisp : emitGate ∈ FDTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by
   let S (x : Σ k, FirstOrder.Language.booleanAlgebra.Functions k × (Fin k → ℕ) × ℕ) := ⌜x⌝ₜ.size
   have hS x : 0 < S x := Tree.size_pos _
   have hn : Dominated (fun x => ⌜x.2.2.2⌝ₜ.size) S := Dominated.of_le fun x => by
@@ -401,8 +401,8 @@ example : HasProgram (List.map (List.reverse : List Unit → List Unit)) hole(�
       (Dominated.refl _)
 
 -- Only ordinary size arithmetic remains; no generated code appears in this proof.
-theorem mapGateClauses_ftisp {α : Type*} [UniqueEncoding Tree α] :
-    List.map (gateClauses (α := α)) ∈ FTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by
+theorem mapGateClauses_fdtisp {α : Type*} [UniqueEncoding Tree α] :
+    List.map (gateClauses (α := α)) ∈ FDTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by
   have hout := Dominated.of_le_mul 4 (fun xs =>
     size_encode_map_le (gateClauses (α := α)) xs 4 (by decide)
       (fun x _ => gateClauses_size_le x))
@@ -430,8 +430,8 @@ def foldReverse {α : Type*} (xs : List α) : List α :=
 example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop :
     HasProgram (foldReverse (α := α)) _ _ _)
 
-theorem foldReverse_ftisp {α : Type*} [UniqueEncoding Tree α] :
-    foldReverse (α := α) ∈ FTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by
+theorem foldReverse_fdtisp {α : Type*} [UniqueEncoding Tree α] :
+    foldReverse (α := α) ∈ FDTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by
   model_fun_prop
 
 def collectStep {α : Type*} (acc : List α) (x : α) := x :: acc
@@ -488,7 +488,7 @@ example := (by source_fun_prop :
 
 def repeatFlag (x : Bool × List Unit) : List Bool := x.2.map (fun _ => x.1)
 
-theorem repeatFlag_ftisp : repeatFlag ∈ FTISP .tree (fun n => n) (fun n => n) := by
+theorem repeatFlag_fdtisp : repeatFlag ∈ FDTISP .tree (fun n => n) (fun n => n) := by
   model_fun_prop
   · have hs : Dominated (fun x : Bool × List Unit => ⌜x.2⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) :=
       Dominated.of_le size_encode_snd_le
@@ -513,12 +513,12 @@ theorem repeatFlag_ftisp : repeatFlag ∈ FTISP .tree (fun n => n) (fun n => n) 
         omega
 
 -- Imported public exits retain the selected implementations and their callback specifications.
-theorem accumulateGate_ftisp :
-    accumulateGate ∈ FTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
+theorem accumulateGate_fdtisp :
+    accumulateGate ∈ FDTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
   model_fun_prop
 
-theorem circuitStep_ftisp :
-    circuitStep ∈ FTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by
+theorem circuitStep_fdtisp :
+    circuitStep ∈ FDTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by
   model_fun_prop
 
 end ComplexityTest.SourceTranslation.Examples
