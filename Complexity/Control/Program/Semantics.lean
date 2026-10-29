@@ -78,15 +78,15 @@ theorem Exec.bindTo {e : Semantics O A Op Ret S} {v w : Kind}
   induction hp generalizing β w with
   | ret a s => simpa only [bindTo, Nat.zero_add] using hf
   | step o k s h ih =>
-    convert Exec.step (e := e) o (fun x ↦ bindTo (k x) f) s (ih hf) using 1 <;>
+    convert Exec.step o (fun x ↦ bindTo (k x) f) s (ih hf) using 1 <;>
       first | rfl | omega
   | loop_done a i body k hb hk _ ih =>
-    convert Exec.loop_done (e := e) a i
+    convert Exec.loop_done a i
       (fun j ↦ (body j).mapResult β (.branch _ _) id) (fun x ↦ bindTo (k x) f)
       (by apply hb.mapResult)
       (ih hf) using 1 <;> first | rfl | omega
   | loop_next a i body k hb hk _ ih =>
-    convert Exec.loop_next (e := e) a i
+    convert Exec.loop_next a i
       (fun j ↦ (body j).mapResult β (.branch _ _) id) (fun x ↦ bindTo (k x) f)
       (by apply hb.mapResult)
       (ih hf) using 1 <;> first | rfl | omega
@@ -113,7 +113,7 @@ theorem pure (e : Semantics O A Op Ret S) (a : α) (s : S) :
 theorem perform (e : Semantics O A Op Ret S) (o : Op) (s : S) :
     (Program.perform o).Exec e s 1 (e.eval o (e.observe s)).2
       (e.act (e.eval o (e.observe s)).1 s) :=
-  Syntax.Exec.step o (fun a ↦ Program.pure a) s (Syntax.Exec.ret (v := .value) _ _)
+  Syntax.Exec.step o (fun a ↦ Program.pure a) s (Syntax.Exec.ret _ _)
 
 /-- Sequential composition adds costs without a connecting transition. -/
 theorem bind {p : Program O A Op Ret α} {f : α → Program O A Op Ret β}
@@ -164,10 +164,10 @@ theorem repeatUntilWith_next (a : A) (p : Program O A Op Ret Bool)
   have hb := h.bind (f := fun b ↦ Program.pure
     (if b then Sum.inr (0 : Fin 1) else Sum.inl (0 : Fin 1)))
     (Exec.pure e (Sum.inl (0 : Fin 1)) t)
-  apply Syntax.Exec.loop_next (m := m) (l := n) (j := 0) a 0 _ _
+  apply Syntax.Exec.loop_next a 0 _ _
   · simpa only [repeatUntilWith, Bind.bind, Pure.pure, loop, bind, Syntax.bindTo,
       Syntax.mapResult_comp, Function.id_comp, Nat.add_zero, id_eq] using
-      hb.mapResult (β := Unit) (w := .branch 1 1) id
+      hb.mapResult (w := .branch 1 1) id
   · exact hc
 
 end Exec

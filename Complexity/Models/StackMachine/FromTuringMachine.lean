@@ -113,7 +113,7 @@ theorem Rep.init (q : Q) (hv : ∀ i, (0 : ℤ) ∈ V i) :
   input_eq := rfl
   output_eq := rfl
   tapes i := ⟨[], [], fun _ ↦ rfl, fun _ ↦ rfl, .empty _, by
-    simpa using (show (V i).fst ≤ 0 ∧ 0 ≤ (V i).snd from hv i)⟩
+    simpa using show (V i).fst ≤ 0 ∧ 0 ≤ (V i).snd from hv i⟩
 
 /-- Simultaneous stack updates represent a source tape action inside the chosen bounds. -/
 theorem Rep.apply (h : Rep V c d) (a : Action κ (Option Bool) Q)
@@ -177,7 +177,7 @@ theorem Rep.step (h : Rep V c d) (M : TM Id κ (Option Bool) Q)
     rw [M.toStack.step_of_not_halted d (fun hd ↦ hc (hh.mp hd))]
     simpa only [toStack_transition, StackMachine.state_def, Cfg.state_def, Id.run_pure,
       h.state_eq, h.observe, StackMachine.observe_def]
-      using h.apply ((M.transition c.state (Controller.observe c)).run) hv
+      using h.apply (M.transition c.state (Controller.observe c)).run hv
 
 theorem Rep.mass_le [Fintype κ] (h : Rep V c d) :
     d.mass ≤ 2 * ∑ i, ((V i).snd + 1 - (V i).fst).toNat := by
@@ -200,10 +200,9 @@ theorem run_toStack (M : TM Id κ (Option Bool) Q) (xs : List Bool) (n : ℕ) :
   have hv (j : ℕ) (hj : j ≤ n) (i : κ) :
       (M.runFrom c j).workPos i ∈ (M.runHistoryFrom c n).visited i :=
     (M.runHistoryFrom_visited_le_iff c n i _).mp le_rfl j hj
-  refine Transition.rel_runN_of_step (f := M.step) (g := M.toStack.step)
-    (Stack.Rep.init M.q₀ (hv 0 (Nat.zero_le n))) ?_
+  refine Transition.rel_runN_of_step (f := M.step) (Stack.Rep.init M.q₀ (hv 0 (Nat.zero_le n))) ?_
   intro j hj d hd
-  rw [Transition.runN_succ' (m := Id) (pure ∘ M.step)]
+  rw [Transition.runN_succ' (pure ∘ M.step)]
   apply hd.step M
   intro i
   have hi := hv (j + 1) (by omega) i

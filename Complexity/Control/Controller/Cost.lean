@@ -35,7 +35,7 @@ variable (M : Controller Id Observation Action Q)
 theorem actionSum_runHistoryFrom_one (cfg : Config) :
     (M.runHistoryFrom cfg 1).actionSum cost =
       if M.halt (state cfg) then 0
-      else cost ((M.transition (state cfg) (observe cfg)).run) cfg := by
+      else cost (M.transition (state cfg) (observe cfg)).run cfg := by
   by_cases h : M.Halted cfg
   · simp [M.runHistoryFrom_of_halted cfg h, show M.halt (state cfg) = true from h]
   · simp [M.runHistoryFrom_succ_of_not_halted cfg h,

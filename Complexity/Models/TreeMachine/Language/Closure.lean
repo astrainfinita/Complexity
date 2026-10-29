@@ -101,7 +101,7 @@ theorem Run.restrict {p : Cmd ℕ} {s t : ℕ → Tree} {time space : ℕ}
   | assign x e s =>
     rw [Function.update_comp_eq_of_injective' s Fin.val_injective
       ⟨x, by simp only [bound] at hn; omega⟩]
-    have hh := Run.assign (ν := Fin n) ⟨x, by simp only [bound] at hn; omega⟩
+    have hh := Run.assign ⟨x, by simp only [bound] at hn; omega⟩
       (e.close n (by simp only [bound] at hn; omega)) (fun i ↦ s i.val)
     simpa only [close, Expr.assignSteps_close, Expr.maxSize_close, Expr.eval_close] using hh
   | seq hp hq ihp ihq =>

@@ -147,13 +147,13 @@ theorem step_toTM (M : StackMachine Id κ Γ Q) (c : Cfg κ Γ Q xs) (cached : �
   · refine ⟨fun i ↦ (((M.transition c.state (observe c)).run).work i).pending.isSome, ?_⟩
     simpa [-TM.Cfg.observe_def, Controller.step_eq, ↓Cfg.observe_toTM,
       show M.halt c.state = false from Bool.eq_false_iff.mpr h]
-      using Action.apply_toTM ((M.transition c.state (observe c)).run) c cached
+      using Action.apply_toTM (M.transition c.state (observe c)).run c cached
 
 /-- Bounded runs preserve the encoding without exposing the cache bookkeeping. -/
 theorem runFrom_toTM (M : StackMachine Id κ Γ Q) (c : Cfg κ Γ Q xs)
     (cached : κ → Bool) (n : ℕ) :
     ∃ cached', M.toTM.runFrom (c.toTM cached) n = (M.runFrom c n).toTM cached' :=
-  Transition.rel_runN (f := M.step) (g := M.toTM.step)
+  Transition.rel_runN
     (R := fun (c : Cfg κ Γ Q xs) d ↦ ∃ cached, d = c.toTM cached)
     (by rintro c _ ⟨cached, rfl⟩; exact M.step_toTM c cached) ⟨cached, rfl⟩ n
 

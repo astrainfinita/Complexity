@@ -78,11 +78,11 @@ def act (a : Action κ Γ Unit) : StackMachine.Program κ Γ Unit :=
 
 /-- Read the input symbol, or `none` at either boundary. -/
 def readInput [FinEnum Γ] : StackMachine.Program κ Γ (Option Γ) :=
-  Program.perform (Op.readInput (κ := κ) (Γ := Γ) inferInstance)
+  Program.perform (Op.readInput inferInstance)
 
 /-- Read one stack top, or `none` for an empty stack. -/
 def read [FinEnum Γ] (i : κ) : StackMachine.Program κ Γ (Option Γ) :=
-  Program.perform (Op.read (Γ := Γ) inferInstance i)
+  Program.perform (Op.read inferInstance i)
 
 /-- Observe finitely many Boolean tests in one transition. -/
 def observeBits {n : ℕ} (f : (Option Γ × (κ → Option Γ)) → Fin n → Bool) :
@@ -94,7 +94,7 @@ def push [DecidableEq κ] (i : κ) (a : Γ) : StackMachine.Program κ Γ Unit :=
 
 /-- Pop one selected stack, leaving it empty if it already was. -/
 def pop [DecidableEq κ] (i : κ) : StackMachine.Program κ Γ Unit :=
-  act { idle (κ := κ) (Γ := Γ) with work := fun j ↦ if j = i then .pop else .nop }
+  act { idle (κ := κ) with work := fun j ↦ if j = i then .pop else .nop }
 
 /-- Move the input head using the bounded input convention. -/
 def moveInput (d : SignType) : StackMachine.Program κ Γ Unit :=
@@ -129,14 +129,14 @@ open Std.WP
     Triple (readInput.verify (semantics xs)) (fun t c ↦ t = s ∧ c = b)
       (fun r t c ↦ r = (observe s : Option Γ × (κ → Option Γ)).1 ∧ t = s ∧ c = b - 1) x := by
   simpa [readInput, eval] using
-    Program.spec_perform (Op.readInput (κ := κ) (Γ := Γ) inferInstance) (semantics xs) s b h x
+    Program.spec_perform (Op.readInput inferInstance) (semantics xs) s b h x
 
 @[spec] theorem spec_read [FinEnum Γ] (i : κ) (xs : Array Γ)
     (s : Cfg κ Γ Unit xs) (b : ℕ) (h : 0 < b) (x : Unit) :
     Triple ((read i).verify (semantics xs)) (fun t c ↦ t = s ∧ c = b)
       (fun r t c ↦ r = (s.stacks i).head? ∧ t = s ∧ c = b - 1) x := by
   simpa [read, eval] using
-    Program.spec_perform (Op.read (Γ := Γ) inferInstance i) (semantics xs) s b h x
+    Program.spec_perform (Op.read inferInstance i) (semantics xs) s b h x
 
 @[spec] theorem spec_observeBits {n : ℕ} (f : (Option Γ × (κ → Option Γ)) → Fin n → Bool)
     (xs : Array Γ) (s : Cfg κ Γ Unit xs) (b : ℕ) (h : 0 < b) (x : Unit) :

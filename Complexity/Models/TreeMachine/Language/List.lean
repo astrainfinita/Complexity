@@ -134,9 +134,7 @@ theorem reverseAppend_bounded (xs ys : Value) (n : ℕ) (s : ℕ → Tree)
   have hloop := reverseLoop_bounded n u _ hu
   apply Bounded.mono (time := 13 * (xs.eval s).listLength + 2 + 2) ?_
     (by omega) (Nat.le_refl _) (fun _ _ h ↦ h)
-  apply Bounded.bind (Q := fun _ t ↦
-    t (n + 1) = (xs.eval s).reverseAppend (ys.eval s) ∧ ∀ j < n, t j = s j)
-    (by simpa +contextual (disch := omega) [u, Nat.add_assoc] using hloop)
+  apply Bounded.bind (by simpa +contextual (disch := omega) [u, Nat.add_assoc] using hloop)
   intro v t ⟨ht, hf⟩
   have hout := Tree.size_reverseAppend (xs.eval s) (ys.eval s)
   simp only [bounded_read_iff, Var.get_mk]

@@ -62,7 +62,7 @@ theorem size_unrollState_le (n : ℕ) (step : Circuit .booleanAlgebra (n + 1) n)
 
 def unrollStep (x : UnrollState) : UnrollState :=
   ⟨x.1, x.2.1 + 1, x.2.2.1,
-    ((x.2.2.2).relabel Fin.castSucc).keepInputs.comp
+    (x.2.2.2.relabel Fin.castSucc).keepInputs.comp
       (x.2.2.1.relabel (Fin.snoc (Fin.natAdd (x.1 + (x.2.1 + 1)))
         (Fin.castAdd x.1 (Fin.last (x.1 + x.2.1)))))⟩
 

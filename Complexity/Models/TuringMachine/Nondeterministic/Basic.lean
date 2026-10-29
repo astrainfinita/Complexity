@@ -88,7 +88,7 @@ theorem UsesTime.usesSpace [Fintype κ] {M : NTM κ Γ Q} {xs : List Γ} {t : �
         Multiset.fmap_def, Multiset.forall_mem_map_iff] at ht
       simpa only [M.runFromWith_nil Multiset, Controller.halted_history] using ht
     have he := M.runFromWith_eq_of_forall_halted
-      (History.nil (Action := TM.Action κ Γ Q) c) hall (Nat.le_of_not_ge hn)
+      (History.nil c) hall (Nat.le_of_not_ge hn)
     simp only [M.runFromWith_nil Multiset] at he
     change h ∈ M.runHistoryFromWith Multiset c n at hh
     rw [he] at hh

@@ -97,7 +97,7 @@ theorem spec_repeatUntilWith (a : A) (p : Program O A Op Ret Bool) (e : Semantic
       (fun r s b => if r then Q () s b else I s b) x) :
     Triple ((repeatUntilWith a p).verify e) (fun s b => I s b) Q x := by
   unfold repeatUntilWith
-  apply spec_bind_of_spec (R := fun _ : Fin 1 ↦ Q ())
+  apply spec_bind_of_spec
   · apply spec_loop a _ 0 e (fun _ ↦ I) (fun _ ↦ Q ()) x (fun _ ↦ hpos)
     intro _
     apply spec_bind_of_spec hstep
@@ -148,7 +148,7 @@ compiled control labels remain structural. -/
 def loopOn (dispatch : A) (b : α → Program O A Op Ret (α ⊕ β)) (i : α) :
     Program O A Op Ret β :=
   Syntax.loop dispatch (FinEnum.equiv i) (loopOnBody b)
-    (fun j ↦ Syntax.ret (u := .value) ((FinEnum.equiv : β ≃ Fin (FinEnum.card β)).symm j))
+    (fun j ↦ Syntax.ret ((FinEnum.equiv : β ≃ Fin (FinEnum.card β)).symm j))
 
 /-- Finite carried values are a relabeling of the numbered loop's inputs and results. -/
 theorem loopOn_eq_mapResult_loop (a : A) (b : α → Program O A Op Ret (α ⊕ β)) (i : α) :
@@ -171,13 +171,12 @@ theorem loopOn_done (a : A) (b : α → Program O A Op Ret (α ⊕ β))
     (loopOn a b i).Exec e s (n + 1) j t := by
   have hb := h.mapResult (β := β) (w := .branch (FinEnum.card α) (FinEnum.card β))
     (Sum.map FinEnum.equiv FinEnum.equiv)
-  apply Syntax.Exec.loop_done (m := n) (l := 0) (j := FinEnum.equiv j)
-    a (FinEnum.equiv i) (loopOnBody b)
+  apply Syntax.Exec.loop_done (l := 0) a (FinEnum.equiv i) (loopOnBody b)
     (fun j ↦ Syntax.ret (u := .value) ((FinEnum.equiv : β ≃ Fin (FinEnum.card β)).symm j))
   · simpa only [loopOnBody, Equiv.symm_apply_apply, Sum.map_inr] using hb
   · simpa only [Equiv.symm_apply_apply] using
-      (Syntax.Exec.ret (e := e) (α := β) (v := .value)
-        ((FinEnum.equiv : β ≃ Fin (FinEnum.card β)).symm (FinEnum.equiv j)) t)
+      Syntax.Exec.ret (v := .value)
+        ((FinEnum.equiv : β ≃ Fin (FinEnum.card β)).symm (FinEnum.equiv j)) t
 
 /-- Continuing routes to the next external carried value without a connecting action. -/
 theorem loopOn_next (a : A) (b : α → Program O A Op Ret (α ⊕ β))
@@ -187,8 +186,7 @@ theorem loopOn_next (a : A) (b : α → Program O A Op Ret (α ⊕ β))
     (loopOn a b i).Exec e s (n + m + 1) v u := by
   have hb := h.mapResult (β := β) (w := .branch (FinEnum.card α) (FinEnum.card β))
     (Sum.map FinEnum.equiv FinEnum.equiv)
-  apply Syntax.Exec.loop_next (m := n) (l := m) (j := FinEnum.equiv j)
-    a (FinEnum.equiv i) (loopOnBody b)
+  apply Syntax.Exec.loop_next a (FinEnum.equiv i) (loopOnBody b)
     (fun j ↦ Syntax.ret (u := .value) ((FinEnum.equiv : β ≃ Fin (FinEnum.card β)).symm j))
   · simpa only [loopOnBody, Equiv.symm_apply_apply, Sum.map_inl] using hb
   · exact hc

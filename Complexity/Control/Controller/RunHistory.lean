@@ -201,8 +201,8 @@ theorem runHistoryFrom_spec (cfg : Config) (fuel : ℕ) :
 
 theorem runHistoryFrom_succ_of_not_halted (cfg : Config) (h : ¬M.Halted cfg) (fuel : ℕ) :
     M.runHistoryFrom cfg (fuel + 1) =
-      History.cons cfg ((M.transition (state cfg) (observe cfg)).run)
-        (M.runHistoryFrom (apply ((M.transition (state cfg) (observe cfg)).run) cfg) fuel)
+      History.cons cfg (M.transition (state cfg) (observe cfg)).run
+        (M.runHistoryFrom (apply (M.transition (state cfg) (observe cfg)).run cfg) fuel)
         (M.first_runHistoryFrom _ _) := by
   simp only [runHistoryFrom, runHistoryFromWith, runHistoryFromWith.runCertified,
     dite_eq_right h]

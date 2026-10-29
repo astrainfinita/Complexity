@@ -113,7 +113,7 @@ theorem sum_finRange {n : α → ℕ} {a : (x : α) → Fin (n x) → ℕ} {b : 
   obtain ⟨C, hc⟩ := dominated_iff.mp h
   refine of_le_mul C fun x => ?_
   have hs := List.sum_le_sum (l := List.finRange (n x))
-    (g := fun _ => C * b x) (fun i _ => hc ⟨x, i⟩)
+    (fun i _ => hc ⟨x, i⟩)
   simpa only [List.map_const', List.sum_replicate, List.length_finRange,
     Nat.nsmul_eq_mul, Nat.mul_left_comm] using hs
 
@@ -127,8 +127,8 @@ theorem sum_finRange_of_mul {n : α → ℕ} {a : (x : α) → Fin (n x) → ℕ
   rcases Nat.eq_zero_or_pos (n x) with h0 | hpos
   · have hnil : List.finRange (n x) = [] := List.eq_nil_of_length_eq_zero (by simp [h0])
     simp [hnil]
-  · have hs := List.sum_le_sum (l := List.finRange (n x)) (f := fun i => n x * a x i)
-      (g := fun _ => C * g x) (fun i _ => by simpa only [Nat.nsmul_eq_mul] using hc ⟨x, i⟩)
+  · have hs := List.sum_le_sum (l := List.finRange (n x))
+      (fun i _ => by simpa only [Nat.nsmul_eq_mul] using hc ⟨x, i⟩)
     have hmul (l : List (Fin (n x))) :
         (l.map fun i => n x * a x i).sum = n x * (l.map (a x)).sum := by
       induction l <;> simp [*, Nat.mul_add]

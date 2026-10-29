@@ -22,7 +22,7 @@ variable {κ Γ : Type} [DecidableEq κ] [FinEnum Γ]
 
 /-- Push the current input symbol and advance the read-only input head together. -/
 def loadAction (i : κ) (a : Γ) : Action κ Γ Unit :=
-  { idle (κ := κ) (Γ := Γ) with
+  { idle (κ := κ) with
     inputMove := 1
     work := fun j ↦ if j = i then .push a else .nop }
 

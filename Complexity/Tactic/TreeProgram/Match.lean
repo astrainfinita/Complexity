@@ -67,7 +67,7 @@ variable {β : α → Type*} [∀ x, UniqueEncoding Tree (β x)]
 
 /-- Branch on the constructor of a computed value: the branch of each constructor receives the
 input with the constructor's fields. One decision `D` on codes serves every input. -/
-theorem HasProgram.cases (D : CaseTree k) (hD : ∀ x, dispatch (T := T x) = D)
+theorem HasProgram.cases (D : CaseTree k) (hD : ∀ x, dispatch (T x) = D)
     {d : (x : α) → T x} {f : (x : α) → β x} {qd : Value → Code Value} {td pd : α → ℕ}
     (hd : HasProgram d qd td pd) {q : Fin k → Value → Code Value}
     {t p : (i : Fin k) → Branch d i → ℕ}
@@ -84,7 +84,7 @@ theorem HasProgram.cases (D : CaseTree k) (hD : ∀ x, dispatch (T := T x) = D)
     (peak := fun x => max ⌜d x⌝ₜ.size
       (atBranch d (fun i y => max (1 + ⌜y.1.1⌝ₜ.size + ⌜y.1.2⌝ₜ.size) ((b i).peak y)) x))
     (fun u v n hu _ => D.run_fresh (fun i a m ha => by
-      have := ((hb i).1 (.var m) (m + 1) le_rfl)
+      have := (hb i).1 (.var m) (m + 1) le_rfl
       simp only [Value.pair, Code.build_bind, Code.eval_build]
       exact ⟨(Nat.le_succ m).trans this.1, this.2⟩) hu) ?_
   · refine ⟨_, h, ?_, ?_⟩
@@ -108,7 +108,7 @@ theorem HasProgram.cases (D : CaseTree k) (hD : ∀ x, dispatch (T := T x) = D)
     have hy : ⌜y⌝ₜ.size = 1 + ⌜x⌝ₜ.size + ⌜pl⌝ₜ.size := rfl
     have hY := (hb i).size_le y
     rw [hy] at hY
-    apply (D.run_bounded hu (Y := ⌜f x⌝ₜ) (time := 1 + (b i).time y)
+    apply (D.run_bounded hu (time := 1 + (b i).time y)
       (by rw [hux]; exact le_max_left _ _) (hY.trans (le_max_right _ _)) ?_).mono
       (by omega) le_rfl (fun _ _ h => h)
     intro m t a hm ha ht hat

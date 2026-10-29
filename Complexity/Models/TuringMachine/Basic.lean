@@ -38,8 +38,7 @@ variable {F : Type (max uκ u v) → Type*} {κ : Type uκ} {Γ : Type u} {Q : T
 /-- Initialize the raw configuration for a list input and read its output tape. -/
 @[simps (attr := simp↓) init hasOutput]
 instance rawExecution (xs : List Γ) :
-    Controller.Execution (Cfg κ Γ Q xs.toArray)
-      Q (Output := List Γ) (input := xs) where
+    Controller.Execution (Cfg κ Γ Q xs.toArray) Q (List Γ) xs where
   init q :=
     { state := q
       inputPos := ⟨1, by omega⟩
@@ -57,7 +56,7 @@ instance rawExecution (xs : List Γ) :
 theorem step_eq (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs) :
     M.step c = if M.halt c.state then c
       else apply
-        ((M.transition c.state (c.inputSymbol, c.workSymbols)).run) c := rfl
+        (M.transition c.state (c.inputSymbol, c.workSymbols)).run c := rfl
 
 /-- A transition moves each work head by at most one cell. -/
 theorem step_workPos_bounds (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs) (i : κ) :

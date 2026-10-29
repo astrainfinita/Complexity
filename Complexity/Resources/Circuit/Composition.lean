@@ -636,7 +636,7 @@ theorem hasProgram_keepFn : HasProgram keepFn hole(⊢ program)
       hasProgram_keepNextFn hasProgram_keepFinishFn
       hasProgram_keepResume keepScale
       keepScale_pos (fun x _ => keepScale_next_le x) hsize (Dominated.one fun x =>
-        Nat.pow_pos (n := 7) (keepScale_pos x))
+        Nat.pow_pos (keepScale_pos x))
       (hsize.mono_pow (by decide : 2 ≤ 4) keepScale_pos)
       (hsize.mono_pow (by decide : 2 ≤ 7) keepScale_pos)
       (hsize.mono_pow (by decide : 2 ≤ 4) keepScale_pos) (Dominated.refl _)

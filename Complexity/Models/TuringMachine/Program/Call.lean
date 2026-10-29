@@ -122,9 +122,9 @@ theorem exec_callFrom (M : TM Id κ Γ Q) (c : History (Cfg κ Γ Q xs) (Action 
       ((M.runFrom c n).mapState (fun _ ↦ ())) := by
   obtain ⟨m, hm, hr⟩ := run_callBlock M (state c) c n hh
   refine ⟨m, hm, ?_⟩
-  have h := Program.Syntax.Exec.call (e := semantics xs)
+  have h := Program.Syntax.Exec.call
     (callBlock M (state c)) (fun e ↦
-      Program.Syntax.ret (α := Q) (u := .value)
+      Program.Syntax.ret
         ((FinEnum.equiv : Q ≃ Fin (FinEnum.card Q)).symm e))
     hr (Program.Syntax.Exec.ret (v := .value) _ _)
   simpa only [callFrom, Program.callControl, Program.pure,

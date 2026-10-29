@@ -141,7 +141,7 @@ theorem Implements.pair {α : Type*} {β γ : α → Type*} [UniqueEncoding Tree
     Implements (fun v => do let w ← p v; let z ← q v; Value.pair w z) (fun x => (f x, g x))
       ⟨fun x => b.time x + (c.time x + 1),
         fun x => max (b.peak x) (max (c.peak x) ⌜(f x, g x)⌝ₜ.size)⟩ := by
-  refine hf.bind_input (r := fun w v => do let z ← q v; Value.pair w z) ?_ ?_
+  refine hf.bind_input ?_ ?_
   · intro u v n hu hv
     obtain ⟨hn, _⟩ := hg.1 v n hv
     simp only [Code.build_bind, Value.pair, Code.eval_build]
@@ -201,7 +201,7 @@ theorem HasProgram.comp_codes {A δ : α → Type*} {B γ : Type*} [∀ x, Uniqu
     (hF : ∀ x, HasProgram (F x) program (u' x) (q' x)) :
     HasProgram (fun x => F x (f x)) (fun v => pf v >>= program) (fun x => t x + u (c x (f x)))
       (fun x => max (p x) (q (c x (f x)))) :=
-  ((hf.of_encode (f := fun x => c x (f x)) fun x => hc x (f x)).comp_dependent hG).of_encode
+  ((hf.of_encode fun x => hc x (f x)).comp_dependent hG).of_encode
     fun x => by
       obtain ⟨_, h, -⟩ := (hF x).sound
       obtain ⟨_, g, -⟩ := hG.sound
@@ -411,12 +411,10 @@ theorem HasProgram.map_dependent {ρ : Type*} {α β : ρ → Type*}
   let u : (Σ x : Σ e, List (α e), α x.1) → Σ e, α e := fun z => ⟨z.1.1, z.2⟩
   refine ⟨_, h.map_dependent, ?_, ?_⟩
   · exact ((Dominated.sum_map (fun x : Σ e, List (α e) => x.2)
-      (a := fun x y => b.time ⟨x.1, y⟩) (b := fun x y => t ⟨x.1, y⟩)
       (by simpa only [Function.comp_def, u] using hbt.comp u)).add
         ((Dominated.refl _).const_mul_left 27)).add (Dominated.const 17)
   · exact (Dominated.refl _).max ((Dominated.refl _).max
       (Dominated.foldr_max (fun x : Σ e, List (α e) => x.2)
-        (a := fun x y => b.peak ⟨x.1, y⟩) (b := fun x y => p ⟨x.1, y⟩)
         (by simpa only [Function.comp_def, u] using hbp.comp u)))
 
 /-- Call code and copy its returned value to a fixed register. -/
@@ -469,7 +467,7 @@ theorem Implements.loop_budget_finish {α β : Type*} [UniqueEncoding Tree α] [
   constructor
   · intro v n hv
     obtain ⟨hn, hr⟩ := hd.1 (.var n) (n + 2) (by change n + 1 ≤ n + 2; omega)
-    exact ⟨(by dsimp [loopCode]; omega),
+    exact ⟨by dsimp [loopCode]; omega,
       hr.trans ((Nat.le_max_right _ _).trans (Nat.le_max_right _ _))⟩
   · intro v n s x hv hx
     let J (t : ℕ → Tree) (k : ℕ) := ∃ y,
@@ -574,7 +572,7 @@ theorem Implements.tagged {pf : Value → Code Value} {f : (x : α) → β x} {b
     Implements (fun v => do let w ← pf v; Code.eval (.pair (.ofTree T) w.expression)) g
       ⟨fun x => b.time x + ((Expr.ofTree T : Expr ℕ).steps + 1),
         fun x => max (b.peak x) ⌜g x⌝ₜ.size⟩ := by
-  refine hf.bind_input (r := fun w _ => Code.eval (.pair (.ofTree T) w.expression)) ?_ ?_
+  refine hf.bind_input ?_ ?_
   · intro u v n _ _
     simp [Expr.bound]
   · intro u v n s x hu _ hux _
@@ -605,7 +603,7 @@ theorem HasProgram.field_cons {f : (x : α) → β x} {g : (x : α) → γ x}
 theorem HasProgram.of_fields {f : (x : α) → β x} {g : (x : α) → γ x} {pf : Value → Code Value}
     (henc : ∀ x, ⌜g x⌝ₜ = ⌜f x⌝ₜ) (hf : HasProgram f pf t (fun x => max (p x) ⌜f x⌝ₜ.size)) :
     HasProgram g pf t (fun x => max (p x) ⌜g x⌝ₜ.size) :=
-  (hf.of_encode (f := g) henc).mono (.refl _) (Dominated.of_le fun x => by rw [henc])
+  (hf.of_encode henc).mono (.refl _) (Dominated.of_le fun x => by rw [henc])
 
 /-- A constructor whose code is a constant tag paired with the tuple of its fields. -/
 theorem HasProgram.of_tagged_fields {f : (x : α) → β x} {g : (x : α) → γ x}
@@ -752,7 +750,7 @@ theorem HasProgram.ite {c : α → Bool} (hc : HasProgram c qc tc pc)
   obtain ⟨bt, hbt, htt, htp⟩ := ht.sound
   obtain ⟨bf, hbf, hft, hfp⟩ := hf.sound
   -- The branches are selected on their codes, whose type does not depend on the input.
-  have h := hbc.ite (f := fun x => ⌜f x⌝ₜ) (g := fun x => ⌜g x⌝ₜ)
+  have h := hbc.ite
     (hbt.of_encode fun _ => Tree.encode_self _) (hbf.of_encode fun _ => Tree.encode_self _)
   exact ⟨_, h.of_encode fun x => by cases c x <;> simp only [Tree.encode_self, Bool.false_eq_true,
       ite_true, ite_false],
@@ -790,13 +788,12 @@ theorem HasProgram.foldl_with {ρ α β : Type*}
   have hargs (z : (ρ × β) × α) : ⌜(z.1.1, z.1.2, z.2)⌝ₜ.size = ⌜z⌝ₜ.size := by
     rcases z with ⟨⟨e, a⟩, x⟩
     simp only [size_encode_prod]; omega
-  have hout := (hs.size_encode.comp (fun z : (ρ × β) × α => (z.1.1, z.1.2, z.2)))
+  have hout := hs.size_encode.comp (fun z : (ρ × β) × α => (z.1.1, z.1.2, z.2))
   simp only [Function.comp_def, hargs] at hout
-  have getEnv := (Prod.hasProgram_fst (α := ρ × β) (β := α)).comp
+  have getEnv := (Prod.hasProgram_fst (β := α)).comp
     (Prod.hasProgram_fst (α := ρ) (β := β))
-  have getArgs := getEnv.pair (((Prod.hasProgram_fst (α := ρ × β) (β := α)).comp
-    (Prod.hasProgram_snd (α := ρ) (β := β))).pair
-      (Prod.hasProgram_snd (α := ρ × β) (β := α)))
+  have getArgs := getEnv.pair ((Prod.hasProgram_fst.comp Prod.hasProgram_snd).pair
+    Prod.hasProgram_snd)
   have step : HasProgram (Function.uncurry (fun (ea : ρ × β) (x : α) => (ea.1, f ea.1 ea.2 x)))
       _ (fun z => ts (z.1.1, z.1.2, z.2) + 1)
       (fun z => max ⌜z⌝ₜ.size (ps (z.1.1, z.1.2, z.2))) :=
@@ -856,9 +853,8 @@ theorem HasProgram.map_with {ρ α β : Type*}
       (fun e => ti e + (((xs e).map (fun y => tf (e, y))).sum + (xs e).length + 1))
       (fun e => max (pi e) (max ⌜(e, xs e)⌝ₜ.size
         (max (⌜(xs e).map (f e)⌝ₜ.size + 1) ((xs e).foldr (fun y s => max (pf (e, y)) s) 0)))) :=
-  (HasProgram.map_dependent_with (α := fun _ => α) (β := fun _ => β)
-    ((hi.of_encode (f := fun e => (⟨e, xs e⟩ : Σ _ : ρ, List α))
-      (fun e => @Sigma.encode_mk ρ (fun _ => List α) _ _ e (xs e))))
+  (HasProgram.map_dependent_with
+    (hi.of_encode (fun e => @Sigma.encode_mk ρ (fun _ => List α) _ _ e (xs e)))
     (hf.map_input (fun p : Σ _ : ρ, α => (p.1, p.2))
       (fun p => (@Sigma.encode_mk ρ (fun _ => α) _ _ p.1 p.2).symm))).mono
     (Dominated.refl _) (Dominated.of_le fun e => by simp only [Sigma.encode_mk, le_refl])
@@ -893,7 +889,7 @@ theorem Dominated.foldl_of_invariant {α β ρ : Type*} [UniqueEncoding Tree α]
   obtain ⟨Ct, htime⟩ := dominated_iff.mp ht
   obtain ⟨Cp, hpeak⟩ := dominated_iff.mp hp
   obtain ⟨Cs, hstate⟩ := dominated_iff.mp hsize
-  have bound (x : ρ) := foldl_le_of_invariant (f := f) (t := t) (p := p)
+  have bound (x : ρ) := foldl_le_of_invariant (t := t)
     (I x) (fun rest _ => Ct * (rest.length * time x)) ((Cs + Cp) * peak x)
     (xs x) (initial x) (start x)
     (by

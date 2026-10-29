@@ -57,7 +57,7 @@ theorem head_mem_of_visited_le (h : History (TM.Cfg κ Γ Q xs) (TM.Action κ Γ
   ⟨(hv k).1.trans (h.head_mem k).1, (h.head_mem k).2.trans (hv k).2⟩
 
 @[simp] theorem visited_nil (c : TM.Cfg κ Γ Q xs) :
-    (nil (Action := TM.Action κ Γ Q) c).visited =
+    (nil c).visited =
       fun k ↦ NonemptyInterval.pure (c.workPos k) := by
   simp [visited]
 
@@ -97,7 +97,7 @@ def space [Fintype κ] (h : History (TM.Cfg κ Γ Q xs) (TM.Action κ Γ Q)) : �
   ∑ k, ((h.visited k).snd + 1 - (h.visited k).fst).toNat
 
 @[simp] theorem space_nil [Fintype κ] (c : TM.Cfg κ Γ Q xs) :
-    (nil (Action := TM.Action κ Γ Q) c).space = Fintype.card κ := by
+    (nil c).space = Fintype.card κ := by
   simp [space, NonemptyInterval.pure]
 
 theorem space_le_of_visited_le [Fintype κ]
@@ -147,7 +147,7 @@ def mapState {Q' : Type*} (f : Q → Q')
   h.map (TM.Cfg.mapState f) (TM.Action.mapState f)
 
 @[simp] theorem mapState_nil {Q' : Type*} (f : Q → Q') (c : TM.Cfg κ Γ Q xs) :
-    (nil (Action := TM.Action κ Γ Q) c).mapState f = nil (c.mapState f) := rfl
+    (nil c).mapState f = nil (c.mapState f) := rfl
 
 @[simp] theorem mapState_id (h : History (TM.Cfg κ Γ Q xs) (TM.Action κ Γ Q)) :
     h.mapState id = h := h.map_id

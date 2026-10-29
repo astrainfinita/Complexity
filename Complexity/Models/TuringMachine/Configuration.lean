@@ -97,7 +97,7 @@ instance : Controller.Apply (Cfg κ Γ Q xs) (Action κ Γ Q) where
 theorem Action.getElem_workTapes_apply (a : Action κ Γ Q)
     (c : Cfg κ Γ Q xs) (i : κ) (j : ℤ) :
     ((apply a c).workTapes i)[j] =
-      if c.workPos i = j then (a.work i).1.getD ((c.workTapes i)[j])
+      if c.workPos i = j then (a.work i).1.getD (c.workTapes i)[j]
       else (c.workTapes i)[j] := by
   cases h : (a.work i).1 <;> simp [h, IntMemory.getElem_set]
 

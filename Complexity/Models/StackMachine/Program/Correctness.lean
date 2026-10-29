@@ -125,7 +125,7 @@ theorem computesWithin [Fintype κ] (p : StackMachine.Program κ Γ α)
       (fun _ c _ ↦ c.output = ys.toArray) ()) :
     (compile p).ComputesWithin xs ys t (Fintype.card κ * t) := by
   apply computesWithin_history
-  have hh := spec_history (n := t) (r := 0) (P := fun _ c ↦ c.output = ys.toArray)
+  have hh := spec_history (r := 0)
     (by simpa using h) (S := Fintype.card κ * t) (by simp [Cfg.mass]) 0
   constructor
   rintro s b ⟨rfl, hb⟩

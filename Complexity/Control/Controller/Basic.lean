@@ -182,13 +182,13 @@ def step (c : Config) : Config :=
 /-- A deterministic step either stays halted or applies the selected action. -/
 theorem step_eq (c : Config) :
     M.step c = if M.halt (state c) then c
-      else apply ((M.transition (state c) (observe c)).run) c := rfl
+      else apply (M.transition (state c) (observe c)).run c := rfl
 
 @[simp] theorem step_of_halted (c : Config) (h : M.Halted c) : M.step c = c :=
   congrArg Id.run (M.stepWith_of_halted Id c h)
 
 theorem step_of_not_halted (c : Config) (h : ¬M.Halted c) :
-    M.step c = apply ((M.transition (state c) (observe c)).run) c :=
+    M.step c = apply (M.transition (state c) (observe c)).run c :=
   congrArg Id.run (M.stepWith_of_not_halted Id c h)
 
 /-- Execute a bounded number of deterministic transitions from a configuration. -/

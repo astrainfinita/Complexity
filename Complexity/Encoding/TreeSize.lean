@@ -41,13 +41,13 @@ theorem finite_size_encode_lt {α : Type*} [UniqueEncoding Tree α] (N : ℕ) :
 /-- Maximum resource on the finite fiber of one exact input size. Empty fibers cost zero. -/
 noncomputable def sizeEnvelope {α : Type*} [UniqueEncoding Tree α]
     (f : α → ℕ) (n : ℕ) : ℕ :=
-  ((finite_size_encode_lt (α := α) (n + 1)).subset
+  ((finite_size_encode_lt (n + 1)).subset
     (show {x | (encode Tree x).size = n} ⊆ {x | (encode Tree x).size < n + 1} from
       fun _ h => by simp only [Set.mem_ofPred_eq] at h ⊢; omega)).toFinset.sup f
 
 theorem le_sizeEnvelope {α : Type*} [UniqueEncoding Tree α] (f : α → ℕ) (x : α) :
     f x ≤ sizeEnvelope f (encode Tree x).size := by
-  apply Finset.le_sup (f := f)
+  apply Finset.le_sup
   simp
 
 theorem sizeEnvelope_le {α : Type*} [UniqueEncoding Tree α] (f : α → ℕ) (n k : ℕ)

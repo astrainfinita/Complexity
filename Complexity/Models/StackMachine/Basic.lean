@@ -28,7 +28,7 @@ variable {κ : Type uκ} {Γ : Type u} {Q : Type v}
 /-- All work stacks start empty; input and output are ordinary symbol lists. -/
 @[simps (attr := simp↓) init hasOutput]
 instance execution (xs : List Γ) :
-    Controller.Execution (Cfg κ Γ Q xs.toArray) Q (Output := List Γ) (input := xs) where
+    Controller.Execution (Cfg κ Γ Q xs.toArray) Q (List Γ) xs where
   init q :=
     { state := q
       inputPos := ⟨1, by omega⟩

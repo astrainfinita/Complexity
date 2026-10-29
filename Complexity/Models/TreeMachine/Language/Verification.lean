@@ -101,8 +101,7 @@ namespace Exec
 theorem whileNode_false (v : Var) (body : Code Unit) (h : (v.get s).root = false) :
     (whileNode v body).Exec n s () (body.build n).2.1 s := by
   refine ⟨rfl, ?_⟩
-  simpa using (Cmd.Exec.while_false (e := Expr.var v.index)
-    (p := block (body.build n).2.2) h : _)
+  simpa using (Cmd.Exec.while_false (e := Expr.var v.index) h : _)
 
 theorem whileNode_true (v : Var) (body : Code Unit) (h : (v.get s).root = true)
     (hb : body.Exec n s () m u) (hr : (whileNode v body).Exec n u () m t) :

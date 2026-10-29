@@ -47,7 +47,7 @@ theorem cfg_spec_readInput [FinEnum Γ] (xs : Array Γ) (s : Cfg κ Γ Unit xs)
     Triple (readInput.verify (cfgSemantics xs)) (fun t c ↦ t = s ∧ c = b)
       (fun r t c ↦ r = s.inputSymbol ∧ t = s ∧ c = b - 1) x := by
   simpa [readInput, eval] using
-    Program.spec_perform (Op.readInput (κ := κ) (Γ := Γ) inferInstance)
+    Program.spec_perform (Op.readInput inferInstance)
       (cfgSemantics xs) s b h x
 
 /-- Reading a work symbol preserves the tape configuration. -/
@@ -57,7 +57,7 @@ theorem cfg_spec_read [FinEnum Γ] (i : κ) (xs : Array Γ) (s : Cfg κ Γ Unit 
     Triple ((read i).verify (cfgSemantics xs)) (fun t c ↦ t = s ∧ c = b)
       (fun r t c ↦ r = s.workSymbols i ∧ t = s ∧ c = b - 1) x := by
   simpa [read, eval] using
-    Program.spec_perform (Op.read (Γ := Γ) inferInstance i) (cfgSemantics xs) s b h x
+    Program.spec_perform (Op.read inferInstance i) (cfgSemantics xs) s b h x
 
 /-- A total loop rule on configurations; the dispatcher consumes one time credit. -/
 @[spec]

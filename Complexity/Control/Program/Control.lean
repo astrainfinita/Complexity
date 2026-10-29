@@ -47,7 +47,7 @@ theorem Run.link {c : Control O A Q E} {d : Control O A Q' E'}
   induction h with
   | done e s => simpa using he e rfl
   | step q s h ih =>
-      have hh := Run.step (c := d) (out := out') (observe := observe) (act := act) (f q) s
+      have hh := Run.step (c := d) (f q) s
         (by simpa only [hn, Prod.fst, Prod.snd] using ih he)
       simpa only [Sum.elim_inl, Nat.add_right_comm] using hh
 
@@ -63,10 +63,10 @@ theorem Run.relabel {c : Control O A Q E} {d : Control O A Q' E'}
   have hh := h.link f (Sum.inr ∘ g) (by
     intro q o
     rw [hn]
-    cases (c.next q o).2 <;> rfl) (m := 0) (u := t) (b := a) (by
+    cases (c.next q o).2 <;> rfl) (by
       intro e ha
       simpa only [Function.comp_apply, he, ha] using
-        (Run.done (c := d) (out := out') (observe := observe) (act := act) (g e) t))
+        Run.done (out := out') (g e) t)
   cases q <;> simpa only [Sum.map_inl, Sum.map_inr, Sum.elim_inl, Sum.elim_inr,
     Function.comp_apply, Nat.add_zero] using hh
 
@@ -76,7 +76,7 @@ theorem Run.congr_next {c d : Control O A Q E}
     {q : Q ⊕ E} {s t : S} {n : ℕ} {a : α}
     (h : Run c out observe act q s n a t) (hn : c.next = d.next) :
     Run d out observe act q s n a t := by
-  simpa only [Sum.map_id_id, id_eq] using h.relabel (d := d) id id
+  simpa only [Sum.map_id_id, id_eq] using h.relabel id id
     (by intro q o; rw [← hn]; simp only [id_eq, Sum.map_id_id]) (fun _ ↦ rfl)
 
 variable {T : Type} {c : Control O A Q E} {out : E → α}

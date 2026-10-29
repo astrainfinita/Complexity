@@ -144,7 +144,6 @@ theorem run_bounded (D : CaseTree k) {w : Value} {h : Fin k → Value → Code V
       intro r u ⟨hr, hu⟩
       exact ⟨hr ▸ hY, by simp [hr], fun j hj => by simp [Nat.ne_of_lt hj, hu j (by omega)]⟩
     have := Code.Bounded.branch (w.expression.subtree path) (yes.run w h) (no.run w h)
-      (n := n) (s := s) (time := time + max yes.cost no.cost) (space := space)
       (fun r u => r.eval u = Y ∧ ∀ j < n, u j = s j) (by cases w <;> simpa using hsize)
       (fun hr => branch
         (by simp only [Expr.eval_subtree, Value.eval_expression] at hr; simp [select, hr])

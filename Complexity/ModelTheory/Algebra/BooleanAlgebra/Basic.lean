@@ -190,7 +190,7 @@ instance : CompatibleBooleanAlgebra Bool :=
 /-- Language isomorphisms between Boolean algebras are exactly order isomorphisms. -/
 def languageEquivEquivOrderIso {B C : Type*} [BooleanAlgebra B] [BooleanAlgebra C]
     [CompatibleBooleanAlgebra B] [CompatibleBooleanAlgebra C] :
-    (Language.booleanAlgebra.Equiv B C) ≃ (B ≃o C) where
+    Language.booleanAlgebra.Equiv B C ≃ (B ≃o C) where
   toFun f :=
     { f.toEquiv with
       map_rel_iff' := by

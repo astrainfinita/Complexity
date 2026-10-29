@@ -33,7 +33,7 @@ variable {F : Type u → Type*} {k : ℕ} {Q : Type u}
 
 /-- Initialize register zero and read the result from the same register. -/
 instance [NeZero k] (a : Tree) :
-    Controller.Execution (Cfg k Q) Q (Output := Tree) (input := a) where
+    Controller.Execution (Cfg k Q) Q Tree a where
   init q := ⟨q, input 0 a⟩
   state_init _ := rfl
   HasOutput cfg b := cfg.regs 0 = b
@@ -44,7 +44,7 @@ instance [NeZero k] (a : Tree) :
 
 /-- The deterministic step equation in terms of register roots and actions. -/
 theorem step_eq (M : TreeMachine Id k Q) (c : Cfg k Q) :
-    M.step c = if M.halt c.state then c else apply ((M.transition c.state (observe c)).run) c := rfl
+    M.step c = if M.halt c.state then c else apply (M.transition c.state (observe c)).run c := rfl
 
 end TreeMachine
 end Complexity

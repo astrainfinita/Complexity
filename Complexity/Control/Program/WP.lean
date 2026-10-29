@@ -160,7 +160,7 @@ theorem spec_mapResult (f : α → β) {p : Program O A Op Ret α}
   constructor
   intro s b hs
   obtain ⟨n, a, t, hn, he, hq⟩ := h.le_wp s b hs
-  exact ⟨n, f a, t, hn, (by apply he.mapResult), hq⟩
+  exact ⟨n, f a, t, hn, by apply he.mapResult, hq⟩
 
 /-- A primitive performs one local action and consumes one unit of budget. -/
 @[spec]
@@ -177,7 +177,7 @@ theorem spec_perform (o : Op) (e : Semantics O A Op Ret S)
 @[spec]
 theorem spec_step_pure (o : Op) (e : Semantics O A Op Ret S)
     (s : S) (b : ℕ) (h : 0 < b) (x : Unit) :
-    Triple ((step o (Pure.pure (f := Program O A Op Ret))).verify e)
+    Triple ((step o Pure.pure).verify e)
       (fun t c ↦ t = s ∧ c = b)
       (fun a t c ↦ a = (e.eval o (e.observe s)).2 ∧
         t = e.act (e.eval o (e.observe s)).1 s ∧ c = b - 1) x :=
@@ -202,13 +202,12 @@ theorem spec_callControl {c d : ℕ} (b : Control O A (Fin c) (Fin d))
 theorem spec_callControl_pure {c d : ℕ} (b : Control O A (Fin c) (Fin d))
     (e : Semantics O A Op Ret S) (s t : S) (m z : ℕ) (j : Fin d)
     (hr : Control.Run b id e.observe e.act b.start s m j t) (hz : m ≤ z) (x : Unit) :
-    Triple ((callControl b (Pure.pure (f := Program O A Op Ret))).verify e)
+    Triple ((callControl b Pure.pure).verify e)
       (fun u q ↦ u = s ∧ q = z)
       (fun i u q ↦ i = j ∧ u = t ∧ q = z - m) x := by
   constructor
   rintro u q ⟨rfl, rfl⟩
   refine ⟨m, j, t, hz, ?_, rfl, rfl, rfl⟩
-  exact Syntax.Exec.call (e := e) b (fun i ↦ Program.pure i) hr
-    (Syntax.Exec.ret (v := .value) j t)
+  exact Syntax.Exec.call b (fun i ↦ Program.pure i) hr (Syntax.Exec.ret (v := .value) j t)
 
 end Complexity.Program

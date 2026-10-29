@@ -65,9 +65,9 @@ theorem exists_boolean_outputs_iff {C : Type*} (cs : Multiset C) (output : C →
       ((∃ c ∈ cs, output c = (⌜true⌝₂.toList.map some).toArray) ↔ p) := by
   have hinj : Function.Injective (fun y : RawWord Bool ↦ (y.toList.map some).toArray) :=
     fun _ _ h ↦ RawWord.ext <| (List.map_injective_iff.2 (Option.some_injective _)) (Array.mk.inj h)
-  rw [← Multiset.forall_mem_map_iff (f := output) (p := fun z =>
+  rw [← Multiset.forall_mem_map_iff (p := fun z =>
     ∃ b : Bool, z = (⌜b⌝₂.toList.map some).toArray)]
-  simp_rw [← Multiset.mem_map (f := output), UniqueEncoding.dom_decode_iff,
+  simp_rw [← Multiset.mem_map, UniqueEncoding.dom_decode_iff,
     UniqueEncoding.mem_decode_iff]
   constructor
   · rintro ⟨ys, he, hv, ha⟩
@@ -79,7 +79,7 @@ theorem exists_boolean_outputs_iff {C : Type*} (cs : Multiset C) (output : C →
         (fun y => (y.toList.map some).toArray)
         (fun z => ∃ b : Bool, z = (⌜b⌝₂.toList.map some).toArray) :=
       ⟨fun _ ⟨b, h⟩ => ⟨⌜b⌝₂, h.symm⟩⟩
-    obtain ⟨ys, he⟩ := CanLift.prf (β := Multiset (RawWord Bool)) (x := cs.map output) hv
+    obtain ⟨ys, he⟩ := CanLift.prf (β := Multiset (RawWord Bool)) (cs.map output) hv
     refine ⟨ys, he, ?_⟩
     rw [← he] at hv ha
     simpa only [Multiset.forall_mem_map_iff, hinj.eq_iff,

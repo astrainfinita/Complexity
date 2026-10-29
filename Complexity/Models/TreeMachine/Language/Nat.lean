@@ -66,7 +66,7 @@ private theorem succLoop_bounded (n : ℕ) (s : ℕ → Tree) (bs : List Bool)
       (encode Tree r).size + (encode Tree a).size ≤ (encode Tree bs).size + 1 ∧
       a.length + r.length = bs.length ∧ ∀ j < n, t j = s j
   have hI : I s := ⟨bs, [], hr, ha, ht, by simp, by simp, by simp, fun _ _ ↦ rfl⟩
-  have hloop := Bounded.whileNode (n := n + 5) (space := (encode Tree bs).size + 1)
+  have hloop := Bounded.whileNode (space := (encode Tree bs).size + 1)
     ⟨n + 4⟩ (succStep ⟨n⟩ ⟨n + 1⟩ ⟨n + 4⟩) I
     (fun t ↦ (t n).listLength) 13 hI
     (by
@@ -132,7 +132,7 @@ theorem succ_bits_bounded (xs : Value) (n : ℕ) (s : ℕ → Tree) (bs : List B
   all_goals try (simp [hr, ha] at * <;> omega)
   refine (List.Code.reverseAppend_bounded _ _ _ _ ?_).mono ?_ ?_ ?_
   · simp [Expr.bound]
-  · simpa [ha] using (show a.length ≤ bs.length by omega)
+  · simpa [ha] using show a.length ≤ bs.length by omega
   · simp [hr, ha] at *
     omega
   · intro v w ⟨hw, hframe⟩

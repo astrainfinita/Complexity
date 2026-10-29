@@ -73,7 +73,7 @@ theorem spec_readInput [FinEnum Γ] (xs : Array Γ)
     Triple (readInput.verify (semantics xs)) (fun t c => t = s ∧ c = b)
       (fun r t c => r = s.last.inputSymbol ∧ t = s.snoc idle ∧ c = b - 1) x := by
   simpa [readInput, eval] using
-    Program.spec_perform (Op.readInput (κ := κ) (Γ := Γ) inferInstance)
+    Program.spec_perform (Op.readInput inferInstance)
       (semantics xs) s b h x
 
 /-- Reading a work symbol preserves the tape configuration and consumes one transition. -/
@@ -84,7 +84,7 @@ theorem spec_read [FinEnum Γ] (i : κ) (xs : Array Γ)
     Triple ((read i).verify (semantics xs)) (fun t c => t = s ∧ c = b)
       (fun r t c => r = s.last.workSymbols i ∧ t = s.snoc idle ∧ c = b - 1) x := by
   simpa [read, eval] using
-    Program.spec_perform (Op.read (Γ := Γ) inferInstance i)
+    Program.spec_perform (Op.read inferInstance i)
       (semantics xs) s b h x
 
 /-- The state used to verify a complete program on an input. -/

@@ -40,7 +40,7 @@ theorem step_compile (p : TM.Program κ Γ α) (q : p.State)
 /-- Compilation preserves the final configuration and visited intervals. -/
 theorem run_compile {p : TM.Program κ Γ α} {q : p.State ⊕ p.Exit}
     {s t : History (Cfg κ Γ Unit xs) (Action κ Γ Unit)} {n : ℕ} {a : α}
-    (h : Program.Control.Run (p.toControl eval) p.result observe (apply) q s n a t)
+    (h : Program.Control.Run (p.toControl eval) p.result observe apply q s n a t)
     (u : History (Cfg κ Γ (p.State ⊕ p.Exit) xs) (Action κ Γ (p.State ⊕ p.Exit)))
     (hc : u.last = s.last.mapState (fun _ ↦ q)) (hv : u.visited = s.visited) :
     ∃ e : p.Exit, p.result e = a ∧

@@ -130,7 +130,7 @@ list (`encode_vector`). The search computes a table through them, by these equat
 rules; the vector of a stored table is the table. -/
 
 theorem _root_.Vector.ofFn_fin_snoc {α : Type*} {n : ℕ} (f : Fin n → α) (a : α) :
-    Vector.ofFn (Fin.snoc (α := fun _ => α) f a) = (Vector.ofFn f).push a := by
+    Vector.ofFn (Fin.snoc f a) = (Vector.ofFn f).push a := by
   rw [Vector.ofFn_succ]
   simp [Fin.snoc]
 
@@ -321,7 +321,7 @@ theorem _root_.List.hasProgram_length {α : Type*} [UniqueEncoding Tree α] :
   obtain ⟨-, hpeak⟩ := Dominated.max_iff.mp hpeak
   fill_hole program in
     refine (HasProgram.of_encode (by simp) (hasProgram_lengthInitial.comp
-      ((hasProgram_lengthStep (α := α)).foldl (f := fun n (_ : α) => n + 1)))).mono ?_ ?_
+      (hasProgram_lengthStep.foldl (f := fun n (_ : α) => n + 1)))).mono ?_ ?_
   all_goals dominated
 
 attribute [scoped fun_prop] List.hasProgram_length
@@ -344,9 +344,9 @@ theorem HasProgram.fin_function {ρ : Type*} {β : ρ → Type*}
   have he := HasProgram.of_encode heq
     (HasProgram.identity.pair (hn.comp List.hasProgram_range))
   fill_hole program in
-    refine (HasProgram.of_encode (g := fun e => (List.finRange (n e)).map (f e))
+    refine (HasProgram.of_encode
       (fun e => by rw [encode_vector, Vector.toList_ofFn, List.ofFn_eq_map])
-      (he.map_dependent_with (f := f) hf)).mono ?_ ?_
+      (he.map_dependent_with hf)).mono ?_ ?_
   · apply Dominated.of_le
     intro e
     simp only [Nat.zero_add, List.length_finRange]
@@ -388,9 +388,7 @@ theorem hasProgram_finComp :
   fill_hole program in
     -- The entry encodings are a family over the environment, which the callback states only at
     -- `z.1`; unification cannot recover the family from there.
-    refine (HasProgram.fin_function (β := fun x : FinCompInput => Fin x.2.2.1)
-      (instβ := fun _ => inferInstance) (n := fun x => x.1) (f := fun x => x.2.2.2.2 ∘ x.2.2.2.1)
-      Sigma.hasProgram_fst hasProgram_finCompStep).mono ?_ ?_
+    refine (HasProgram.fin_function Sigma.hasProgram_fst hasProgram_finCompStep).mono ?_ ?_
   all_goals dominated
 
 /-- Reuse the existing table-composition backend while retaining the caller's program. -/

@@ -41,7 +41,7 @@ def loadedCfg (i : Fin k) (x : Complexity.Tree) :
   output := #[]
 
 private theorem loaded_boot (i : Fin k) (x : Complexity.Tree) :
-    let c := apply (boot i) ((StackMachine.execution (κ := Work k) (BitList.encodeTree x)).init ())
+    let c := apply (boot i) ((StackMachine.execution (BitList.encodeTree x)).init ())
     { c.setStack (data i) (BitList.encodeTree x ++ c.stacks (data i)) with
       inputPos := ⟨(BitList.encodeTree x).length + 1, by simp⟩ } = loadedCfg i x := by
   ext j <;> try rfl
@@ -52,7 +52,7 @@ private theorem loaded_boot (i : Fin k) (x : Complexity.Tree) :
 
 @[spec] theorem spec_init (i : Fin k) (x : Complexity.Tree) (q : ℕ) :
     Triple ((init i).verify (semantics (BitList.encodeTree x).toArray))
-      (fun s t ↦ s = (StackMachine.execution (κ := Work k) (BitList.encodeTree x)).init () ∧
+      (fun s t ↦ s = (StackMachine.execution (BitList.encodeTree x)).init () ∧
         (6 * x.size + 5) + q ≤ t)
       (fun _ s t ↦ s = loadedCfg i x ∧ q ≤ t) () := by
   let c := apply (boot i) ((StackMachine.execution (κ := Work k) (BitList.encodeTree x)).init ())

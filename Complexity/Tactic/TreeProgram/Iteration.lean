@@ -130,7 +130,7 @@ theorem Dominated.iterate_of_potential {ρ : Type*} {t p : α → ℕ}
   obtain ⟨C, hC⟩ := hround
   obtain ⟨D, hD⟩ := hsize
   obtain ⟨P, hP⟩ := hp
-  have bound (x : ρ) := iterate_le_of_invariant (f := f) (t := t) (p := p) (I x)
+  have bound (x : ρ) := iterate_le_of_invariant (p := p) (I x)
     (fun n a => C * remaining x n a) ((D + P) * peak x) (count x) (initial x) (start x)
     (fun n a ha => by
       have ht := hC ⟨(x, n, a), ha⟩
@@ -229,8 +229,8 @@ theorem HasProgram.iteration_step {α : Type*} [UniqueEncoding Tree α] {f : α 
   have := Nat.hasProgram_pred.size_encode.comp (Prod.fst : ℕ × α → ℕ)
   have := hf.size_encode.comp (Prod.snd : ℕ × α → α)
   fill_hole program in
-    refine (((Prod.hasProgram_fst (α := ℕ) (β := α)).comp Nat.hasProgram_pred).pair
-      ((Prod.hasProgram_snd (α := ℕ) (β := α)).comp hf)).mono ?_ ?_
+    refine ((Prod.hasProgram_fst.comp Nat.hasProgram_pred).pair
+      (Prod.hasProgram_snd.comp hf)).mono ?_ ?_
   all_goals dominated
 
 /-- Compile one callback for every count as a tail loop over the counter and the state. -/
@@ -245,9 +245,8 @@ theorem HasProgram.iterate {α : Type*} [UniqueEncoding Tree α] {f : α → α}
     rw [hy]
     exact size_le_iteratePeak p _ hk
   fill_hole program in
-    refine (HasProgram.tail_loop_potential (result := fun x : ℕ × α => f^[x.1] x.2)
-      Iteration.hasProgram_continues hf.iteration_step
-      (Prod.hasProgram_snd (α := ℕ) (β := α)) I (fun _ y => iterateTime f t y.1 y.2)
+    refine (HasProgram.tail_loop_potential Iteration.hasProgram_continues hf.iteration_step
+      Prod.hasProgram_snd I (fun _ y => iterateTime f t y.1 y.2)
       (fun _ => 1) (fun x => iteratePeak f p x.1 x.2) ?_ ?_ ?_ (Dominated.of_le size)
       (Dominated.of_le size) ?_ (Dominated.of_le fun z => size ⟨z.1, z.2.1⟩)
       (Dominated.of_le_mul 2 fun _ => le_rfl) ?_).mono (Dominated.of_le_mul 3 fun x => by omega)
@@ -295,13 +294,12 @@ theorem HasProgram.iterate_with {ρ α : Type*} [UniqueEncoding Tree ρ] [Unique
   have hout := hs.size_encode
   have carry : HasProgram (fun x : ρ × α => (x.1, f x.1 x.2)) _ (fun x => ts x + 1)
       (fun x => max ⌜x⌝ₜ.size (ps x)) :=
-    ((Prod.hasProgram_fst (α := ρ) (β := α)).pair hs).mono (by dominated) (by dominated)
+    (Prod.hasProgram_fst.pair hs).mono (by dominated) (by dominated)
   have hiter (n : ℕ) (e : ρ) (a : α) :
       (fun x : ρ × α => (x.1, f x.1 x.2))^[n] (e, a) = (e, (f e)^[n] a) :=
     (Function.Semiconj.iterate_right (f := fun a => (e, a)) (fun _ => rfl) n a).symm
   fill_hole program in
-    refine ((hi.comp (carry.iterate.comp (Prod.hasProgram_snd (α := ρ) (β := α)))).congr ?_).mono
-      ?_ ?_
+    refine ((hi.comp (carry.iterate.comp Prod.hasProgram_snd)).congr ?_).mono ?_ ?_
   · funext e
     simp only [Function.comp_apply, hiter]
   · apply Dominated.of_le_mul 2

@@ -49,7 +49,7 @@ private def identity : TreeMachine Id 1 Unit where
 
 /-- Leaving the input register unchanged computes the identity at zero time cost. -/
 theorem fp_id : (id : α → α) ∈ FP .sizeCostTree := by
-  apply FP.of_time_le (t := fun _ => 0) (c := 0) (d := 0) _ (by simp)
+  apply FP.of_time_le (t := fun _ => 0) _ 0 0 (by simp)
   refine ⟨fun _ => 0, ⟨fun n => n, _,
     ⟨1, inferInstance, Unit, inferInstance, identity, rfl⟩, ?_⟩, DominatedAtTop.refl _⟩
   intro x a hx

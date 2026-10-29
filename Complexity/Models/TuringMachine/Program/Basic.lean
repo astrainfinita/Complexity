@@ -96,11 +96,11 @@ def act (a : Action κ Γ Unit) : TM.Program κ Γ Unit :=
 
 /-- Read the current input symbol in one transition. -/
 def readInput [FinEnum Γ] : TM.Program κ Γ Γ :=
-  Program.perform (Op.readInput (κ := κ) (Γ := Γ) inferInstance)
+  Program.perform (Op.readInput inferInstance)
 
 /-- Read the symbol under one work head in one transition. -/
 def read [FinEnum Γ] (i : κ) : TM.Program κ Γ Γ :=
-  Program.perform (Op.read (Γ := Γ) inferInstance i)
+  Program.perform (Op.read inferInstance i)
 
 /-- Observe a finite collection of Boolean tests in one transition. -/
 def observeBits {n : ℕ} (f : (Γ × (κ → Γ)) → Fin n → Bool) :

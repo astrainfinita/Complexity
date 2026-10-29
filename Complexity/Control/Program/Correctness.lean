@@ -64,7 +64,7 @@ private theorem run_loop_body {n r : ℕ} (a : A) (i : Fin n)
     Control.Run (toControl e.eval (.loop a i b k)) (Syntax.loop a i b k).result e.observe e.act
       (loopLabel a i b k (fun j ↦ (toControl e.eval (k j)).start) j q) s (m + l) x z := by
   have hh := h.link (d := toControl e.eval (.loop a i b k))
-    (out' := (Syntax.loop a i b k).result) (fun q ↦ Sum.inr (.inl ⟨j, q⟩))
+    (fun q ↦ Sum.inr (.inl ⟨j, q⟩))
     (fun q ↦ loopRoute a i b k (fun j ↦ (toControl e.eval (k j)).start) ((b j).result q))
     (by
       intro q o
@@ -100,7 +100,7 @@ private theorem run_call_block {c d : ℕ} (b : Control O A (Fin c) (Fin d))
     Control.Run (toControl e.eval (.call b k)) (Syntax.call b k).result e.observe e.act
       (callLabel b k (fun j ↦ (toControl e.eval (k j)).start) q) s (m + l) x z := by
   have hh := h.link (d := toControl e.eval (.call b k))
-    (out' := (Syntax.call b k).result) Sum.inl
+    Sum.inl
     (fun j ↦ callCont b k j (toControl e.eval (k j)).start)
     (by
       intro q v

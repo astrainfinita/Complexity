@@ -121,9 +121,9 @@ theorem mem_ftisp_pow {t s : ℕ}
     (hf : HasProgram f program (fun x => ⌜x⌝ₜ.size ^ t) (fun x => ⌜x⌝ₜ.size ^ s))
     (hs : 0 < s) : f ∈ FTISP .tree (fun n => n ^ t) (fun n => n ^ s) := by
   apply hf.mem_ftisp
-  · exact (Dominated.of_le fun x => Nat.le_self_pow (by omega) _)
-  · exact (Dominated.const_of_pos 4 (fun x => Nat.pow_pos (Tree.size_pos ⌜x⌝ₜ)))
-  · exact (Dominated.const_of_pos 2 (fun x => Nat.pow_pos (Tree.size_pos ⌜x⌝ₜ)))
+  · exact Dominated.of_le fun x => Nat.le_self_pow (by omega) _
+  · exact Dominated.const_of_pos 4 (fun x => Nat.pow_pos (Tree.size_pos ⌜x⌝ₜ))
+  · exact Dominated.const_of_pos 2 (fun x => Nat.pow_pos (Tree.size_pos ⌜x⌝ₜ))
 
 end TreeProgram.Source.HasProgram
 

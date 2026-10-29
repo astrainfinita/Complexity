@@ -35,13 +35,13 @@ theorem verify_move [DecidableEq κ] (i : κ) (d : SignType) :
 /-- Expose an input-head move as its one local action. -/
 @[spec]
 theorem verify_moveInput (d : SignType) :
-    (moveInput (κ := κ) d).verify e =
-      (act { idle (κ := κ) with inputMove := d }).verify e := rfl
+    (moveInput d).verify e =
+      (act { idle with inputMove := d }).verify e := rfl
 
 /-- Expose output as the local action which appends its symbol. -/
 @[spec]
 theorem verify_emit (a : Γ) :
-    (emit (κ := κ) a).verify e =
-      (act { idle (κ := κ) with output := some a }).verify e := rfl
+    (emit a).verify e =
+      (act { idle with output := some a }).verify e := rfl
 
 end Complexity.TM.Program

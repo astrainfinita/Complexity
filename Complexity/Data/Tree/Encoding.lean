@@ -134,7 +134,7 @@ theorem encodeTree_append_eq_iff {a b : Tree} {xs ys : List Bool} :
 @[simp] theorem encodeTree_prefix_iff {a b : Tree} : encodeTree a <+: encodeTree b ↔ a = b := by
   constructor
   · rintro ⟨xs, h⟩
-    exact (encodeTree_append_eq_iff (xs := xs) (ys := []).mp (by simpa using h)).1
+    exact (encodeTree_append_eq_iff (ys := []).mp (by simpa using h)).1
   · rintro rfl
     exact List.prefix_rfl
 

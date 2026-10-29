@@ -275,7 +275,7 @@ theorem foldl_budget_bounded {α β : Type*} {space : ℕ}
   let J (t : ℕ → Tree) (k : ℕ) := ∃ as b,
     t (n + 1) = ⌜as⌝ₜ ∧ t n = ⌜b⌝ₜ ∧ I as b ∧
       as.foldl f b = xs.foldl f a ∧ (∀ j < n, t j = s j) ∧ k = budget as b + 2
-  have hl := Bounded.whileNode_budget (n := n + 2) (s := u) (space := space) ⟨n + 1⟩
+  have hl := Bounded.whileNode_budget (s := u) ⟨n + 1⟩
     (do
       let r ← read ⟨n + 1⟩
       let x ← r.left
@@ -283,7 +283,7 @@ theorem foldl_budget_bounded {α β : Type*} {space : ℕ}
       write ⟨n⟩ (← p a x)
       write ⟨n + 1⟩ (← r.right)) J (budget xs a + 2)
     ⟨xs, a, by simp [u], by simp [u], hI, rfl,
-      (by intros; simp (disch := omega) [u]), rfl⟩
+      by intros; simp (disch := omega) [u], rfl⟩
     (by rintro t k ⟨as, b, hr, _, hi, _⟩; simpa [Var.get, hr] using (hsize as b hi).1)
     (by rintro t k ⟨as, b, _, _, _, _, _, rfl⟩ _; omega)
     (by
@@ -411,8 +411,8 @@ theorem HasProgram.foldl {α β : Type*} [UniqueEncoding Tree α] [UniqueEncodin
       (fun x => foldlTime f t x.1 x.2 + x.2.length + 1)
       (fun x => max ⌜x⌝ₜ.size (foldlPeak f p x.1 x.2)) := by
   obtain ⟨b, h, hbt, hbp⟩ := hf.sound
-  exact ⟨_, h.foldl, ((hbt.foldlTime (f := f)).add
+  exact ⟨_, h.foldl, (hbt.foldlTime.add
     ((Dominated.refl _).const_mul_left 13)).add (Dominated.const 10),
-    (Dominated.refl _).max (hbp.foldlPeak (f := f))⟩
+    (Dominated.refl _).max hbp.foldlPeak⟩
 
 end Complexity.TreeProgram.Source

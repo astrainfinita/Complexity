@@ -55,16 +55,16 @@ instance (priority := 1100) Sum.instFinEnumDirect {α β : Type*}
 instance (priority := 1100) Sigma.instFinEnumDirect {α : Type*} {β : α → Type*}
     [FinEnum α] [∀ a, FinEnum (β a)] : FinEnum (Sigma β) where
   card := ∑ i : Fin (FinEnum.card α), FinEnum.card (β (FinEnum.equiv.symm i))
-  equiv := (Equiv.sigmaCongrLeft' (FinEnum.equiv (α := α))).trans
-    ((Equiv.sigmaCongrRight (fun i ↦ (FinEnum.equiv (α := β (FinEnum.equiv.symm i))))).trans
+  equiv := (Equiv.sigmaCongrLeft' FinEnum.equiv).trans
+    ((Equiv.sigmaCongrRight (fun i ↦ FinEnum.equiv (α := β (FinEnum.equiv.symm i)))).trans
       finSigmaFinEquiv)
 
 /-- Number a finite dependent function by the mixed-radix representation of its coordinates. -/
 instance (priority := 1100) Pi.instFinEnumDirect {α : Type*} {β : α → Type*}
     [FinEnum α] [∀ a, FinEnum (β a)] : FinEnum ((a : α) → β a) where
   card := ∏ i : Fin (FinEnum.card α), FinEnum.card (β (FinEnum.equiv.symm i))
-  equiv := (Equiv.piCongrLeft' β (FinEnum.equiv (α := α))).trans
-    ((Equiv.piCongrRight (fun i ↦ (FinEnum.equiv (α := β (FinEnum.equiv.symm i))))).trans
+  equiv := (Equiv.piCongrLeft' β FinEnum.equiv).trans
+    ((Equiv.piCongrRight (fun i ↦ FinEnum.equiv (α := β (FinEnum.equiv.symm i)))).trans
       finPiFinEquiv)
 
 /-- Reuse coordinate numbering for an array-backed vector. -/

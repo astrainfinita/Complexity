@@ -197,7 +197,7 @@ the configuration. The dispatch also gives a continuing pure body a positive ite
 def loop {n r : ℕ} (dispatch : A) (body : Fin n → Program O A Op Ret (Fin n ⊕ Fin r))
     (i : Fin n) : Program O A Op Ret (Fin r) :=
   Syntax.loop dispatch i (fun j ↦ (body j).mapResult (Fin r) (.branch n r) id)
-    (fun j ↦ Syntax.ret (u := .value) j)
+    (fun j ↦ Syntax.ret j)
 
 /-- Call an external control graph and select a continuation by its numbered exit.
 

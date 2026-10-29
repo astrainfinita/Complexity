@@ -304,14 +304,14 @@ theorem Bounded.compile {p : Code Value} {x y : Tree} {time space : ℕ}
       (fun v s ↦ v.eval s = y)) (hx : x.size ≤ space) :
     p.compile.ComputesInUnitTimeAndSpace x y (time + 4) (p.registers * (space + 2)) := by
   obtain ⟨n, s, b, hr, hn, hb, ho⟩ := h
-  apply Procedure.Bounded.compile (Procedure.close_bounded (p := p.source) ?_)
+  apply Procedure.Bounded.compile (Procedure.close_bounded ?_)
   refine ⟨n, s, b, hr, ?_, ?_, hx, hb, ?_⟩
   · simpa only [source, Value.eval_expression] using ho
   · have ha := (p.build 1).1.assignSteps_le
     change 2 + (n + (p.build 1).1.expression.assignSteps) ≤ time + 4
     omega
   · have hpos := (Tree.size_pos x).trans_le hx
-    have hs := hr.size_le (space := space) (by
+    have hs := hr.size_le (by
       intro i
       by_cases hi : i = 0 <;> simp [hi] <;> omega) hb
     change (p.build 1).1.expression.maxSize s ≤ space

@@ -112,7 +112,7 @@ include hc hsc in
         rintro r s z ⟨rfl, rfl, rfl⟩
         cases fs' with
         | nil => simpa [forestCode, ← hp, List.append_assoc] using
-            (show b - 3 = q by simp [forestCode] at hb; omega)
+            show b - 3 = q by simp [forestCode] at hb; omega
         | cons t fs =>
           simp only [List.isEmpty_cons, Bool.false_eq_true, ↓reduceIte]
           refine ⟨t :: fs, p ++ [bit], by simp, rfl, ?_, ?_⟩

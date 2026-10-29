@@ -120,7 +120,7 @@ theorem implements {pc ps pd pr : Value → Code Value}
         have := (hstep x ht).2.2.1
         omega
   have path {x y stack} (hp : Path r x y stack) :=
-    r.path_bounds (b := b) (br := br)
+    r.path_bounds (br := br)
       (fun a ha => by simp only [pending, ha, ↓reduceDIte]; have := (hstep a ha).2.2.2; omega)
       (fun a ha => (hstep a ha).2.2.1) hp
   constructor
@@ -458,7 +458,7 @@ theorem hasProgram
     (hbr.of_encode fun _ => Tree.encode_self _)
     ⟨fun x => (r.cost bc bs bd br x).time, fun x => (r.cost bc bs bd br x).peak⟩
     ?_ ?_ ?_ ?_).of_encode fun _ => (Tree.encode_self _).symm,
-    ((hct.add (hcost.1.const_mul_left 3)).add (Dominated.const 10)),
+    (hct.add (hcost.1.const_mul_left 3)).add (Dominated.const 10),
     hcost.2.add (Dominated.refl _)⟩
   · intro x
     cases h : r.test x <;>
@@ -668,17 +668,13 @@ theorem dominated_cost_of_scale (bc bs : Bounds α) (bd : Bounds {x // r.test x 
     (dominated_pow_comp (fun z : Z => z.1.2) hsize fun z => z.2 :)
     (dominated_pow_comp (fun z : Z => z.1.2) hc.2 fun z => z.2 :)
     (dominated_pow_comp (fun z : Z => z.1.2) hs.2 fun z => z.2 :)
-    (dominated_pow_comp (S := S₀) (fun z : Stop => ⟨z.1.1.2, z.2⟩) hd.2
-      fun z => z.1.2 :)
-    (dominated_pow_comp (S := S₁) (fun z : Step => ⟨z.1.1.2, z.2⟩) hr.2
-      fun z => z.1.2 :)
-    (dominated_pow_comp (S := S₀) (fun z : Stop => ⟨z.1.1.2, z.2⟩) hd.1
-      fun z => z.1.2 :)
+    (dominated_pow_comp (fun z : Stop => ⟨z.1.1.2, z.2⟩) hd.2 fun z => z.1.2 :)
+    (dominated_pow_comp (fun z : Step => ⟨z.1.1.2, z.2⟩) hr.2 fun z => z.1.2 :)
+    (dominated_pow_comp (fun z : Stop => ⟨z.1.1.2, z.2⟩) hd.1 fun z => z.1.2 :)
     (dominated_pow_comp (fun z : Z => z.1.2) hs.1 fun z => z.2 :)
     (dominated_pow_comp (fun z : Step => r.next z.1.1.2) hc.1
       fun z => (hnext _ z.2).trans z.1.2 :)
-    (dominated_pow_comp (S := S₁) (fun z : Step => ⟨z.1.1.2, z.2⟩) hr.1
-      fun z => z.1.2 :)
+    (dominated_pow_comp (fun z : Step => ⟨z.1.1.2, z.2⟩) hr.1 fun z => z.1.2 :)
     (fun x => Nat.pow_pos (hS x)) (fun x => Nat.pow_pos (hS x))
 
 variable [instβ : ∀ x, UniqueEncoding Tree (β x)]
