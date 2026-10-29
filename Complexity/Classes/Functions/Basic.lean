@@ -43,52 +43,52 @@ end TimeSpaceModel
 
 /-- Functions computable in the given model in time `O(T(n))`.
 The unrestricted space budget is still uniform over codes of the same size. -/
-def FTIME (model : TimeSpaceModel Id Data) (T : ℕ → ℕ) : Set (α → β) :=
+def FDTIME (model : TimeSpaceModel Id Data) (T : ℕ → ℕ) : Set (α → β) :=
   {f | ∃ t, (∃ s, model.ComputableWithSizeBudgets f t s) ∧ DominatedAtTop t T}
 
 /-- Functions computable in the given model in space `O(S(n))`.
 The unrestricted time budget is still uniform over codes of the same size. -/
-def FSPACE (model : TimeSpaceModel Id Data) (S : ℕ → ℕ) : Set (α → β) :=
+def FDSPACE (model : TimeSpaceModel Id Data) (S : ℕ → ℕ) : Set (α → β) :=
   {f | ∃ s, (∃ t, model.ComputableWithSizeBudgets f t s) ∧ DominatedAtTop s S}
 
 /-- Functions computable by one behavior within both asymptotic bounds. -/
-def FTISP (model : TimeSpaceModel Id Data) (T S : ℕ → ℕ) : Set (α → β) :=
+def FDTISP (model : TimeSpaceModel Id Data) (T S : ℕ → ℕ) : Set (α → β) :=
   {f | ∃ t s, model.ComputableWithSizeBudgets f t s ∧
     DominatedAtTop t T ∧ DominatedAtTop s S}
 
 /-- Polynomial-time functions between the chosen encoded types. -/
 def FP (model : TimeSpaceModel Id Data) : Set (α → β) :=
-  ⋃ d : ℕ, FTIME model (fun n => n ^ d)
+  ⋃ d : ℕ, FDTIME model (fun n => n ^ d)
 
 variable {model : TimeSpaceModel Id Data} {f : α → β} {T S T' S' : ℕ → ℕ}
 
-theorem FTIME.mono (h : DominatedAtTop T T') :
-    FTIME (α := α) (β := β) model T ⊆ FTIME model T' := by
+theorem FDTIME.mono (h : DominatedAtTop T T') :
+    FDTIME (α := α) (β := β) model T ⊆ FDTIME model T' := by
   rintro f ⟨t, hf, ht⟩
   exact ⟨t, hf, ht.trans h⟩
 
-theorem FSPACE.mono (h : DominatedAtTop S S') :
-    FSPACE (α := α) (β := β) model S ⊆ FSPACE model S' := by
+theorem FDSPACE.mono (h : DominatedAtTop S S') :
+    FDSPACE (α := α) (β := β) model S ⊆ FDSPACE model S' := by
   rintro f ⟨s, hf, hs⟩
   exact ⟨s, hf, hs.trans h⟩
 
-theorem FTISP.mono (ht : DominatedAtTop T T') (hs : DominatedAtTop S S') :
-    FTISP (α := α) (β := β) model T S ⊆ FTISP model T' S' := by
+theorem FDTISP.mono (ht : DominatedAtTop T T') (hs : DominatedAtTop S S') :
+    FDTISP (α := α) (β := β) model T S ⊆ FDTISP model T' S' := by
   rintro f ⟨t, s, hf, ht₀, hs₀⟩
   exact ⟨t, s, hf, ht₀.trans ht, hs₀.trans hs⟩
 
-theorem FTISP.subset_time :
-    FTISP (α := α) (β := β) model T S ⊆ FTIME model T := by
+theorem FDTISP.subset_time :
+    FDTISP (α := α) (β := β) model T S ⊆ FDTIME model T := by
   rintro f ⟨t, s, hf, ht, _⟩
   exact ⟨t, ⟨s, hf⟩, ht⟩
 
-theorem FTISP.subset_space :
-    FTISP (α := α) (β := β) model T S ⊆ FSPACE model S := by
+theorem FDTISP.subset_space :
+    FDTISP (α := α) (β := β) model T S ⊆ FDSPACE model S := by
   rintro f ⟨t, s, hf, _, hs⟩
   exact ⟨s, ⟨t, hf⟩, hs⟩
 
-theorem FTISP.subset_inter :
-    FTISP (α := α) (β := β) model T S ⊆ FTIME model T ∩ FSPACE model S :=
+theorem FDTISP.subset_inter :
+    FDTISP (α := α) (β := β) model T S ⊆ FDTIME model T ∩ FDSPACE model S :=
   fun _ hf => ⟨subset_time hf, subset_space hf⟩
 
 namespace TimeSpaceModel
@@ -96,57 +96,57 @@ namespace TimeSpaceModel
 variable {t s : ℕ → ℕ}
 
 /-- Eventual comparisons only relax the budgets; the computation still handles every code. -/
-theorem ComputableWithSizeBudgets.mem_ftisp_of_dominated
+theorem ComputableWithSizeBudgets.mem_fdtisp_of_dominated
     (h : model.ComputableWithSizeBudgets f t s)
-    (ht : DominatedAtTop t T) (hs : DominatedAtTop s S) : f ∈ FTISP model T S :=
+    (ht : DominatedAtTop t T) (hs : DominatedAtTop s S) : f ∈ FDTISP model T S :=
   ⟨t, s, h, ht, hs⟩
 
-theorem ComputableWithSizeBudgets.mem_ftime_of_dominated
+theorem ComputableWithSizeBudgets.mem_fdtime_of_dominated
     (h : model.ComputableWithSizeBudgets f t s)
-    (ht : DominatedAtTop t T) : f ∈ FTIME model T :=
+    (ht : DominatedAtTop t T) : f ∈ FDTIME model T :=
   ⟨t, ⟨s, h⟩, ht⟩
 
-theorem ComputableWithSizeBudgets.mem_fspace_of_dominated
+theorem ComputableWithSizeBudgets.mem_fdspace_of_dominated
     (h : model.ComputableWithSizeBudgets f t s)
-    (hs : DominatedAtTop s S) : f ∈ FSPACE model S :=
+    (hs : DominatedAtTop s S) : f ∈ FDSPACE model S :=
   ⟨s, ⟨t, h⟩, hs⟩
 
 /-- Export the same behavior with both actual-code-size budgets. -/
-theorem ComputableWithSizeBudgets.mem_ftisp
-    (h : model.ComputableWithSizeBudgets f t s) : f ∈ FTISP model t s :=
-  h.mem_ftisp_of_dominated (DominatedAtTop.refl _) (DominatedAtTop.refl _)
+theorem ComputableWithSizeBudgets.mem_fdtisp
+    (h : model.ComputableWithSizeBudgets f t s) : f ∈ FDTISP model t s :=
+  h.mem_fdtisp_of_dominated (DominatedAtTop.refl _) (DominatedAtTop.refl _)
 
-theorem ComputableWithSizeBudgets.mem_ftime
-    (h : model.ComputableWithSizeBudgets f t s) : f ∈ FTIME model t :=
-  h.mem_ftime_of_dominated (DominatedAtTop.refl _)
+theorem ComputableWithSizeBudgets.mem_fdtime
+    (h : model.ComputableWithSizeBudgets f t s) : f ∈ FDTIME model t :=
+  h.mem_fdtime_of_dominated (DominatedAtTop.refl _)
 
-theorem ComputableWithSizeBudgets.mem_fspace
-    (h : model.ComputableWithSizeBudgets f t s) : f ∈ FSPACE model s :=
-  h.mem_fspace_of_dominated (DominatedAtTop.refl _)
+theorem ComputableWithSizeBudgets.mem_fdspace
+    (h : model.ComputableWithSizeBudgets f t s) : f ∈ FDSPACE model s :=
+  h.mem_fdspace_of_dominated (DominatedAtTop.refl _)
 
 end TimeSpaceModel
 
 namespace FP
 
-theorem mem_iff_exists_ftime :
-    f ∈ FP model ↔ ∃ d : ℕ, f ∈ FTIME model (fun n => n ^ d) :=
+theorem mem_iff_exists_fdtime :
+    f ∈ FP model ↔ ∃ d : ℕ, f ∈ FDTIME model (fun n => n ^ d) :=
   Set.mem_iUnion
 
 /-- Polynomial time admits a polynomial bound valid at every input size. -/
 theorem exists_polynomial_bound (h : f ∈ FP model) :
     ∃ (p : Polynomial ℕ) (s : ℕ → ℕ), model.ComputableWithSizeBudgets f p.eval s := by
-  obtain ⟨d, t, ⟨s, h⟩, ht⟩ := mem_iff_exists_ftime.mp h
+  obtain ⟨d, t, ⟨s, h⟩, ht⟩ := mem_iff_exists_fdtime.mp h
   obtain ⟨p, hp⟩ := ht.exists_polynomial_bound
   exact ⟨p, s, h.mono hp (fun _ => le_rfl)⟩
 
 /-- A pointwise comparison with a polynomial preserves polynomial time. -/
-theorem of_time_le {t : ℕ → ℕ} (h : f ∈ FTIME model t)
+theorem of_time_le {t : ℕ → ℕ} (h : f ∈ FDTIME model t)
     (c d : ℕ) (ht : ∀ n, t n ≤ c * (n + 1) ^ d) : f ∈ FP model :=
-  mem_iff_exists_ftime.mpr ⟨d, FTIME.mono (DominatedAtTop.of_le_mul_add_one_pow c d ht) h⟩
+  mem_iff_exists_fdtime.mpr ⟨d, FDTIME.mono (DominatedAtTop.of_le_mul_add_one_pow c d ht) h⟩
 
-theorem ftime_subset (d : ℕ) :
-    FTIME (α := α) (β := β) model (fun n => n ^ d) ⊆ FP model :=
-  fun _ hf => mem_iff_exists_ftime.mpr ⟨d, hf⟩
+theorem fdtime_subset (d : ℕ) :
+    FDTIME (α := α) (β := β) model (fun n => n ^ d) ⊆ FP model :=
+  fun _ hf => mem_iff_exists_fdtime.mpr ⟨d, hf⟩
 
 end FP
 
@@ -171,19 +171,19 @@ theorem ComputableWithin.iff_sizeBudgets :
     exact h a _ (by simp)
 
 /-- A size-indexed specialization of an all-input certificate reaches the complexity boundary. -/
-theorem ComputableWithin.mem_ftisp
+theorem ComputableWithin.mem_fdtisp
     (h : model.ComputableWithin f
       (fun a => T (model.inputSize (encode Data a)))
-      (fun a => S (model.inputSize (encode Data a)))) : f ∈ FTISP model T S :=
-  (ComputableWithin.iff_sizeBudgets.mp h).mem_ftisp
+      (fun a => S (model.inputSize (encode Data a)))) : f ∈ FDTISP model T S :=
+  (ComputableWithin.iff_sizeBudgets.mp h).mem_fdtisp
 
 /-- Export the same machine; an eventual class conclusion is never used as a call specification. -/
-theorem ComputableWithGrowth.mem_ftisp
+theorem ComputableWithGrowth.mem_fdtisp
     (h : model.ComputableWithGrowth f
       (fun a => T (model.inputSize (encode Data a)))
-      (fun a => S (model.inputSize (encode Data a)))) : f ∈ FTISP model T S := by
+      (fun a => S (model.inputSize (encode Data a)))) : f ∈ FDTISP model T S := by
   obtain ⟨t, s, h, ⟨C, ht⟩, ⟨D, hs⟩⟩ := h
-  exact FTISP.mono ((Dominated.refl T).const_mul_left C).atTop
-    ((Dominated.refl S).const_mul_left D).atTop (h.mono ht hs).mem_ftisp
+  exact FDTISP.mono ((Dominated.refl T).const_mul_left C).atTop
+    ((Dominated.refl S).const_mul_left D).atTop (h.mono ht hs).mem_fdtisp
 
 end Complexity.TimeSpaceModel

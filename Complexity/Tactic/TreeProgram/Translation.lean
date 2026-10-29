@@ -87,40 +87,40 @@ namespace TreeProgram.Source.HasProgram
 variable {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
   {f : α → β} {program : Value → Code Value} {t p : α → ℕ} {T S : ℕ → ℕ}
 
-theorem mem_ftisp (hf : HasProgram f program (fun x => T ⌜x⌝ₜ.size) (fun x => S ⌜x⌝ₜ.size))
+theorem mem_fdtisp (hf : HasProgram f program (fun x => T ⌜x⌝ₜ.size) (fun x => S ⌜x⌝ₜ.size))
     (input : Dominated (fun x : α => ⌜x⌝ₜ.size) (fun x => S ⌜x⌝ₜ.size))
     (time_overhead : Dominated (fun _ : α => 4) (fun x => T ⌜x⌝ₜ.size))
     (space_overhead : Dominated (fun _ : α => 2) (fun x => S ⌜x⌝ₜ.size)) :
-    f ∈ FTISP .tree T S :=
+    f ∈ FDTISP .tree T S :=
   (hf.computableWithGrowth_of_dominated
     ((Dominated.refl _).add_same time_overhead)
-    ((input.max_same (Dominated.refl _)).add_same space_overhead)).mem_ftisp
+    ((input.max_same (Dominated.refl _)).add_same space_overhead)).mem_fdtisp
 
 /-- Compare the structural growth with the scale functions at the model boundary. -/
-theorem mem_ftisp_of_dominated (hf : HasProgram f program t p)
+theorem mem_fdtisp_of_dominated (hf : HasProgram f program t p)
     (ht : Dominated (fun x => t x + 4) (fun x => T ⌜x⌝ₜ.size))
     (hp : Dominated (fun x => max ⌜x⌝ₜ.size (p x) + 2) (fun x => S ⌜x⌝ₜ.size)) :
-    f ∈ FTISP .tree T S :=
-  (hf.computableWithGrowth_of_dominated ht hp).mem_ftisp
+    f ∈ FDTISP .tree T S :=
+  (hf.computableWithGrowth_of_dominated ht hp).mem_fdtisp
 
 /-- Exact-size envelopes are used only where an eventual scale comparison is required.
 This permits finite input types to inhabit a zero eventual class without weakening their
 all-input program or machine specifications. -/
-theorem mem_ftisp_of_sizeEnvelope (hf : HasProgram f program t p)
+theorem mem_fdtisp_of_sizeEnvelope (hf : HasProgram f program t p)
     (ht : DominatedAtTop (sizeEnvelope (fun x => t x + 4)) T)
     (hp : DominatedAtTop (sizeEnvelope (fun x => max ⌜x⌝ₜ.size (p x) + 2)) S) :
-    f ∈ FTISP .tree T S := by
+    f ∈ FDTISP .tree T S := by
   have hm := hf.computableWithGrowth.mono
     (Dominated.of_le (le_sizeEnvelope (fun x => t x + 4)))
     (Dominated.of_le (le_sizeEnvelope (fun x => max ⌜x⌝ₜ.size (p x) + 2)))
-  exact FTISP.mono ht hp hm.mem_ftisp
+  exact FDTISP.mono ht hp hm.mem_fdtisp
 
 /-- The usual positive powers of encoding size absorb the model's input storage,
 fixed controller overheads and fixed register factor. -/
-theorem mem_ftisp_pow {t s : ℕ}
+theorem mem_fdtisp_pow {t s : ℕ}
     (hf : HasProgram f program (fun x => ⌜x⌝ₜ.size ^ t) (fun x => ⌜x⌝ₜ.size ^ s))
-    (hs : 0 < s) : f ∈ FTISP .tree (fun n => n ^ t) (fun n => n ^ s) := by
-  apply hf.mem_ftisp
+    (hs : 0 < s) : f ∈ FDTISP .tree (fun n => n ^ t) (fun n => n ^ s) := by
+  apply hf.mem_fdtisp
   · exact Dominated.of_le fun x => Nat.le_self_pow (by omega) _
   · exact Dominated.const_of_pos 4 (fun x => Nat.pow_pos (Tree.size_pos ⌜x⌝ₜ))
   · exact Dominated.const_of_pos 2 (fun x => Nat.pow_pos (Tree.size_pos ⌜x⌝ₜ))
@@ -862,10 +862,10 @@ private def modelFunPropCore (disch : Option (TSyntax ``Lean.Parser.Tactic.disch
   setGoals (originalGoals.take 1)
   let target ← (← getMainGoal).getType
   let machine := target.isAppOf ``TimeSpaceModel.ComputableWithGrowth
-  let asymptotic := (target.find? (·.isConstOf ``FTISP)).isSome
+  let asymptotic := (target.find? (·.isConstOf ``FDTISP)).isSome
   unless machine || asymptotic do
-    throwError "model_fun_prop expects a tree ComputableWithGrowth or FTISP target"
-  let powers ← if let some application := target.find? (·.isAppOf ``FTISP) then do
+    throwError "model_fun_prop expects a tree ComputableWithGrowth or FDTISP target"
+  let powers ← if let some application := target.find? (·.isAppOf ``FDTISP) then do
       let args := application.getAppArgs
       let exponent (f : Lean.Expr) : MetaM (Option Nat) :=
         withLocalDeclD `n (mkConst ``Nat) fun n => do
@@ -883,10 +883,10 @@ private def modelFunPropCore (disch : Option (TSyntax ``Lean.Parser.Tactic.disch
       (program := ?program) (hf := ?implementation) (t := ?time_bound) (p := ?peak_bound)
       ?time ?peak))
   else if let some (t, s) := powers then
-    evalTactic (← `(tactic| refine HasProgram.mem_ftisp_pow (program := ?program)
+    evalTactic (← `(tactic| refine HasProgram.mem_fdtisp_pow (program := ?program)
       (hf := ?implementation) (t := $(quote t)) (s := $(quote s)) (by decide)))
   else
-    evalTactic (← `(tactic| refine HasProgram.mem_ftisp_of_dominated (program := ?program)
+    evalTactic (← `(tactic| refine HasProgram.mem_fdtisp_of_dominated (program := ?program)
       (hf := ?implementation) (t := ?time_bound) (p := ?peak_bound) ?time ?peak))
   let pending ← getGoals
   let some implementation ← pending.findM? fun g =>

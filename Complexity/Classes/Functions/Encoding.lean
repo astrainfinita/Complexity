@@ -23,13 +23,13 @@ theorem TimeSpaceModel.ComputableWithSizeBudgets.of_encode {Data α β γ : Type
   TimeSpaceModel.ComputableWithCodeBudgets.of_encode h hfg
 
 /-- Equal output codes preserve simultaneous asymptotic bounds in the same model. -/
-theorem FTISP.of_encode {Data α β γ : Type*} [Encoding Data α]
+theorem FDTISP.of_encode {Data α β γ : Type*} [Encoding Data α]
     [UniqueEncoding Data β] [UniqueEncoding Data γ]
     {model : TimeSpaceModel Id Data} {f : α → β} {g : α → γ} {T S : ℕ → ℕ}
-    (hg : g ∈ FTISP model T S)
-    (hfg : ∀ x, encode Data (f x) = encode Data (g x)) : f ∈ FTISP model T S := by
+    (hg : g ∈ FDTISP model T S)
+    (hfg : ∀ x, encode Data (f x) = encode Data (g x)) : f ∈ FDTISP model T S := by
   obtain ⟨t, s, h, ht, hs⟩ := hg
-  exact (h.of_encode hfg).mem_ftisp_of_dominated ht hs
+  exact (h.of_encode hfg).mem_fdtisp_of_dominated ht hs
 
 namespace FP
 
@@ -41,8 +41,8 @@ Raw data uses the identity encoding. -/
 theorem of_encode {Data α β : Type*} [UniqueEncoding Data α] [UniqueEncoding Data β]
     {model : TimeSpaceModel Id Data} {f : Data → Data} {g : α → β} (hf : f ∈ FP model)
     (h : ∀ a, f (encode Data a) = encode Data (g a)) : g ∈ FP model := by
-  obtain ⟨d, t, ⟨s, R, hR, hm⟩, ht⟩ := mem_iff_exists_ftime.mp hf
-  apply mem_iff_exists_ftime.mpr
+  obtain ⟨d, t, ⟨s, R, hR, hm⟩, ht⟩ := mem_iff_exists_fdtime.mp hf
+  apply mem_iff_exists_fdtime.mpr
   refine ⟨d, t, ⟨s, R, hR, ?_⟩, ht⟩
   rw [Encoding.Computes.iff_of_uniqueEncoding] at hm ⊢
   intro a

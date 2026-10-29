@@ -41,17 +41,17 @@ theorem toKSAT_correct (input : Σ n, Circuit .booleanAlgebra n 1) :
     CircuitSAT input ↔ KSAT 3 (toKSAT input) := iff_ksat input.2
 
 theorem toKSAT_unitTime :
-    toKSAT ∈ FTISP .tree (fun n => n ^ 2) (fun n => n ^ 2) :=
-  FTISP.of_encode Circuit.tseitin_ftisp (fun _ => rfl)
+    toKSAT ∈ FDTISP .tree (fun n => n ^ 2) (fun n => n ^ 2) :=
+  FDTISP.of_encode Circuit.tseitin_fdtisp (fun _ => rfl)
 
 theorem toKSAT_sizeCost :
-    toKSAT ∈ FTISP .sizeCostTree (fun n => n ^ 4) (fun n => n ^ 2) := by
-  have h := TreeMachine.ftisp_unitTime_subset_sizeCost
+    toKSAT ∈ FDTISP .sizeCostTree (fun n => n ^ 4) (fun n => n ^ 2) := by
+  have h := TreeMachine.fdtisp_unitTime_subset_sizeCost
     (fun n => n ^ 2) (fun n => n ^ 2) toKSAT_unitTime
   simpa only [← pow_add] using h
 
 theorem toKSAT_fp : toKSAT ∈ FP .sizeCostTree :=
-  FP.ftime_subset 4 (FTISP.subset_time toKSAT_sizeCost)
+  FP.fdtime_subset 4 (FDTISP.subset_time toKSAT_sizeCost)
 
 theorem polytimeManyOneReducible_ksat :
     PolytimeManyOneReducible .sizeCostTree CircuitSAT (KSAT 3) :=

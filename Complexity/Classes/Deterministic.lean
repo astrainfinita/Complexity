@@ -25,63 +25,63 @@ variable {Data α : Type*} [Encoding Data α] [Encoding Data Bool]
 
 /-- Predicates decidable in the given model in time `O(T(n))`. -/
 def DTIME (model : TimeSpaceModel Id Data) (T : ℕ → ℕ) : Set (α → Prop) :=
-  DecisionClass (FTIME model T)
+  DecisionClass (FDTIME model T)
 
 namespace DTIME
 
 variable {model : TimeSpaceModel Id Data}
 
 theorem of_decides {f : α → Bool} {p : α → Prop} {T : ℕ → ℕ}
-    (hf : f ∈ FTIME model T) (hp : Decides f p) : p ∈ DTIME model T :=
+    (hf : f ∈ FDTIME model T) (hp : Decides f p) : p ∈ DTIME model T :=
   DecisionClass.of_decides hf hp
 
 theorem mono {T T' : ℕ → ℕ} (h : DominatedAtTop T T') :
     DTIME (α := α) model T ⊆ DTIME model T' :=
-  DecisionClass.mono (FTIME.mono h)
+  DecisionClass.mono (FDTIME.mono h)
 
 end DTIME
 
 /-- Predicates decidable in the given model in space `O(S(n))`. -/
 def DSPACE (model : TimeSpaceModel Id Data) (S : ℕ → ℕ) : Set (α → Prop) :=
-  DecisionClass (FSPACE model S)
+  DecisionClass (FDSPACE model S)
 
 namespace DSPACE
 
 variable {model : TimeSpaceModel Id Data}
 
 theorem of_decides {f : α → Bool} {p : α → Prop} {S : ℕ → ℕ}
-    (hf : f ∈ FSPACE model S) (hp : Decides f p) : p ∈ DSPACE model S :=
+    (hf : f ∈ FDSPACE model S) (hp : Decides f p) : p ∈ DSPACE model S :=
   DecisionClass.of_decides hf hp
 
 theorem mono {S S' : ℕ → ℕ} (h : DominatedAtTop S S') :
     DSPACE (α := α) model S ⊆ DSPACE model S' :=
-  DecisionClass.mono (FSPACE.mono h)
+  DecisionClass.mono (FDSPACE.mono h)
 
 end DSPACE
 
 /-- Predicates decidable by one behavior in time `O(T(n))` and space `O(S(n))`. -/
 def DTISP (model : TimeSpaceModel Id Data) (T S : ℕ → ℕ) : Set (α → Prop) :=
-  DecisionClass (FTISP model T S)
+  DecisionClass (FDTISP model T S)
 
 namespace DTISP
 
 variable {model : TimeSpaceModel Id Data}
 
 theorem of_decides {f : α → Bool} {p : α → Prop} {T S : ℕ → ℕ}
-    (hf : f ∈ FTISP model T S) (hp : Decides f p) : p ∈ DTISP model T S :=
+    (hf : f ∈ FDTISP model T S) (hp : Decides f p) : p ∈ DTISP model T S :=
   DecisionClass.of_decides hf hp
 
 theorem mono {T S T' S' : ℕ → ℕ} (hT : DominatedAtTop T T') (hS : DominatedAtTop S S') :
     DTISP (α := α) model T S ⊆ DTISP model T' S' :=
-  DecisionClass.mono (FTISP.mono hT hS)
+  DecisionClass.mono (FDTISP.mono hT hS)
 
 theorem subset_time {T S : ℕ → ℕ} :
     DTISP (α := α) model T S ⊆ DTIME model T :=
-  DecisionClass.mono FTISP.subset_time
+  DecisionClass.mono FDTISP.subset_time
 
 theorem subset_space {T S : ℕ → ℕ} :
     DTISP (α := α) model T S ⊆ DSPACE model S :=
-  DecisionClass.mono FTISP.subset_space
+  DecisionClass.mono FDTISP.subset_space
 
 theorem subset_inter {T S : ℕ → ℕ} :
     DTISP (α := α) model T S ⊆ DTIME model T ∩ DSPACE model S :=
@@ -108,7 +108,7 @@ theorem congr {p q : α → Prop} (hp : p ∈ P model) (h : ∀ a, p a ↔ q a) 
 /-- The polynomial decision class is induced by the union of power-time function classes. -/
 theorem eq_iUnion_dtime :
     P (α := α) model = ⋃ d : ℕ, DTIME model (fun n => n ^ d) :=
-  DecisionClass.iUnion (fun d => FTIME model (fun n => n ^ d))
+  DecisionClass.iUnion (fun d => FDTIME model (fun n => n ^ d))
 
 /-- Polynomial time is the union of the parameterized power-time classes. -/
 theorem mem_iff_exists_dtime {p : α → Prop} :

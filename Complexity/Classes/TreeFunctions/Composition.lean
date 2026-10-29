@@ -28,7 +28,7 @@ theorem fp_comp (hg : g ∈ FP .sizeCostTree) (hf : f ∈ FP .sizeCostTree) :
   let a : Polynomial ℕ := Polynomial.X + Polynomial.C k + p
   let b : Polynomial ℕ := p + Polynomial.C (max k l) + q.comp a
   obtain ⟨d, hb⟩ := Polynomial.exists_dominatedAtTop_pow b
-  apply FP.ftime_subset d
+  apply FP.fdtime_subset d
   refine ⟨b.eval, ⟨fun n => n + (max k l + 1) + b.eval n, _,
     ⟨max k l + 1, inferInstance, _, inferInstance, M.comp N, rfl⟩, ?_⟩, hb⟩
   intro x r hx

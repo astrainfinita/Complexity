@@ -36,7 +36,7 @@ theorem fp_subset_stack {α β : Type*} [Encoding Tree α] [Encoding Tree β] :
   let q : Polynomial ℕ := 43 * p + 12 * Polynomial.X + Polynomial.C (6 * k + 8)
   have hq (n : ℕ) : timeBound k n (p.eval n) = q.eval n := by simp [timeBound, q]; omega
   obtain ⟨b, hb⟩ := Polynomial.exists_dominatedAtTop_pow q
-  apply FP.ftime_subset b
+  apply FP.fdtime_subset b
   refine ⟨_, ⟨fun n => spaceBound k (s n), _,
     ⟨_, inferInstance, _, inferInstance, compiler M, rfl⟩, fun a xs ha => ?_⟩,
     (DominatedAtTop.of_le fun n => (hq n).le).trans hb⟩
