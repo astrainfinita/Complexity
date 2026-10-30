@@ -59,11 +59,8 @@ variable [Observe Config Observation] [Apply Config Action]
   induction n generalizing c with
   | zero => exact Multiset.mem_singleton
   | succ n ih =>
-    rw [runFromWith_succ, runFrom_succ]
-    change d ∈ (M.toBinary.stepWith Multiset c).bind
-      (fun b => M.toBinary.runFromWith Multiset b n) ↔
-      d = M.runFrom (M.step c) n
-    simp only [Multiset.mem_bind, mem_stepWith_toBinary_iff, ih, exists_eq_left]
+    simp only [runFromWith_succ, runFrom_succ, Multiset.bind_def, Multiset.mem_bind,
+      mem_stepWith_toBinary_iff, ih, exists_eq_left]
 
 /-- Standard input execution reaches exactly the original deterministic endpoint. -/
 @[simp] theorem mem_runWith_toBinary_iff (input : Input) (d : Config) (n : ℕ)
@@ -74,8 +71,8 @@ variable [Observe Config Observation] [Apply Config Action]
 /-- Duplicated deterministic choices record exactly the original action history. -/
 theorem mem_runHistoryFromWith_toBinary_iff (c : Config)
     (h : History Config Action) (n : ℕ) :
-    h ∈ M.toBinary.runHistoryFromWith Multiset c n ↔ h = M.runHistoryFrom c n := by
-  rw [← M.toBinary.runFromWith_nil Multiset, M.mem_runFromWith_toBinary_iff, M.runFrom_nil]
+    h ∈ M.toBinary.runHistoryFromWith Multiset c n ↔ h = M.runHistoryFrom c n :=
+  M.mem_runFromWith_toBinary_iff (History.nil c) h n
 
 /-- Duplicated deterministic choices preserve standard-input histories. -/
 theorem mem_runHistoryWith_toBinary_iff (input : Input) (h : History Config Action) (n : ℕ)

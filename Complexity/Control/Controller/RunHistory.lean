@@ -35,99 +35,98 @@ namespace RunConditions
 
 variable (M : Controller F Observation Action Q)
 
-/-- No action is performed at zero fuel or an already halted configuration. -/
-theorem nil (cfg : Config) (fuel : ℕ) (h : fuel = 0 ∨ M.Halted cfg) :
-    M.RunConditions cfg fuel (History.nil cfg) where
+/-- No action is performed without fuel. -/
+theorem nil (cfg : Config) : M.RunConditions cfg 0 (History.nil cfg) where
   first_eq := rfl
-  length_le := Nat.zero_le _
-  stopped := h.elim (fun h ↦ Or.inl h.symm) Or.inr
+  length_le := le_rfl
+  stopped := Or.inl rfl
   active c hc := by simp at hc
 
-/-- Prefix an action to the continuation from its resulting configuration. -/
-theorem cons (cfg : Config) (a : Action) (h : ¬M.Halted cfg) {fuel : ℕ}
-    {tail : History Config Action} (ht : M.RunConditions (apply a cfg) fuel tail) :
-    M.RunConditions cfg (fuel + 1) (History.cons cfg a tail ht.first_eq) where
-  first_eq := History.cons_first _ _ _ _
-  length_le := Nat.succ_le_succ ht.length_le
-  stopped := by
-    simpa only [History.cons_length, History.last_cons] using
-      ht.stopped.imp_left (congrArg Nat.succ)
-  active := by
-    simpa only [History.configs_cons,
-      List.dropLast_cons_of_ne_nil tail.configs_ne_nil, List.mem_cons, forall_eq_or_imp] using
-      And.intro h ht.active
+/-- A halted history stays unchanged with one more unit of fuel. -/
+theorem of_halted {cfg : Config} {fuel : ℕ} {h : History Config Action}
+    (hr : M.RunConditions cfg fuel h) (hh : M.Halted h.last) :
+    M.RunConditions cfg (fuel + 1) h where
+  first_eq := hr.first_eq
+  length_le := hr.length_le.trans (Nat.le_succ _)
+  stopped := Or.inr hh
+  active := hr.active
+
+/-- An action at an active last configuration extends the history with one more unit of fuel. -/
+theorem snoc {cfg : Config} {fuel : ℕ} {h : History Config Action}
+    (hr : M.RunConditions cfg fuel h) (hh : ¬M.Halted h.last) (a : Action) :
+    M.RunConditions cfg (fuel + 1) (h.snoc a) where
+  first_eq := hr.first_eq
+  length_le := by simpa using hr.length_le
+  stopped := Or.inl (by rw [History.snoc_length, hr.stopped.resolve_right hh])
+  active c hc := by
+    rw [History.configs_snoc, List.dropLast_concat,
+      ← List.dropLast_append_getLast h.configs_ne_nil] at hc
+    rcases List.mem_append.mp hc with hc | hc
+    · exact hr.active c hc
+    · rw [List.mem_singleton.mp hc]
+      simpa only [History.configs, History.last, List.getLast_scanl] using hh
 
 end RunConditions
 
 variable [Observe Config Observation]
 
-/-- Run for at most the supplied fuel, selecting each recorded action exactly once. -/
+/-- Run for at most the supplied fuel, recording the selected actions: the execution on the
+history itself, starting from the history with no actions. -/
 def runHistoryFromWith (m : Type u → Type*) [Monad m] [MonadLiftT F m]
     (M : Controller F Observation Action Q) (cfg : Config) (fuel : ℕ) :
     m (History Config Action) :=
-  Subtype.val <$> runCertified cfg fuel
-where
-  /-- Internal recursion retaining the conditions needed by `History.cons`. -/
-  runCertified (cfg : Config) :
-      (fuel : ℕ) → m {h : History Config Action // M.RunConditions cfg fuel h}
-    | 0 => pure ⟨History.nil cfg, RunConditions.nil M cfg 0 (Or.inl rfl)⟩
-    | fuel + 1 =>
-      if h : M.Halted cfg then pure ⟨History.nil cfg, RunConditions.nil M cfg _ (Or.inr h)⟩
-      else do
-        let a ← monadLift (M.transition (state cfg) (observe cfg))
-        let tail ← runCertified (apply a cfg) fuel
-        pure ⟨History.cons cfg a tail.val tail.property.first_eq,
-          RunConditions.cons M cfg a h tail.property⟩
+  M.runFromWith m (History.nil cfg) fuel
 
 section Interpreted
 
 variable (m : Type u → Type*) [Monad m] [MonadLiftT F m]
   (M : Controller F Observation Action Q)
 
-/-- Every returned history satisfies the common bounded-run conditions. -/
-theorem runHistoryFromWith_spec (cfg : Config) (fuel : ℕ) :
-    Functor.Liftp (M.RunConditions cfg fuel) (M.runHistoryFromWith m cfg fuel) :=
-  ⟨runHistoryFromWith.runCertified m M cfg fuel, rfl⟩
-
-private theorem runCertified_of_halted (cfg : Config) (h : M.Halted cfg) (fuel : ℕ) :
-    runHistoryFromWith.runCertified m M cfg fuel =
-      pure ⟨History.nil cfg, RunConditions.nil M cfg fuel (Or.inr h)⟩ := by
-  cases fuel with
-  | zero => rfl
-  | succ fuel => simp only [runHistoryFromWith.runCertified, dite_eq_left h]
-
-variable [LawfulApplicative m] in
 @[simp] theorem runHistoryFromWith_zero (cfg : Config) :
-    M.runHistoryFromWith m cfg 0 = pure (History.nil cfg) := by
-  simp only [runHistoryFromWith, runHistoryFromWith.runCertified, map_pure]
+    M.runHistoryFromWith m cfg 0 = pure (History.nil cfg) := rfl
 
-variable [LawfulApplicative m] in
-@[simp] theorem runHistoryFromWith_of_halted (cfg : Config) (h : M.Halted cfg) (fuel : ℕ) :
-    M.runHistoryFromWith m cfg fuel = pure (History.nil cfg) := by
-  simp only [runHistoryFromWith, runCertified_of_halted m M cfg h, map_pure]
+@[simp] theorem runFromWith_nil (c : Config) (n : ℕ) :
+    M.runFromWith m (History.nil (Action := Action) c) n =
+      M.runHistoryFromWith m c n := rfl
 
 variable [LawfulMonad m]
 
-private theorem runFromWith_certified (p : History Config Action) (n : ℕ) :
+/-- Every returned history satisfies the common bounded-run conditions. -/
+theorem runHistoryFromWith_spec (cfg : Config) (fuel : ℕ) :
+    Functor.Liftp (M.RunConditions cfg fuel) (M.runHistoryFromWith m cfg fuel) := by
+  refine Transition.liftp_runN (M.stepWith m) (P := fun k h ↦ M.RunConditions cfg k h)
+    (RunConditions.nil M cfg) (fun k h hr ↦ ?_) fuel
+  by_cases hh : M.Halted h
+  · rw [M.stepWith_of_halted m h hh]
+    exact ⟨pure ⟨h, hr.of_halted M hh⟩, map_pure _ _⟩
+  · rw [M.stepWith_of_not_halted m h hh]
+    exact ⟨(fun a ↦ ⟨h.snoc a, hr.snoc M hh a⟩) <$>
+      (monadLift (M.transition (state h) (observe h)) : m Action), by simp [Functor.map_map]⟩
+
+@[simp] theorem runHistoryFromWith_of_halted (cfg : Config) (h : M.Halted cfg) (fuel : ℕ) :
+    M.runHistoryFromWith m cfg fuel = pure (History.nil cfg) :=
+  M.runFromWith_of_halted m (History.nil (Action := Action) cfg) h fuel
+
+/-- Continuing an existing history appends the newly selected actions. -/
+private theorem runFromWith_history (p : History Config Action) (n : ℕ) :
     M.runFromWith m p n =
-      (fun h ↦ (⟨p.first, p.actions ++ h.val.actions⟩ : History Config Action)) <$>
-        runHistoryFromWith.runCertified m M p.last n := by
+      (fun h ↦ (⟨p.first, p.actions ++ h.actions⟩ : History Config Action)) <$>
+        M.runHistoryFromWith m p.last n := by
   induction n generalizing p with
-  | zero => simp only [runFromWith_zero, runHistoryFromWith.runCertified, map_pure,
-      History.nil_actions, List.append_nil]
+  | zero => simp [runHistoryFromWith]
   | succ n ih =>
     by_cases h : M.Halted p.last
-    · rw [M.runFromWith_of_halted m p h, runCertified_of_halted m M p.last h]
-      simp only [map_pure, History.nil_actions, List.append_nil]
-    · rw [runFromWith_succ, runHistoryFromWith.runCertified, dite_eq_right h,
-        M.stepWith_of_not_halted m p h]
-      simp only [History.state_def, History.observe_def, bind_map_left, History.apply_def,
-        map_bind, map_pure]
+    · rw [M.runFromWith_of_halted m p h, M.runHistoryFromWith_of_halted m p.last h]
+      simp
+    · rw [runFromWith_succ, runHistoryFromWith, runFromWith_succ,
+        M.stepWith_of_not_halted m p h,
+        M.stepWith_of_not_halted m (History.nil (Action := Action) p.last) h]
+      simp only [History.state_def, History.observe_def, History.last_nil, bind_map_left,
+        map_bind]
       congr 1
       funext a
-      rw [ih, History.last_snoc, ← map_eq_pure_bind]
-      simp only [History.snoc_first, History.snoc_actions, History.cons_actions,
-        List.append_assoc, List.singleton_append]
+      rw [ih, ih]
+      simp [Functor.map_map, History.apply_def]
 
 @[simp] theorem last_runFromWith (p : History Config Action) (n : ℕ) :
     History.last <$> M.runFromWith m p n = M.runFromWith m p.last n := by
@@ -141,25 +140,17 @@ private theorem runFromWith_certified (p : History Config Action) (n : ℕ) :
       simp only [History.state_def, History.observe_def, bind_map_left, map_bind, ih,
         History.apply_last]
 
-@[simp] theorem runFromWith_nil (c : Config) (n : ℕ) :
-    M.runFromWith m (History.nil (Action := Action) c) n =
-      M.runHistoryFromWith m c n := by
-  rw [runFromWith_certified, runHistoryFromWith]
-  congr 1
-  funext h
-  exact History.nil_append c h.val h.property.first_eq
-
 /-- Forgetting the history recovers the original padded execution. -/
 @[simp] theorem last_runHistoryFromWith (cfg : Config) (fuel : ℕ) :
-    History.last <$> M.runHistoryFromWith m cfg fuel = M.runFromWith m cfg fuel := by
-  rw [← M.runFromWith_nil m cfg, M.last_runFromWith m, History.last_nil]
+    History.last <$> M.runHistoryFromWith m cfg fuel = M.runFromWith m cfg fuel :=
+  M.last_runFromWith m _ fuel
 
 /-- Splitting the fuel continues the first segment with its existing history. -/
 theorem runHistoryFromWith_add (cfg : Config) (n k : ℕ) :
     M.runHistoryFromWith m cfg (n + k) = (do
       let p ← M.runHistoryFromWith m cfg n
-      M.runFromWith m p k) := by
-  rw [← M.runFromWith_nil m cfg, M.runFromWith_add m, M.runFromWith_nil m]
+      M.runFromWith m p k) :=
+  M.runFromWith_add m _ n k
 
 end Interpreted
 
@@ -186,8 +177,10 @@ def runHistoryFrom (cfg : Config) (fuel : ℕ) : History Config Action :=
   (M.runHistoryFromWith Id cfg fuel).run
 
 theorem runHistoryFrom_spec (cfg : Config) (fuel : ℕ) :
-    M.RunConditions cfg fuel (M.runHistoryFrom cfg fuel) :=
-  (runHistoryFromWith.runCertified Id M cfg fuel).run.property
+    M.RunConditions cfg fuel (M.runHistoryFrom cfg fuel) := by
+  obtain ⟨u, hu⟩ := M.runHistoryFromWith_spec Id cfg fuel
+  rw [runHistoryFrom, ← hu]
+  exact u.run.property
 
 @[simp] theorem first_runHistoryFrom (cfg : Config) (fuel : ℕ) :
     (M.runHistoryFrom cfg fuel).first = cfg := (M.runHistoryFrom_spec cfg fuel).first_eq
@@ -195,36 +188,37 @@ theorem runHistoryFrom_spec (cfg : Config) (fuel : ℕ) :
 @[simp] theorem runHistoryFrom_zero (cfg : Config) :
     M.runHistoryFrom cfg 0 = History.nil cfg := rfl
 
+/-- A run records at most one action per unit of fuel. -/
+theorem length_runHistoryFrom_le (cfg : Config) (fuel : ℕ) :
+    (M.runHistoryFrom cfg fuel).length ≤ fuel := (M.runHistoryFrom_spec cfg fuel).length_le
+
 @[simp] theorem runHistoryFrom_of_halted (cfg : Config) (h : M.Halted cfg) (fuel : ℕ) :
     M.runHistoryFrom cfg fuel = History.nil cfg :=
   congrArg Id.run (M.runHistoryFromWith_of_halted Id cfg h fuel)
+
+@[simp] theorem last_runHistoryFrom (cfg : Config) (fuel : ℕ) :
+    (M.runHistoryFrom cfg fuel).last = M.runFrom cfg fuel :=
+  congrArg Id.run (M.last_runHistoryFromWith Id cfg fuel)
+
+/-- Continuing an existing history appends the newly selected actions. -/
+theorem runFrom_history (p : History Config Action) (n : ℕ) :
+    M.runFrom p n = p.append (M.runHistoryFrom p.last n)
+      (M.first_runHistoryFrom p.last n).symm :=
+  congrArg Id.run (M.runFromWith_history Id p n)
+
+@[simp] theorem runFrom_nil (c : Config) (n : ℕ) :
+    M.runFrom (History.nil (Action := Action) c) n = M.runHistoryFrom c n := rfl
 
 theorem runHistoryFrom_succ_of_not_halted (cfg : Config) (h : ¬M.Halted cfg) (fuel : ℕ) :
     M.runHistoryFrom cfg (fuel + 1) =
       History.cons cfg (M.transition (state cfg) (observe cfg)).run
         (M.runHistoryFrom (apply (M.transition (state cfg) (observe cfg)).run cfg) fuel)
         (M.first_runHistoryFrom _ _) := by
-  simp only [runHistoryFrom, runHistoryFromWith, runHistoryFromWith.runCertified,
-    dite_eq_right h]
-  rfl
-
-@[simp] theorem last_runHistoryFrom (cfg : Config) (fuel : ℕ) :
-    (M.runHistoryFrom cfg fuel).last = M.runFrom cfg fuel :=
-  congrArg Id.run (M.last_runHistoryFromWith Id cfg fuel)
-
-@[simp] theorem last_runFrom (p : History Config Action) (n : ℕ) :
-    (M.runFrom p n).last = M.runFrom p.last n :=
-  congrArg Id.run (M.last_runFromWith Id p n)
-
-/-- Continuing an existing history appends the newly selected actions. -/
-theorem runFrom_history (p : History Config Action) (n : ℕ) :
-    M.runFrom p n = p.append (M.runHistoryFrom p.last n)
-      (M.first_runHistoryFrom p.last n).symm :=
-  congrArg Id.run (runFromWith_certified Id M p n)
-
-@[simp] theorem runFrom_nil (c : Config) (n : ℕ) :
-    M.runFrom (History.nil (Action := Action) c) n = M.runHistoryFrom c n :=
-  congrArg Id.run (M.runFromWith_nil Id c n)
+  have hs := M.runFrom_succ (History.nil (Action := Action) cfg) fuel
+  rw [M.step_of_not_halted (History.nil (Action := Action) cfg) h] at hs
+  conv_rhs at hs => rw [runFrom_history]
+  refine hs.trans ?_
+  ext <;> simp [History.apply_def]
 
 /-- Deterministic histories compose at the intermediate configuration. -/
 theorem runHistoryFrom_add (cfg : Config) (n k : ℕ) :
@@ -237,9 +231,8 @@ theorem runHistoryFrom_add (cfg : Config) (n k : ℕ) :
 /-- More fuel after halting preserves the complete recorded history. -/
 theorem runHistoryFrom_eq_of_halted (cfg : Config) {n k : ℕ}
     (h : M.Halted (M.runFrom cfg n)) (hn : n ≤ k) :
-    M.runHistoryFrom cfg k = M.runHistoryFrom cfg n := by
-  simpa only [runFrom_nil] using M.runFrom_eq_of_halted
-    (History.nil (Action := Action) cfg) (by simpa using h) hn
+    M.runHistoryFrom cfg k = M.runHistoryFrom cfg n :=
+  M.runFrom_eq_of_halted (History.nil (Action := Action) cfg) (by simpa using h) hn
 
 /-- Running for the actual action count reaches the same endpoint as the supplied fuel. -/
 theorem runFrom_length_runHistoryFrom (cfg : Config) (fuel : ℕ) :

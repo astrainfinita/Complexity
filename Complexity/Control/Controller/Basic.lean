@@ -144,6 +144,12 @@ theorem mem_runFromWith_add_iff (c d : Config) (n l : ℕ) :
   rw [runFromWith_add]
   exact Multiset.mem_bind
 
+/-- A property preserved by every step holds on every finite path. -/
+theorem forall_mem_runFromWith {P : Config → Prop}
+    (hstep : ∀ c, P c → ∀ d ∈ M.stepWith Multiset c, P d) {c : Config} (hc : P c) (n : ℕ) :
+    ∀ d ∈ M.runFromWith Multiset c n, P d :=
+  Transition.forall_mem_runN (M.stepWith Multiset) hstep hc n
+
 /-- A reachable halting configuration remains reachable at every later time. -/
 theorem mem_runFromWith_of_halted (c : Config) {d : Config} {n n' : ℕ}
     (hd : d ∈ M.runFromWith Multiset c n) (hh : M.Halted d) (hn : n ≤ n') :

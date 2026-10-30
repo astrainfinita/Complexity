@@ -90,7 +90,7 @@ theorem computesInUnitTimeAndSpace_of_exec [NeZero k] {p : TreeMachine.Program k
   simp only [Controller.runFrom_nil, Controller.last_runHistoryFrom] at hc hv
   exact ⟨n, (congrArg (p.compile.halt ∘ Cfg.state) hc).trans rfl,
     (congrArg (fun c ↦ c.regs 0) hc).trans ho,
-    (p.compile.runHistory_spec _ _ n).length_le.trans hn, hv.le.trans hs⟩
+    (p.compile.length_runHistory_le _ _ n).trans hn, hv.le.trans hs⟩
 
 /-- A program contract yields the machine bound without inspecting compiled control states. -/
 theorem computesInUnitTimeAndSpace [NeZero k] {p : TreeMachine.Program k α}

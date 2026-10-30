@@ -113,7 +113,7 @@ theorem computesWithin_history [Fintype κ] {p : StackMachine.Program κ Γ α}
     (History.nil (p.compile.initInput (Config := Cfg κ Γ _ xs.toArray) xs)) rfl
     (by simp [Cfg.mass, Controller.initInput])
   simp only [Controller.runFrom_nil, Controller.last_runHistoryFrom] at hc hv
-  refine ⟨n, ?_, ?_, (p.compile.runHistory_spec _ _ n).length_le.trans hn, hv.le.trans hs⟩
+  refine ⟨n, ?_, ?_, (p.compile.length_runHistory_le _ _ n).trans hn, hv.le.trans hs⟩
   · exact (congrArg (fun c ↦ p.compile.halt c.state) hc).trans rfl
   · exact (congrArg Cfg.output hc).trans ho
 

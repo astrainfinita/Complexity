@@ -88,27 +88,19 @@ def runHistory (M : Controller Id Observation Action Q) (input : Input) (n : ℕ
   M.runHistoryFrom (M.initInput input) n
 
 @[simp] theorem runHistoryWith_zero {F : Type u → Type*} (m : Type u → Type*)
-    [Monad m] [LawfulApplicative m] [MonadLiftT F m] (M : Controller F Observation Action Q)
+    [Monad m] [MonadLiftT F m] (M : Controller F Observation Action Q)
     (input : Input) [Execution Config Q Output input] :
-    M.runHistoryWith Config m input 0 = pure (History.nil (M.initInput input)) :=
-  M.runHistoryFromWith_zero m (M.initInput input)
+    M.runHistoryWith Config m input 0 = pure (History.nil (M.initInput input)) := rfl
 
 @[simp] theorem runHistory_zero (M : Controller Id Observation Action Q)
     (input : Input) [Execution Config Q Output input] :
     M.runHistory Config input 0 = History.nil (M.initInput input) := rfl
 
 variable (Config) in
-/-- Standard-input execution satisfies the common bounded-run conditions. -/
-theorem runHistory_spec (M : Controller Id Observation Action Q) (input : Input) (n : ℕ)
-    [Execution Config Q Output input] :
-    M.RunConditions (M.initInput input) n (M.runHistory Config input n) :=
-  M.runHistoryFrom_spec (M.initInput input) n
-
-@[simp] theorem last_runHistoryWith {F : Type u → Type*} (m : Type u → Type*)
-    [Monad m] [LawfulMonad m] [MonadLiftT F m] (M : Controller F Observation Action Q)
-    (input : Input) (n : ℕ) [Execution Config Q Output input] :
-    (fun h ↦ h.last) <$> M.runHistoryWith Config m input n = M.runWith Config m input n :=
-  M.last_runHistoryFromWith m (M.initInput input) n
+/-- A standard-input run records at most one action per unit of fuel. -/
+theorem length_runHistory_le (M : Controller Id Observation Action Q) (input : Input) (n : ℕ)
+    [Execution Config Q Output input] : (M.runHistory Config input n).length ≤ n :=
+  M.length_runHistoryFrom_le (M.initInput input) n
 
 @[simp] theorem last_runHistory (M : Controller Id Observation Action Q)
     (input : Input) (n : ℕ) [Execution Config Q Output input] :
@@ -225,11 +217,11 @@ theorem computesWith_unit_iff [exe : Execution Config Q Output input] :
     have he : M.run Config input (M.runHistory Config input n).length =
         M.run Config input n := M.runFrom_length_runHistoryFrom (M.initInput input) n
     have hh := he.symm ▸ hn
-    have hp := M.runHistory_eq_of_halted input hh (M.runHistory_spec Config input n).length_le
+    have hp := M.runHistory_eq_of_halted input hh (M.length_runHistory_le Config input n)
     have hq := M.runHistory_eq_of_halted input hh ht
     have hr := hq.trans hp.symm
     simpa only [← last_runHistory, hr] using And.intro hn (And.intro ho hs)
   · rintro ⟨hn, ho, hs⟩
-    exact ⟨time, hn, ho, (M.runHistory_spec Config input time).length_le, hs⟩
+    exact ⟨time, hn, ho, M.length_runHistory_le Config input time, hs⟩
 
 end Complexity.Controller

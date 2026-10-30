@@ -51,7 +51,7 @@ theorem ComputesWithin.of_run {M : StackMachine Id κ Γ Q}
     (hh : M.Halted (M.run (Cfg κ Γ Q xs.toArray) xs n))
     (ho : (M.run (Cfg κ Γ Q xs.toArray) xs n).output = ys.toArray) (hn : n ≤ t) :
     M.ComputesWithin xs ys t (Fintype.card κ * t) := by
-  have ht := ((M.runHistory_spec (Cfg κ Γ Q xs.toArray) xs n).length_le).trans hn
+  have ht := (M.length_runHistory_le (Cfg κ Γ Q xs.toArray) xs n).trans hn
   refine ⟨n, hh, ho, ht, ?_⟩
   exact (configSup_mass_le _).trans
     (by simpa [Controller.runHistory] using Nat.mul_le_mul_left (Fintype.card κ) ht)

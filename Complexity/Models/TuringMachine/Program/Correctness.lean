@@ -66,7 +66,7 @@ theorem computesWithin_of_exec [Fintype κ] (p : TM.Program κ Γ α) {ys : Arra
     (History.nil ((rawExecution xs.toList).init (compile p).q₀)) rfl (by simp)
   simp only [Controller.runFrom_nil, Controller.last_runHistoryFrom] at hc hv
   exact ⟨n, (congrArg ((compile p).halt ∘ Cfg.state) hc).trans rfl,
-    (congrArg Cfg.output hc).trans ho, ((compile p).runHistory_spec _ _ n).length_le.trans hn,
+    (congrArg Cfg.output hc).trans ho, ((compile p).length_runHistory_le _ _ n).trans hn,
     (History.space_le_of_visited_le _ _ hv.le).trans hs⟩
 
 end Complexity.TM.Program

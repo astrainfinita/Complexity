@@ -53,11 +53,8 @@ theorem usesSpace_of_invariant [Fintype κ] (M : NTM κ Γ Q) {xs : List Γ} {s 
     {P : History (TM.Cfg κ Γ Q xs.toArray) (TM.Action κ Γ Q) → Prop}
     (hinit : P (History.nil (M.initInput xs)))
     (hstep : ∀ c, P c → ∀ d ∈ M.stepWith Multiset c, P d)
-    (hspace : ∀ c, P c → c.space ≤ s) : M.UsesSpace xs s := by
-  intro n h hh
-  change h ∈ M.runHistoryFromWith Multiset (M.initInput xs) n at hh
-  rw [← M.runFromWith_nil Multiset] at hh
-  exact hspace h (Transition.forall_mem_runN (M.stepWith Multiset) hstep hinit n h hh)
+    (hspace : ∀ c, P c → c.space ≤ s) : M.UsesSpace xs s :=
+  fun n h hh ↦ hspace h (M.forall_mem_runFromWith hstep hinit n h hh)
 
 theorem UsesTime.mono {M : NTM κ Γ Q} {xs : List Γ} {t t' : ℕ}
     (h : M.UsesTime xs t) (ht : t ≤ t') : M.UsesTime xs t' :=
@@ -81,17 +78,10 @@ theorem UsesTime.usesSpace [Fintype κ] {M : NTM κ Γ Q} {xs : List Γ} {t : �
   apply Nat.succ_le_succ
   by_cases hn : n ≤ t
   · exact (M.runHistoryFromWith_mem_spec c n hh).length_le.trans hn
-  · have hall : ∀ p ∈ M.runFromWith Multiset
-        (History.nil (Action := TM.Action κ Γ Q) c) t, M.Halted p := by
-      change ∀ d ∈ M.runFromWith Multiset c t, M.Halted d at ht
-      rw [← M.last_runHistoryFromWith Multiset c t,
-        Multiset.fmap_def, Multiset.forall_mem_map_iff] at ht
-      simpa only [M.runFromWith_nil Multiset, Controller.halted_history] using ht
-    have he := M.runFromWith_eq_of_forall_halted
-      (History.nil c) hall (Nat.le_of_not_ge hn)
-    simp only [M.runFromWith_nil Multiset] at he
-    change h ∈ M.runHistoryFromWith Multiset c n at hh
-    rw [he] at hh
+  · rw [UsesTime, Controller.runWith, ← M.last_runHistoryFromWith Multiset, Multiset.fmap_def,
+      Multiset.forall_mem_map_iff] at ht
+    rw [Controller.runHistoryWith, Controller.runHistoryFromWith,
+      M.runFromWith_eq_of_forall_halted _ ht (Nat.le_of_not_ge hn)] at hh
     exact (M.runHistoryFromWith_mem_spec c t hh).length_le
 
 /-- Initial head positions count toward space, even at time zero. -/
