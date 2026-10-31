@@ -105,8 +105,9 @@ namespace Cfg
 instance : Controller.Observe (Cfg k) (Fin k → Bool) where
   observe c i := Tree.root (c.regs i)
 
-/-- Apply one instruction. `nop` is not skipped. -/
-@[simps -fullyApplied]
+/-- Apply one instruction. `nop` is not skipped. The generated `Cfg.apply_def` is not a simp lemma:
+simp keeps `apply o c` and works through `(apply o c).regs`. -/
+@[simps -fullyApplied, simps -isSimp apply]
 instance : Controller.Apply (Cfg k) (Action k) where
   apply o c := ⟨o.eval c.regs⟩
 

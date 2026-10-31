@@ -113,14 +113,13 @@ theorem exec_compile_history (e : Expr ν) (v : ν → Fin k) (z : Fin k) (b : �
 /-- The value-only conclusion follows by forgetting the execution history. -/
 theorem exec_compile (e : Expr ν) (v : ν → Fin k) (z : Fin k) (b : ℕ)
     (hb : b + e.slots ≤ k) (hv : ∀ x, (v x).val < b) (hzv : z.val < b)
-    (ρ : Fin k → Tree) (hz : ρ z = .nil) :
-    ∃ σ i, (e.compile v z b hb).Exec TreeMachine.Program.semantics ρ e.steps i σ ∧
-      σ i = e.eval (ρ ∘ v) ∧ i.val ≤ b ∧
-      ∀ j : Fin k, j.val < b → σ j = ρ j := by
+    (c : TreeMachine.Cfg k) (hz : c.regs z = .nil) :
+    ∃ σ i, (e.compile v z b hb).Exec TreeMachine.Program.semantics c e.steps i σ ∧
+      σ.regs i = e.eval (c.regs ∘ v) ∧ i.val ≤ b ∧
+      ∀ j : Fin k, j.val < b → σ.regs j = c.regs j := by
   obtain ⟨t, i, ht, hval, hi, hf, _⟩ := e.exec_compile_history v z b hb hv hzv
-    (History.nil ⟨ρ⟩) hz
-  exact ⟨t.last.regs, i, ht.map (fun h ↦ h.last.regs) (fun _ ↦ rfl)
-    (by intro a h; ext i; simp), hval, hi, hf⟩
+    (History.nil c) hz
+  exact ⟨t.last, i, ht.map (fun h ↦ h.last) (fun _ ↦ rfl) (by intro a h; simp), hval, hi, hf⟩
 
 /-- Assignments write their final operation directly to the destination.
 Only assigning an existing variable needs the two-instruction copy macro. -/
@@ -214,11 +213,10 @@ theorem exec_assign_history (e : Expr ν) (d : Fin k) (v : ν → Fin k) (z : Fi
 /-- Assignment preserves every other source variable, including when a source aliases `d`. -/
 theorem exec_assign (e : Expr ν) (d : Fin k) (v : ν → Fin k) (z : Fin k) (b : ℕ)
     (hb : b + e.slots ≤ k) (hv : ∀ x, (v x).val < b) (hzv : z.val < b)
-    (ρ : Fin k → Tree) (hz : ρ z = .nil) :
-    ∃ σ, (e.assign d v z b hb).Exec TreeMachine.Program.semantics ρ e.assignSteps () σ ∧
-      ∀ i : Fin k, i.val < b → σ i = Function.update ρ d (e.eval (ρ ∘ v)) i := by
-  obtain ⟨t, ht, hf, _⟩ := e.exec_assign_history d v z b hb hv hzv (History.nil ⟨ρ⟩) hz
-  exact ⟨t.last.regs, ht.map (fun h ↦ h.last.regs) (fun _ ↦ rfl)
-    (by intro a h; ext i; simp), hf⟩
+    (c : TreeMachine.Cfg k) (hz : c.regs z = .nil) :
+    ∃ σ, (e.assign d v z b hb).Exec TreeMachine.Program.semantics c e.assignSteps () σ ∧
+      ∀ i : Fin k, i.val < b → σ.regs i = Function.update c.regs d (e.eval (c.regs ∘ v)) i := by
+  obtain ⟨t, ht, hf, _⟩ := e.exec_assign_history d v z b hb hv hzv (History.nil c) hz
+  exact ⟨t.last, ht.map (fun h ↦ h.last) (fun _ ↦ rfl) (by intro a h; simp), hf⟩
 
 end Complexity.TreeProgram.Expr

@@ -53,12 +53,11 @@ theorem Expr.exec_test_history (e : Expr ν) (v : ν → Fin k) (z : Fin k) (b :
 
 theorem Expr.exec_test (e : Expr ν) (v : ν → Fin k) (z : Fin k) (b : ℕ)
     (hb : b + e.slots ≤ k) (hv : ∀ x, (v x).val < b) (hzv : z.val < b)
-    (ρ : Fin k → Tree) (hz : ρ z = .nil) :
-    ∃ σ, (e.test v z b hb).Exec TreeMachine.Program.semantics ρ (e.steps + 1)
-      (e.eval (ρ ∘ v)).root σ ∧ σ ∘ v = ρ ∘ v ∧ σ z = .nil := by
-  obtain ⟨t, ht, hf, hz, _⟩ := e.exec_test_history v z b hb hv hzv (History.nil ⟨ρ⟩) hz
-  exact ⟨t.last.regs, ht.map (fun h ↦ h.last.regs) (fun _ ↦ rfl)
-    (by intro a h; ext i; simp), hf, hz⟩
+    (c : TreeMachine.Cfg k) (hz : c.regs z = .nil) :
+    ∃ σ, (e.test v z b hb).Exec TreeMachine.Program.semantics c (e.steps + 1)
+      (e.eval (c.regs ∘ v)).root σ ∧ σ.regs ∘ v = c.regs ∘ v ∧ σ.regs z = .nil := by
+  obtain ⟨t, ht, hf, hz, _⟩ := e.exec_test_history v z b hb hv hzv (History.nil c) hz
+  exact ⟨t.last, ht.map (fun h ↦ h.last) (fun _ ↦ rfl) (by intro a h; simp), hf, hz⟩
 
 /-- Scratch space shared by all executions of a statement. -/
 def Cmd.slots : Cmd ν → ℕ
@@ -167,14 +166,13 @@ theorem Cmd.Run.compile_history [DecidableEq ν] {p : Cmd ν} {s t : ν → Tree
 theorem Cmd.Exec.compile [DecidableEq ν] {p : Cmd ν} {s t : ν → Tree}
     (h : p.Exec s t) (v : ν → Fin k) (hi : Function.Injective v) (z : Fin k) (b : ℕ)
     (hb : b + p.slots ≤ k) (hv : ∀ x, (v x).val < b) (hzv : z.val < b)
-    (hvz : ∀ x, v x ≠ z) (ρ : Fin k → Tree) (hρ : ρ ∘ v = s) (hz : ρ z = .nil) :
-    ∃ n σ, (p.compile v z b hb).Exec TreeMachine.Program.semantics ρ n () σ ∧
-      σ ∘ v = t ∧ σ z = .nil := by
+    (hvz : ∀ x, v x ≠ z) (c : TreeMachine.Cfg k) (hc : c.regs ∘ v = s) (hz : c.regs z = .nil) :
+    ∃ n σ, (p.compile v z b hb).Exec TreeMachine.Program.semantics c n () σ ∧
+      σ.regs ∘ v = t ∧ σ.regs z = .nil := by
   obtain ⟨n, a, h⟩ := h
   obtain ⟨σ, hr, ht, hz, _⟩ := h.compile_history v hi z b hb hv hzv hvz
-    (History.nil ⟨ρ⟩) hρ hz
-  exact ⟨n, σ.last.regs, hr.map (fun h ↦ h.last.regs) (fun _ ↦ rfl)
-    (by intro a h; ext i; simp), ht, hz⟩
+    (History.nil c) hc hz
+  exact ⟨n, σ.last, hr.map (fun h ↦ h.last) (fun _ ↦ rfl) (by intro a h; simp), ht, hz⟩
 
 namespace Procedure
 

@@ -16,24 +16,14 @@ namespace Complexity.TreeMachine.Program
 
 variable {k : ℕ} {α : Type}
 
-/-- Compiling the control graph preserves the action count and every register. -/
-theorem run_compile {p : TreeMachine.Program k α} {q : p.State ⊕ p.Exit}
-    {ρ σ : Fin k → Tree} {n : ℕ} {a : α}
-    (h : Program.Control.Run (p.toControl eval) p.result semantics.observe semantics.act
-      q ρ n a σ) :
-    ∃ e, p.result e = a ∧ (compile p).runFrom (q, Cfg.mk ρ) n = (.inr e, Cfg.mk σ) := by
-  induction h with
-  | done e ρ => exact ⟨e, rfl, rfl⟩
-  | step q ρ h ih => exact ih
-
 /-- A source execution from standard input yields the same output after the same number
 of transitions. This count is independent of the size-charged cost model. -/
 theorem run_output [NeZero k] {p : TreeMachine.Program k α} {x y : Tree}
-    {n : ℕ} {a : α} {ρ : Fin k → Tree}
-    (h : p.Exec semantics (input 0 x) n a ρ) (ho : ρ 0 = y) :
+    {n : ℕ} {a : α} {c : Cfg k}
+    (h : p.Exec semantics (Cfg.init k x) n a c) (ho : c.regs 0 = y) :
     (compile p).Halted ((compile p).run x n) ∧ ((compile p).run x n).2.regs 0 = y := by
-  obtain ⟨e, _, hr⟩ := run_compile h.toControl
-  have hr' : (compile p).run x n = (.inr e, Cfg.mk ρ) := hr
+  obtain ⟨e, _, hr⟩ := h.runFrom_compile .nop
+  have hr' : (compile p).run x n = (.inr e, c) := hr
   rw [hr']
   exact ⟨rfl, ho⟩
 
