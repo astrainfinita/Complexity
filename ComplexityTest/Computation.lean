@@ -11,7 +11,7 @@ import Complexity.Models.TuringMachine.Deterministic
 
 open Complexity
 
-namespace Complexity.ExecutionTest
+namespace Complexity.ComputationTest
 
 -- Halting hypotheses simplify both shared execution and history statistics.
 example {k : ℕ} {Q : Type*} (M : TreeMachine Id k Q) (c : Q × TreeMachine.Cfg k)
@@ -42,7 +42,7 @@ example {κ Γ Q : Type*} [Inhabited Γ] [Fintype κ]
       (M.run xs t).2.output = ys.toArray ∧
       (M.runHistory xs t).snd.space ≤ s := by
   refine Controller.computesWith_unit_iff.trans ?_
-  simp only [TM.rawExecution_hasOutput]
+  simp only [TM.hasOutput_isOutput]
 
 -- Zero action fees require an execution length separate from the time budget.
 private def oneAction : Controller Id Unit Unit Bool where
@@ -59,8 +59,8 @@ private instance : Controller.Apply ℕ Unit where
 private instance : Controller.HasConfig Unit Unit (fun _ ↦ ℕ) where
   init _ := 0
 
-private instance : Controller.Execution ℕ ℕ where
-  HasOutput c n := c = n
+private instance : Controller.HasOutput ℕ ℕ where
+  IsOutput c n := c = n
 
 example : oneAction.ComputesWith () 1 (fun _ ↦ 0) (fun h ↦ h.snd.configSup id) 0 1 := by
   refine ⟨1, rfl, rfl, ?_, ?_⟩ <;> decide
@@ -81,8 +81,8 @@ example : oneAction.ComputesWith () 1
     Controller.History.length (fun h ↦ if h.length = 0 then 1 else 0) 5 0 :=
   Controller.computesWith_unit_iff.mpr ⟨rfl, rfl, by decide⟩
 
--- The standard output type is inferred from the execution instance.
-example : Controller.Execution.HasOutput (1 : ℕ) 1 := rfl
+-- The standard output type is inferred from the output instance.
+example : Controller.HasOutput.IsOutput (1 : ℕ) 1 := rfl
 
 -- Configuration capabilities support independent universes and can be supplied separately.
 example : Controller.HasState (ULift.{1} Unit) Unit where
@@ -100,7 +100,7 @@ example : Controller.Apply Unit (ULift.{1} Unit) where
 example : Controller.HasConfig (TreeMachine.Action 1) Tree (fun _ ↦ TreeMachine.Cfg 1) :=
   inferInstance
 
-example : Controller.Execution (TreeMachine.Cfg 1) Tree :=
+example : Controller.HasOutput (TreeMachine.Cfg 1) Tree :=
   inferInstance
 
 example (M : TreeMachine Id 1 (ULift.{1} Bool)) : ULift.{1} Bool × TreeMachine.Cfg 1 :=
@@ -110,7 +110,7 @@ example : Controller.HasConfig (TM.Action (ULift.{1} Unit) (ULift.{2} Bool))
     (List (ULift.{2} Bool)) (fun xs ↦ TM.Cfg (ULift.{1} Unit) (ULift.{2} Bool) xs.toArray) :=
   inferInstance
 
-example : Controller.Execution
+example : Controller.HasOutput
     (TM.Cfg (ULift.{1} Unit) (ULift.{2} Bool) (#[] : Array (ULift.{2} Bool)))
     (List (ULift.{2} Bool)) := inferInstance
 
@@ -118,4 +118,4 @@ example (M : TM Id (ULift.{1} Unit) (ULift.{2} Bool) (ULift.{3} Bool)) :
     ULift.{3} Bool × TM.Cfg (ULift.{1} Unit) (ULift.{2} Bool) (#[] : Array (ULift.{2} Bool)) :=
   M.init ([] : List (ULift.{2} Bool))
 
-end Complexity.ExecutionTest
+end Complexity.ComputationTest
