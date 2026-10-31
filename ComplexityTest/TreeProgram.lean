@@ -168,8 +168,8 @@ theorem reverse_correct (x : Tree) :
 -- Source correctness transfers to the machine without inspecting generated code.
 example (x : Tree) :
     let p := reverse .input
-    ∃ n, p.compile.Halted (p.compile.run (TreeMachine.Cfg p.registers _) x n) ∧
-      (p.compile.run (TreeMachine.Cfg p.registers _) x n).regs 0 = reverseAux x .nil :=
+    ∃ n, p.compile.Halted (p.compile.run x n) ∧
+      (p.compile.run x n).2.regs 0 = reverseAux x .nil :=
   Code.compile_correct (reverse_correct x)
 
 example (p : Code Value) : Finite (p.source.close.code.State ⊕ p.source.close.code.Exit) :=
@@ -178,8 +178,8 @@ example (p : Code Value) : Finite (p.source.close.code.State ⊕ p.source.close.
 private def leafPair : Tree := .pair .nil .nil
 
 private def finished (p : Code Value) (x y : Tree) (n : ℕ) : Bool :=
-  let c := p.compile.run (TreeMachine.Cfg p.registers _) x n
-  p.compile.halt c.state && decide (c.regs 0 = y)
+  let c := p.compile.run x n
+  p.compile.halt c.1 && decide (c.2.regs 0 = y)
 
 #guard finished (snapshot .input) leafPair leafPair 30
 #guard finished (choose .input) .nil leafPair 30
@@ -201,10 +201,10 @@ private def finished (p : Code Value) (x y : Tree) (n : ℕ) : Bool :=
 private def rootInput : TreeMachine.Program 3 Bool :=
   (Expr.var ()).test (fun _ ↦ (0 : Fin 3)) 1 2 (by decide)
 
-#guard (rootInput.compile.runHistory (TreeMachine.Cfg 3 _) leafPair 1).length == 1
-#guard (rootInput.compile.runHistory (TreeMachine.Cfg 3 _) leafPair 1).actionSum
+#guard (rootInput.compile.runHistory leafPair 1).length == 1
+#guard (rootInput.compile.runHistory leafPair 1).snd.actionSum
   TreeMachine.Action.sizeCost == 1
-#guard (rootInput.compile.runHistory (TreeMachine.Cfg 3 _) leafPair 1).configSup
+#guard (rootInput.compile.runHistory leafPair 1).snd.configSup
   TreeMachine.Cfg.mass == leafPair.size + 2
 
 -- Direct assignment preserves sources until the final write, including aliases.
@@ -213,8 +213,8 @@ private def assign (e : Expr Unit) (hb : 2 + e.slots ≤ 4) : TreeMachine.Progra
 
 private def checkAssign (e : Expr Unit) (hb : 2 + e.slots ≤ 4) (x y : Tree) (n : ℕ) : Bool :=
   let M := (assign e hb).compile
-  let h := M.runHistory (TreeMachine.Cfg 4 _) x n
-  M.halt h.last.state && h.last.regs 0 == y && h.length == n
+  let h := M.runHistory x n
+  M.halt h.last.1 && h.last.2.regs 0 == y && h.length == n
 
 #guard checkAssign .nil (by decide) leafPair .nil 1
 #guard checkAssign (.var ()) (by decide) leafPair leafPair 2

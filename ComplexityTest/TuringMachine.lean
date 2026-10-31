@@ -25,18 +25,18 @@ def copyInput : TM Id (Fin 0) Γ Bool where
   q₀ := false
   halt := id
   transition := fun _ (a, _) ↦ pure <|
-    { inputMove := .pos
-      work := Fin.elim0
-      output := if a == .blank then none else some a
-      state := a == .blank }
+    (a == .blank,
+      { inputMove := .pos
+        work := Fin.elim0
+        output := if a == .blank then none else some a })
 
-#guard (copyInput.run (Input := List Γ) (Cfg (Fin 0) Γ Bool [.one, .zero, .one].toArray) [.one, .zero, .one] 3).output = #[.one, .zero, .one]
-#guard (copyInput.run (Input := List Γ) (Cfg (Fin 0) Γ Bool [.one, .zero, .one].toArray) [.one, .zero, .one] 3).state = false
-#guard (copyInput.run (Input := List Γ) (Cfg (Fin 0) Γ Bool [.one, .zero, .one].toArray) [.one, .zero, .one] 4).state = true
-#guard (copyInput.run (Input := List Γ) (Cfg (Fin 0) Γ Bool [.one, .zero, .one].toArray) [.one, .zero, .one] 20).output = #[.one, .zero, .one]
-#guard (copyInput.run (Input := List Γ) (Cfg (Fin 0) Γ Bool [].toArray) [] 1).state = true
-#guard (copyInput.run (Input := List Γ) (Cfg (Fin 0) Γ Bool [].toArray) [] 1).output = #[]
-#guard (copyInput.runHistory (Cfg (Fin 0) Γ Bool [.one, .zero].toArray) ([.one, .zero] : List Γ) 10).space = 0
+#guard (copyInput.run (Input := List Γ) [.one, .zero, .one] 3).2.output = #[.one, .zero, .one]
+#guard (copyInput.run (Input := List Γ) [.one, .zero, .one] 3).1 = false
+#guard (copyInput.run (Input := List Γ) [.one, .zero, .one] 4).1 = true
+#guard (copyInput.run (Input := List Γ) [.one, .zero, .one] 20).2.output = #[.one, .zero, .one]
+#guard (copyInput.run (Input := List Γ) [] 1).1 = true
+#guard (copyInput.run (Input := List Γ) [] 1).2.output = #[]
+#guard (copyInput.runHistory ([.one, .zero] : List Γ) 10).snd.space = 0
 
 -- Outward input moves clamp, including on an empty input.
 #guard (Input.movePos (0 : Fin 5) .neg).val = 0
@@ -45,33 +45,31 @@ def copyInput : TM Id (Fin 0) Γ Bool where
 #guard (Input.movePos (1 : Fin 2) .neg).val = 0
 
 -- All work tapes write at their old head positions, before their heads move.
-def writeBoth : Action (Fin 2) Γ Bool where
+def writeBoth : Action (Fin 2) Γ where
   inputMove := .zero
   work i := if i = 0 then (some .one, .neg) else (some .zero, .pos)
   output := some .one
-  state := true
 
-def afterWrite : Cfg (Fin 2) Γ Bool #[] :=
-  apply writeBoth ((rawExecution []).init false)
+def afterWrite : Bool × Cfg (Fin 2) Γ #[] :=
+  apply (true, writeBoth) (false, Cfg.init (Fin 2) [])
 
-#guard (afterWrite.workTapes 0)[(0 : ℤ)] = .one
-#guard (afterWrite.workTapes 1)[(0 : ℤ)] = .zero
-#guard afterWrite.workPos 0 = -1
-#guard afterWrite.workPos 1 = 1
-#guard afterWrite.workSymbols 0 = .blank
-#guard afterWrite.workSymbols 1 = .blank
-#guard afterWrite.output = #[.one]
-#guard afterWrite.state = true
+#guard (afterWrite.2.workTapes 0)[(0 : ℤ)] = .one
+#guard (afterWrite.2.workTapes 1)[(0 : ℤ)] = .zero
+#guard afterWrite.2.workPos 0 = -1
+#guard afterWrite.2.workPos 1 = 1
+#guard afterWrite.2.workSymbols 0 = .blank
+#guard afterWrite.2.workSymbols 1 = .blank
+#guard afterWrite.2.output = #[.one]
+#guard afterWrite.1 = true
 
 -- Writing `default` erases a cell; omitting a write preserves its current contents.
-def eraseFirst : Action (Fin 2) Γ Bool where
+def eraseFirst : Action (Fin 2) Γ where
   inputMove := .zero
   work i := (if i = 0 then some default else none, .zero)
   output := none
-  state := true
 
-def afterErase : Cfg (Fin 2) Γ Bool #[] :=
-  apply eraseFirst { afterWrite with workPos := fun _ ↦ 0 }
+def afterErase : Cfg (Fin 2) Γ #[] :=
+  apply eraseFirst { afterWrite.2 with workPos := fun _ ↦ 0 }
 
 #guard (afterErase.workTapes 0)[(0 : ℤ)] = .blank
 #guard (afterErase.workTapes 1)[(0 : ℤ)] = .zero
@@ -80,39 +78,40 @@ def afterErase : Cfg (Fin 2) Γ Bool #[] :=
 def haltAfterWrite : TM Id (Fin 2) Γ Bool where
   q₀ := false
   halt := id
-  transition _ _ := pure writeBoth
+  transition _ _ := pure (true, writeBoth)
 
-#guard (haltAfterWrite.run (Input := List Γ) (Cfg (Fin 2) Γ Bool [].toArray) [] 10).output = #[.one]
-#guard ((haltAfterWrite.run (Input := List Γ) (Cfg (Fin 2) Γ Bool [].toArray) [] 10).workTapes 0)[(0 : ℤ)] = .one
-#guard (haltAfterWrite.runHistory (Cfg (Fin 2) Γ Bool #[]) ([] : List Γ) 0).space = 2
-#guard (haltAfterWrite.runHistory (Cfg (Fin 2) Γ Bool #[]) ([] : List Γ) 1).space = 4
-#guard (haltAfterWrite.runHistory (Cfg (Fin 2) Γ Bool #[]) ([] : List Γ) 10).space = 4
+#guard (haltAfterWrite.run (Input := List Γ) [] 10).2.output = #[.one]
+#guard ((haltAfterWrite.run (Input := List Γ) [] 10).2.workTapes 0)[(0 : ℤ)] = .one
+#guard (haltAfterWrite.runHistory ([] : List Γ) 0).snd.space = 2
+#guard (haltAfterWrite.runHistory ([] : List Γ) 1).snd.space = 4
+#guard (haltAfterWrite.runHistory ([] : List Γ) 10).snd.space = 4
 
 -- Space counts visited blank cells, even when a machine never writes or halts.
 def walkLeft : TM Id (Fin 1) Γ Bool where
   q₀ := false
   halt := id
   transition _ _ := pure <|
-    { inputMove := .zero
-      work := fun _ ↦ (none, .neg)
-      output := none
-      state := false }
+    (false,
+      { inputMove := .zero
+        work := fun _ ↦ (none, .neg)
+        output := none })
 
-#guard (walkLeft.runHistory (Cfg (Fin 1) Γ Bool #[]) ([] : List Γ) 5).space = 6
-#guard ((walkLeft.run (Input := List Γ) (Cfg (Fin 1) Γ Bool [].toArray) [] 5).workTapes 0)[(-3 : ℤ)] = .blank
+#guard (walkLeft.runHistory ([] : List Γ) 5).snd.space = 6
+#guard ((walkLeft.run (Input := List Γ) [] 5).2.workTapes 0)[(-3 : ℤ)] = .blank
 
 -- Distinct choices with equal successors retain their multiplicity in the Multiset monad.
 def fork : TM BinaryChoice (Fin 0) Γ Bool where
   q₀ := false
   halt := id
   transition _ _ :=
-    let a : Action (Fin 0) Γ Bool := ⟨.zero, Fin.elim0, some .one, true⟩
+    let a : Bool × Action (Fin 0) Γ := (true, ⟨.zero, Fin.elim0, some .one⟩)
     fun _ ↦ a
 
-#guard (fork.runWith (Cfg (Fin 0) Γ Bool #[]) Multiset ([] : List Γ) 1).map (·.output) = ↑[#[Γ.one], #[Γ.one]]
-#guard (fork.runWith (Cfg (Fin 0) Γ Bool #[]) Multiset ([] : List Γ) 5).map (·.output) = ↑[#[Γ.one], #[Γ.one]]
+#guard (fork.runWith Multiset ([] : List Γ) 1).map (·.2.output) = ↑[#[Γ.one], #[Γ.one]]
+#guard (fork.runWith Multiset ([] : List Γ) 5).map (·.2.output) = ↑[#[Γ.one], #[Γ.one]]
 
-#guard (fork.runHistoryWith (Cfg (Fin 0) Γ Bool #[]) Multiset ([] : List Γ) 2).map (fun h ↦ h.space) = ↑[0, 0]
+#guard (fork.runHistoryWith Multiset ([] : List Γ) 2).map
+  (fun h ↦ h.snd.space) = ↑[0, 0]
 
 -- Failure of an effect is distinct from a halting state.
 def abort : TM Option (Fin 0) Γ Bool where
@@ -120,29 +119,29 @@ def abort : TM Option (Fin 0) Γ Bool where
   halt := id
   transition _ _ := none
 
-#guard (abort.runWith (Cfg (Fin 0) Γ Bool #[]) Option ([] : List Γ) 1).isNone
-#guard (abort.runWith (Cfg (Fin 0) Γ Bool #[]) Option ([] : List Γ) 0).isSome
-#guard (abort.runFromWith Option { (abort.initInput (Input := List Γ) (Config := Cfg (Fin 0) Γ Bool [].toArray) []) with state := true } 10).isSome
+#guard (abort.runWith Option ([] : List Γ) 1).isNone
+#guard (abort.runWith Option ([] : List Γ) 0).isSome
+#guard (abort.runFromWith Option (true, (abort.init ([] : List Γ)).2) 10).isSome
 
 -- Halting is allowed already at time zero, and the transition is never executed.
 def alreadyHalted : TM Id (Fin 0) Γ Bool where
   q₀ := true
   halt := id
-  transition _ _ := pure <| ⟨.zero, Fin.elim0, some .one, false⟩
+  transition _ _ := pure <| (false, ⟨.zero, Fin.elim0, some .one⟩)
 
-#guard (alreadyHalted.run (Input := List Γ) (Cfg (Fin 0) Γ Bool [].toArray) [] 0).state
-#guard (alreadyHalted.run (Input := List Γ) (Cfg (Fin 0) Γ Bool [].toArray) [] 10).output = #[]
+#guard (alreadyHalted.run (Input := List Γ) [] 0).1
+#guard (alreadyHalted.run (Input := List Γ) [] 10).2.output = #[]
 
 -- Each active step makes a fresh choice; both mixed histories must occur.
 def twoChoices : TM BinaryChoice (Fin 0) Γ (Fin 3) where
   q₀ := 0
   halt q := q == 2
   transition q _ b :=
-    { inputMove := 0, work := Fin.elim0
-      output := some (if b = 0 then .zero else .one)
-      state := if q = 0 then 1 else 2 }
+    (if q = 0 then 1 else 2,
+      { inputMove := 0, work := Fin.elim0
+        output := some (if b = 0 then .zero else .one) })
 
-#guard (twoChoices.runWith (Cfg (Fin 0) Γ (Fin 3) #[]) Multiset ([] : List Γ) 2).map (·.output) =
+#guard (twoChoices.runWith Multiset ([] : List Γ) 2).map (·.2.output) =
   ↑[#[Γ.zero, Γ.zero], #[Γ.zero, Γ.one], #[Γ.one, Γ.zero], #[Γ.one, Γ.one]]
-#guard (twoChoices.runWith (Cfg (Fin 0) Γ (Fin 3) #[]) Multiset ([] : List Γ) 8).map (·.output) =
-  (twoChoices.runWith (Cfg (Fin 0) Γ (Fin 3) #[]) Multiset ([] : List Γ) 2).map (·.output)
+#guard (twoChoices.runWith Multiset ([] : List Γ) 8).map (·.2.output) =
+  (twoChoices.runWith Multiset ([] : List Γ) 2).map (·.2.output)

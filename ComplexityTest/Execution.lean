@@ -14,25 +14,23 @@ open Complexity
 namespace Complexity.ExecutionTest
 
 -- Halting hypotheses simplify both shared execution and history statistics.
-example {k : ℕ} {Q : Type*} (M : TreeMachine Id k Q) (c : TreeMachine.Cfg k Q)
+example {k : ℕ} {Q : Type*} (M : TreeMachine Id k Q) (c : Q × TreeMachine.Cfg k)
     (h : M.Halted c) (n : ℕ) :
     M.step c = c ∧ M.runFrom c n = c ∧
-      (M.runHistoryFrom c n).actionSum TreeMachine.Action.sizeCost = 0 := by
+      (M.runHistoryFrom c n).snd.actionSum TreeMachine.Action.sizeCost = 0 := by
   simp [h]
 
 -- Each model's complete interface recovers its existing resource relation.
 example {k : ℕ} [NeZero k] {Q : Type*} (M : TreeMachine Id k Q)
     (a b : Tree) (t s : ℕ) :
-    M.ComputesWith (Config := TreeMachine.Cfg k Q)
-      (fun h ↦ h.actionSum TreeMachine.Action.sizeCost)
-      (fun h ↦ h.configSup TreeMachine.Cfg.mass) a b t s ↔
+    M.ComputesWith a b (fun h ↦ h.snd.actionSum TreeMachine.Action.sizeCost)
+      (fun h ↦ h.snd.configSup TreeMachine.Cfg.mass) t s ↔
       M.ComputesWithin a b t s :=
   Iff.rfl
 
 example {κ Γ Q : Type*} [Inhabited Γ] [Fintype κ]
     (M : TM Id κ Γ Q) (xs ys : List Γ) (t s : ℕ) :
-    M.ComputesWith (Config := TM.Cfg κ Γ Q xs.toArray)
-      Controller.History.length Controller.History.space xs ys t s ↔
+    M.ComputesWith xs ys Controller.History.length (fun h ↦ h.snd.space) t s ↔
       M.ComputesWithin xs ys t s :=
   Iff.rfl
 
@@ -40,9 +38,9 @@ example {κ Γ Q : Type*} [Inhabited Γ] [Fintype κ]
 example {κ Γ Q : Type*} [Inhabited Γ] [Fintype κ]
     (M : TM Id κ Γ Q) (xs ys : List Γ) (t s : ℕ) :
     M.ComputesWithin xs ys t s ↔
-      M.Halted (M.run (TM.Cfg κ Γ Q xs.toArray) xs t) ∧
-      (M.run (TM.Cfg κ Γ Q xs.toArray) xs t).output = ys.toArray ∧
-      (M.runHistory (TM.Cfg κ Γ Q xs.toArray) xs t).space ≤ s := by
+      M.Halted (M.run xs t) ∧
+      (M.run xs t).2.output = ys.toArray ∧
+      (M.runHistory xs t).snd.space ≤ s := by
   refine Controller.computesWith_unit_iff.trans ?_
   simp only [TM.rawExecution_hasOutput]
 
@@ -50,44 +48,41 @@ example {κ Γ Q : Type*} [Inhabited Γ] [Fintype κ]
 private def oneAction : Controller Id Unit Unit Bool where
   q₀ := false
   halt := id
-  transition _ _ := pure ()
+  transition _ _ := pure (true, ())
 
-private instance : Controller.HasState (Bool × ℕ) Bool where
-  state := Prod.fst
-
-private instance : Controller.Observe (Bool × ℕ) Unit where
+private instance : Controller.Observe ℕ Unit where
   observe _ := ()
 
-private instance : Controller.Apply (Bool × ℕ) Unit where
-  apply _ cfg := (true, cfg.2 + 1)
+private instance : Controller.Apply ℕ Unit where
+  apply _ n := n + 1
 
-private instance : Controller.Execution (Bool × ℕ) Bool ℕ () where
-  init q := (q, 0)
-  state_init _ := rfl
-  HasOutput cfg n := cfg.2 = n
+private instance : Controller.HasConfig Unit Unit (fun _ ↦ ℕ) where
+  init _ := 0
 
-example : oneAction.ComputesWith (Config := Bool × ℕ)
-    (fun _ ↦ 0) (fun h ↦ h.configSup Prod.snd) () 1 0 1 := by
+private instance : Controller.Execution ℕ ℕ where
+  HasOutput c n := c = n
+
+example : oneAction.ComputesWith () 1 (fun _ ↦ 0) (fun h ↦ h.snd.configSup id) 0 1 := by
   refine ⟨1, rfl, rfl, ?_, ?_⟩ <;> decide
 
 -- Unit costs permit halted padding, but cannot hide the first active step in a zero budget.
-example : oneAction.ComputesWith (Config := Bool × ℕ)
-    Controller.History.length (fun h ↦ h.configSup Prod.snd) () 1 5 1 :=
+example : oneAction.ComputesWith () 1
+    Controller.History.length (fun h ↦ h.snd.configSup id) 5 1 :=
   Controller.computesWith_unit_iff.mpr ⟨rfl, rfl, by decide⟩
 
-example : ¬oneAction.ComputesWith (Config := Bool × ℕ)
-    Controller.History.length (fun h ↦ h.configSup Prod.snd) () 1 0 1 := by
+example : ¬oneAction.ComputesWith () 1
+    Controller.History.length (fun h ↦ h.snd.configSup id) 0 1 := by
   intro h
   have hh := (Controller.computesWith_unit_iff.mp h).1
   contradiction
 
 -- The unit-time equivalence also handles history measurements that decrease.
-example : oneAction.ComputesWith (Config := Bool × ℕ)
-    Controller.History.length (fun h ↦ if h.length = 0 then 1 else 0) () 1 5 0 :=
+example : oneAction.ComputesWith () 1
+    Controller.History.length (fun h ↦ if h.length = 0 then 1 else 0) 5 0 :=
   Controller.computesWith_unit_iff.mpr ⟨rfl, rfl, by decide⟩
 
 -- The standard output type is inferred from the execution instance.
-example : Controller.Execution.HasOutput (Config := Bool × ℕ) () (false, 1) 1 := rfl
+example : Controller.Execution.HasOutput (1 : ℕ) 1 := rfl
 
 -- Configuration capabilities support independent universes and can be supplied separately.
 example : Controller.HasState (ULift.{1} Unit) Unit where
@@ -102,12 +97,25 @@ example : Controller.Apply (ULift.{1} Unit) Unit where
 example : Controller.Apply Unit (ULift.{1} Unit) where
   apply _ config := config
 
-example : Controller.Execution (TreeMachine.Cfg 1 (ULift.{1} Bool)) (ULift.{1} Bool)
-    Tree Tree.nil := inferInstance
+example : Controller.HasConfig (TreeMachine.Action 1) Tree (fun _ ↦ TreeMachine.Cfg 1) :=
+  inferInstance
+
+example : Controller.Execution (TreeMachine.Cfg 1) Tree :=
+  inferInstance
+
+example (M : TreeMachine Id 1 (ULift.{1} Bool)) : ULift.{1} Bool × TreeMachine.Cfg 1 :=
+  M.init Tree.nil
+
+example : Controller.HasConfig (TM.Action (ULift.{1} Unit) (ULift.{2} Bool))
+    (List (ULift.{2} Bool)) (fun xs ↦ TM.Cfg (ULift.{1} Unit) (ULift.{2} Bool) xs.toArray) :=
+  inferInstance
 
 example : Controller.Execution
-    (TM.Cfg (ULift.{1} Unit) (ULift.{2} Bool) (ULift.{3} Bool)
-      (#[] : Array (ULift.{2} Bool)))
-    (ULift.{3} Bool) (List (ULift.{2} Bool)) ([] : List (ULift.{2} Bool)) := inferInstance
+    (TM.Cfg (ULift.{1} Unit) (ULift.{2} Bool) (#[] : Array (ULift.{2} Bool)))
+    (List (ULift.{2} Bool)) := inferInstance
+
+example (M : TM Id (ULift.{1} Unit) (ULift.{2} Bool) (ULift.{3} Bool)) :
+    ULift.{3} Bool × TM.Cfg (ULift.{1} Unit) (ULift.{2} Bool) (#[] : Array (ULift.{2} Bool)) :=
+  M.init ([] : List (ULift.{2} Bool))
 
 end Complexity.ExecutionTest

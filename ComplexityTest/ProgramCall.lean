@@ -36,12 +36,13 @@ def machine : TM Id (Fin 1) Bool Bool where
   q₀ := false
   halt := id
   transition _ _ := pure
-    { inputMove := 0, work := fun _ ↦ (some true, 1), output := some false, state := true }
+    (true, { inputMove := 0, work := fun _ ↦ (some true, 1), output := some false })
 
 private theorem machine_run_one :
-    machine.runFrom (machine.initInput (Config := Cfg (Fin 1) Bool Bool #[]) ([] : List Bool)) 1 =
-      { state := true, inputPos := 1, workTapes := fun _ ↦ (∅ : IntMemory Bool).set 0 true,
-        workPos := fun _ ↦ 1, output := #[false] } := rfl
+    machine.runFrom (machine.q₀, Cfg.init (Fin 1) ([] : List Bool)) 1 =
+      (true,
+        { inputPos := 1, workTapes := fun _ ↦ (∅ : IntMemory Bool).set 0 true,
+          workPos := fun _ ↦ 1, output := #[false] }) := rfl
 
 -- A returned machine state and its stored result are usable by the continuation.
 def demo : TM.Program (Fin 1) Bool Bool := do
@@ -55,46 +56,45 @@ def demo : TM.Program (Fin 1) Bool Bool := do
 example : (Program.compile (Program.callFrom machine true)).halt
     (Program.compile (Program.callFrom machine true)).q₀ = true :=
   Program.halt_start_callFrom machine true
-example : ((Program.compile (Program.callFrom machine true)).run (Input := List Bool) (Cfg (Fin 1) Bool ((Program.callFrom machine true).State ⊕ (Program.callFrom machine true).Exit) [].toArray) [] 3).output = #[] := by
+example :
+    ((Program.compile (Program.callFrom machine true)).run (Input := List Bool) [] 3).2.output =
+      #[] := by
   rw [Controller.run, Controller.runFrom_of_halted _ _
     (by exact Program.halt_start_callFrom machine true)]
   rfl
-example : ((Program.compile (Program.call machine)).run (Input := List Bool) (Cfg (Fin 1) Bool ((Program.call machine).State ⊕ (Program.call machine).Exit) [].toArray) [] 1).output = #[false] := by
-  change ((Program.compile (Program.call machine)).step
-    ((Program.compile (Program.call machine)).initInput (Config := Cfg (Fin 1) Bool ((Program.call machine).State ⊕ (Program.call machine).Exit) [].toArray) [])).output = _
-  rw [TM.step_eq]
+example : ((Program.compile (Program.call machine)).run (Input := List Bool) [] 1).2.output =
+    #[false] := by
+  rw [Controller.run_succ, Controller.run_zero, TM.step_eq]
   simp [Program.call, Program.compile, Program.callFrom, Program.callBlock, Program.blockRoute,
     Program.callControl, Program.Syntax.toControl,
     Program.Syntax.callLabel, Program.Syntax.callCont,
-    machine, Action.mapState]
+    machine]
   rfl
 
-#guard ((Program.compile demo).run (Input := List Bool) (Cfg (Fin 1) Bool (demo.State ⊕ demo.Exit) [].toArray) [] 4).output == #[false, true]
-#guard (((Program.compile demo).run (Input := List Bool) (Cfg (Fin 1) Bool (demo.State ⊕ demo.Exit) [].toArray) [] 4).workTapes 0)[(0 : ℤ)]
+#guard ((Program.compile demo).run (Input := List Bool) [] 4).2.output == #[false, true]
+#guard (((Program.compile demo).run (Input := List Bool) [] 4).2.workTapes 0)[(0 : ℤ)]
 
 theorem demo_spec : Triple (demo.verify (Program.cfgSemantics #[]))
-    (fun c b ↦ c = (rawExecution []).init () ∧ b = 4)
+    (fun c b ↦ c = Cfg.init (Fin 1) [] ∧ b = 4)
     (fun a c _ ↦ a = true ∧ c.output = #[false, true] ∧ c.workPos 0 = 0) () := by
-  have hc := Program.cfg_spec_call machine (machine.initInput (Input := List Bool) (Config := Cfg (Fin 1) Bool Bool [].toArray) []) 1 3 rfl (by rfl)
+  have hc := Program.cfg_spec_call machine (Cfg.init (Fin 1) ([] : List Bool)) 1 3 (by rfl)
   unfold demo
   vcgen [hc]
   all_goals simp_all only [machine_run_one]
-  all_goals simp_all [machine, Cfg.mapState,
-    Program.idle, Cfg.workSymbols]
+  all_goals simp_all [machine, Program.idle, Cfg.workSymbols]
   all_goals omega
 
 -- Earlier visits remain part of the caller's history; the current head is still at zero.
 private def moveHistory (d : SignType)
-    (s : History (Cfg (Fin 1) Bool Unit #[]) (Action (Fin 1) Bool Unit)) :=
+    (s : History (Cfg (Fin 1) Bool #[]) (Action (Fin 1) Bool)) :=
   s.snoc { Program.idle (κ := Fin 1) with work := fun _ ↦ (none, d) }
 
-def start : History (Cfg (Fin 1) Bool Unit #[]) (Action (Fin 1) Bool Unit) :=
+def start : History (Cfg (Fin 1) Bool #[]) (Action (Fin 1) Bool) :=
   (moveHistory (-1))^[4] ((moveHistory 1)^[7]
-    ((moveHistory (-1))^[3] (History.nil ((rawExecution []).init ()))))
+    ((moveHistory (-1))^[3] (History.nil (Cfg.init (Fin 1) []))))
 
-private def historyDemo : History (Cfg (Fin 1) Bool (demo.State ⊕ demo.Exit) #[])
-    (Action (Fin 1) Bool (demo.State ⊕ demo.Exit)) :=
-  demo.compile.runFrom (start.mapState (fun _ ↦ demo.compile.q₀)) 10
+private def historyDemo : History (Cfg (Fin 1) Bool #[]) (Action (Fin 1) Bool) :=
+  (demo.compile.runFrom (demo.compile.q₀, start) 10).2
 
 #guard historyDemo.visited 0 = start.visited 0
 #guard historyDemo.space = 8

@@ -27,14 +27,14 @@ def eraseAfterRead : TM.Program (Fin 1) Bool Unit := do
   Program.move 0 .neg
   Program.write 0 default
 
-def start : History (Cfg (Fin 1) Bool Unit #[]) (Action (Fin 1) Bool Unit) :=
-  History.nil ((rawExecution []).init ())
+def start : History (Cfg (Fin 1) Bool #[]) (Action (Fin 1) Bool) :=
+  History.nil (Cfg.init (Fin 1) [])
 
 -- Both cells are blank at the end, but both remain part of the visited footprint.
-def finish : Cfg (Fin 1) Bool Unit #[] :=
-  { (rawExecution []).init () with output := #[true] }
+def finish : Cfg (Fin 1) Bool #[] :=
+  { Cfg.init (Fin 1) [] with output := #[true] }
 
-theorem finish_space {s : History (Cfg (Fin 1) Bool Unit #[]) (Action (Fin 1) Bool Unit)}
+theorem finish_space {s : History (Cfg (Fin 1) Bool #[]) (Action (Fin 1) Bool)}
     (h : s.visited = fun _ ↦ ⟨(0, 1), by decide⟩) : s.space = 2 := by
   simp [History.space, h]
 

@@ -17,7 +17,7 @@ namespace Complexity.TreeActionCostTest
 def pairOnce : TreeMachine Id 1 Bool where
   q₀ := false
   halt := id
-  transition _ _ := pure <| Action.assign true (.pair 0 0 0)
+  transition _ _ := pure <| (true, .pair 0 0 0)
 
 -- The same program and data incur three size units, or one unit of step time.
 example : pairOnce.ComputesWithin Tree.nil (Tree.pair Tree.nil Tree.nil) 3 3 := by
@@ -34,7 +34,7 @@ example : pairOnce.ComputesWithin Tree.nil (Tree.pair Tree.nil Tree.nil) 3 3 :=
 def rightOnce : TreeMachine Id 1 Bool where
   q₀ := false
   halt := id
-  transition _ _ := pure <| Action.assign true (.right 0 0)
+  transition _ _ := pure <| (true, .right 0 0)
 
 example : rightOnce.ComputesWithin
     (.pair (.pair .nil .nil) .nil) .nil 5 5 := by
@@ -63,22 +63,20 @@ example : TimeSpaceModel.sizeCostTree.ComputableWithin
   simpa using pairBool_unit.toSizeCost
 
 -- This difference affects bounded computations, not just reported diagnostic totals.
-example : ¬Controller.ComputesWith (Config := Cfg 1 Bool) pairOnce
-    (fun h ↦ h.actionSum Action.sizeCost) (fun h ↦ h.configSup Cfg.mass)
-    Tree.nil (Tree.pair Tree.nil Tree.nil) 1 3 := by
+example : ¬Controller.ComputesWith pairOnce Tree.nil (Tree.pair Tree.nil Tree.nil)
+    (fun h ↦ h.snd.actionSum Action.sizeCost) (fun h ↦ h.snd.configSup Cfg.mass) 1 3 := by
   intro h
   have hbound : pairOnce.ComputesWithin _ _ _ _ := h
   have := hbound.output_size_le_mass_add_time
-  norm_num [pairOnce, initInput_tree,  Cfg.mass, input, Tree.size] at this
+  norm_num [pairOnce, Cfg.mass, input, Tree.size] at this
 
 -- The execution also uses the selected state-space measure.
-example : Controller.ComputesWith (Config := Cfg 1 Bool) pairOnce
-    Controller.History.length (fun _ ↦ 0) Tree.nil (Tree.pair Tree.nil Tree.nil) 1 0 := by
+example : Controller.ComputesWith pairOnce Tree.nil (Tree.pair Tree.nil Tree.nil)
+    Controller.History.length (fun _ ↦ 0) 1 0 := by
   refine ⟨1, rfl, rfl, ?_, ?_⟩ <;> decide
 
-example : ¬Controller.ComputesWith (Config := Cfg 1 Bool) pairOnce
-    (fun h ↦ h.actionSum Action.sizeCost) (fun h ↦ h.configSup Cfg.mass)
-    Tree.nil (Tree.pair Tree.nil Tree.nil) 3 2 := by
+example : ¬Controller.ComputesWith pairOnce Tree.nil (Tree.pair Tree.nil Tree.nil)
+    (fun h ↦ h.snd.actionSum Action.sizeCost) (fun h ↦ h.snd.configSup Cfg.mass) 3 2 := by
   intro h
   have hbound : pairOnce.ComputesWithin _ _ _ _ := h
   have := hbound.output_size_le_space

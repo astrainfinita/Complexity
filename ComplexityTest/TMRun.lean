@@ -23,27 +23,28 @@ open Complexity
 
 variable {κ Γ Q : Type} [FinEnum κ] [Inhabited Γ] {xs : Array Γ}
 
-def materialize (c : TM.Cfg κ Γ Q xs) : TM.Cfg κ Γ Q xs :=
+def materialize (c : TM.Cfg κ Γ xs) : TM.Cfg κ Γ xs :=
   let tapes := Vector.ofFn fun i : Fin (FinEnum.card κ) ↦ c.workTapes (FinEnum.equiv.symm i)
   let heads := Vector.ofFn fun i : Fin (FinEnum.card κ) ↦ c.workPos (FinEnum.equiv.symm i)
   { c with workTapes := fun i ↦ tapes[FinEnum.equiv i]
            workPos := fun i ↦ heads[FinEnum.equiv i] }
 
-@[simp] theorem materialize_eq (c : TM.Cfg κ Γ Q xs) : materialize c = c := by
+@[simp] theorem materialize_eq (c : TM.Cfg κ Γ xs) : materialize c = c := by
   apply TM.Cfg.ext <;> try rfl
   all_goals funext i; simp [materialize]
 
-def step (M : TM Id κ Γ Q) (c : TM.Cfg κ Γ Q xs) : TM.Cfg κ Γ Q xs :=
-  materialize (M.step c)
+def step (M : TM Id κ Γ Q) (c : Q × TM.Cfg κ Γ xs) : Q × TM.Cfg κ Γ xs :=
+  let d := M.step c
+  (d.1, materialize d.2)
 
-@[simp] theorem step_eq (M : TM Id κ Γ Q) (c : TM.Cfg κ Γ Q xs) : step M c = M.step c := by
+@[simp] theorem step_eq (M : TM Id κ Γ Q) (c : Q × TM.Cfg κ Γ xs) : step M c = M.step c := by
   simp [step]
 
-def runFrom (M : TM Id κ Γ Q) : TM.Cfg κ Γ Q xs → ℕ → TM.Cfg κ Γ Q xs
+def runFrom (M : TM Id κ Γ Q) : Q × TM.Cfg κ Γ xs → ℕ → Q × TM.Cfg κ Γ xs
   | c, 0 => c
   | c, n + 1 => runFrom M (step M c) n
 
-theorem runFrom_eq (M : TM Id κ Γ Q) (c : TM.Cfg κ Γ Q xs) (n : ℕ) :
+theorem runFrom_eq (M : TM Id κ Γ Q) (c : Q × TM.Cfg κ Γ xs) (n : ℕ) :
     runFrom M c n = M.runFrom c n := by
   induction n generalizing c with
   | zero => rfl

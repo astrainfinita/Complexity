@@ -96,8 +96,8 @@ example (s : ℕ → Tree) (v : Value) :
 
 private def finished (p : Code Value) (x y : Tree) (steps : ℕ) : Bool :=
   let c := ComplexityTest.TreeRun.runFrom p.compile
-    (p.compile.initInput (Config := TreeMachine.Cfg p.registers _) x) steps
-  p.compile.halt c.state && decide (c.regs 0 = y)
+    (p.compile.init x) steps
+  p.compile.halt c.1 && decide (c.2.regs 0 = y)
 
 #guard finished (Nat.Code.succ .input) (encode Tree (0 : ℕ)) (encode Tree (1 : ℕ)) 29
 

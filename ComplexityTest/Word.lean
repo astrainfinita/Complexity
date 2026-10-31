@@ -47,19 +47,22 @@ def checkLoad (word : List Bool) (suffix : List Bool := []) : Bool :=
   let xs := word.toArray.map some
   let p : StackMachine.Program (Fin 3) Bool Unit := StackMachine.Program.IO.load 0 1
   let M := p.compile.toTM
-  let c : Cfg (Fin 3) (Option Bool) _ xs :=
-    { (M.initInput (Config := Cfg (Fin 3) _ _ xs.toList.toArray) xs.toList) with
+  let c₀ := M.init xs.toList
+  let c : Cfg (Fin 3) (Option Bool) xs :=
+    { c₀.2 with
       workTapes := fun j ↦ if j = 0 then StackMachine.Tape.encode suffix
         else if j = 2 then StackMachine.Tape.encode source else ∅
       workPos := fun j ↦ if j = 0 then suffix.length else if j = 2 then source.length else 0
       output := #[some false, none, some true] }
   let steps := 6 * word.length + 4
-  let d := if word.length ≤ 1 then M.runFrom c steps else TMRun.runFrom M c steps
-  M.halt d.state && (d.inputPos.val == xs.size + 1) && (d.output == c.output) &&
-    (d.workPos 0 == (word ++ suffix).length) && (d.workPos 1 == 0) && (d.workPos 2 == source.length) &&
-    stackMatches (d.workTapes 0) (d.state.2 0) (word ++ suffix) &&
-    stackMatches (d.workTapes 1) (d.state.2 1) [] &&
-    stackMatches (d.workTapes 2) (d.state.2 2) source
+  let d :=
+    if word.length ≤ 1 then M.runFrom (c₀.1, c) steps else TMRun.runFrom M (c₀.1, c) steps
+  M.halt d.1 && (d.2.inputPos.val == xs.size + 1) && (d.2.output == c.output) &&
+    (d.2.workPos 0 == (word ++ suffix).length) && (d.2.workPos 1 == 0) &&
+    (d.2.workPos 2 == source.length) &&
+    stackMatches (d.2.workTapes 0) (d.1.2 0) (word ++ suffix) &&
+    stackMatches (d.2.workTapes 1) (d.1.2 1) [] &&
+    stackMatches (d.2.workTapes 2) (d.1.2 2) source
 
 #guard checkLoad []
 #guard checkLoad [false]
@@ -69,22 +72,21 @@ def checkLoad (word : List Bool) (suffix : List Bool := []) : Bool :=
 
 -- The backend performs simultaneous operations and keeps an empty pop at address zero.
 def checkStackAction : Bool :=
-  let a : StackMachine.Action (Fin 3) Bool Unit :=
+  let a : StackMachine.Action (Fin 3) Bool :=
     { inputMove := 1
       work := fun i ↦ if i = 1 then .push false else .pop
-      output := some false
-      state := () }
+      output := some false }
   let p := StackMachine.Program.act a
   let M := p.compile.toTM
-  let c : StackMachine.Cfg (Fin 3) Bool _ #[true, false] :=
-    { state := p.compile.q₀, inputPos := 1, output := #[true]
+  let c : StackMachine.Cfg (Fin 3) Bool #[true, false] :=
+    { inputPos := 1, output := #[true]
       «stacks» := fun i ↦ if i = 0 then [] else if i = 1 then [true] else [false, true] }
-  let d := M.runFrom (c.toTM (fun _ ↦ false)) 1
-  M.halt d.state && d.inputPos.val == 2 && d.output == #[some true, some false] &&
-    d.workPos 0 == 0 && d.workPos 1 == 2 && d.workPos 2 == 1 &&
-    stackMatches (d.workTapes 0) (d.state.2 0) [] &&
-    stackMatches (d.workTapes 1) (d.state.2 1) [false, true] &&
-    stackMatches (d.workTapes 2) (d.state.2 2) [true]
+  let d := M.runFrom (M.q₀, c.toTM (fun _ ↦ false)) 1
+  M.halt d.1 && d.2.inputPos.val == 2 && d.2.output == #[some true, some false] &&
+    d.2.workPos 0 == 0 && d.2.workPos 1 == 2 && d.2.workPos 2 == 1 &&
+    stackMatches (d.2.workTapes 0) (d.1.2 0) [] &&
+    stackMatches (d.2.workTapes 1) (d.1.2 1) [false, true] &&
+    stackMatches (d.2.workTapes 2) (d.1.2 2) [true]
 
 #guard checkStackAction
 
@@ -92,12 +94,12 @@ def checkStackAction : Bool :=
 def checkStacks (p : StackMachine.Program (Fin 3) Bool Unit)
     (before after : Fin 3 → List Bool) (steps : ℕ) : Bool :=
   let M := p.compile.toTM
-  let c : StackMachine.Cfg (Fin 3) Bool _ #[true, false, true] :=
-    { state := p.compile.q₀, inputPos := 2, output := #[true, false], «stacks» := before }
-  let d := TMRun.runFrom M (c.toTM (fun _ ↦ false)) steps
-  M.halt d.state && d.inputPos.val == 2 && d.output == #[some true, some false] &&
+  let c : StackMachine.Cfg (Fin 3) Bool #[true, false, true] :=
+    { inputPos := 2, output := #[true, false], «stacks» := before }
+  let d := TMRun.runFrom M (M.q₀, c.toTM (fun _ ↦ false)) steps
+  M.halt d.1 && d.2.inputPos.val == 2 && d.2.output == #[some true, some false] &&
     (List.finRange 3).all fun i ↦
-      d.workPos i == (after i).length && stackMatches (d.workTapes i) (d.state.2 i) (after i)
+      d.2.workPos i == (after i).length && stackMatches (d.2.workTapes i) (d.1.2 i) (after i)
 
 -- Generic copying restores its source and scratch, and retains the target's old suffix.
 def checkStackCopy (word suffix : List Bool) : Bool :=

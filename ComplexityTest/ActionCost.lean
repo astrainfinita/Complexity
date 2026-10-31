@@ -21,7 +21,7 @@ namespace Complexity.ActionCostTest
 def branches : Controller BinaryChoice Unit Bool Bool where
   q₀ := false
   halt := id
-  transition _ _ i := i == 1
+  transition _ _ i := (true, i == 1)
 
 private instance : Controller.HasState Bool Bool where
   state := id
@@ -29,10 +29,10 @@ private instance : Controller.HasState Bool Bool where
 private instance : Controller.Observe Bool Unit where
   observe _ := ()
 
-private instance : Controller.Apply Bool Bool where
-  apply _ _ := true
+private instance : Controller.Apply Bool (Bool × Bool) where
+  apply a _ := a.1
 
-def branchCost : Bool → Bool → ℕ := fun action _ => if action then 7 else 2
+def branchCost : Bool × Bool → Bool → ℕ := fun action _ => if action.2 then 7 else 2
 
 -- Coincident endpoints cannot recover which action was selected or its charge.
 #guard branches.stepWith Multiset false = ↑[true, true]
@@ -48,7 +48,7 @@ def branchCost : Bool → Bool → ℕ := fun action _ => if action then 7 else 
 def counter : Controller Id ℕ Unit Bool where
   q₀ := false
   halt := id
-  transition _ _ := pure ()
+  transition _ _ := pure (false, ())
 
 private instance : Controller.HasState ℕ Bool where
   state data := decide (3 ≤ data)
@@ -56,10 +56,10 @@ private instance : Controller.HasState ℕ Bool where
 private instance : Controller.Observe ℕ ℕ where
   observe := id
 
-private instance : Controller.Apply ℕ Unit where
+private instance : Controller.Apply ℕ (Bool × Unit) where
   apply _ data := data + 1
 
-def counterCost : Unit → ℕ → ℕ := fun _ data => data + 1
+def counterCost : Bool × Unit → ℕ → ℕ := fun _ data => data + 1
 
 -- Control-state types are inferred without an action or an expected result type.
 private def inferredState :=
@@ -80,13 +80,13 @@ example (data n : ℕ) : (counter.runHistoryFrom data n).last = counter.runFrom 
   counter.last_runHistoryFrom data n
 
 -- Conditions can be attached to a history without changing its data type.
-example (data n : ℕ) (h : Controller.History ℕ Unit)
+example (data n : ℕ) (h : Controller.History ℕ (Bool × Unit))
     (hr : counter.RunConditions data n h) : h.first = data := hr.first_eq
 
-example (data n : ℕ) (h : Controller.History ℕ Unit)
+example (data n : ℕ) (h : Controller.History ℕ (Bool × Unit))
     (hr : counter.RunConditions data n h) : h.length ≤ n := hr.length_le
 
-example (data n : ℕ) (h : Controller.History ℕ Unit)
+example (data n : ℕ) (h : Controller.History ℕ (Bool × Unit))
     (hr : counter.RunConditions data n h) (hn : h.length < n) :
     counter.Halted h.last := hr.stopped.resolve_left (by omega)
 
@@ -94,7 +94,7 @@ example (data n : ℕ) (hn : (counter.runHistoryFrom data n).length < n) :
     counter.Halted (counter.runHistoryFrom data n).last :=
   (counter.runHistoryFrom_spec data n).stopped.resolve_left (by omega)
 
-example (n : ℕ) (h : Controller.History Bool Bool)
+example (n : ℕ) (h : Controller.History Bool (Bool × Bool))
     (hh : h ∈ branches.runHistoryFromWith Multiset false n) :
     h.first = false ∧ h.length ≤ n := by
   have hr := branches.runHistoryFromWith_mem_spec false n hh

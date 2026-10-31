@@ -17,7 +17,7 @@ private def bit : TM Id (Fin 0) (Option Bool) Bool where
   q₀ := false
   halt := id
   transition := fun _ (a, _) ↦ pure <|
-    { inputMove := 1, work := Fin.elim0, output := a.map some, state := a.isNone }
+    (a.isNone, { inputMove := 1, work := Fin.elim0, output := a.map some })
 
 private theorem bit_spec : TM.Computes bit (id : Bool → Bool) (fun _ => 4) (fun _ => 0) := by
   apply Encoding.Computes.iff_of_uniqueEncoding.mpr
@@ -64,7 +64,7 @@ example : (fun b : Bool => b = true) ∈ DTISP .tm (fun _ => 4) (fun _ => 0) :=
 private def tree : TreeMachine Id 1 Unit where
   q₀ := ()
   halt _ := true
-  transition _ _ := pure <| TreeMachine.Action.keep ()
+  transition _ _ := pure <| ((), .nop)
 
 private theorem tree_spec :
     TreeMachine.Computes tree (id : Bool → Bool) (fun _ => 0) (fun b => (encode Tree b).size) := by
@@ -92,8 +92,7 @@ example : ¬TreeMachine.Computes tree (id : Bool → Bool) (fun _ => 0) (fun _ =
   intro h
   have hh := (Encoding.Computes.iff_of_uniqueEncoding.mp h) false
   have hm := hh.mass_le 0
-  change (TreeMachine.Cfg.mk () (TreeMachine.input (0 : Fin 1) Tree.nil)).mass ≤ 0 at hm
-  simp [ TreeMachine.Cfg.mass] at hm
+  simp [TreeMachine.Cfg.mass] at hm
 
 -- Eventual size bounds may ignore the finitely many legal sizes of a finite encoded type.
 -- This does not turn the all-input machine specification above into a zero-space one.

@@ -35,8 +35,8 @@ example : Code (Code Unit) := pure (pure ())
 -- Compile with the public backend and check the first halting time, not padded execution.
 def check {k : ℕ} (p : TM.Program (Fin k) (Fin 2) Unit) (xs ys : Array (Fin 2)) (n : ℕ) : Bool :=
   let M := p.compile
-  let c := M.run (Cfg (Fin k) _ _ xs.toList.toArray) xs.toList n
-  M.halt c.state && c.output == ys && (n == 0 || !M.halt (M.run (Cfg (Fin k) _ _ xs.toList.toArray) xs.toList (n - 1)).state)
+  let c := M.run xs.toList n
+  M.halt c.1 && c.2.output == ys && (n == 0 || !M.halt (M.run xs.toList (n - 1)).1)
 
 -- One continuation is pure; the other has two internal actions and a different state type.
 def branch : TM.Program (Fin 0) (Fin 2) Unit := do

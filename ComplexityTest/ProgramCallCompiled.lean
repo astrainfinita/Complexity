@@ -34,7 +34,7 @@ def producer : TM.Program (Fin 0) (Option Bool) Unit := do
   Program.emit (some true)
 
 -- A compiled program can itself be called and compiled again.
-#guard ((Program.compile (Program.call (Program.compile producer))).run (Input := List (Option Bool)) (Cfg (Fin 0) (Option Bool) ((Program.call producer.compile).State ⊕ (Program.call producer.compile).Exit) #[]) [] 2).output ==
+#guard ((Program.compile (Program.call (Program.compile producer))).run (Input := List (Option Bool)) [] 2).2.output ==
   #[some false, some true]
 
 end ProgramCallCompiledTest

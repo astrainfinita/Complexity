@@ -38,7 +38,7 @@ def echo : TM.Program (Fin 0) Bool Unit := do
   Program.emit a
 
 -- Registered primitive rules preserve data and exact remaining credits.
-theorem echo_spec (xs : Array Bool) (c : Cfg (Fin 0) Bool Unit xs) :
+theorem echo_spec (xs : Array Bool) (c : Cfg (Fin 0) Bool xs) :
     Triple (echo.verify (Program.cfgSemantics xs)) (fun s b ↦ s = c ∧ b = 2)
       (fun _ s b ↦ s.output = c.output.push c.inputSymbol ∧ b = 0) () := by
   unfold echo
@@ -51,7 +51,7 @@ theorem echo_computes (xs : Array Bool) :
   apply Program.cfg_computesWithin
   · constructor
     intro s b hs
-    exact (echo_spec xs ((rawExecution xs.toList).init ())).entails_wp_of_post
+    exact (echo_spec xs (Cfg.init (Fin 0) xs.toList)).entails_wp_of_post
       (fun _ _ _ h ↦ by simpa [Cfg.inputSymbol] using h.1) s b hs
   · exact ⟨rfl, rfl⟩
 

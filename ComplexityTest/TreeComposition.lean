@@ -25,90 +25,87 @@ def dirty : TreeMachine Id 3 (Fin 4) where
   q₀ := 0
   halt q := q == 3
   transition q _ := pure <|
-    if q = 0 then Action.assign 1 (.pair 1 0 0)
-    else if q = 1 then Action.assign 2 (.pair 2 0 0)
-    else Action.assign 3 (.pair 0 0 0)
+    if q = 0 then (1, .pair 1 0 0)
+    else if q = 1 then (2, .pair 2 0 0)
+    else (3, .pair 0 0 0)
 
 -- The output is correct only when every scratch register starts empty.
 def needsClean (k : ℕ) [NeZero k] : TreeMachine Id k Bool where
   q₀ := false
   halt := id
   transition _ roots := pure <|
-    if ∃ i : Fin k, i ≠ 0 ∧ roots i = true then Action.assign true (.pair 0 0 0)
-    else Action.assign true (.left 0 0)
+    if ∃ i : Fin k, i ≠ 0 ∧ roots i = true then (true, .pair 0 0 0)
+    else (true, .left 0 0)
 
 def halted (k : ℕ) : TreeMachine Id k Unit where
   q₀ := ()
   halt _ := true
-  transition _ _ := pure <| Action.keep ()
+  transition _ _ := pure <| ((), .nop)
 
 -- A larger destination shares the old work bank and gains one fresh scratch slot.
 def wider := dirty.comp (needsClean 4)
 
-#guard (wider.run (Cfg (max 3 4 + 1) (Comp.State 3 4 (Fin 4) Bool)) a 3).regs 0 =
-    .pair a a
-#guard (wider.run (Cfg (max 3 4 + 1) (Comp.State 3 4 (Fin 4) Bool)) a 3).regs 1 =
-    .pair a a
-#guard (wider.run (Cfg (max 3 4 + 1) (Comp.State 3 4 (Fin 4) Bool)) a 3).regs 2 =
-    .pair a a
-#guard (wider.run (Cfg (max 3 4 + 1) (Comp.State 3 4 (Fin 4) Bool)) a 4).regs 1 =
-    .pair a a
-#guard (wider.run (Cfg (max 3 4 + 1) (Comp.State 3 4 (Fin 4) Bool)) a 5).regs 1 = .nil
-#guard (wider.run (Cfg (max 3 4 + 1) (Comp.State 3 4 (Fin 4) Bool)) a 5).regs 2 =
-    .pair a a
-#guard (wider.run (Cfg (max 3 4 + 1) (Comp.State 3 4 (Fin 4) Bool)) a 6).regs 2 = .nil
-#guard (wider.run (Cfg (max 3 4 + 1) (Comp.State 3 4 (Fin 4) Bool)) a 7).regs 3 = .nil
+#guard (wider.run a 3).2.regs 0 = .pair a a
+#guard (wider.run a 3).2.regs 1 = .pair a a
+#guard (wider.run a 3).2.regs 2 = .pair a a
+#guard (wider.run a 4).2.regs 1 = .pair a a
+#guard (wider.run a 5).2.regs 1 = .nil
+#guard (wider.run a 5).2.regs 2 = .pair a a
+#guard (wider.run a 6).2.regs 2 = .nil
+#guard (wider.run a 7).2.regs 3 = .nil
 #guard ∀ n : Fin 5, (wider.run
-    (Cfg (max 3 4 + 1) (Comp.State 3 4 (Fin 4) Bool)) a (3 + n.val)).regs 0 = .pair a a
-#guard ¬wider.Halted (wider.run (Cfg (max 3 4 + 1) (Comp.State 3 4 (Fin 4) Bool)) a 7)
-#guard wider.Halted (wider.run (Cfg (max 3 4 + 1) (Comp.State 3 4 (Fin 4) Bool)) a 8)
-#guard (wider.run (Cfg (max 3 4 + 1) (Comp.State 3 4 (Fin 4) Bool)) a 8).regs 0 = a
+    a (3 + n.val)).2.regs 0 = .pair a a
+#guard ¬wider.Halted (wider.run a 7)
+#guard wider.Halted (wider.run a 8)
+#guard (wider.run a 8).2.regs 0 = a
 
 -- The reserved slot stays empty through both phases, cleanup, and halted padding.
 #guard ∀ n : Fin 16, (wider.run
-    (Cfg (max 3 4 + 1) (Comp.State 3 4 (Fin 4) Bool)) a n.val).regs 4 = .nil
+    a n.val).2.regs 4 = .nil
 
 -- Cleanup costs exactly K, including the initial control transfer.
 #guard (wider.runHistoryFrom
-  (wider.run (Cfg (max 3 4 + 1) (Comp.State 3 4 (Fin 4) Bool)) a 3) 4).actionSum Action.sizeCost = 4
+  (wider.run a 3) 4).snd.actionSum Action.sizeCost = 4
 #guard
-  let h := wider.runHistory (Cfg (max 3 4 + 1) (Comp.State 3 4 (Fin 4) Bool)) a 20
+  let h := (wider.runHistory a 20).snd
   (h.actionSum Action.sizeCost, h.length, h.configSup Cfg.mass) = (32, 8, 23)
 
 -- A smaller destination also clears the old scratch slot it does not itself use.
 def narrower := dirty.comp (needsClean 2)
 
 #guard narrower.Halted (narrower.run
-    (Cfg (max 3 2 + 1) (Comp.State 3 2 (Fin 4) Bool)) a 7)
-#guard (narrower.run (Cfg (max 3 2 + 1) (Comp.State 3 2 (Fin 4) Bool)) a 7).regs 0 = a
-#guard (narrower.run (Cfg (max 3 2 + 1) (Comp.State 3 2 (Fin 4) Bool)) a 7).regs 1 = .nil
-#guard (narrower.run (Cfg (max 3 2 + 1) (Comp.State 3 2 (Fin 4) Bool)) a 7).regs 2 = .nil
+    a 7)
+#guard (narrower.run a 7).2.regs 0 = a
+#guard (narrower.run a 7).2.regs 1 = .nil
+#guard (narrower.run a 7).2.regs 2 = .nil
 #guard ∀ n : Fin 16, (narrower.run
-    (Cfg (max 3 2 + 1) (Comp.State 3 2 (Fin 4) Bool)) a n.val).regs 3 = .nil
+    a n.val).2.regs 3 = .nil
 #guard
-  let h := narrower.runHistory (Cfg (max 3 2 + 1) (Comp.State 3 2 (Fin 4) Bool)) a 20
+  let h := (narrower.runHistory a 20).snd
   (h.actionSum Action.sizeCost, h.configSup Cfg.mass) = (31, 22)
 
 -- Initially halted endpoints still perform the bridge, including the K = 1 case.
 #guard (dirty.comp (halted 2)).Halted ((dirty.comp (halted 2)).run
-    (Cfg (max 3 2 + 1) (Comp.State 3 2 (Fin 4) Unit)) a 6)
+    a 6)
 #guard ((dirty.comp (halted 2)).run
-    (Cfg (max 3 2 + 1) (Comp.State 3 2 (Fin 4) Unit)) a 6).regs 0 = .pair a a
+    a 6).2.regs 0 = .pair a a
 #guard ((dirty.comp (halted 2)).run
-    (Cfg (max 3 2 + 1) (Comp.State 3 2 (Fin 4) Unit)) a 6).regs 1 = .nil
+    a 6).2.regs 1 = .nil
 #guard ((dirty.comp (halted 2)).run
-    (Cfg (max 3 2 + 1) (Comp.State 3 2 (Fin 4) Unit)) a 6).regs 2 = .nil
-#guard ((dirty.comp (halted 2)).runHistory _ a 20).actionSum Action.sizeCost = 24
-#guard ((halted 3).comp (needsClean 4)).Halted (((halted 3).comp (needsClean 4)).run (Cfg (max 3 4 + 1) (Comp.State 3 4 Unit Bool)) a 5)
+    a 6).2.regs 2 = .nil
+#guard ((dirty.comp (halted 2)).runHistory a 20).snd.actionSum
+  Action.sizeCost = 24
+#guard ((halted 3).comp (needsClean 4)).Halted (((halted 3).comp (needsClean 4)).run a 5)
 #guard (((halted 3).comp (needsClean 4)).run
-    (Cfg (max 3 4 + 1) (Comp.State 3 4 Unit Bool)) a 5).regs 0 = .nil
+    a 5).2.regs 0 = .nil
 #guard ¬((halted 1).comp (halted 1)).Halted (((halted 1).comp (halted 1)).run
-    (Cfg (max 1 1 + 1) (Comp.State 1 1 Unit Unit)) a 0)
+    a 0)
 #guard ((halted 1).comp (halted 1)).Halted (((halted 1).comp (halted 1)).run
-    (Cfg (max 1 1 + 1) (Comp.State 1 1 Unit Unit)) a 1)
+    a 1)
 #guard (((halted 1).comp (halted 1)).run
-    (Cfg (max 1 1 + 1) (Comp.State 1 1 Unit Unit)) a 1).regs 0 = a
-#guard (((halted 1).comp (halted 1)).runHistory _ a 20).actionSum Action.sizeCost = 1
+    a 1).2.regs 0 = a
+#guard (((halted 1).comp (halted 1)).runHistory a 20).snd.actionSum
+  Action.sizeCost = 1
 
 private theorem dirty_computes : dirty.ComputesWithin a (.pair a a) 21 21 := by
   refine ⟨3, rfl, rfl, ?_, ?_⟩ <;> decide

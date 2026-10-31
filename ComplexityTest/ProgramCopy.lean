@@ -34,18 +34,17 @@ def copyInput : TM.Program (Fin 0) Symbol Unit := Program.repeatUntil body
 
 example : Finite (copyInput.State ⊕ copyInput.Exit) := inferInstance
 
-private theorem cfg_ext {xs : Array Symbol} (s t : Cfg (Fin 0) Symbol Unit xs)
+private theorem cfg_ext {xs : Array Symbol} (s t : Cfg (Fin 0) Symbol xs)
     (hi : s.inputPos = t.inputPos) (ho : s.output = t.output) : s = t := by
   apply Cfg.ext
-  · exact Subsingleton.elim _ _
   · exact hi
   · exact Subsingleton.elim _ _
   · exact Subsingleton.elim _ _
   · exact ho
 
 private def state (xs : List Bool) (i : ℕ) (h : i ≤ xs.length) :
-    Cfg (Fin 0) Symbol Unit (input xs) :=
-  { (rawExecution (input xs).toList).init () with
+    Cfg (Fin 0) Symbol (input xs) :=
+  { Cfg.init (Fin 0) (input xs).toList with
     inputPos := ⟨i + 1, by simp only [input, List.size_toArray, List.length_map]; omega⟩
     output := input (xs.take i) }
 
@@ -72,11 +71,11 @@ private theorem at_step (xs : List Bool) (i : ℕ) (h : i < xs.length) :
     simp only [input, Array.toList_push, List.toList_toArray,
       List.take_succ_eq_append_getElem h, List.map_append, List.map_cons, List.map_nil]
 
-private def Inv (xs : List Bool) (s : Cfg (Fin 0) Symbol Unit (input xs)) (b : ℕ) : Prop :=
+private def Inv (xs : List Bool) (s : Cfg (Fin 0) Symbol (input xs)) (b : ℕ) : Prop :=
   ∃ i h, s = state xs i h ∧ b = 4 * (xs.length - i) + 2
 
 private theorem inv_done (xs : List Bool)
-    {s : Cfg (Fin 0) Symbol Unit (input xs)}
+    {s : Cfg (Fin 0) Symbol (input xs)}
     {b : ℕ} (h : Inv xs s b) (ha : s.inputSymbol = none) :
     s.output = input xs := by
   obtain ⟨i, hi, hs, _⟩ := h
@@ -90,7 +89,7 @@ private theorem inv_done (xs : List Bool)
   simp [hs, state]
 
 private theorem inv_next (xs : List Bool)
-    {s : Cfg (Fin 0) Symbol Unit (input xs)}
+    {s : Cfg (Fin 0) Symbol (input xs)}
     {b : ℕ} (h : Inv xs s (b + 1)) (ha : s.inputSymbol ≠ none) :
     Inv xs (apply { Program.idle (κ := Fin 0) (Γ := Symbol) with inputMove := 1 }
       (apply { Program.idle (κ := Fin 0) with output := some s.inputSymbol } s))
@@ -106,7 +105,7 @@ private theorem inv_next (xs : List Bool)
   simpa only [hs, at_input_lt xs i hl] using at_step xs i hl
 
 private theorem inv_budget (xs : List Bool)
-    {s : Cfg (Fin 0) Symbol Unit (input xs)}
+    {s : Cfg (Fin 0) Symbol (input xs)}
     {b : ℕ} (h : Inv xs s (b + 1)) (ha : s.inputSymbol ≠ none) : 4 < b := by
   obtain ⟨i, hi, hs, hb⟩ := h
   rw [hs] at ha

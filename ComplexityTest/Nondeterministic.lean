@@ -57,11 +57,8 @@ example : ¬(fixedOutputs {RawWord.ofList [], ⌜true⌝₂}).NDecidableWithin
   have he := UniqueEncoding.mem_decode_iff.mp hb
   cases b <;> cases he
 
-def answer {Q : Type} (b : Bool) (q : Q) : TM.Action (Fin 0) (Option Bool) Q where
-  inputMove := 0
-  work := Fin.elim0
-  output := some (some b)
-  state := q
+def answer {Q : Type} (b : Bool) (q : Q) : Q × TM.Action (Fin 0) (Option Bool) :=
+  (q, { inputMove := 0, work := Fin.elim0, output := some (some b) })
 
 -- One branch rejects immediately; the other finishes the three-bit code for true.
 def guess : NTM (Fin 0) (Option Bool) (Fin 4) where
@@ -72,24 +69,23 @@ def guess : NTM (Fin 0) (Option Bool) (Fin 4) where
     else answer false (if q = 1 then 2 else 3)
 
 private theorem guess_results (xs : List (Option Bool)) :
-    (guess.runWith (TM.Cfg (Fin 0) (Option Bool) (Fin 4) xs.toArray) Multiset xs 3).map
-      (fun c => (c.state, c.output)) =
+    (guess.runWith Multiset xs 3).map (fun c => (c.1, c.2.output)) =
       ↑([(3, #[some false]), (3, #[some true, some false, some false]),
         (3, #[some true, some false, some false]), (3, #[some true, some false, some false]),
         (3, #[some true, some false, some false])] : List (Fin 4 × Array (Option Bool))) := rfl
 
 private theorem guess_time (xs : List (Option Bool)) : guess.UsesTime xs 3 := by
   intro c hc
-  have hm := Multiset.mem_map_of_mem (fun c => (c.state, c.output)) hc
+  have hm := Multiset.mem_map_of_mem (fun c => (c.1, c.2.output)) hc
   rw [guess_results] at hm
   simp only [Multiset.mem_coe, List.mem_cons, List.not_mem_nil, or_false, or_self,
     Prod.mk.injEq] at hm
-  rcases hm with ⟨h, _⟩ | ⟨h, _⟩ <;> change (c.state == 3) = true <;> simp [h]
+  rcases hm with ⟨h, _⟩ | ⟨h, _⟩ <;> simp [Controller.Halted, guess, h]
 
 private theorem guess_boolean (xs : RawWord Bool) : guess.BooleanOutput xs := by
   rw [NTM.booleanOutput_iff_of_usesTime (guess_time _)]
   intro c hc
-  have hm := Multiset.mem_map_of_mem (fun c => (c.state, c.output)) hc
+  have hm := Multiset.mem_map_of_mem (fun c => (c.1, c.2.output)) hc
   rw [guess_results] at hm
   simp only [Multiset.mem_coe, List.mem_cons, List.not_mem_nil, or_false, or_self,
     Prod.mk.injEq] at hm
@@ -100,9 +96,8 @@ private theorem guess_boolean (xs : RawWord Bool) : guess.BooleanOutput xs := by
 private theorem guess_accepts (xs : RawWord Bool) : guess.Accepts xs := by
   rw [NTM.accepts_iff_of_usesTime (guess_time _)]
   have hm : (3, #[some true, some false, some false]) ∈
-      (guess.runWith (TM.Cfg (Fin 0) (Option Bool) (Fin 4) (xs.toList.map some).toArray)
-        Multiset (xs.toList.map some) 3).map
-        (fun c => (c.state, c.output)) := by rw [guess_results]; simp
+      (guess.runWith Multiset (xs.toList.map some) 3).map
+        (fun c => (c.1, c.2.output)) := by rw [guess_results]; simp
   obtain ⟨c, hc, h⟩ := Multiset.mem_map.mp hm
   exact ⟨c, hc, congrArg Prod.snd h⟩
 
@@ -145,19 +140,20 @@ def splitHeads : NTM (Fin 1) (Option Bool) Bool where
   q₀ := false
   halt := id
   transition _ _ i :=
-    { inputMove := 0, work := fun _ => (none, if i = 0 then -1 else 1)
-      output := some (some (i == 1)), state := true }
+    (true,
+      { inputMove := 0, work := fun _ => (none, if i = 0 then -1 else 1)
+        output := some (some (i == 1)) })
 
-#guard (splitHeads.runHistoryWith (TM.Cfg (Fin 1) (Option Bool) Bool #[])
-  Multiset ([] : List (Option Bool)) 1).map (fun h ↦ h.space) = ↑[2, 2]
-#guard (splitHeads.runHistoryWith (TM.Cfg (Fin 1) (Option Bool) Bool #[])
-  Multiset ([] : List (Option Bool)) 4).map (fun h ↦ h.space) = ↑[2, 2]
+#guard (splitHeads.runHistoryWith
+  Multiset ([] : List (Option Bool)) 1).map (fun h ↦ h.snd.space) = ↑[2, 2]
+#guard (splitHeads.runHistoryWith
+  Multiset ([] : List (Option Bool)) 4).map (fun h ↦ h.snd.space) = ↑[2, 2]
 
 -- A local invariant proves the space bound at every depth, including halted padding.
 example : splitHeads.UsesSpace [] 2 := by
   apply splitHeads.usesSpace_of_invariant
-    (P := fun h ↦ h = History.nil (splitHeads.initInput ([] : List (Option Bool))) ∨
-      splitHeads.Halted h ∧ h.space ≤ 2)
+    (P := fun h ↦ h = History.nil (splitHeads.init ([] : List (Option Bool))) ∨
+      splitHeads.Halted h ∧ h.snd.space ≤ 2)
   · exact Or.inl rfl
   · intro c hc d hd
     rcases hc with rfl | ⟨hh, hs⟩
@@ -177,47 +173,45 @@ def rejoinHeads : NTM Unit Bool (Fin 4) where
   q₀ := 0
   halt q := q == 3
   transition q _ i :=
-    { inputMove := 0
-      work := fun _ => (none,
-        if q = 0 then (if i = 0 then -1 else 1) else if q = 1 then 1 else -1)
-      output := none
-      state := if q = 0 then (if i = 0 then 1 else 2) else 3 }
+    (if q = 0 then (if i = 0 then 1 else 2) else 3,
+      { inputMove := 0
+        work := fun _ => (none,
+          if q = 0 then (if i = 0 then -1 else 1) else if q = 1 then 1 else -1)
+        output := none })
 
-#guard (rejoinHeads.runWith (TM.Cfg Unit Bool (Fin 4) #[]) Multiset ([] : List Bool) 2).map
-  (fun c => (c.state, c.workPos ())) = ↑([(3, 0), (3, 0), (3, 0), (3, 0)] : List (Fin 4 × ℤ))
-#guard (rejoinHeads.runHistoryWith (TM.Cfg Unit Bool (Fin 4) #[]) Multiset ([] : List Bool) 2).map
-  (fun c => ((c.visited ()).fst, (c.visited ()).snd)) = ↑([(-1, 0), (-1, 0), (0, 1), (0, 1)] : List (ℤ × ℤ))
+#guard (rejoinHeads.runWith Multiset ([] : List Bool) 2).map
+  (fun c => (c.1, c.2.workPos ())) = ↑([(3, 0), (3, 0), (3, 0), (3, 0)] : List (Fin 4 × ℤ))
+#guard (rejoinHeads.runHistoryWith Multiset ([] : List Bool) 2).map
+  (fun h => let v := h.snd.visited (); (v.fst, v.snd)) =
+    ↑([(-1, 0), (-1, 0), (0, 1), (0, 1)] : List (ℤ × ℤ))
 
 -- An early accepting branch does not excuse another branch missing the time bound.
 def mixed : NTM (Fin 0) (Option Bool) (Fin 4) where
   q₀ := 0
   halt q := q == 3
-  transition q o i := if q = 0 ∧ i = 0 then ⟨0, Fin.elim0, none, 0⟩
+  transition q o i := if q = 0 ∧ i = 0 then (0, ⟨0, Fin.elim0, none⟩)
     else guess.transition q o i
 
 example : mixed.Accepts (.ofList []) := by
   have hm : (3, #[some true, some false, some false]) ∈
-      (mixed.runWith (TM.Cfg (Fin 0) (Option Bool) (Fin 4) #[])
-        Multiset ([] : List (Option Bool)) 3).map (fun c => (c.state, c.output)) := by decide
+      (mixed.runWith
+        Multiset ([] : List (Option Bool)) 3).map (fun c => (c.1, c.2.output)) := by decide
   obtain ⟨c, hc, h⟩ := Multiset.mem_map.mp hm
   refine ⟨3, c, hc, ?_, congrArg Prod.snd h⟩
-  change (c.state == 3) = true
-  simp [show c.state = 3 from congrArg Prod.fst h]
+  simp [Controller.Halted, mixed, show c.1 = 3 from congrArg Prod.fst h]
 
 example : ¬mixed.UsesTime [] 3 := by
   intro h
-  have hm : 0 ∈ (mixed.runWith (TM.Cfg (Fin 0) (Option Bool) (Fin 4) #[])
-      Multiset ([] : List (Option Bool)) 3).map (·.state) := by decide
+  have hm : 0 ∈ (mixed.runWith Multiset ([] : List (Option Bool)) 3).map (·.1) := by decide
   obtain ⟨c, hc, he⟩ := Multiset.mem_map.mp hm
   have hh := h c hc
-  change (c.state == 3) = true at hh
-  simp [he] at hh
+  simp [Controller.Halted, mixed, he] at hh
 
 -- Space alone is meaningful for divergence, but an NSPACE decider must terminate.
 def forever : TM Id (Fin 0) (Option Bool) Unit where
   q₀ := ()
   halt _ := false
-  transition _ _ := pure <| ⟨0, Fin.elim0, none, ()⟩
+  transition _ _ := pure <| ((), ⟨0, Fin.elim0, none⟩)
 
 example (xs : List (Option Bool)) : NTM.UsesSpace forever.toBinary xs 0 := by
   intro n c _
@@ -237,15 +231,15 @@ example : ¬∃ t, NTM.DecidesWithin forever.toBinary
 def malformed : TM Id (Fin 0) (Option Bool) Bool where
   q₀ := false
   halt := id
-  transition _ _ := pure <| { answer false true with output := none }
+  transition _ _ := pure <| (true, { (answer false true).2 with output := none })
 
 example : ¬NTM.BooleanOutput malformed.toBinary (.ofList []) := by
   have ht : NTM.UsesTime malformed.toBinary [] 1 :=
     (malformed.usesTime_toBinary_iff _ _).2 rfl
   rw [NTM.booleanOutput_iff_of_usesTime ht]
   intro h
-  have hc : malformed.run (TM.Cfg (Fin 0) (Option Bool) Bool #[]) ([] : List (Option Bool)) 1 ∈
-      malformed.toBinary.runWith _ Multiset ([] : List (Option Bool)) 1 := by
+  have hc : malformed.run ([] : List (Option Bool)) 1 ∈
+      malformed.toBinary.runWith Multiset ([] : List (Option Bool)) 1 := by
     simp only [Controller.mem_runWith_toBinary_iff]
   obtain ⟨b, hb⟩ := h _ hc
   cases b <;> cases congrArg Array.size hb

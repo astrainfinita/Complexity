@@ -95,9 +95,8 @@ theorem swapRoot_correct {α : Type*} [UniqueEncoding Tree α] (x : Term α) :
 -- The existing compiler transfers this source proof directly to a finite tree machine.
 example {α : Type*} [UniqueEncoding Tree α] (x : Term α) :
     let p := swapRoot .input
-    ∃ n, p.compile.Halted (p.compile.run (TreeMachine.Cfg p.registers _) (encode Tree x) n) ∧
-      (p.compile.run (TreeMachine.Cfg p.registers _) (encode Tree x) n).regs 0 =
-        encode Tree x.swapRoot :=
+    ∃ n, p.compile.Halted (p.compile.run (encode Tree x) n) ∧
+      (p.compile.run (encode Tree x) n).2.regs 0 = encode Tree x.swapRoot :=
   Code.compile_correct (swapRoot_correct x)
 
 -- Unit-returning cases work with mutable variables and unequal allocations in the branches.

@@ -48,10 +48,10 @@ example (i j : Fin 2) :
     Prod.mk.injEq, ite_and, mul_ite]
 
 -- Multiset interpretations may have more than two alternatives, with coincident endpoints.
-private def threeChoices : Controller Multiset Unit ℕ ℕ where
+private def threeChoices : Controller Multiset Unit Unit ℕ where
   q₀ := 0
   halt q := q != 0
-  transition _ _ := ↑[1, 1, 2]
+  transition _ _ := ↑[(1, ()), (1, ()), (2, ())]
 
 private instance : Controller.HasState ℕ ℕ where
   state := id
@@ -59,8 +59,8 @@ private instance : Controller.HasState ℕ ℕ where
 private instance : Controller.Observe ℕ Unit where
   observe _ := ()
 
-private instance : Controller.Apply ℕ ℕ where
-  apply a _ := a
+private instance : Controller.Apply ℕ (ℕ × Unit) where
+  apply a _ := a.1
 
 -- Halting freezes the three paths without collapsing their repeated endpoint.
 example (n : ℕ) (hn : 1 ≤ n) :
@@ -72,10 +72,10 @@ example (n : ℕ) (hn : 1 ≤ n) :
   rcases hd with rfl | rfl | rfl <;> decide
 
 -- The same controller can use a local interpretation for the same target monad.
-private def binaryChoices : Controller BinaryChoice Unit ℕ ℕ where
+private def binaryChoices : Controller BinaryChoice Unit Unit ℕ where
   q₀ := 0
   halt q := q != 0
-  transition _ _ i := if i = 0 then 1 else 2
+  transition _ _ i := if i = 0 then (1, ()) else (2, ())
 
 #guard binaryChoices.runFromWith Multiset 0 1 = ↑[1, 2]
 

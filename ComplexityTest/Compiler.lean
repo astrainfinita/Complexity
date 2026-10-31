@@ -47,21 +47,21 @@ local instance (k : ℕ) : FinEnum (Work k) := FinEnum.ofEquiv _ (proxy_equiv% (
 def a : Tree := .pair .nil .nil
 def b : Tree := .pair a .nil
 
-def once (p : Op 2) : TreeMachine Id 2 Bool where
+def once (p : Action 2) : TreeMachine Id 2 Bool where
   q₀ := false
   halt := id
-  transition _ _ := pure <| ⟨p, true⟩
+  transition _ _ := pure <| (true, p)
 
 -- Check the actual controller, including input consumption and counter restoration.
 def check {k : ℕ} {Q : Type} [FinEnum Q] (M : TreeMachine Id k Q) (i : Fin k) (x : Tree)
     (o : Fin k) (t : Tree) : Bool :=
   let N := (StackMachine.Program.compile (Simulation.Program.program M i o)).toTM
   let xs := (BitList.encodeTree x).map some
-  let c := TMRun.runFrom N (N.initInput (Config := TM.Cfg (Work k) _ _ xs.toArray) xs) 4802
-  N.halt c.state && (c.output == ((BitList.encodeTree t).map some).toArray) &&
-    (c.inputPos.val == xs.length + 1) &&
+  let c := TMRun.runFrom N (N.init xs) 4802
+  N.halt c.1 && (c.2.output == ((BitList.encodeTree t).map some).toArray) &&
+    (c.2.inputPos.val == xs.length + 1) &&
     (FinEnum.toList Scratch).all fun j ↦
-      c.workPos (.scratch j) == 0 && (c.workTapes (.scratch j))[(0 : ℤ)] == none
+      c.2.workPos (.scratch j) == 0 && (c.2.workTapes (.scratch j))[(0 : ℤ)] == none
 
 -- Keeping a register performs no data transfer.
 #guard check (once .nop) 0 a 0 a
@@ -74,10 +74,10 @@ def checkNopLoop (x : Tree) : Bool :=
   let p : StackMachine.Program (Work 2) Bool Unit :=
     Program.loopOn StackMachine.Program.idle (Simulation.Program.body (once .nop)) false
   let M := p.compile
-  let c := (Simulation.Program.loadedCfg (0 : Fin 2) x).mapState (fun _ ↦ M.q₀)
+  let c := (M.q₀, Simulation.Program.loadedCfg (0 : Fin 2) x)
   let d := M.runFrom c 3
-  M.halt d.state && !(M.halt (M.runFrom c 2).state) &&
-    d.stacks (.data 0) == BitList.encodeTree x
+  M.halt d.1 && !(M.halt (M.runFrom c 2).1) &&
+    d.2.stacks (.data 0) == BitList.encodeTree x
 
 #guard checkNopLoop .nil
 #guard checkNopLoop (.pair (.pair a b) (.pair b a))
@@ -102,8 +102,8 @@ def twice : TreeMachine Id 2 (Fin 3) where
   q₀ := 0
   halt q := q == 2
   transition q _ := pure <|
-    if q = 0 then Action.assign 1 (.right 0 0)
-    else Action.assign 2 (.left 1 0)
+    if q = 0 then (1, .right 0 0)
+    else (2, .left 1 0)
 
 #guard check twice 0 (Tree.pair b a) 0 a
 #guard check twice 0 (Tree.pair b a) 1 .nil
@@ -113,9 +113,9 @@ def thrice : TreeMachine Id 1 (Fin 4) where
   q₀ := 0
   halt q := q == 3
   transition q r := pure <|
-    if q = 0 then Action.assign 1 (.pair 0 0 0)
-    else if q = 1 then Action.assign 2 (.right 0 0)
-    else Action.assign 3 (if r 0 then .right 0 0 else .pair 0 0 0)
+    if q = 0 then (1, .pair 0 0 0)
+    else if q = 1 then (2, .right 0 0)
+    else (3, if r 0 then .right 0 0 else .pair 0 0 0)
 
 #guard check thrice 0 a 0 .nil
 #guard check thrice 0 .nil 0 a
@@ -124,7 +124,7 @@ def thrice : TreeMachine Id 1 (Fin 4) where
 def halted : TreeMachine Id 1 Bool where
   q₀ := true
   halt := id
-  transition _ _ := pure <| Action.assign false (.pair 0 0 0)
+  transition _ _ := pure <| (false, .pair 0 0 0)
 
 #guard check halted 0 b 0 b
 
@@ -139,17 +139,17 @@ example (x : Tree) (q : ℕ) :
         (StackMachine.Program.historySemantics (BitList.encodeTree x).toArray))
       (fun c t ↦ c.last = Simulation.Program.loadedCfg 1 x ∧
         c.configSup StackMachine.Cfg.mass ≤ Simulation.spaceBound 2 (x.size + 2) ∧
-        3 * (Cfg.mk true (TreeMachine.input (1 : Fin 2) x)).mass + 1 + q ≤ t)
+        3 * (Cfg.mk (TreeMachine.input (1 : Fin 2) x)).mass + 1 + q ≤ t)
       (fun _ c t ↦ c.last = Simulation.Program.loadedCfg 1 x ∧
         c.configSup StackMachine.Cfg.mass ≤ Simulation.spaceBound 2 (x.size + 2) ∧ q ≤ t) () := by
-  have hm : ∀ j ≤ 0, ((once .nop).runFrom (Cfg.mk true (input (1 : Fin 2) x)) j).mass ≤ x.size + 2 := by
+  have hm : ∀ j ≤ 0,
+      ((once .nop).runFrom (true, Cfg.mk (input (1 : Fin 2) x)) j).2.mass ≤ x.size + 2 := by
     intro j hj
     have : j = 0 := by omega
     subst j
-    change (∑ i, (TreeMachine.input (1 : Fin 2) x i).size) ≤ _
-    rw [sum_size_input]
+    rw [Controller.runFrom_zero, Cfg.mass, sum_size_input]
     omega
-  simpa using Simulation.Program.spec_loop (once .nop) (Cfg.mk true (input (1 : Fin 2) x))
+  simpa using Simulation.Program.spec_loop (once .nop) (true, Cfg.mk (input (1 : Fin 2) x))
     (Simulation.Program.loadedCfg 1 x) 0 (x.size + 2) q rfl rfl (by intro j hj; omega) hm
 
 -- The public compiler exposes native stack computation and its complete resource theorem.

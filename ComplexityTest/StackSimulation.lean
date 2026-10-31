@@ -24,7 +24,7 @@ namespace Complexity.StackSimulationTest
 private def excursion : TM Id Unit (Option Bool) (Fin 13) where
   q₀ := 0
   halt q := q == 12
-  transition q v := pure <|
+  transition q v := pure <| (q + 1,
     { inputMove := if q.val < 2 then -1 else if q.val < 6 then 1 else -1
       work := fun _ ↦ match q.val with
         | 0 | 3 => (none, -1)
@@ -36,47 +36,46 @@ private def excursion : TM Id Unit (Option Bool) (Fin 13) where
         | 8 => (some none, 1)
         | 9 => (some (some false), -1)
         | _ => (none, 0)
-      output := some (if q == 0 then v.1 else v.2 ())
-      state := q + 1 }
+      output := some (if q == 0 then v.1 else v.2 ()) })
 
 private def source (M : TM Id Unit (Option Bool) (Fin 13)) (xs : List Bool) (n : ℕ) :=
-  M.run (TM.Cfg Unit (Option Bool) (Fin 13) (xs.map some).toArray) (xs.map some) n
+  M.run (xs.map some) n
 
 private def target (M : TM Id Unit (Option Bool) (Fin 13)) (xs : List Bool) (n : ℕ) :=
-  M.toStack.run (StackMachine.Cfg (Unit × Bool × Bool) Bool _ xs.toArray) xs n
+  M.toStack.run xs n
 
 private def agrees (M : TM Id Unit (Option Bool) (Fin 13)) (xs : List Bool) (n : ℕ) : Bool :=
   let c := source M xs n
   let d := target M xs n
-  (c.state.val, c.inputPos.val, c.workSymbols (), c.output.toList.filterMap id) ==
-    (d.state.1.val, d.inputPos.val, d.state.2 (), d.output.toList)
+  (c.1.val, c.2.inputPos.val, c.2.workSymbols (), c.2.output.toList.filterMap id) ==
+    (d.1.1.val, d.2.inputPos.val, d.1.2 (), d.2.output.toList)
 
 -- Compare the actual bounded runs, including every intermediate state and halted padding.
 #guard (List.range 16).all (agrees excursion [true, false])
 #guard (List.range 16).all (agrees excursion [])
-#guard (source excursion [true, false] 12).workPos () = 2
-#guard (target excursion [true, false] 12).output = #[true, false, true, false, true, false]
-#guard (List.range 16).all fun n ↦ (target excursion [] n).mass ≤ 8
-#guard (target excursion [] 12).mass = 8
+#guard (source excursion [true, false] 12).2.workPos () = 2
+#guard (target excursion [true, false] 12).2.output = #[true, false, true, false, true, false]
+#guard (List.range 16).all fun n ↦ (target excursion [] n).2.mass ≤ 8
+#guard (target excursion [] 12).2.mass = 8
 
 -- Explicit blank outputs are discarded, while false data bits remain observable.
-#guard (source excursion [] 3).output = #[none, none, none]
-#guard (target excursion [] 3).output = #[]
-#guard (target excursion [] 4).output = #[false]
+#guard (source excursion [] 3).2.output = #[none, none, none]
+#guard (target excursion [] 3).2.output = #[]
+#guard (target excursion [] 4).2.output = #[false]
 
 -- Input movement stays at both boundaries and resumes inward on the next opposite move.
-#guard ((List.range 8).map fun n ↦ (target excursion [true, false] n).inputPos.val) =
+#guard ((List.range 8).map fun n ↦ (target excursion [true, false] n).2.inputPos.val) =
   [1, 0, 0, 1, 2, 3, 3, 2]
-#guard ((List.range 8).map fun n ↦ (target excursion [] n).inputPos.val) =
+#guard ((List.range 8).map fun n ↦ (target excursion [] n).2.inputPos.val) =
   [1, 0, 0, 1, 1, 1, 1, 0]
 
 private def halted := { excursion with q₀ := 12 }
 
 #guard (List.range 4).all (agrees halted [false])
-#guard (target halted [false] 3).state.1 = 12
-#guard (target halted [false] 3).state.2 () = none
-#guard (target halted [false] 3).output = #[]
-#guard (target halted [false] 3).inputPos.val = 1
-#guard (target halted [false] 3).mass = 0
+#guard (target halted [false] 3).1.1 = 12
+#guard (target halted [false] 3).1.2 () = none
+#guard (target halted [false] 3).2.output = #[]
+#guard (target halted [false] 3).2.inputPos.val = 1
+#guard (target halted [false] 3).2.mass = 0
 
 end Complexity.StackSimulationTest

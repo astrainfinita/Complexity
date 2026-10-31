@@ -24,15 +24,15 @@ private def excursion : TM Id Unit Bool (Fin 5) where
   q₀ := 0
   halt q := q == 4
   transition q _ := pure <|
-    { inputMove := 0
-      work := fun _ => (none, if q.val < 2 then 1 else -1)
-      output := none
-      state := q + 1 }
+    (q + 1,
+      { inputMove := 0
+        work := fun _ => (none, if q.val < 2 then 1 else -1)
+        output := none })
 
-private def start : TM.Cfg Unit Bool (Fin 5) #[] :=
-  excursion.initInput ([] : List Bool)
+private def start : Fin 5 × TM.Cfg Unit Bool #[] :=
+  excursion.init ([] : List Bool)
 
-private def history (n : ℕ) := excursion.runHistoryFrom start n
+private def history (n : ℕ) := (excursion.runHistoryFrom start n).snd
 
 -- The starting work cell counts even before any action has run.
 #guard (history 0).space = 1
@@ -47,43 +47,43 @@ private def history (n : ℕ) := excursion.runHistoryFrom start n
 -- Halting padding changes neither the stored data nor its historical footprint.
 #guard (history 20).last.workPos () = 0
 #guard (history 20).space = 3
-#guard (excursion.runHistory (TM.Cfg Unit Bool (Fin 5) #[]) ([] : List Bool) 20).space = 3
+#guard (excursion.runHistory ([] : List Bool) 20).snd.space = 3
 #guard (history 20).length = 4
 
 -- The endpoint projection covers every prefix, including halted padding.
-example (n : ℕ) : (history n).last = excursion.runFrom start n :=
+example (n : ℕ) : (excursion.runHistoryFrom start n).last = excursion.runFrom start n :=
   excursion.last_runHistoryFrom start n
 
 -- Pointwise head bounds give the same interval bound on the actual history.
 example {κ Γ Q : Type*} [Inhabited Γ] [Fintype κ] {xs : Array Γ}
-    (M : TM Id κ Γ Q) (c : TM.Cfg κ Γ Q xs) (n : ℕ) (V : κ → NonemptyInterval ℤ)
-    (hb : ∀ i m, m ≤ n → (M.runFrom c m).workPos i ∈ V i) :
-    (M.runHistoryFrom c n).space ≤ ∑ i, ((V i).snd + 1 - (V i).fst).toNat :=
-  (M.runHistoryFrom c n).space_le_of_visited_le V
+    (M : TM Id κ Γ Q) (c : Q × TM.Cfg κ Γ xs) (n : ℕ) (V : κ → NonemptyInterval ℤ)
+    (hb : ∀ i m, m ≤ n → (M.runFrom c m).2.workPos i ∈ V i) :
+    (M.runHistoryFrom c n).snd.space ≤
+      ∑ i, ((V i).snd + 1 - (V i).fst).toNat :=
+  (M.runHistoryFrom c n).snd.space_le_of_visited_le V
     (fun i ↦ (M.runHistoryFrom_visited_le_iff c n i (V i)).mpr (hb i))
 
 -- Recording can also begin in the middle of a computation, away from head zero.
-private def freshResume : Controller.History (TM.Cfg Unit Bool (Fin 5) #[])
-    (TM.Action Unit Bool (Fin 5)) :=
-  let c : TM.Cfg Unit Bool (Fin 5) #[] :=
-    { start with state := 2, workPos := fun _ => 7 }
-  excursion.runHistoryFrom c 2
+private def freshResume : Controller.History (TM.Cfg Unit Bool #[]) (TM.Action Unit Bool) :=
+  let c : Fin 5 × TM.Cfg Unit Bool #[] :=
+    (2, { start.2 with workPos := fun _ => 7 })
+  (excursion.runHistoryFrom c 2).snd
 
 #guard freshResume.last.workPos () = 5
 #guard freshResume.visited () = ⟨⟨5, 7⟩, by decide⟩
 #guard freshResume.space = 3
 
 -- Resume at the left boundary while retaining cells visited earlier on the right.
-private def resumeStart : Controller.History (TM.Cfg Unit Bool (Fin 5) #[])
-    (TM.Action Unit Bool (Fin 5)) :=
+private def resumeStart : Controller.History (Fin 5 × TM.Cfg Unit Bool #[])
+    (Fin 5 × TM.Action Unit Bool) :=
   (fun h ↦ h.snoc
-    { inputMove := 0
-      work := fun _ ↦ (none, -1)
-      output := none
-      state := 2 })^[5]
-    (Controller.History.nil { start with state := 2, workPos := fun _ ↦ 3 })
+    (2,
+      { inputMove := 0
+        work := fun _ ↦ (none, -1)
+        output := none }))^[5]
+    (Controller.History.nil (2, { start.2 with workPos := fun _ ↦ 3 }))
 
-private def resumed := excursion.runFrom resumeStart 2
+private def resumed := (excursion.runFrom resumeStart 2).snd
 
 #guard resumed.last.workPos () = -4
 #guard (resumed.visited ()).fst = -4
@@ -91,6 +91,6 @@ private def resumed := excursion.runFrom resumeStart 2
 #guard resumed.space = 8
 
 -- Peak space also preserves the prior history through halted padding.
-#guard (excursion.runFrom resumeStart 20).space = 8
+#guard (excursion.runFrom resumeStart 20).snd.space = 8
 
 end Complexity.TuringMachineCostTest

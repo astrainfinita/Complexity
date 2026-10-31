@@ -20,7 +20,7 @@ private def copyInput : TreeMachine.Program 1 Unit := TreeMachine.Program.copy 0
 private theorem copyInput_unit (x : Tree) :
     copyInput.compile.ComputesInUnitTimeAndSpace x x 2 (2 * x.size + 1) := by
   apply TreeMachine.Program.computesInUnitTimeAndSpace
-    (P := fun h b ↦ h = History.nil ⟨(), input 0 x⟩ ∧ b = 2) (hp := ⟨rfl, rfl⟩)
+    (P := fun h b ↦ h = History.nil ⟨input 0 x⟩ ∧ b = 2) (hp := ⟨rfl, rfl⟩)
   unfold copyInput TreeMachine.Program.copy
   vcgen
   all_goals simp_all [Cfg.mass, Tree.size_pair] <;> omega
@@ -34,7 +34,7 @@ example (x : Tree) :
 example (x : Tree) :
     (pure () : TreeMachine.Program 1 Unit).compile.ComputesInUnitTimeAndSpace x x 0 x.size := by
   apply TreeMachine.Program.computesInUnitTimeAndSpace_of_exec
-    (Program.Exec.pure TreeMachine.Program.historySemantics () (History.nil ⟨(), input 0 x⟩))
+    (Program.Exec.pure TreeMachine.Program.historySemantics () (History.nil ⟨input 0 x⟩))
     le_rfl
   · simp
   · simp [Cfg.mass]
@@ -43,7 +43,7 @@ example (x : Tree) :
 example (x : Tree) :
     (TreeMachine.Program.root (0 : Fin 1)).compile.ComputesInUnitTimeAndSpace x x 1 x.size := by
   apply TreeMachine.Program.computesInUnitTimeAndSpace
-    (P := fun h b ↦ h = History.nil ⟨(), input 0 x⟩ ∧ b = 1) (hp := ⟨rfl, rfl⟩)
+    (P := fun h b ↦ h = History.nil ⟨input 0 x⟩ ∧ b = 1) (hp := ⟨rfl, rfl⟩)
   vcgen
   all_goals simp_all [Cfg.mass]
 
@@ -57,7 +57,7 @@ example (x : Tree) :
     projectPairCode.compile.ComputesInUnitTimeAndSpace x x 2 (3 * (2 * x.size + 3)) := by
   obtain ⟨h, hr, hout, hpeak⟩ := projectPair.exec_assign_history (0 : Fin 3) (fun _ ↦ 0) 1 2
     (by decide) (by intro; decide) (by decide)
-    (History.nil ⟨(), input 0 x⟩) (by simp)
+    (History.nil ⟨input 0 x⟩) (by simp)
   apply TreeMachine.Program.computesInUnitTimeAndSpace_of_exec hr (by decide)
   · simpa [projectPair] using hout 0 (by decide)
   · apply (TreeMachine.configSup_mass_le_sum h).trans

@@ -17,8 +17,8 @@ private def mapOutput : List (List Bool) := [[false, true], [], [true, true, fal
 private def mapReverseCode := List.Code.map List.Code.reverse .input
 #guard let p := mapReverseCode
   let c := ComplexityTest.TreeRun.runFrom p.compile
-    (p.compile.initInput (Config := TreeMachine.Cfg p.registers _) ⌜mapInput⌝ₜ) 186
-  p.compile.halt c.state && decide (c.regs 0 = ⌜mapOutput⌝ₜ)
+    (p.compile.init ⌜mapInput⌝ₜ) 186
+  p.compile.halt c.1 && decide (c.2.regs 0 = ⌜mapOutput⌝ₜ)
 
 -- One long callback and many empty callbacks have linear, not quadratic, total time.
 example : HasProgram
