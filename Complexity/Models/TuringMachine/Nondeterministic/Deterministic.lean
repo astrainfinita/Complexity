@@ -25,9 +25,9 @@ variable {κ : Type*} {Γ Q : Type*} [Inhabited Γ]
 variable (M : TM Id κ Γ Q)
 
 @[simp] theorem usesTime_toBinary_iff (xs : List Γ) (t : ℕ) :
-    NTM.UsesTime M.toBinary xs t ↔ M.Halted (M.run (Cfg κ Γ Q xs.toArray) xs t) := by
-  simp only [NTM.UsesTime, Controller.mem_runWith_toBinary_iff,
-    forall_eq, Controller.halted_toBinary_iff]
+    NTM.UsesTime M.toBinary xs t ↔ M.Halted (M.run xs t) := by
+  simp only [NTM.UsesTime, Controller.mem_runWith_toBinary_iff, forall_eq,
+    Controller.halted_toBinary_iff]
 
 @[simp] theorem terminates_toBinary_iff (xs : List Γ) :
     NTM.Terminates M.toBinary xs ↔ M.Terminates xs := by

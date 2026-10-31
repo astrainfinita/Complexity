@@ -29,7 +29,7 @@ variable {k : ℕ} [NeZero k] {Q : Type} [FinEnum Q]
 
 omit [NeZero k] in
 /-- The local macro bound is uniform over all instructions within a source space bound. -/
-theorem macro_space_le {xs : Array Bool} (c : StackMachine.Cfg (Work k) Bool Unit xs)
+theorem macro_space_le {xs : Array Bool} (c : StackMachine.Cfg (Work k) Bool xs)
     {n s : ℕ} (hm : c.mass ≤ s) (hn : n ≤ 42 * s) :
     c.mass + Fintype.card (Work k) * n ≤ spaceBound k s := by
   rw [card_work]
@@ -41,28 +41,29 @@ theorem macro_space_le {xs : Array Bool} (c : StackMachine.Cfg (Work k) Bool Uni
 /-- Simulate a source run, charging creation and amortizing destination erasure.
 Histories retain the peak across macros; no internal macro invariant is required. -/
 theorem spec_loop {xs : Array Bool} (M : TreeMachine Id k Q)
-    (r : Cfg k Q) (c₀ : StackMachine.Cfg (Work k) Bool Unit xs) (n s q : ℕ)
-    (hw : c₀.stacks = contents r.regs)
+    (r : Q × Cfg k) (c₀ : StackMachine.Cfg (Work k) Bool xs) (n s q : ℕ)
+    (hw : c₀.stacks = contents r.2.regs)
     (hh : M.Halted (M.runFrom r n)) (hn : ∀ j < n, ¬M.Halted (M.runFrom r j))
-    (hm : ∀ j ≤ n, (M.runFrom r j).mass ≤ s) :
-    Triple ((Program.loopOn idle (body M) r.state).verify (historySemantics xs))
+    (hm : ∀ j ≤ n, (M.runFrom r j).2.mass ≤ s) :
+    Triple ((Program.loopOn idle (body M) r.1).verify (historySemantics xs))
       (fun h b ↦ h.last = c₀ ∧ h.configSup StackMachine.Cfg.mass ≤ spaceBound k s ∧
-        40 * (M.runHistoryFrom r n).actionSum Action.sizeCost + 3 * r.mass + 1 + q ≤ b)
-      (fun _ h b ↦ h.last = bank c₀ (M.runFrom r n).regs ∧
+        40 * (M.runHistoryFrom r n).snd.actionSum Action.sizeCost +
+          3 * r.2.mass + 1 + q ≤ b)
+      (fun _ h b ↦ h.last = bank c₀ (M.runFrom r n).2.regs ∧
         h.configSup StackMachine.Cfg.mass ≤ spaceBound k s ∧ q ≤ b) () := by
-  let W := fun j ↦ (M.runHistoryFrom r j).actionSum Action.sizeCost
-  let I : Q → History (StackMachine.Cfg (Work k) Bool Unit xs)
-      (StackMachine.Action (Work k) Bool Unit) → ℕ → Prop := fun v h b ↦
-    ∃ j ≤ n, v = (M.runFrom r j).state ∧ h.last = bank c₀ (M.runFrom r j).regs ∧
+  let W := fun j ↦ (M.runHistoryFrom r j).actionSum fun a c ↦ a.2.sizeCost c.2
+  let I : Q → History (StackMachine.Cfg (Work k) Bool xs)
+      (StackMachine.Action (Work k) Bool) → ℕ → Prop := fun v h b ↦
+    ∃ j ≤ n, v = (M.runFrom r j).1 ∧ h.last = bank c₀ (M.runFrom r j).2.regs ∧
       h.configSup StackMachine.Cfg.mass ≤ spaceBound k s ∧
-      40 * (W n - W j) + 3 * (M.runFrom r j).mass + 1 + q ≤ b
+      40 * (W n - W j) + 3 * (M.runFrom r j).2.mass + 1 + q ≤ b
   constructor
   apply Triple.entails_wp_of_pre
-    (Program.spec_loopOn_of_invariant idle (body M) r.state (historySemantics xs) I _ ?_ ?_ ?_)
+    (Program.spec_loopOn_of_invariant idle (body M) r.1 (historySemantics xs) I _ ?_ ?_ ?_)
   · rintro h b ⟨hc, hS, hb⟩
     refine ⟨0, Nat.zero_le _, rfl, ?_, hS, ?_⟩
-    · simpa only [Controller.runFrom_zero, bank_self c₀ r.regs hw] using hc
-    · simpa [W] using hb
+    · simpa only [Controller.runFrom_zero, bank_self c₀ r.2.regs hw] using hc
+    · simpa [W, History.actionSum_snd] using hb
   · intro v h b hv
     simpa only [I, historySemantics_act, History.apply_def, History.last_snoc, idle_apply,
       History.configSup_snoc, sup_eq_left.mpr
@@ -73,33 +74,35 @@ theorem spec_loop {xs : Array Bool} (M : TreeMachine Id k Q)
     constructor
     rintro h b ⟨j, hj, rfl, hc, hS, ht⟩
     by_cases hj' : j < n
-    · have hf : M.halt (M.runFrom r j).state = false := Bool.eq_false_iff.mpr (hn j hj')
-      let a := (M.transition (M.runFrom r j).state (observe (M.runFrom r j))).run
+    · have hf : M.halt (M.runFrom r j).1 = false := Bool.eq_false_iff.mpr (hn j hj')
+      let a := (M.transition (M.runFrom r j).1 (observe (M.runFrom r j).2)).run
       have he : M.step (M.runFrom r j) = M.runFrom r (j + 1) := (M.runFrom_succ' _ j).symm
-      have hcost : W (j + 1) = W j + a.sizeCost (M.runFrom r j) := by
+      have hcost : W (j + 1) = W j + a.2.sizeCost (M.runFrom r j).2 := by
         simp [W, Controller.actionSum_runHistoryFrom_add,
           Controller.actionSum_runHistoryFrom_one, hf, a]
-      have hle : W (j + 1) ≤ W n := M.actionSum_runHistoryFrom_mono Action.sizeCost r hj'
+      have hle : W (j + 1) ≤ W n := M.actionSum_runHistoryFrom_mono _ r hj'
       have hnext := hm (j + 1) hj'
-      rw [← he, M.step_of_not_halted _ (hn j hj')] at hnext
-      have ha : a.sizeCost (M.runFrom r j) ≤ s :=
-        (a.sizeCost_le_mass _).trans (sup_le (hm j hj) hnext)
-      have hp : 0 < a.sizeCost (M.runFrom r j) := a.op.sizeCost_pos (M.runFrom r j).regs
+      rw [← he, M.step_of_not_halted _ (hn j hj'), Controller.apply_prod] at hnext
+      have ha : a.2.sizeCost (M.runFrom r j).2 ≤ s :=
+        (a.2.sizeCost_le_mass _).trans (sup_le (hm j hj) hnext)
+      have hp : 0 < a.2.sizeCost (M.runFrom r j).2 := a.2.sizeCost_pos _
       have hmj := hm j hj
       dsimp only [a] at hcost ha hp
       let z := 40 * (W n - W (j + 1)) + 1 + q
-      have hbody := spec_body_continue M (bank c₀ (M.runFrom r j).regs) (M.runFrom r j) 0 hf rfl
+      have hbody :=
+        spec_body_continue M (bank c₀ (M.runFrom r j).2.regs) (M.runFrom r j) 0 hf rfl
       simp only [Nat.add_zero] at hbody
       have hs := spec_history hbody
-        (macro_space_le (bank c₀ (M.runFrom r j).regs) (by simpa [Cfg.mass] using hmj) (by omega)) z
+        (macro_space_le (bank c₀ (M.runFrom r j).2.regs) (by simpa [Cfg.mass] using hmj)
+          (by omega)) z
       apply (Triple.entails_wp_of_post hs ?_) h b ⟨hc, hS, by dsimp only [z]; omega⟩
       rintro _ t b ⟨⟨rfl, hd⟩, hS', hq⟩
-      refine ⟨j + 1, hj', congrArg Cfg.state he, ?_, hS', ?_⟩
+      refine ⟨j + 1, hj', congrArg Prod.fst he, ?_, hS', ?_⟩
       · simpa only [he, bank_bank] using hd
       · simpa only [he, z, Nat.add_assoc, Nat.add_left_comm, Nat.add_comm] using hq
     · have hj : j = n := by omega
       subst j
-      have hf : M.halt (M.runFrom r n).state = true := hh
+      have hf : M.halt (M.runFrom r n).1 = true := hh
       unfold body
       simp only [hf, ↓reduceIte]
       vcgen
@@ -127,28 +130,27 @@ def timeBound (k N t : ℕ) : ℕ :=
 theorem Program.spec_program (M : TreeMachine Id k Q)
     {x a : Tree} {t s : ℕ} (h : M.ComputesWithin x a t s) :
     Triple ((program M 0 0).verify (historySemantics (BitList.encodeTree x).toArray))
-      (fun c b ↦ c = History.nil ((StackMachine.execution (BitList.encodeTree x)).init ()) ∧
+      (fun c b ↦ c = History.nil (StackMachine.Cfg.init (Work k) (BitList.encodeTree x)) ∧
         timeBound k x.size t ≤ b)
       (fun _ c _ ↦ c.last.output = (BitList.encodeTree a).toArray ∧
         c.configSup StackMachine.Cfg.mass ≤ spaceBound k s) () := by
   obtain ⟨n, _, hh, ha, ht, _⟩ := h.exists_haltsAt
   have hx := h.input_size_le_space
   have hp : 0 < s := x.size_pos.trans_le hx
-  let d := bank (loadedCfg 0 x) (M.run (Cfg k Q) x n).regs
+  let d := bank (loadedCfg 0 x) (M.run x n).2.regs
   have hd : d.mass ≤ s := by simpa [d, Cfg.mass] using h.mass_le n
   have hi := spec_history (by simpa only [Nat.add_zero] using spec_init (k := k) 0 x 0)
     (macro_space_le _ (s := s) (by simp [StackMachine.Cfg.mass]) (by omega))
     (40 * t + 3 * (x.size + k) + 1 + (3 * (x.size + k + t) + 2))
-  have hl := spec_loop M (M.initInput x) (loadedCfg 0 x) n s (3 * a.size + 2) rfl
+  have hl := spec_loop M (M.init x) (loadedCfg 0 x) n s (3 * a.size + 2) rfl
     hh.1 hh.2 (fun j _ ↦ h.mass_le j)
-  rw [show (M.initInput x : Cfg k Q).state = M.q₀ from
-    M.state_initInput (Config := Cfg k Q) x] at hl
+  rw [Controller.init_fst] at hl
   have he := Program.spec_exact_budget_le (fun q ↦ IO.spec_emitStack d (data 0) q)
     (m := 3 * a.size + 2) (by simp [d, ha]) 0
   simp only [Nat.add_zero] at he
   have hs := h.output_size_le_space
   have ho := spec_history he (macro_space_le d hd (by omega)) 0
-  have hm₀ := M.mass_input_le x
+  have hm₀ := Cfg.mass_init_le (k := k) x
   have hout := h.output_size_le_mass_add_time
   unfold program
   vcgen [hi, hl, ho]

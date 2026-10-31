@@ -24,7 +24,7 @@ variable {κ : Type} [DecidableEq κ] {xs : Array Bool}
 def forestCode (fs : List Complexity.Tree) : List Bool := fs.flatMap BitList.encodeTree
 
 /-- Consume one token, save it, and update the pending-subtree counter. -/
-def scanAction (source saved counter : κ) (b : Bool) : Action κ Bool Unit :=
+def scanAction (source saved counter : κ) (b : Bool) : Action κ Bool :=
   { idle (κ := κ) with work := fun i ↦ if i = source then .pop else if i = saved then .push b
     else if i = counter then if b then .push true else .pop else .nop }
 
@@ -41,8 +41,8 @@ def scan (source saved counter : κ) : StackMachine.Program κ Bool Unit :=
 
 /-- Complete configuration with a pending forest and the reversed processed prefix. -/
 @[simps -fullyApplied]
-def scanning (c : Cfg κ Bool Unit xs) (source saved counter : κ)
-    (fs : List Complexity.Tree) (p suffix : List Bool) : Cfg κ Bool Unit xs :=
+def scanning (c : Cfg κ Bool xs) (source saved counter : κ)
+    (fs : List Complexity.Tree) (p suffix : List Bool) : Cfg κ Bool xs :=
   { c with «stacks» := fun i ↦ if i = source then forestCode fs ++ suffix
     else if i = saved then p.reverse ++ c.stacks i
     else if i = counter then List.replicate fs.length true else c.stacks i }
@@ -52,13 +52,13 @@ variable (source saved counter : κ) (hs : source ≠ saved) (hc : source ≠ co
 
 include hc hsc in
 /-- The scan preserves every unrelated stack and the external streams. -/
-@[spec] theorem spec_scan (c : Cfg κ Bool Unit xs) (a : Complexity.Tree)
+@[spec] theorem spec_scan (c : Cfg κ Bool xs) (a : Complexity.Tree)
     (suffix : List Bool) (q : ℕ) :
     Triple ((scan source saved counter).verify (semantics xs))
       (fun s b ↦ s = scanning c source saved counter [a] [] suffix ∧ b = 4 * a.size + q)
       (fun _ s b ↦ s = scanning c source saved counter [] (BitList.encodeTree a) suffix ∧
         b = q) () := by
-  let I : Cfg κ Bool Unit xs → ℕ → Prop := fun s b ↦ ∃ fs p, fs ≠ [] ∧
+  let I : Cfg κ Bool xs → ℕ → Prop := fun s b ↦ ∃ fs p, fs ≠ [] ∧
     s = scanning c source saved counter fs p suffix ∧
     p ++ forestCode fs = BitList.encodeTree a ∧ b = 4 * (forestCode fs).length + q
   have h : Triple ((scan source saved counter).verify (semantics xs)) I
@@ -130,7 +130,7 @@ def takeTree (source saved counter : κ) : StackMachine.Program κ Bool Unit := 
 
 include hs hc hsc in
 /-- A tree may be followed by any suffix; unrelated storage is preserved. -/
-@[spec] theorem spec_takeTree (c : Cfg κ Bool Unit xs) (a : Complexity.Tree)
+@[spec] theorem spec_takeTree (c : Cfg κ Bool xs) (a : Complexity.Tree)
     (suffix : List Bool) (q : ℕ) (ha : c.stacks source = BitList.encodeTree a ++ suffix)
     (hn : c.stacks counter = []) :
     Triple ((takeTree source saved counter).verify (semantics xs))
@@ -156,7 +156,7 @@ def copyTree (source target saved counter : κ) : StackMachine.Program κ Bool U
   Word.drain saved (fun i ↦ i == source || i == target)
 
 include hs hc hsc in
-@[spec] theorem spec_copyTree (c : Cfg κ Bool Unit xs) (target : κ) (a : Complexity.Tree)
+@[spec] theorem spec_copyTree (c : Cfg κ Bool xs) (target : κ) (a : Complexity.Tree)
     (suffix : List Bool) (q : ℕ) (hst : source ≠ target) (hts : target ≠ saved)
     (ha : c.stacks source = BitList.encodeTree a ++ suffix)
     (hn : c.stacks counter = []) (hp : c.stacks saved = []) :
@@ -181,7 +181,7 @@ def pair (left right target temp : κ) : StackMachine.Program κ Bool Unit := do
   push target true
 
 /-- Pairing accepts arbitrary binary words and preserves both sources. -/
-@[spec] theorem spec_pair (c : Cfg κ Bool Unit xs) (left right target temp : κ)
+@[spec] theorem spec_pair (c : Cfg κ Bool xs) (left right target temp : κ)
     (u v : List Bool) (q : ℕ) (hlt : left ≠ target) (hlp : left ≠ temp)
     (hrt : right ≠ target) (hrp : right ≠ temp) (htp : target ≠ temp)
     (ha : c.stacks left = u) (hb : c.stacks right = v)
@@ -226,7 +226,7 @@ theorem projectTime_le (a : Complexity.Tree) (right : Bool) :
   · omega
   · split_ifs <;> omega
 
-@[spec] theorem spec_project (c : Cfg κ Bool Unit xs) (source target saved temp counter : κ)
+@[spec] theorem spec_project (c : Cfg κ Bool xs) (source target saved temp counter : κ)
     (a : Complexity.Tree) (suffix : List Bool) (right : Bool) (q : ℕ)
     (hi : [source, target, saved, temp, counter].Nodup)
     (ha : c.stacks source = BitList.encodeTree a ++ suffix)

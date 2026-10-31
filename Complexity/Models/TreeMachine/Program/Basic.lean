@@ -19,7 +19,7 @@ namespace Program
 
 /-- Instructions return only finite observations; tree values remain in registers. -/
 inductive Op (k : ℕ) where
-  | act (o : TreeMachine.Op k)
+  | act (o : TreeMachine.Action k)
   | root (i : Fin k)
 
 /-- A write returns unit; a root test returns a Boolean. -/
@@ -34,19 +34,19 @@ end Program
 
 /-- Finite control over tree-register instructions and root observations. -/
 protected abbrev Program (k : ℕ) :=
-  Program (Fin k → Bool) (TreeMachine.Op k) (Program.Op k) Program.Op.Result
+  Program (Fin k → Bool) (TreeMachine.Action k) (Program.Op k) Program.Op.Result
 
 namespace Program
 
 variable {k : ℕ}
 
 /-- Reading a root emits a no-op and consumes one transition. -/
-def eval : (o : Op k) → (Fin k → Bool) → TreeMachine.Op k × o.Result
+def eval : (o : Op k) → (Fin k → Bool) → TreeMachine.Action k × o.Result
   | .act o, _ => (o, ())
   | .root i, v => (.nop, v i)
 
 /-- Execute one register instruction. -/
-def act (o : TreeMachine.Op k) : TreeMachine.Program k Unit :=
+def act (o : TreeMachine.Action k) : TreeMachine.Program k Unit :=
   Program.perform (Op.act o)
 
 /-- Read whether a register contains a node. -/
@@ -60,12 +60,12 @@ def repeatUntil (p : TreeMachine.Program k Bool) : TreeMachine.Program k Unit :=
 /-- Interpret a program directly on register values, without machine control states. -/
 @[simps eval observe act]
 def semantics :
-    Program.Semantics (Fin k → Bool) (TreeMachine.Op k) (Op k) Op.Result (Fin k → Tree) where
+    Program.Semantics (Fin k → Bool) (TreeMachine.Action k) (Op k) Op.Result (Fin k → Tree) where
   eval := eval
   observe ρ i := (ρ i).root
   act o ρ := o.eval ρ
 
-theorem exec_act (o : TreeMachine.Op k) (ρ : Fin k → Tree) :
+theorem exec_act (o : TreeMachine.Action k) (ρ : Fin k → Tree) :
     (act o).Exec semantics ρ 1 () (o.eval ρ) :=
   Program.Exec.perform semantics (.act o) ρ
 
@@ -81,7 +81,7 @@ def copy (aux dst src : Fin k) : TreeMachine.Program k Unit := do
 theorem exec_copy (aux dst src : Fin k) (ρ : Fin k → Tree) :
     (copy aux dst src).Exec semantics ρ 2 () (Function.update ρ dst (ρ src)) := by
   have h := (exec_act (.pair dst src aux) ρ).bind (f := fun _ ↦ act (.left dst dst))
-    (exec_act (.left dst dst) ((TreeMachine.Op.pair dst src aux).eval ρ))
+    (exec_act (.left dst dst) ((TreeMachine.Action.pair dst src aux).eval ρ))
   simpa [copy, Bind.bind] using h
 
 /-- Exits of the generic control graph become halting states. Each action takes one step. -/
@@ -92,8 +92,8 @@ def compile {α : Type} (p : TreeMachine.Program k α) :
   transition q v := pure <| match q with
     | .inl q =>
         let (o, q') := (p.toControl eval).next q v
-        .assign q' o
-    | .inr e => .keep (.inr e)
+        (q', o)
+    | .inr e => (.inr e, .nop)
 
 end Program
 end Complexity.TreeMachine

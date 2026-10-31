@@ -56,15 +56,15 @@ def contents (ρ : Fin k → Tree) : Work k → List Bool
 
 /-- Represent the register bank while preserving external streams. -/
 @[simps -fullyApplied]
-def bank (c : StackMachine.Cfg (Work k) Bool Unit xs) (ρ : Fin k → Tree) :
-    StackMachine.Cfg (Work k) Bool Unit xs :=
+def bank (c : StackMachine.Cfg (Work k) Bool xs) (ρ : Fin k → Tree) :
+    StackMachine.Cfg (Work k) Bool xs :=
   { c with «stacks» := contents ρ }
 
-@[simp] theorem bank_self (c : StackMachine.Cfg (Work k) Bool Unit xs)
+@[simp] theorem bank_self (c : StackMachine.Cfg (Work k) Bool xs)
     (ρ : Fin k → Tree) (h : c.stacks = contents ρ) : bank c ρ = c := by
   simp [bank, ← h]
 
-@[simp] theorem bank_bank (c : StackMachine.Cfg (Work k) Bool Unit xs)
+@[simp] theorem bank_bank (c : StackMachine.Cfg (Work k) Bool xs)
     (ρ ν : Fin k → Tree) : bank (bank c ρ) ν = bank c ν := rfl
 
 /-- Observe all register roots in a single local transition. -/

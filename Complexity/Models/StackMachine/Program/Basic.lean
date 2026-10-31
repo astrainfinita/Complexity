@@ -19,7 +19,7 @@ namespace Program
 
 /-- Primitive actions and finite observations for stack programs. -/
 inductive Op (κ Γ : Type) where
-  | act (a : Action κ Γ Unit)
+  | act (a : Action κ Γ)
   | readInput (s : FinEnum (Option Γ))
   | read (s : FinEnum (Option Γ)) (i : κ)
   | observeBits (n : ℕ) (f : (Option Γ × (κ → Option Γ)) → Fin n → Bool)
@@ -47,7 +47,7 @@ end Program
 
 /-- Each observed result is finite; unbounded stacks stay in the semantic configuration. -/
 protected abbrev Program (κ Γ : Type) :=
-  Program (Option Γ × (κ → Option Γ)) (Action κ Γ Unit) (Program.Op κ Γ)
+  Program (Option Γ × (κ → Option Γ)) (Action κ Γ) (Program.Op κ Γ)
     Program.Op.Result
 
 namespace Program
@@ -55,25 +55,24 @@ namespace Program
 variable {κ Γ : Type}
 
 /-- A control-only action still consumes one transition. -/
-def idle : Action κ Γ Unit where
+def idle : Action κ Γ where
   inputMove := 0
   work := fun _ ↦ .nop
   output := none
-  state := ()
 
-@[simp] theorem idle_apply {xs : Array Γ} (c : Cfg κ Γ Unit xs) :
+@[simp] theorem idle_apply {xs : Array Γ} (c : Cfg κ Γ xs) :
     apply (idle (κ := κ) (Γ := Γ)) c = c := by
   apply Cfg.ext <;> simp [idle, funext_iff, StackMachine.Op.apply]
 
 /-- Interpret an instruction as a local action and its observed result. -/
-def eval : (o : Op κ Γ) → (Option Γ × (κ → Option Γ)) → Action κ Γ Unit × o.Result
+def eval : (o : Op κ Γ) → (Option Γ × (κ → Option Γ)) → Action κ Γ × o.Result
   | .act a, _ => (a, ())
   | .readInput _, v => (idle, v.1)
   | .read _ i, v => (idle, v.2 i)
   | .observeBits _ f, v => (idle, Vector.ofFn (f v))
 
 /-- Execute one simultaneous local action. -/
-def act (a : Action κ Γ Unit) : StackMachine.Program κ Γ Unit :=
+def act (a : Action κ Γ) : StackMachine.Program κ Γ Unit :=
   Program.perform (Op.act a)
 
 /-- Read the input symbol, or `none` at either boundary. -/
@@ -110,50 +109,50 @@ def repeatUntil (p : StackMachine.Program κ Γ Bool) : StackMachine.Program κ 
 /-- Interpret instructions directly on complete stack configurations. -/
 @[simps eval observe act]
 def semantics (xs : Array Γ) :
-    Program.Semantics (Option Γ × (κ → Option Γ)) (Action κ Γ Unit) (Op κ Γ) Op.Result
-      (Cfg κ Γ Unit xs) where
+    Program.Semantics (Option Γ × (κ → Option Γ)) (Action κ Γ) (Op κ Γ) Op.Result
+      (Cfg κ Γ xs) where
   eval := eval
   observe := Controller.observe
   act := apply
 
 open Std.WP
 
-@[spec] theorem spec_act (a : Action κ Γ Unit) (xs : Array Γ)
-    (s : Cfg κ Γ Unit xs) (b : ℕ) (h : 0 < b) (x : Unit) :
+@[spec] theorem spec_act (a : Action κ Γ) (xs : Array Γ)
+    (s : Cfg κ Γ xs) (b : ℕ) (h : 0 < b) (x : Unit) :
     Triple ((act a).verify (semantics xs)) (fun t c ↦ t = s ∧ c = b)
       (fun r t c ↦ r = () ∧ t = apply a s ∧ c = b - 1) x :=
   Program.spec_perform (Op.act a) (semantics xs) s b h x
 
 @[spec] theorem spec_readInput [FinEnum Γ] (xs : Array Γ)
-    (s : Cfg κ Γ Unit xs) (b : ℕ) (h : 0 < b) (x : Unit) :
+    (s : Cfg κ Γ xs) (b : ℕ) (h : 0 < b) (x : Unit) :
     Triple (readInput.verify (semantics xs)) (fun t c ↦ t = s ∧ c = b)
       (fun r t c ↦ r = (observe s : Option Γ × (κ → Option Γ)).1 ∧ t = s ∧ c = b - 1) x := by
   simpa [readInput, eval] using
     Program.spec_perform (Op.readInput inferInstance) (semantics xs) s b h x
 
 @[spec] theorem spec_read [FinEnum Γ] (i : κ) (xs : Array Γ)
-    (s : Cfg κ Γ Unit xs) (b : ℕ) (h : 0 < b) (x : Unit) :
+    (s : Cfg κ Γ xs) (b : ℕ) (h : 0 < b) (x : Unit) :
     Triple ((read i).verify (semantics xs)) (fun t c ↦ t = s ∧ c = b)
       (fun r t c ↦ r = (s.stacks i).head? ∧ t = s ∧ c = b - 1) x := by
   simpa [read, eval] using
     Program.spec_perform (Op.read inferInstance i) (semantics xs) s b h x
 
 @[spec] theorem spec_observeBits {n : ℕ} (f : (Option Γ × (κ → Option Γ)) → Fin n → Bool)
-    (xs : Array Γ) (s : Cfg κ Γ Unit xs) (b : ℕ) (h : 0 < b) (x : Unit) :
+    (xs : Array Γ) (s : Cfg κ Γ xs) (b : ℕ) (h : 0 < b) (x : Unit) :
     Triple ((observeBits f).verify (semantics xs)) (fun t c ↦ t = s ∧ c = b)
       (fun v t c ↦ v = Vector.ofFn (f (observe s)) ∧ t = s ∧ c = b - 1) x := by
   simpa [observeBits, eval] using
     Program.spec_perform (Op.observeBits n f) (semantics xs) s b h x
 
 @[simp] theorem pushAction_apply [DecidableEq κ] {xs : Array Γ}
-    (c : Cfg κ Γ Unit xs) (i : κ) (a : Γ) :
+    (c : Cfg κ Γ xs) (i : κ) (a : Γ) :
     apply { idle (κ := κ) with work := fun j ↦ if j = i then .push a else .nop } c =
       c.setStack i (a :: c.stacks i) := by
   ext j <;> simp [idle, Function.update_apply]
   split_ifs <;> simp_all [StackMachine.Op.apply]
 
 @[simp] theorem popAction_apply [DecidableEq κ] {xs : Array Γ}
-    (c : Cfg κ Γ Unit xs) (i : κ) :
+    (c : Cfg κ Γ xs) (i : κ) :
     apply { idle (κ := κ) (Γ := Γ) with work := fun j ↦ if j = i then .pop else .nop } c =
       c.setStack i (c.stacks i).tail := by
   ext j <;> simp [idle, Function.update_apply]
@@ -178,8 +177,8 @@ def compile {α : Type} (p : StackMachine.Program κ Γ α) :
   transition q v := pure <| match q with
     | .inl q =>
         let (a, q') := (p.toControl eval).next q v
-        a.mapState (fun _ ↦ q')
-    | .inr e => idle.mapState (fun _ ↦ .inr e)
+        (q', a)
+    | .inr e => (.inr e, idle)
 
 end Program
 end Complexity.StackMachine

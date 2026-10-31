@@ -15,7 +15,7 @@ public import Complexity.Models.TuringMachine.Program.Basic
 namespace Complexity.TM.Program
 
 variable {κ : Type} {Γ S : Type}
-  (e : Program.Semantics (Γ × (κ → Γ)) (Action κ Γ Unit)
+  (e : Program.Semantics (Γ × (κ → Γ)) (Action κ Γ)
     (Op κ Γ) Op.Result S)
 
 /-- Expose a work write as its one local action. -/

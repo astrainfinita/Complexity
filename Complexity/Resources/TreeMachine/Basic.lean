@@ -30,7 +30,7 @@ theorem ComputesWithin.output_size_le {M : TreeMachine Id k Q}
     {a b : Tree} {t s : ℕ}
     (h : M.ComputesWithin a b t s) : b.size ≤ a.size + k + t := by
   exact h.output_size_le_mass_add_time.trans
-    (Nat.add_le_add_right (mass_input_le M a) t)
+    (Nat.add_le_add_right (Cfg.mass_init_le a) t)
 
 variable [Encoding Tree α] [Encoding Tree β]
 

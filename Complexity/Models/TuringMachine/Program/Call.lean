@@ -31,12 +31,12 @@ def blockRoute (M : TM Id κ Γ Q) (q : Q) :
 
 /-- Use the supplied state numbering without constructing a transition table. -/
 def callBlock (M : TM Id κ Γ Q) (q : Q) :
-    Program.Control (Γ × (κ → Γ)) (Action κ Γ Unit)
+    Program.Control (Γ × (κ → Γ)) (Action κ Γ)
       (Fin (FinEnum.card Q)) (Fin (FinEnum.card Q)) where
   start := blockRoute M q
   next q v :=
     let a := (M.transition (FinEnum.equiv.symm q) v).run
-    (a.mapState (fun _ ↦ ()), blockRoute M a.state)
+    (a.2, blockRoute M a.1)
 
 /-- Call a machine from a selected finite control state and return its halting state.
 
@@ -84,98 +84,88 @@ theorem halt_start_callFrom (M : TM Id κ Γ Q) (q : Q) :
 
 variable [Inhabited Γ] {xs : Array Γ}
 
-private theorem run_callBlock (M : TM Id κ Γ Q) (q : Q)
-    (c : History (Cfg κ Γ Q xs) (Action κ Γ Q)) (n : ℕ) (hh : M.Halted (M.runFrom c n)) :
+private theorem run_callBlock (M : TM Id κ Γ Q) (q r : Q)
+    (s : History (Cfg κ Γ xs) (Action κ Γ)) (n : ℕ) (hh : M.Halted (M.runFrom (r, s) n)) :
     ∃ m ≤ n, Program.Control.Run (callBlock M q) id
-      (semantics xs).observe (semantics xs).act (blockRoute M (state c))
-      (c.mapState (fun _ ↦ ())) m (FinEnum.equiv (state (M.runFrom c n)))
-      ((M.runFrom c n).mapState (fun _ ↦ ())) := by
-  induction n generalizing c with
+      (semantics xs).observe (semantics xs).act (blockRoute M r) s m
+      (FinEnum.equiv (M.runFrom (r, s) n).1) (M.runFrom (r, s) n).2 := by
+  induction n generalizing r s with
   | zero =>
-    have hc : M.halt (state c) = true := hh
+    have hc : M.halt r = true := hh
     refine ⟨0, le_rfl, ?_⟩
     simp only [blockRoute, hc, ↓reduceIte, Controller.runFrom_zero]
     exact Program.Control.Run.done _ _
   | succ n ih =>
-    by_cases hc : M.Halted c
-    · have hr := M.runFrom_of_halted c hc (n + 1)
+    by_cases hc : M.halt r
+    · rw [M.runFrom_of_halted (r, s) hc (n + 1)]
       refine ⟨0, Nat.zero_le _, ?_⟩
-      rw [hr]
-      have he : M.halt (state c) = true := hc
-      simp only [blockRoute, he, ↓reduceIte]
+      simp only [blockRoute, hc, ↓reduceIte]
       exact Program.Control.Run.done _ _
-    · have hf : M.halt (state c) = false := Bool.eq_false_iff.mpr hc
-      have hs := M.step_of_not_halted c hc
-      obtain ⟨m, hm, hr⟩ := ih (M.step c) hh
+    · rw [Controller.runFrom_succ, M.step_of_not_halted (r, s) hc] at hh ⊢
+      obtain ⟨m, hm, hr⟩ := ih _ _ hh
       refine ⟨m + 1, by omega, ?_⟩
-      simp only [Controller.runFrom_succ, blockRoute, hf, Bool.false_eq_true, ↓reduceIte]
-      apply Program.Control.Run.step
-      simpa only [callBlock, Equiv.symm_apply_apply, semantics_observe, semantics_act,
-        History.observe_mapState, History.apply_mapState,
-        hs, History.state_def, History.apply_last, Cfg.state_def, apply_state] using hr
+      simp only [blockRoute, hc, Bool.false_eq_true, ↓reduceIte]
+      exact Program.Control.Run.step _ _ (by simpa [callBlock] using hr)
 
 /-- A bounded halting run gives an actual call execution of at most the same length. -/
-theorem exec_callFrom (M : TM Id κ Γ Q) (c : History (Cfg κ Γ Q xs) (Action κ Γ Q))
-    (n : ℕ) (hh : M.Halted (M.runFrom c n)) :
-    ∃ m ≤ n, (callFrom M (state c)).Exec (semantics xs)
-      (c.mapState (fun _ ↦ ())) m (state (M.runFrom c n))
-      ((M.runFrom c n).mapState (fun _ ↦ ())) := by
-  obtain ⟨m, hm, hr⟩ := run_callBlock M (state c) c n hh
+theorem exec_callFrom (M : TM Id κ Γ Q) (q : Q) (s : History (Cfg κ Γ xs) (Action κ Γ))
+    (n : ℕ) (hh : M.Halted (M.runFrom (q, s) n)) :
+    ∃ m ≤ n, (callFrom M q).Exec (semantics xs) s m (M.runFrom (q, s) n).1
+      (M.runFrom (q, s) n).2 := by
+  obtain ⟨m, hm, hr⟩ := run_callBlock M q q s n hh
   refine ⟨m, hm, ?_⟩
   have h := Program.Syntax.Exec.call
-    (callBlock M (state c)) (fun e ↦
+    (callBlock M q) (fun e ↦
       Program.Syntax.ret
         ((FinEnum.equiv : Q ≃ Fin (FinEnum.card Q)).symm e))
     hr (Program.Syntax.Exec.ret (v := .value) _ _)
   simpa only [callFrom, Program.callControl, Program.pure,
     Program.ret, Nat.add_zero, Equiv.symm_apply_apply] using h
 
-/-- A call preserves the complete final configuration, including earlier visits and
-credits reserved for its continuation. -/
+/-- A call runs the machine from the selected state on the current history and returns its
+halting state; credits reserved for the continuation survive. -/
 @[spec]
-theorem spec_callFrom (M : TM Id κ Γ Q) (c : History (Cfg κ Γ Q xs) (Action κ Γ Q))
-    (n r : ℕ) (hh : M.Halted (M.runFrom c n)) :
-    Triple ((callFrom M (state c)).verify (semantics xs))
-      (fun s b ↦ s = c.mapState (fun _ ↦ ()) ∧ n + r ≤ b)
-      (fun a s b ↦ a = state (M.runFrom c n) ∧
-        s = (M.runFrom c n).mapState (fun _ ↦ ()) ∧ r ≤ b) () := by
+theorem spec_callFrom (M : TM Id κ Γ Q) (q : Q) (s : History (Cfg κ Γ xs) (Action κ Γ))
+    (n r : ℕ) (hh : M.Halted (M.runFrom (q, s) n)) :
+    Triple ((callFrom M q).verify (semantics xs))
+      (fun s' b ↦ s' = s ∧ n + r ≤ b)
+      (fun a s' b ↦ a = (M.runFrom (q, s) n).1 ∧ s' = (M.runFrom (q, s) n).2 ∧ r ≤ b) () := by
   constructor
-  rintro s b ⟨rfl, hb⟩
-  obtain ⟨m, hm, hr⟩ := exec_callFrom M c n hh
-  exact ⟨m, state (M.runFrom c n), (M.runFrom c n).mapState (fun _ ↦ ()),
-    by omega, hr, rfl, rfl, by omega⟩
+  rintro s' b ⟨rfl, hb⟩
+  obtain ⟨m, hm, hr⟩ := exec_callFrom M q s' n hh
+  exact ⟨m, _, _, by omega, hr, rfl, rfl, by omega⟩
 
 /-- Start at the machine's initial control state without resetting storage or visit history. -/
 @[spec]
-theorem spec_call (M : TM Id κ Γ Q) (c : History (Cfg κ Γ Q xs) (Action κ Γ Q))
-    (n r : ℕ) (hc : state c = M.q₀) (hh : M.Halted (M.runFrom c n)) :
+theorem spec_call (M : TM Id κ Γ Q) (s : History (Cfg κ Γ xs) (Action κ Γ))
+    (n r : ℕ) (hh : M.Halted (M.runFrom (M.q₀, s) n)) :
     Triple ((call M).verify (semantics xs))
-      (fun s b ↦ s = c.mapState (fun _ ↦ ()) ∧ n + r ≤ b)
-      (fun a s b ↦ a = state (M.runFrom c n) ∧
-        s = (M.runFrom c n).mapState (fun _ ↦ ()) ∧ r ≤ b) () := by
-  simpa only [call, hc] using spec_callFrom M c n r hh
+      (fun s' b ↦ s' = s ∧ n + r ≤ b)
+      (fun a s' b ↦ a = (M.runFrom (M.q₀, s) n).1 ∧ s' = (M.runFrom (M.q₀, s) n).2 ∧ r ≤ b)
+      () :=
+  spec_callFrom M M.q₀ s n r hh
 
 /-- A call preserves the complete final configuration and credits reserved for its continuation. -/
 @[spec]
-theorem cfg_spec_callFrom (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs)
-    (n r : ℕ) (hh : M.Halted (M.runFrom c n)) :
-    Triple ((callFrom M c.state).verify (cfgSemantics xs))
-      (fun s b ↦ s = c.mapState (fun _ ↦ ()) ∧ n + r ≤ b)
-      (fun a s b ↦ a = (M.runFrom c n).state ∧
-        s = (M.runFrom c n).mapState (fun _ ↦ ()) ∧ r ≤ b) () := by
-  apply cfg_of_history (spec_callFrom M (History.nil c) n r (by simpa using hh))
-  · rintro s b ⟨rfl, hb⟩; exact ⟨by simp, hb⟩
+theorem cfg_spec_callFrom (M : TM Id κ Γ Q) (q : Q) (c : Cfg κ Γ xs)
+    (n r : ℕ) (hh : M.Halted (M.runFrom (q, c) n)) :
+    Triple ((callFrom M q).verify (cfgSemantics xs))
+      (fun s b ↦ s = c ∧ n + r ≤ b)
+      (fun a s b ↦ a = (M.runFrom (q, c) n).1 ∧ s = (M.runFrom (q, c) n).2 ∧ r ≤ b) () := by
+  apply cfg_of_history (spec_callFrom M q (History.nil c) n r
+    (by simpa [Controller.Halted] using hh))
+  · rintro s b ⟨rfl, hb⟩; exact ⟨rfl, hb⟩
   · rintro a s b ⟨ha, rfl, hb⟩
-    simpa using And.intro ha hb
+    simpa [History.last_snd] using And.intro ha hb
 
 /-- Start at the machine's initial control state without resetting any storage or head. -/
 @[spec]
-theorem cfg_spec_call (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs)
-    (n r : ℕ) (hc : c.state = M.q₀) (hh : M.Halted (M.runFrom c n)) :
+theorem cfg_spec_call (M : TM Id κ Γ Q) (c : Cfg κ Γ xs)
+    (n r : ℕ) (hh : M.Halted (M.runFrom (M.q₀, c) n)) :
     Triple ((call M).verify (cfgSemantics xs))
-      (fun s b ↦ s = c.mapState (fun _ ↦ ()) ∧ n + r ≤ b)
-      (fun a s b ↦ a = (M.runFrom c n).state ∧
-        s = (M.runFrom c n).mapState (fun _ ↦ ()) ∧ r ≤ b) () := by
-  simpa only [call, hc] using cfg_spec_callFrom M c n r hh
+      (fun s b ↦ s = c ∧ n + r ≤ b)
+      (fun a s b ↦ a = (M.runFrom (M.q₀, c) n).1 ∧ s = (M.runFrom (M.q₀, c) n).2 ∧ r ≤ b)
+      () :=
+  cfg_spec_callFrom M M.q₀ c n r hh
 
 end Complexity.TM.Program

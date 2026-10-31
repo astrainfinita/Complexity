@@ -18,18 +18,18 @@ Halting padding adds neither actions nor configurations.
 
 @[expose] public section
 
-universe u
+universe u v
 
 namespace Complexity.Controller
 
-variable {F : Type u → Type*} {Observation : Type*} {Action Config : Type u}
-  {Q : Type*}
+variable {F : Type (max u v) → Type*} {Observation : Type*} {Action : Type u} {Q : Type v}
+  {Config : Type (max u v)}
 
 section Deterministic
 
 variable (M : Controller Id Observation Action Q)
-  [HasState Config Q] [Observe Config Observation] [Apply Config Action]
-  (cost : Action → Config → ℕ)
+  [HasState Config Q] [Observe Config Observation] [Apply Config (Q × Action)]
+  (cost : Q × Action → Config → ℕ)
 
 /-- A one-step history charges the selected action, or zero if the machine has halted. -/
 theorem actionSum_runHistoryFrom_one (cfg : Config) :
@@ -58,7 +58,7 @@ end Deterministic
 section ConfigSup
 
 variable (M : Controller Id Observation Action Q)
-  [HasState Config Q] [Observe Config Observation] [Apply Config Action]
+  [HasState Config Q] [Observe Config Observation] [Apply Config (Q × Action)]
   {α : Type*} [SemilatticeSup α] (space : Config → α)
 
 /-- Sequential segments combine their configuration measurements by taking the supremum. -/

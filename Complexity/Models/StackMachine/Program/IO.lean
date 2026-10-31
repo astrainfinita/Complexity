@@ -21,7 +21,7 @@ open Std.WP
 variable {κ Γ : Type} [DecidableEq κ] [FinEnum Γ]
 
 /-- Push the current input symbol and advance the read-only input head together. -/
-def loadAction (i : κ) (a : Γ) : Action κ Γ Unit :=
+def loadAction (i : κ) (a : Γ) : Action κ Γ :=
   { idle (κ := κ) with
     inputMove := 1
     work := fun j ↦ if j = i then .push a else .nop }
@@ -44,18 +44,18 @@ def load (target temp : κ) : StackMachine.Program κ Γ Unit := do
 
 /-- The configuration after reading a prefix of the input. -/
 @[simps -fullyApplied]
-def loaded {xs : List Γ} (c : Cfg κ Γ Unit xs.toArray) (i : κ) (p : List Γ) :
-    Cfg κ Γ Unit xs.toArray :=
+def loaded {xs : List Γ} (c : Cfg κ Γ xs.toArray) (i : κ) (p : List Γ) :
+    Cfg κ Γ xs.toArray :=
   { c.setStack i (p.reverse ++ c.stacks i) with
     inputPos := ⟨min (p.length + 1) (xs.length + 1), by simp only [List.size_toArray]; omega⟩ }
 
 omit [FinEnum Γ] in
-@[simp] theorem loaded_start {xs : List Γ} (c : Cfg κ Γ Unit xs.toArray) (i : κ)
+@[simp] theorem loaded_start {xs : List Γ} (c : Cfg κ Γ xs.toArray) (i : κ)
     (h : c.inputPos.val = 1) : loaded c i [] = c := by
   ext j <;> simp [h]
 
 omit [FinEnum Γ] in
-private theorem observe_loaded {xs : List Γ} (c : Cfg κ Γ Unit xs.toArray) (i : κ)
+private theorem observe_loaded {xs : List Γ} (c : Cfg κ Γ xs.toArray) (i : κ)
     (p r : List Γ) (h : p ++ r = xs) :
     (observe (loaded c i p) : Option Γ × (κ → Option Γ)).1 = r.head? := by
   have hp : p.length ≤ xs.length := by rw [← h, List.length_append]; omega
@@ -66,7 +66,7 @@ private theorem observe_loaded {xs : List Γ} (c : Cfg κ Γ Unit xs.toArray) (i
   cases r <;> rfl
 
 omit [FinEnum Γ] in
-private theorem loadAction_loaded {xs : List Γ} (c : Cfg κ Γ Unit xs.toArray) (i : κ)
+private theorem loadAction_loaded {xs : List Γ} (c : Cfg κ Γ xs.toArray) (i : κ)
     (p r : List Γ) (a : Γ) (h : p ++ a :: r = xs) :
     apply (loadAction i a) (loaded c i p) = loaded c i (p ++ [a]) := by
   have hp : p.length < xs.length := by rw [← h, List.length_append, List.length_cons]; omega
@@ -74,7 +74,7 @@ private theorem loadAction_loaded {xs : List Γ} (c : Cfg κ Γ Unit xs.toArray)
   · omega
   · split_ifs <;> simp_all [StackMachine.Op.apply]
 
-@[spec] theorem spec_loadReverse {xs : List Γ} (c : Cfg κ Γ Unit xs.toArray) (i : κ)
+@[spec] theorem spec_loadReverse {xs : List Γ} (c : Cfg κ Γ xs.toArray) (i : κ)
     (q : ℕ) (hi : c.inputPos.val = 1) :
     Triple ((loadReverse i).verify (semantics xs.toArray))
       (fun s b ↦ s = c ∧ b = 3 * xs.length + 2 + q)
@@ -102,7 +102,7 @@ private theorem loadAction_loaded {xs : List Γ} (c : Cfg κ Γ Unit xs.toArray)
   simpa only [loadReverse, repeatUntil, List.take_zero, loaded_start c i hi] using h
 
 /-- Load input onto the target, empty scratch, and finish at the right boundary. -/
-@[spec] theorem spec_load {xs : List Γ} (c : Cfg κ Γ Unit xs.toArray) (target temp : κ)
+@[spec] theorem spec_load {xs : List Γ} (c : Cfg κ Γ xs.toArray) (target temp : κ)
     (q : ℕ) (hne : target ≠ temp) (ht : c.stacks temp = []) (hi : c.inputPos.val = 1) :
     Triple ((load target temp).verify (semantics xs.toArray))
       (fun s b ↦ s = c ∧ b = 6 * xs.length + 4 + q)
@@ -123,7 +123,7 @@ private theorem loadAction_loaded {xs : List Γ} (c : Cfg κ Γ Unit xs.toArray)
   all_goals simp_all [d] <;> omega
 
 /-- Pop the observed source symbol and append it to output in the same transition. -/
-def emitAction (i : κ) (a : Γ) : Action κ Γ Unit :=
+def emitAction (i : κ) (a : Γ) : Action κ Γ :=
   { idle (κ := κ) (Γ := Γ) with
     work := fun j ↦ if j = i then .pop else .nop
     output := some a }
@@ -141,23 +141,23 @@ def emitStack (i : κ) : StackMachine.Program κ Γ Unit := repeatUntil (emitBod
 
 /-- The configuration after emitting a prefix, with the remaining source word. -/
 @[simps -fullyApplied]
-def emitted {xs : Array Γ} (c : Cfg κ Γ Unit xs) (i : κ) (p r : List Γ) :
-    Cfg κ Γ Unit xs :=
+def emitted {xs : Array Γ} (c : Cfg κ Γ xs) (i : κ) (p r : List Γ) :
+    Cfg κ Γ xs :=
   { c.setStack i r with output := c.output ++ p.toArray }
 
 omit [FinEnum Γ] in
-@[simp] theorem emitted_start {xs : Array Γ} (c : Cfg κ Γ Unit xs) (i : κ) :
+@[simp] theorem emitted_start {xs : Array Γ} (c : Cfg κ Γ xs) (i : κ) :
     emitted c i [] (c.stacks i) = c := by simp [emitted]
 
 omit [FinEnum Γ] in
 /-- Pop the selected stack and append the supplied symbol to output. -/
-@[simp] theorem emitAction_apply {xs : Array Γ} (c : Cfg κ Γ Unit xs) (i : κ) (a : Γ) :
+@[simp] theorem emitAction_apply {xs : Array Γ} (c : Cfg κ Γ xs) (i : κ) (a : Γ) :
     apply (emitAction i a) c = emitted c i [a] (c.stacks i).tail := by
   ext j <;> simp [emitAction, Function.update_apply, idle]
   split_ifs <;> simp_all [StackMachine.Op.apply]
 
 /-- Writing a word uses three transitions per symbol, plus two to stop. -/
-@[spec] theorem spec_emitStack {xs : Array Γ} (c : Cfg κ Γ Unit xs) (i : κ) (q : ℕ) :
+@[spec] theorem spec_emitStack {xs : Array Γ} (c : Cfg κ Γ xs) (i : κ) (q : ℕ) :
     Triple ((emitStack i).verify (semantics xs))
       (fun s b ↦ s = c ∧ b = 3 * (c.stacks i).length + 2 + q)
       (fun _ s b ↦ s = { c.setStack i [] with output := c.output ++ (c.stacks i).toArray }

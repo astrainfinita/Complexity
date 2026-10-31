@@ -23,7 +23,7 @@ open StackMachine.Program.Tree (project spec_project spec_pair projectTime_le)
 variable {k : ℕ} {xs : Array Bool}
 
 /-- Compute before overwriting the destination, including when it aliases a source. -/
-def make : Op k → StackMachine.Program (Work k) Bool Unit
+def make : Action k → StackMachine.Program (Work k) Bool Unit
   | .nop => pure ()
   | .left _ j =>
       project (data j) (.scratch .result) (.scratch .saved) (.scratch .temp)
@@ -35,7 +35,7 @@ def make : Op k → StackMachine.Program (Work k) Bool Unit
       StackMachine.Program.Tree.pair (data j) (data l) (.scratch .result) (.scratch .temp)
 
 /-- Replace only the selected register and restore the temporary stacks. -/
-def build (o : Op k) : StackMachine.Program (Work k) Bool Unit := do
+def build (o : Action k) : StackMachine.Program (Work k) Bool Unit := do
   match o.dst with
   | none => pure ()
   | some i =>
@@ -43,11 +43,11 @@ def build (o : Op k) : StackMachine.Program (Work k) Bool Unit := do
       Word.clear (data i)
       Word.move (.scratch .result) (data i) (.scratch .temp)
 
-@[spec] theorem spec_make (c : StackMachine.Cfg (Work k) Bool Unit xs)
-    (o : Op k) (i : Fin k) (ρ : Fin k → Complexity.Tree) (q : ℕ)
+@[spec] theorem spec_make (c : StackMachine.Cfg (Work k) Bool xs)
+    (o : Action k) (i : Fin k) (ρ : Fin k → Complexity.Tree) (q : ℕ)
     (hw : c.stacks = contents ρ) (hd : o.dst = some i) :
     Triple ((make o).verify (semantics xs))
-      (fun s t ↦ s = c ∧ 16 * o.sizeCost ρ + q ≤ t)
+      (fun s t ↦ s = c ∧ 16 * o.sizeCost ⟨ρ⟩ + q ≤ t)
       (fun _ s t ↦ s = c.setStack (.scratch .result) (BitList.encodeTree (o.eval ρ i)) ∧
         q ≤ t) () := by
   have hproject (j : Fin k) (right : Bool) := Program.spec_exact_budget_le
@@ -60,10 +60,10 @@ def build (o : Op k) : StackMachine.Program (Work k) Bool Unit := do
   | nop => simp at hd
   | left l j =>
     cases Option.some.inj hd
-    simpa [make, hw, Op.sizeCost] using hproject j false
+    simpa [make, hw, Action.sizeCost] using hproject j false
   | right l j =>
     cases Option.some.inj hd
-    simpa [make, hw, Op.sizeCost] using hproject j true
+    simpa [make, hw, Action.sizeCost] using hproject j true
   | pair l j m =>
     cases Option.some.inj hd
     have h := Program.spec_exact_budget_le (fun z ↦ spec_pair c (data j) (data m)
@@ -72,21 +72,21 @@ def build (o : Op k) : StackMachine.Program (Work k) Bool Unit := do
       (by simp [hw]) (by simp [hw]) (by simp [hw]))
       (m := 16 * (Complexity.Tree.pair (ρ j) (ρ m)).size)
       (by simp only [BitList.length_encodeTree, Complexity.Tree.size_pair]; omega) q
-    simpa [make, hw, Op.sizeCost, BitList.encodeTree] using h
+    simpa [make, hw, Action.sizeCost, BitList.encodeTree] using h
 
 /-- The three credits per live node pay for clearing it at its next overwrite. -/
-@[spec] theorem spec_build (c : StackMachine.Cfg (Work k) Bool Unit xs)
-    (o : Op k) (ρ : Fin k → Complexity.Tree) (q : ℕ) (hw : c.stacks = contents ρ) :
+@[spec] theorem spec_build (c : StackMachine.Cfg (Work k) Bool xs)
+    (o : Action k) (ρ : Fin k → Complexity.Tree) (q : ℕ) (hw : c.stacks = contents ρ) :
     Triple ((build o).verify (semantics xs))
-      (fun s t ↦ s = c ∧ 38 * o.sizeCost ρ + 3 * (∑ i, (ρ i).size) + q ≤ t)
+      (fun s t ↦ s = c ∧ 38 * o.sizeCost ⟨ρ⟩ + 3 * (∑ i, (ρ i).size) + q ≤ t)
       (fun _ s t ↦ s = bank c (o.eval ρ) ∧ 3 * (∑ i, (o.eval ρ i).size) + q ≤ t) () := by
   cases hd : o.dst with
   | none =>
     have ho : o = .nop := by cases o <;> simp_all
     subst o
-    simp only [build, Op.dst_nop, Op.eval_nop, bank_self c ρ hw]
+    simp only [build, Action.dst_nop, Action.eval_nop, bank_self c ρ hw]
     vcgen
-    all_goals simp_all [Op.sizeCost]; omega
+    all_goals simp_all [Action.sizeCost]; omega
   | some i =>
     let w := BitList.encodeTree (o.eval ρ i)
     let d := c.setStack (.scratch .result) w
@@ -110,8 +110,8 @@ def build (o : Op k) : StackMachine.Program (Work k) Bool Unit := do
     have hmake := spec_make c o i ρ
       (3 * (ρ i).size + 2 + (6 * w.length + 4 + z)) hw hd
     have hm := o.sum_size_eval_add ρ hd
-    have hn := o.written_size_le (ρ := ρ) hd
-    have hp := o.sizeCost_pos ρ
+    have hn := o.written_size_le (c := ⟨ρ⟩) hd
+    have hp := o.sizeCost_pos ⟨ρ⟩
     simp only [build, hd]
     vcgen [hmake, hclear, hmove]
     all_goals simp_all [d, e, w, z] <;> omega

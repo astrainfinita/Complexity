@@ -12,9 +12,11 @@ public import Complexity.Control.Transition.Basic
 # Controllers over local observations and atomic actions
 
 `F` describes one layer of permitted choices, independently of the monad used to
-interpret a run. An action includes its destination control state. The concrete
-model supplies configurations, their local observations, and action application.
-No input/output representation or resource accounting is imposed here.
+interpret a run. A transition selects the next control state together with an action. A
+machine configuration pairs the control state with the configuration that actions update; the
+concrete model supplies the latter, its local observations, and action application. Programs run
+on the same configurations and actions without a control state. No input/output representation
+or resource accounting is imposed here.
 
 `stepWith` and `runFromWith` interpret choices in the target monad `m` through
 `MonadLiftT F m`. Their deterministic counterparts `step` and `runFrom` use `Id`.
@@ -26,18 +28,21 @@ of control and observations and select their permitted atomic choice shape.
 
 @[expose] public section
 
-universe u
+universe u v
 
 namespace Complexity
 
-/-- A controller selecting an atomic action from its state and local observation. -/
-structure Controller (F : Type u → Type*) (Observation : Type*) (Action : Type u) (Q : Type*) where
+/-- A controller selecting its next control state and an atomic action from its state and local
+observation. -/
+structure Controller (F : Type (max u v) → Type*) (Observation : Type*) (Action : Type u)
+    (Q : Type v) where
   /-- Initial control state. -/
   q₀ : Q
   /-- Decide whether the current control state is halting. -/
   halt : Q → Bool
-  /-- Select an atomic action from the state and permitted local observation. -/
-  transition : Q → Observation → F Action
+  /-- Select the next control state and an atomic action from the state and permitted local
+  observation. -/
+  transition : Q → Observation → F (Q × Action)
 
 namespace Controller
 
@@ -53,14 +58,61 @@ class Observe (Config Observation : Type*) where
 
 /-- Execute an atomic action on a configuration. -/
 class Apply (Config Action : Type*) where
-  /-- Update the configuration, including its control state, with one action. -/
+  /-- Update the configuration with one action. -/
   apply : Action → Config → Config
 
 export HasState (state)
 export Observe (observe)
 export Apply (apply)
 
-variable {F : Type u → Type*} {Observation : Type*} {Action : Type u} {Q : Type*}
+section Prod
+
+variable {Q Config Observation Action : Type*}
+
+/-- A machine configuration pairs the control state with the configuration that actions
+update. -/
+instance : HasState (Q × Config) Q where
+  state := Prod.fst
+
+instance [Observe Config Observation] : Observe (Q × Config) Observation where
+  observe c := observe c.2
+
+/-- A transition's action moves to its control state and updates the configuration. -/
+instance [Apply Config Action] : Apply (Q × Config) (Q × Action) where
+  apply a c := (a.1, apply a.2 c.2)
+
+@[simp] theorem state_prod (c : Q × Config) : state c = c.1 := rfl
+
+@[simp] theorem observe_prod [Observe Config Observation] (c : Q × Config) :
+    observe c = (observe c.2 : Observation) := rfl
+
+@[simp] theorem apply_prod [Apply Config Action] (a : Q × Action) (c : Q × Config) :
+    apply a c = (a.1, apply a.2 c.2) := rfl
+
+end Prod
+
+/-- Programs and machines with actions of type `Action` run on each standard input
+`input : Input` with configurations of type `Config input`, starting from `init input`. The
+instance depends only on the input type, so rewriting an input does not leave a stale instance. -/
+class HasConfig (Action : Type*) (Input : Type*) (Config : outParam (Input → Type*)) where
+  /-- The initial configuration on the standard input. -/
+  init : (input : Input) → Config input
+
+variable {F : Type (max u v) → Type*} {Observation : Type*} {Action : Type u} {Q : Type v}
+
+/-- The initial machine configuration of `M` on the standard input `input`: its initial state
+with the standard initial configuration. -/
+def init {Input : Type*} {Config : Input → Type u} (M : Controller F Observation Action Q)
+    (input : Input) [HasConfig Action Input Config] : Q × Config input :=
+  (M.q₀, HasConfig.init Action input)
+
+@[simp] theorem init_fst {Input : Type*} {Config : Input → Type u}
+    (M : Controller F Observation Action Q) (input : Input) [HasConfig Action Input Config] :
+    (M.init input).1 = M.q₀ := rfl
+
+@[simp] theorem init_snd {Input : Type*} {Config : Input → Type u}
+    (M : Controller F Observation Action Q) (input : Input) [HasConfig Action Input Config] :
+    (M.init input).2 = HasConfig.init Action input := rfl
 
 /-- Halting depends only on finite control, independently of the storage model. -/
 def Halted {Config : Type*} (M : Controller F Observation Action Q)
@@ -71,11 +123,12 @@ instance {Config : Type*} (M : Controller F Observation Action Q)
     [HasState Config Q] (c : Config) : Decidable (M.Halted c) :=
   inferInstanceAs (Decidable (M.halt (state c) = true))
 
-variable {Config : Type u} [HasState Config Q] [Observe Config Observation] [Apply Config Action]
+variable {Config : Type (max u v)} [HasState Config Q] [Observe Config Observation]
+  [Apply Config (Q × Action)]
 
 section Interpreted
 
-variable (m : Type u → Type*) [Monad m] [MonadLiftT F m]
+variable (m : Type (max u v) → Type*) [Monad m] [MonadLiftT F m]
 
 /-- Interpret one layer of choices and apply the selected action.
 Halted configurations do not perform a choice. -/

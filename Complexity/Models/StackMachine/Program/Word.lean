@@ -21,7 +21,7 @@ open Std.WP
 variable {κ Γ : Type} [DecidableEq κ] [FinEnum Γ] {xs : Array Γ}
 
 /-- Remove one source symbol and push it onto each selected destination. -/
-def drainAction (i : κ) (targets : κ → Bool) (a : Γ) : Action κ Γ Unit :=
+def drainAction (i : κ) (targets : κ → Bool) (a : Γ) : Action κ Γ :=
   { idle (κ := κ) with work := fun j ↦ if j = i then .pop else if targets j then .push a else .nop }
 
 /-- Transfer one symbol, or stop when the source is empty. -/
@@ -39,18 +39,18 @@ def drain (i : κ) (targets : κ → Bool) : StackMachine.Program κ Γ Unit :=
 
 /-- A complete configuration during a word transfer. -/
 @[simps -fullyApplied]
-def drained (c : Cfg κ Γ Unit xs) (i : κ) (targets : κ → Bool)
-    (p remaining : List Γ) : Cfg κ Γ Unit xs :=
+def drained (c : Cfg κ Γ xs) (i : κ) (targets : κ → Bool)
+    (p remaining : List Γ) : Cfg κ Γ xs :=
   { c with «stacks» := fun j ↦ if j = i then remaining
     else if targets j then p.reverse ++ c.stacks j else c.stacks j }
 
 omit [FinEnum Γ] in
-@[simp] theorem drained_start (c : Cfg κ Γ Unit xs) (i : κ) (targets : κ → Bool) :
+@[simp] theorem drained_start (c : Cfg κ Γ xs) (i : κ) (targets : κ → Bool) :
     drained c i targets [] (c.stacks i) = c := by
   apply Cfg.ext <;> simp [funext_iff]
 
 omit [FinEnum Γ] in
-private theorem drainAction_drained (c : Cfg κ Γ Unit xs) (i : κ) (targets : κ → Bool)
+private theorem drainAction_drained (c : Cfg κ Γ xs) (i : κ) (targets : κ → Bool)
     (p remaining : List Γ) (a : Γ) :
     apply (drainAction i targets a) (drained c i targets p (a :: remaining)) =
       drained c i targets (p ++ [a]) remaining := by
@@ -58,7 +58,7 @@ private theorem drainAction_drained (c : Cfg κ Γ Unit xs) (i : κ) (targets : 
   split_ifs <;> simp_all
 
 /-- Moving a word takes exactly three transitions per symbol and two to stop. -/
-@[spec] theorem spec_drain (c : Cfg κ Γ Unit xs) (i : κ) (targets : κ → Bool) (q : ℕ) :
+@[spec] theorem spec_drain (c : Cfg κ Γ xs) (i : κ) (targets : κ → Bool) (q : ℕ) :
     Triple ((drain i targets).verify (semantics xs))
       (fun s b ↦ s = c ∧ b = 3 * (c.stacks i).length + 2 + q)
       (fun _ s b ↦ s = drained c i targets (c.stacks i) [] ∧ b = q) () := by
@@ -93,7 +93,7 @@ def copy (source target temp : κ) : StackMachine.Program κ Γ Unit := do
   drain temp (fun i ↦ i == source || i == target)
 
 /-- Clearing preserves the external streams and every other stack. -/
-@[spec] theorem spec_clear (c : Cfg κ Γ Unit xs) (i : κ) (q : ℕ) :
+@[spec] theorem spec_clear (c : Cfg κ Γ xs) (i : κ) (q : ℕ) :
     Triple ((clear i).verify (semantics xs))
       (fun s b ↦ s = c ∧ b = 3 * (c.stacks i).length + 2 + q)
       (fun _ s b ↦ s = c.setStack i [] ∧ b = q) () := by
@@ -103,7 +103,7 @@ def copy (source target temp : κ) : StackMachine.Program κ Γ Unit := do
   simpa only [clear, he] using spec_drain c i (fun _ ↦ false) q
 
 /-- Copying prepends the source word to the target, restores the source, and empties scratch. -/
-@[spec] theorem spec_copy (c : Cfg κ Γ Unit xs) (source target temp : κ) (q : ℕ)
+@[spec] theorem spec_copy (c : Cfg κ Γ xs) (source target temp : κ) (q : ℕ)
     (hst : source ≠ target) (hsp : source ≠ temp) (htp : target ≠ temp)
     (hp : c.stacks temp = []) :
     Triple ((copy source target temp).verify (semantics xs))
@@ -126,7 +126,7 @@ def move (source target temp : κ) : StackMachine.Program κ Γ Unit := do
   drain source (fun i ↦ i == temp)
   drain temp (fun i ↦ i == target)
 
-@[spec] theorem spec_move (c : Cfg κ Γ Unit xs) (source target temp : κ) (q : ℕ)
+@[spec] theorem spec_move (c : Cfg κ Γ xs) (source target temp : κ) (q : ℕ)
     (hst : source ≠ target) (hsp : source ≠ temp) (htp : target ≠ temp)
     (hp : c.stacks temp = []) :
     Triple ((move source target temp).verify (semantics xs))

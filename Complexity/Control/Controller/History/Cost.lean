@@ -140,4 +140,26 @@ theorem configSup_le_add_actionSum (h : History Config Action) (potential : Conf
     (p.map f g).configSup space = p.configSup (space ∘ f) := by
   simp [configSup, configs_map _ _ _ h, ← List.map_tail, List.foldl_map]
 
+@[simp] theorem actionSum_map {Config' Action' : Type*} [Apply Config' Action']
+    (p : History Config Action) (f : Config → Config') (g : Action → Action')
+    (h : ∀ a c, f (apply a c) = apply (g a) (f c)) (cost : Action' → Config' → ℕ) :
+    (p.map f g).actionSum cost = p.actionSum (fun a c ↦ cost (g a) (f c)) := by
+  simp [actionSum, configs_map _ _ _ h, List.zip_map, List.map_map, Function.comp_def]
+
+section Prod
+
+variable {Q C A α : Type*} [Apply C A]
+
+/-- Measuring the data part charges each action at its configuration. -/
+theorem actionSum_snd (p : History (Q × C) (Q × A)) (cost : A → C → ℕ) :
+    p.snd.actionSum cost = p.actionSum fun a c ↦ cost a.2 c.2 :=
+  p.actionSum_map _ _ (fun _ _ ↦ rfl) cost
+
+theorem configSup_snd [SemilatticeSup α] (p : History (Q × C) (Q × A))
+    (space : C → α) :
+    p.snd.configSup space = p.configSup (space ∘ Prod.snd) :=
+  p.configSup_map _ _ (fun _ _ ↦ rfl) space
+
+end Prod
+
 end Complexity.Controller.History

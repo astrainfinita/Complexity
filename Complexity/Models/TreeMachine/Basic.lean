@@ -25,26 +25,31 @@ namespace Complexity
 
 /-- A controller whose atomic actions update one tree register. -/
 abbrev TreeMachine (F : Type u → Type*) (k : ℕ) (Q : Type u) :=
-  Controller F (Fin k → Bool) (TreeMachine.Action k Q) Q
+  Controller F (Fin k → Bool) (TreeMachine.Action k) Q
 
 namespace TreeMachine
 
 variable {F : Type u → Type*} {k : ℕ} {Q : Type u}
 
-/-- Initialize register zero and read the result from the same register. -/
-instance [NeZero k] (a : Tree) :
-    Controller.Execution (Cfg k Q) Q Tree a where
-  init q := ⟨q, input 0 a⟩
-  state_init _ := rfl
+variable (k) in
+/-- The standard initial register bank: the input in register zero, every other register
+empty. -/
+@[simps -fullyApplied]
+def Cfg.init [NeZero k] (a : Tree) : Cfg k := ⟨input 0 a⟩
+
+instance [NeZero k] : Controller.HasConfig (Action k) Tree (fun _ ↦ Cfg k) where
+  init a := Cfg.init k a
+
+@[simp] theorem hasConfig_init [NeZero k] (a : Tree) :
+    Controller.HasConfig.init (Action k) a = Cfg.init k a := rfl
+
+/-- Read the result from register zero. -/
+instance [NeZero k] : Controller.Execution (Cfg k) Tree where
   HasOutput cfg b := cfg.regs 0 = b
 
-/-- Standard tree input places the value in register zero and clears all other registers. -/
-@[simp] theorem initInput_tree [NeZero k] (M : TreeMachine F k Q) (a : Tree) :
-    M.initInput (Config := Cfg k Q) a = ⟨M.q₀, input 0 a⟩ := rfl
-
 /-- The deterministic step equation in terms of register roots and actions. -/
-theorem step_eq (M : TreeMachine Id k Q) (c : Cfg k Q) :
-    M.step c = if M.halt c.state then c else apply (M.transition c.state (observe c)).run c := rfl
+theorem step_eq (M : TreeMachine Id k Q) (c : Q × Cfg k) :
+    M.step c = if M.halt c.1 then c else apply (M.transition c.1 (observe c.2)).run c := rfl
 
 end TreeMachine
 end Complexity

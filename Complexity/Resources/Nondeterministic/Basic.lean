@@ -39,15 +39,13 @@ def Accepts (M : NTM κ (Option Bool) Q) (xs : RawWord Bool) : Prop :=
   M.Produces (xs.toList.map some) (⌜true⌝₂.toList.map some)
 
 theorem accepts_iff_of_usesTime {t : ℕ} (h : M.UsesTime (xs.toList.map some) t) :
-    M.Accepts xs ↔ ∃ c ∈ M.runWith
-      (TM.Cfg κ (Option Bool) Q (xs.toList.map some).toArray) Multiset (xs.toList.map some) t,
-        c.output = (⌜true⌝₂.toList.map some).toArray :=
+    M.Accepts xs ↔ ∃ c ∈ M.runWith Multiset (xs.toList.map some) t,
+        c.2.output = (⌜true⌝₂.toList.map some).toArray :=
   produces_iff_of_usesTime h
 
 theorem booleanOutput_iff_of_usesTime {t : ℕ} (h : M.UsesTime (xs.toList.map some) t) :
-    M.BooleanOutput xs ↔ ∀ c ∈ M.runWith
-      (TM.Cfg κ (Option Bool) Q (xs.toList.map some).toArray) Multiset (xs.toList.map some) t,
-        ∃ b : Bool, c.output = (⌜b⌝₂.toList.map some).toArray := by
+    M.BooleanOutput xs ↔ ∀ c ∈ M.runWith Multiset (xs.toList.map some) t,
+        ∃ b : Bool, c.2.output = (⌜b⌝₂.toList.map some).toArray := by
   simp only [BooleanOutput, produces_iff_of_usesTime h, ← Array.toList_inj,
     forall_exists_index, and_imp]
   rw [forall_comm]
@@ -93,8 +91,7 @@ def _root_.Complexity.TimeSpaceModel.ntm : TimeSpaceModel Multiset (RawWord Bool
       (M : NTM κ (Option Bool) Q), R = fun xs ys t s =>
         M.UsesTime (xs.toList.map some) t ∧ M.UsesSpace (xs.toList.map some) s ∧
         ys.map (fun y => (y.toList.map some).toArray) =
-          (M.runWith (TM.Cfg κ (Option Bool) Q (xs.toList.map some).toArray)
-            Multiset (xs.toList.map some) t).map (·.output)}
+          (M.runWith Multiset (xs.toList.map some) t).map (·.2.output)}
   budget_mono := by
     rintro R ⟨κ, hκ, Q, hQ, M, rfl⟩ xs ys t s t' s' ⟨ht, hs, ho⟩ htt hss
     exact ⟨ht.mono htt, hs.mono hss, by rw [runWith_eq_of_usesTime ht htt]; exact ho⟩

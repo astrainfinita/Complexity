@@ -26,10 +26,10 @@ def body (M : TreeMachine Id k Q) (q : Q) : StackMachine.Program (Work k) Bool (
   else
     let v ← roots
     let a := (M.transition q v).run
-    build a.op
-    pure (.inl a.state)
+    build a.2
+    pure (.inl a.1)
 
-private theorem spec_roots (c : StackMachine.Cfg (Work k) Bool Unit xs)
+private theorem spec_roots (c : StackMachine.Cfg (Work k) Bool xs)
     (ρ : Fin k → Complexity.Tree) (hw : c.stacks = contents ρ) (n : ℕ) (hn : 0 < n) :
     Triple (roots.verify (semantics xs))
       (fun s t ↦ s = c ∧ t = n)
@@ -44,27 +44,27 @@ private theorem spec_roots (c : StackMachine.Cfg (Work k) Bool Unit xs)
   all_goals simp_all
 
 @[spec] theorem spec_body_continue (M : TreeMachine Id k Q)
-    (c : StackMachine.Cfg (Work k) Bool Unit xs) (r : Cfg k Q) (q : ℕ)
-    (hf : M.halt r.state = false) (hw : c.stacks = contents r.regs) :
-    Triple ((body M r.state).verify (semantics xs))
+    (c : StackMachine.Cfg (Work k) Bool xs) (r : Q × Cfg k) (q : ℕ)
+    (hf : M.halt r.1 = false) (hw : c.stacks = contents r.2.regs) :
+    Triple ((body M r.1).verify (semantics xs))
       (fun s t ↦ s = c ∧
-        39 * ((M.transition r.state (observe r)).run).sizeCost r + 3 * r.mass + q ≤ t)
-      (fun v s t ↦ (v = .inl (M.step r).state ∧ s = bank c (M.step r).regs) ∧
-        3 * (M.step r).mass + q ≤ t) () := by
-  have he : (M.step r).regs = ((M.transition r.state (observe r)).run).op.eval r.regs := by
-    simp [Controller.step_eq, hf]
-  have hs : (M.step r).state = ((M.transition r.state (observe r)).run).state := by
-    simp [Controller.step_eq, hf]
-  have hp := ((M.transition r.state (observe r)).run).op.sizeCost_pos r.regs
-  have hr := spec_roots c r.regs hw
-  have hb (v : Fin k → Bool) (hv : v = observe r) :
-      Triple ((build ((M.transition r.state v).run).op).verify (semantics xs))
+        39 * ((M.transition r.1 (observe r.2)).run).2.sizeCost r.2 + 3 * r.2.mass + q ≤ t)
+      (fun v s t ↦ (v = .inl (M.step r).1 ∧ s = bank c (M.step r).2.regs) ∧
+        3 * (M.step r).2.mass + q ≤ t) () := by
+  have he : (M.step r).2.regs = ((M.transition r.1 (observe r.2)).run).2.eval r.2.regs := by
+    simp [step_eq, hf]
+  have hs : (M.step r).1 = ((M.transition r.1 (observe r.2)).run).1 := by
+    simp [step_eq, hf]
+  have hp := ((M.transition r.1 (observe r.2)).run).2.sizeCost_pos r.2
+  have hr := spec_roots c r.2.regs hw
+  have hb (v : Fin k → Bool) (hv : v = observe r.2) :
+      Triple ((build ((M.transition r.1 v).run).2).verify (semantics xs))
         (fun s t ↦ s = c ∧
-          38 * ((M.transition r.state (observe r)).run).sizeCost r + 3 * r.mass + q ≤ t)
-        (fun _ s t ↦ s = bank c (M.step r).regs ∧ 3 * (M.step r).mass + q ≤ t) () := by
+          38 * ((M.transition r.1 (observe r.2)).run).2.sizeCost r.2 + 3 * r.2.mass + q ≤ t)
+        (fun _ s t ↦ s = bank c (M.step r).2.regs ∧ 3 * (M.step r).2.mass + q ≤ t) () := by
     subst v
     simpa only [Cfg.mass, Action.sizeCost, he] using
-      spec_build c ((M.transition r.state (observe r)).run).op r.regs q hw
+      spec_build c ((M.transition r.1 (observe r.2)).run).2 r.2.regs q hw
   unfold body
   simp only [hf, Bool.false_eq_true, ↓reduceIte]
   vcgen [hr, hb]
@@ -72,7 +72,7 @@ private theorem spec_roots (c : StackMachine.Cfg (Work k) Bool Unit xs)
   all_goals first | rfl | omega
 
 /-- At instruction boundaries, stack storage is exactly the source register mass. -/
-@[simp] theorem mass_bank (c : StackMachine.Cfg (Work k) Bool Unit xs) (ρ : Fin k → Tree) :
+@[simp] theorem mass_bank (c : StackMachine.Cfg (Work k) Bool xs) (ρ : Fin k → Tree) :
     (bank c ρ).mass = ∑ i, (ρ i).size := by
   unfold StackMachine.Cfg.mass
   rw [Fintype.sum_equiv (proxy_equiv% (Work k)).symm _

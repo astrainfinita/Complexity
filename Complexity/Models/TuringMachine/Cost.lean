@@ -20,20 +20,22 @@ open Controller (History)
 variable {κ Γ Q : Type*} [Inhabited Γ] {xs : Array Γ}
 
 /-- Extending a run can only enlarge its visited intervals. -/
-theorem runHistoryFrom_visited_mono (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs) :
-    Monotone fun n ↦ (M.runHistoryFrom c n).visited :=
-  fun _ _ h ↦ M.configSup_runHistoryFrom_mono _ c h
+theorem runHistoryFrom_visited_mono (M : TM Id κ Γ Q) (c : Q × Cfg κ Γ xs) :
+    Monotone fun n ↦ (M.runHistoryFrom c n).snd.visited := fun _ _ h ↦ by
+  simpa only [History.visited, History.configSup_snd] using
+    M.configSup_runHistoryFrom_mono _ c h
 
-theorem runHistoryFrom_space_mono [Fintype κ] (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs) :
-    Monotone fun n ↦ (M.runHistoryFrom c n).space :=
+theorem runHistoryFrom_space_mono [Fintype κ] (M : TM Id κ Γ Q) (c : Q × Cfg κ Γ xs) :
+    Monotone fun n ↦ (M.runHistoryFrom c n).snd.space :=
   fun _ _ h ↦ History.space_mono (M.runHistoryFrom_visited_mono c h)
 
 /-- An interval bounds a tape's visits exactly when it contains every bounded-run head. -/
-theorem runHistoryFrom_visited_le_iff (M : TM Id κ Γ Q) (c : Cfg κ Γ Q xs)
+theorem runHistoryFrom_visited_le_iff (M : TM Id κ Γ Q) (c : Q × Cfg κ Γ xs)
     (n : ℕ) (i : κ) (v : NonemptyInterval ℤ) :
-    (M.runHistoryFrom c n).visited i ≤ v ↔
-      ∀ m ≤ n, (M.runFrom c m).workPos i ∈ v := by
-  simp only [History.visited_apply_le_iff, Controller.mem_configs_runHistoryFrom,
-    forall_exists_index, and_imp, forall_apply_eq_imp_iff₂]
+    (M.runHistoryFrom c n).snd.visited i ≤ v ↔
+      ∀ m ≤ n, (M.runFrom c m).2.workPos i ∈ v := by
+  simp only [History.visited_apply_le_iff, History.configs_snd, List.mem_map,
+    Controller.mem_configs_runHistoryFrom, forall_exists_index, and_imp,
+    forall_apply_eq_imp_iff₂]
 
 end Complexity.TM

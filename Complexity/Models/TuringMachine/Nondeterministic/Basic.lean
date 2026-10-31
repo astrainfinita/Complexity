@@ -37,7 +37,7 @@ variable {κ : Type*} {Γ Q : Type*} [Inhabited Γ] {xs : List Γ}
 
 /-- Every computation branch has halted by this deadline. -/
 def UsesTime (M : NTM κ Γ Q) (xs : List Γ) (t : ℕ) : Prop :=
-  ∀ c ∈ M.runWith (TM.Cfg κ Γ Q xs.toArray) Multiset xs t, M.Halted c
+  ∀ c ∈ M.runWith Multiset xs t, M.Halted c
 
 /-- All computation branches halt, with a common finite deadline for this input. -/
 def Terminates (M : NTM κ Γ Q) (xs : List Γ) : Prop :=
@@ -46,20 +46,21 @@ def Terminates (M : NTM κ Γ Q) (xs : List Γ) : Prop :=
 /-- Every finite computation prefix stays within the work-space bound.
 This property alone does not require termination. -/
 def UsesSpace [Fintype κ] (M : NTM κ Γ Q) (xs : List Γ) (s : ℕ) : Prop :=
-  ∀ n h, h ∈ M.runHistoryWith (TM.Cfg κ Γ Q xs.toArray) Multiset xs n → h.space ≤ s
+  ∀ n h, h ∈ M.runHistoryWith Multiset xs n → h.snd.space ≤ s
 
 /-- A step invariant bounds space on every finite computation prefix. -/
 theorem usesSpace_of_invariant [Fintype κ] (M : NTM κ Γ Q) {xs : List Γ} {s : ℕ}
-    {P : History (TM.Cfg κ Γ Q xs.toArray) (TM.Action κ Γ Q) → Prop}
-    (hinit : P (History.nil (M.initInput xs)))
+    {P : History (Q × TM.Cfg κ Γ xs.toArray) (Q × TM.Action κ Γ) → Prop}
+    (hinit : P (History.nil (M.init xs)))
     (hstep : ∀ c, P c → ∀ d ∈ M.stepWith Multiset c, P d)
-    (hspace : ∀ c, P c → c.space ≤ s) : M.UsesSpace xs s :=
-  fun n h hh ↦ hspace h (M.forall_mem_runFromWith hstep hinit n h hh)
+    (hspace : ∀ c, P c → c.snd.space ≤ s) : M.UsesSpace xs s :=
+  fun n h hh ↦
+    hspace h (M.forall_mem_runFromWith hstep hinit n h hh)
 
 theorem UsesTime.mono {M : NTM κ Γ Q} {xs : List Γ} {t t' : ℕ}
     (h : M.UsesTime xs t) (ht : t ≤ t') : M.UsesTime xs t' :=
   Controller.forall_halted_runFromWith_mono M
-    (M.initInput (Config := TM.Cfg κ Γ Q xs.toArray) xs) h ht
+    (M.init xs) h ht
 
 theorem UsesTime.terminates {M : NTM κ Γ Q} {xs : List Γ} {t : ℕ}
     (h : M.UsesTime xs t) : M.Terminates xs := ⟨t, h⟩
@@ -71,9 +72,10 @@ theorem UsesSpace.mono [Fintype κ] {M : NTM κ Γ Q} {xs : List Γ} {s s' : ℕ
 /-- A time bound also bounds visited work cells on every finite computation prefix. -/
 theorem UsesTime.usesSpace [Fintype κ] {M : NTM κ Γ Q} {xs : List Γ} {t : ℕ}
     (ht : M.UsesTime xs t) : M.UsesSpace xs (Fintype.card κ * (t + 1)) := by
-  let c : TM.Cfg κ Γ Q xs.toArray := M.initInput xs
+  let c : Q × TM.Cfg κ Γ xs.toArray := M.init xs
   intro n h hh
-  apply h.space_le_length.trans
+  apply h.snd.space_le_length.trans
+  rw [History.length_snd]
   apply Nat.mul_le_mul_left
   apply Nat.succ_le_succ
   by_cases hn : n ≤ t
@@ -88,32 +90,30 @@ theorem UsesTime.usesSpace [Fintype κ] {M : NTM κ Γ Q} {xs : List Γ} {t : �
 theorem UsesSpace.tapes_le [Fintype κ] {M : NTM κ Γ Q} {xs : List Γ} {s : ℕ}
     (h : M.UsesSpace xs s) : Fintype.card κ ≤ s := by
   have hh := h 0 _ (Multiset.mem_singleton_self _)
-  simpa only [History.space_nil] using hh
+  simpa only [History.snd_nil, History.space_nil] using hh
 
 /-- Once every branch has halted, additional padding leaves the entire endpoint multiset fixed. -/
 theorem runWith_eq_of_usesTime {M : NTM κ Γ Q} {xs : List Γ} {t t' : ℕ}
     (h : M.UsesTime xs t) (ht : t ≤ t') :
-    M.runWith (TM.Cfg κ Γ Q xs.toArray) Multiset xs t' =
-      M.runWith (TM.Cfg κ Γ Q xs.toArray) Multiset xs t :=
+    M.runWith Multiset xs t' = M.runWith Multiset xs t :=
   Controller.runFromWith_eq_of_forall_halted M
-    (M.initInput (Config := TM.Cfg κ Γ Q xs.toArray) xs) h ht
+    (M.init xs) h ht
 
 /-- Some finite computation halts with the given complete output. -/
 def Produces (M : NTM κ Γ Q) (xs ys : List Γ) : Prop :=
-  ∃ n c, c ∈ M.runWith (TM.Cfg κ Γ Q xs.toArray) Multiset xs n ∧
-    M.Halted c ∧ c.output = ys.toArray
+  ∃ n c, c ∈ M.runWith Multiset xs n ∧ M.Halted c ∧ c.2.output = ys.toArray
 
 /-- A time bound allows eventual output to be checked at one fixed depth. -/
 theorem produces_iff_of_usesTime {M : NTM κ Γ Q} {xs ys : List Γ} {t : ℕ}
     (h : M.UsesTime xs t) : M.Produces xs ys ↔
-      ∃ c ∈ M.runWith (TM.Cfg κ Γ Q xs.toArray) Multiset xs t,
-        c.output = ys.toArray := by
+      ∃ c ∈ M.runWith Multiset xs t,
+        c.2.output = ys.toArray := by
   constructor
   · rintro ⟨n, c, hc, hh, ho⟩
     refine ⟨c, ?_, ho⟩
     rcases le_total n t with ht | ht
     · exact Controller.mem_runFromWith_of_halted M
-        (M.initInput (Config := TM.Cfg κ Γ Q xs.toArray) xs) hc hh ht
+        (M.init xs) hc hh ht
     · rwa [runWith_eq_of_usesTime h ht] at hc
   · rintro ⟨c, hc, ho⟩
     exact ⟨t, c, hc, h c hc, ho⟩

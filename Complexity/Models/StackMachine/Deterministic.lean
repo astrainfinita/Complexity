@@ -17,10 +17,10 @@ namespace Complexity.StackMachine
 variable {κ Γ Q : Type*} [Fintype κ]
 
 /-- The total number of symbols on the work stacks, excluding input and output. -/
-def Cfg.mass {xs : Array Γ} (c : Cfg κ Γ Q xs) : ℕ :=
+def Cfg.mass {xs : Array Γ} (c : Cfg κ Γ xs) : ℕ :=
   ∑ i, (c.stacks i).length
 
-theorem Cfg.mass_apply_le {xs : Array Γ} (c : Cfg κ Γ Q xs) (a : Action κ Γ Q) :
+theorem Cfg.mass_apply_le {xs : Array Γ} (c : Cfg κ Γ xs) (a : Action κ Γ) :
     (apply a c).mass ≤ c.mass + Fintype.card κ := by
   calc
     (apply a c).mass ≤ ∑ i, ((c.stacks i).length + 1) := by
@@ -30,37 +30,35 @@ theorem Cfg.mass_apply_le {xs : Array Γ} (c : Cfg κ Γ Q xs) (a : Action κ Γ
       omega
     _ = c.mass + Fintype.card κ := by simp [Cfg.mass, Finset.sum_add_distrib]
 
-theorem configSup_mass_le {xs : Array Γ} (h : Controller.History (Cfg κ Γ Q xs)
-    (Action κ Γ Q)) :
+theorem configSup_mass_le {xs : Array Γ} (h : Controller.History (Cfg κ Γ xs) (Action κ Γ)) :
     h.configSup Cfg.mass ≤ h.first.mass + Fintype.card κ * h.length := by
   simpa only [Controller.History.actionSum_const, Nat.mul_comm] using h.configSup_le_add_actionSum
     Cfg.mass (fun _ _ ↦ Fintype.card κ) (fun a c _ ↦ c.mass_apply_le a)
 
-@[simp] theorem mass_initInput (M : StackMachine Id κ Γ Q) (xs : List Γ) :
-    (M.initInput (Config := Cfg κ Γ Q xs.toArray) xs).mass = 0 := by
-  simp [Cfg.mass, Controller.initInput]
+@[simp] theorem Cfg.mass_init (xs : List Γ) : (Cfg.init κ xs).mass = 0 := by
+  simp [Cfg.mass]
 
 /-- One terminating history bounds transitions and the peak total work-stack length. -/
 def ComputesWithin (M : StackMachine Id κ Γ Q) (xs ys : List Γ) (t s : ℕ) : Prop :=
-  M.ComputesWith (Config := Cfg κ Γ Q xs.toArray)
-    Controller.History.length (fun h ↦ h.configSup Cfg.mass) xs ys t s
+  M.ComputesWith xs ys Controller.History.length
+    (fun h ↦ h.snd.configSup Cfg.mass) t s
 
 /-- Initially empty work stacks grow by at most one symbol per stack per transition. -/
 theorem ComputesWithin.of_run {M : StackMachine Id κ Γ Q}
     {xs ys : List Γ} {n t : ℕ}
-    (hh : M.Halted (M.run (Cfg κ Γ Q xs.toArray) xs n))
-    (ho : (M.run (Cfg κ Γ Q xs.toArray) xs n).output = ys.toArray) (hn : n ≤ t) :
+    (hh : M.Halted (M.run xs n))
+    (ho : (M.run xs n).2.output = ys.toArray) (hn : n ≤ t) :
     M.ComputesWithin xs ys t (Fintype.card κ * t) := by
-  have ht := (M.length_runHistory_le (Cfg κ Γ Q xs.toArray) xs n).trans hn
+  have ht := (M.length_runHistory_le xs n).trans hn
   refine ⟨n, hh, ho, ht, ?_⟩
   exact (configSup_mass_le _).trans
-    (by simpa [Controller.runHistory] using Nat.mul_le_mul_left (Fintype.card κ) ht)
+    (by simpa [Controller.runHistory, Controller.History.first_snd,
+      Controller.History.length_snd] using Nat.mul_le_mul_left (Fintype.card κ) ht)
 
 /-- Read the halted result at the advertised transition budget. -/
 theorem ComputesWithin.run_spec {M : StackMachine Id κ Γ Q}
     {xs ys : List Γ} {t s : ℕ} (h : M.ComputesWithin xs ys t s) :
-    M.Halted (M.run (Cfg κ Γ Q xs.toArray) xs t) ∧
-      (M.run (Cfg κ Γ Q xs.toArray) xs t).output = ys.toArray := by
+    M.Halted (M.run xs t) ∧ (M.run xs t).2.output = ys.toArray := by
   have ⟨hh, ho, _⟩ := Controller.computesWith_unit_iff.mp h
   exact ⟨hh, ho⟩
 

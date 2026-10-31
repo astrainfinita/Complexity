@@ -21,7 +21,7 @@ theorem run_compile {p : TreeMachine.Program k α} {q : p.State ⊕ p.Exit}
     {ρ σ : Fin k → Tree} {n : ℕ} {a : α}
     (h : Program.Control.Run (p.toControl eval) p.result semantics.observe semantics.act
       q ρ n a σ) :
-    ∃ e, p.result e = a ∧ (compile p).runFrom (Cfg.mk q ρ) n = Cfg.mk (.inr e) σ := by
+    ∃ e, p.result e = a ∧ (compile p).runFrom (q, Cfg.mk ρ) n = (.inr e, Cfg.mk σ) := by
   induction h with
   | done e ρ => exact ⟨e, rfl, rfl⟩
   | step q ρ h ih => exact ih
@@ -31,10 +31,9 @@ of transitions. This count is independent of the size-charged cost model. -/
 theorem run_output [NeZero k] {p : TreeMachine.Program k α} {x y : Tree}
     {n : ℕ} {a : α} {ρ : Fin k → Tree}
     (h : p.Exec semantics (input 0 x) n a ρ) (ho : ρ 0 = y) :
-    (compile p).Halted ((compile p).run (Cfg k (p.State ⊕ p.Exit)) x n) ∧
-      ((compile p).run (Cfg k (p.State ⊕ p.Exit)) x n).regs 0 = y := by
+    (compile p).Halted ((compile p).run x n) ∧ ((compile p).run x n).2.regs 0 = y := by
   obtain ⟨e, _, hr⟩ := run_compile h.toControl
-  change (compile p).run (Cfg k (p.State ⊕ p.Exit)) x n = _ at hr
+  change (compile p).run x n = _ at hr
   constructor
   · change (compile p).halt _ = true
     rw [hr]

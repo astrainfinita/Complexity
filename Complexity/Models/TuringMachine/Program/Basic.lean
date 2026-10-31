@@ -27,7 +27,7 @@ namespace Program
 
 /-- The local operations recorded by a source program. -/
 inductive Op (κ : Type) (Γ : Type) where
-  | act (a : Action κ Γ Unit)
+  | act (a : Action κ Γ)
   | readInput (s : FinEnum Γ)
   | read (s : FinEnum Γ) (i : κ)
   | observeBits (n : ℕ) (f : (Γ × (κ → Γ)) → Fin n → Bool)
@@ -59,7 +59,7 @@ This specializes `Program` to the TM observations, actions, and operation result
 protected name is written `TM.Program`, keeping the generic `Program` interface available
 when the TM namespace is opened. `compile` supplies the fixed TM operation interpreter. -/
 protected abbrev Program (κ : Type) (Γ : Type) :=
-  Program (Γ × (κ → Γ)) (Action κ Γ Unit) (Program.Op κ Γ)
+  Program (Γ × (κ → Γ)) (Action κ Γ) (Program.Op κ Γ)
     Program.Op.Result
 
 namespace Program
@@ -67,31 +67,30 @@ namespace Program
 variable {κ : Type} {Γ α : Type}
 
 /-- A local action which leaves all storage and heads unchanged. -/
-def idle : Action κ Γ Unit where
+def idle : Action κ Γ where
   inputMove := 0
   work := fun _ ↦ (none, 0)
   output := none
-  state := ()
 
 /-- An idle action preserves the tape configuration. -/
 @[simp]
-theorem idle_apply [Inhabited Γ] {xs : Array Γ} (c : Cfg κ Γ Unit xs) :
+theorem idle_apply [Inhabited Γ] {xs : Array Γ} (c : Cfg κ Γ xs) :
     apply (idle (κ := κ) (Γ := Γ)) c = c := by
   ext <;> simp [idle, SignType.cast]
 
 /-- The local action used by a single work-head movement. -/
-def moveAction [DecidableEq κ] (j : κ) (d : SignType) : Action κ Γ Unit :=
+def moveAction [DecidableEq κ] (j : κ) (d : SignType) : Action κ Γ :=
   { idle (κ := κ) with work := fun i ↦ (none, if i = j then d else 0) }
 
 /-- Interpret one recorded operation as one local machine transition. -/
-def eval : (o : Op κ Γ) → (Γ × (κ → Γ)) → Action κ Γ Unit × o.Result
+def eval : (o : Op κ Γ) → (Γ × (κ → Γ)) → Action κ Γ × o.Result
   | .act a, _ => (a, ())
   | .readInput _, v => (idle, v.1)
   | .read _ i, v => (idle, v.2 i)
   | .observeBits _ f, v => (idle, Vector.ofFn (f v))
 
 /-- Execute a simultaneous local action in one transition. -/
-def act (a : Action κ Γ Unit) : TM.Program κ Γ Unit :=
+def act (a : Action κ Γ) : TM.Program κ Γ Unit :=
   Program.perform (Op.act a)
 
 /-- Read the current input symbol in one transition. -/
@@ -121,10 +120,9 @@ variable [DecidableEq κ]
 variable [Inhabited Γ] {xs : Array Γ}
 
 /-- A move is exactly one local head update; tape data and external streams stay fixed. -/
-@[simp] theorem moveAction_apply (j : κ) (d : SignType) (c : Cfg κ Γ Unit xs) :
+@[simp] theorem moveAction_apply (j : κ) (d : SignType) (c : Cfg κ Γ xs) :
     apply (moveAction (Γ := Γ) j d) c = c.setWorkPos j (c.workPos j + d.cast) := by
   apply Cfg.ext
-  · exact Subsingleton.elim _ _
   · rfl
   · rfl
   · funext i
@@ -160,8 +158,8 @@ def compile (p : TM.Program κ Γ α) : TM Id κ Γ (p.State ⊕ p.Exit) where
   transition q v := pure <| match q with
     | .inl q =>
         let (b, q') := (p.toControl eval).next q v
-        b.mapState (fun _ ↦ q')
-    | .inr e => idle.mapState (fun _ ↦ .inr e)
+        (q', b)
+    | .inr e => (.inr e, idle)
 
 end Program
 

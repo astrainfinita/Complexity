@@ -58,9 +58,9 @@ theorem pad_update (h : k ≤ r) (ρ : Fin k → Tree) (i : Fin k) (a : Tree) :
   simp only [input, pad_update, pad_nil]
 
 /-- Executing an embedded instruction preserves every added empty register. -/
-theorem pad_eval (h : k ≤ r) (ρ : Fin k → Tree) (o : Op k) :
+theorem pad_eval (h : k ≤ r) (ρ : Fin k → Tree) (o : Action k) :
     (o.rename (Fin.castLE h)).eval (pad h ρ) = pad h (o.eval ρ) := by
-  cases o <;> simp [Op.rename, Op.eval, pad_update]
+  cases o <;> simp [Action.rename, Action.eval, pad_update]
 
 /-- Each additional empty register contributes one node to space. -/
 theorem sum_size_pad (h : k ≤ r) (ρ : Fin k → Tree) :

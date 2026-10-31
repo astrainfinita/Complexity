@@ -142,6 +142,35 @@ def cons (c : Config) (a : Action) (tail : History Config Action)
   | nil => simp
   | cons a as ih => simp [← h, ih]
 
+section Prod
+
+variable {Q C A : Type*}
+
+/-- The data part of a history: the configurations that actions update and the actions applied
+to them, without control states. -/
+def snd (p : History (Q × C) (Q × A)) : History C A :=
+  p.map Prod.snd Prod.snd
+
+theorem length_snd (p : History (Q × C) (Q × A)) : p.snd.length = p.length :=
+  p.map_length _ _
+
+theorem first_snd (p : History (Q × C) (Q × A)) : p.snd.first = p.first.2 := rfl
+
+/-- The data part of an empty history is empty. -/
+@[simp] theorem snd_nil (c : Q × C) : (nil c : History (Q × C) (Q × A)).snd = nil c.2 := rfl
+
+variable [Apply C A]
+
+/-- The data part ends at the data part of the last configuration. -/
+theorem last_snd (p : History (Q × C) (Q × A)) : p.snd.last = p.last.2 :=
+  p.last_map _ _ fun _ _ ↦ rfl
+
+/-- The data part records the data part of every configuration. -/
+theorem configs_snd (p : History (Q × C) (Q × A)) : p.snd.configs = p.configs.map Prod.snd :=
+  p.configs_map _ _ fun _ _ ↦ rfl
+
+end Prod
+
 /-- Join histories at their common configuration, recording it only once. -/
 @[simps first actions]
 def append (p q : History Config Action) (_h : p.last = q.first) : History Config Action :=
@@ -213,8 +242,9 @@ instance : Apply (History Config Action) Action where
 
 end History
 
-@[simp] theorem halted_history {F : Type _ → Type*} {Config Action Observation Q : Type*}
-    [Apply Config Action] [HasState Config Q] (M : Controller F Observation Action Q)
+@[simp] theorem halted_history {F : Type _ → Type*} {Config Action Observation : Type*}
+    {A Q : Type*}
+    [Apply Config Action] [HasState Config Q] (M : Controller F Observation A Q)
     (p : History Config Action) : M.Halted p ↔ M.Halted p.last := Iff.rfl
 
 end Complexity.Controller

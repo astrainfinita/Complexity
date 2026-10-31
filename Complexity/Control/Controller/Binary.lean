@@ -18,11 +18,11 @@ The multiset interpretation retains the multiplicity of coincident paths.
 
 @[expose] public section
 
-universe u
+universe u v
 
 namespace Complexity.Controller
 
-variable {Observation : Type*} {Action Config : Type u} {Q : Type*}
+variable {Observation : Type*} {Action : Type u} {Q : Type v} {Config : Type (max u v)}
 variable (M : Controller Id Observation Action Q)
   [HasState Config Q]
 
@@ -36,14 +36,12 @@ def toBinary : Controller BinaryChoice Observation Action Q where
 @[simp] theorem halted_toBinary_iff (c : Config) :
     M.toBinary.Halted c ↔ M.Halted c := Iff.rfl
 
-variable {Input Output : Type*}
+variable {Input : Type*}
 
-/-- Duplicating transitions preserves the standard input configuration. -/
-@[simp] theorem initInput_toBinary (input : Input)
-    [Execution Config Q Output input] :
-    M.toBinary.initInput (Config := Config) input = M.initInput input := rfl
+/-- Duplicating transitions keeps the initial state. -/
+@[simp] theorem toBinary_q₀ : M.toBinary.q₀ = M.q₀ := rfl
 
-variable [Observe Config Observation] [Apply Config Action]
+variable [Observe Config Observation] [Apply Config (Q × Action)]
 
 /-- Both alternatives of an embedded deterministic step have the original successor. -/
 @[simp] theorem mem_stepWith_toBinary_iff (c d : Config) :
@@ -63,21 +61,22 @@ variable [Observe Config Observation] [Apply Config Action]
       mem_stepWith_toBinary_iff, ih, exists_eq_left]
 
 /-- Standard input execution reaches exactly the original deterministic endpoint. -/
-@[simp] theorem mem_runWith_toBinary_iff (input : Input) (d : Config) (n : ℕ)
-    [Execution Config Q Output input] :
-    d ∈ M.toBinary.runWith Config Multiset input n ↔ d = M.run Config input n :=
-  M.mem_runFromWith_toBinary_iff (M.initInput input) d n
+@[simp] theorem mem_runWith_toBinary_iff {C : Input → Type u} [∀ x, Observe (C x) Observation]
+    [∀ x, Apply (C x) Action] (input : Input) [HasConfig Action Input C] (d : Q × C input) (n : ℕ) :
+    d ∈ M.toBinary.runWith Multiset input n ↔ d = M.run input n :=
+  M.mem_runFromWith_toBinary_iff (M.init input) d n
 
 /-- Duplicated deterministic choices record exactly the original action history. -/
 theorem mem_runHistoryFromWith_toBinary_iff (c : Config)
-    (h : History Config Action) (n : ℕ) :
+    (h : History Config (Q × Action)) (n : ℕ) :
     h ∈ M.toBinary.runHistoryFromWith Multiset c n ↔ h = M.runHistoryFrom c n :=
   M.mem_runFromWith_toBinary_iff (History.nil c) h n
 
 /-- Duplicated deterministic choices preserve standard-input histories. -/
-theorem mem_runHistoryWith_toBinary_iff (input : Input) (h : History Config Action) (n : ℕ)
-    [Execution Config Q Output input] :
-    h ∈ M.toBinary.runHistoryWith Config Multiset input n ↔ h = M.runHistory Config input n :=
-  M.mem_runHistoryFromWith_toBinary_iff (M.initInput input) h n
+theorem mem_runHistoryWith_toBinary_iff {C : Input → Type u} [∀ x, Observe (C x) Observation]
+    [∀ x, Apply (C x) Action] (input : Input) [HasConfig Action Input C]
+    (h : History (Q × C input) (Q × Action)) (n : ℕ) :
+    h ∈ M.toBinary.runHistoryWith Multiset input n ↔ h = M.runHistory input n :=
+  M.mem_runHistoryFromWith_toBinary_iff (M.init input) h n
 
 end Complexity.Controller

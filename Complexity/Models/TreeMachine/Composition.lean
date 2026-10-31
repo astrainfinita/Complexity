@@ -46,76 +46,76 @@ def comp (M : TreeMachine Id k Q) (N : TreeMachine Id l Q') :
     | .inr (.inr q) => N.halt q
   transition q v := pure <| match q with
     | .inl q =>
-      if M.halt q then ⟨.nop, Comp.next N 0⟩
+      if M.halt q then (Comp.next N 0, .nop)
       else
         let a := (M.transition q (v ∘ Fin.castLE (by omega : k ≤ max k l + 1))).run
-        ⟨a.op.rename (Fin.castLE (by omega)), .inl a.state⟩
+        (.inl a.1, a.2.rename (Fin.castLE (by omega)))
     | .inr (.inl j) =>
-      ⟨.left ⟨j.val + 1, by omega⟩ ⟨max k l, by omega⟩, Comp.next N (j.val + 1)⟩
+      (Comp.next N (j.val + 1), .left ⟨j.val + 1, by omega⟩ ⟨max k l, by omega⟩)
     | .inr (.inr q) =>
       let a := (N.transition q (v ∘ Fin.castLE (by omega : l ≤ max k l + 1))).run
-      ⟨a.op.rename (Fin.castLE (by omega)), .inr (.inr a.state)⟩
+      (.inr (.inr a.1), a.2.rename (Fin.castLE (by omega)))
 
 namespace Comp
 
 variable (M : TreeMachine Id k Q) (N : TreeMachine Id l Q')
 
 /-- Pad a first-phase configuration with empty registers. -/
-def left (c : Cfg k Q) : Cfg (max k l + 1) (State k l Q Q') :=
-  ⟨.inl c.state, pad (by omega) c.regs⟩
+def left (c : Q × Cfg k) : State k l Q Q' × Cfg (max k l + 1) :=
+  (.inl c.1, ⟨pad (by omega) c.2.regs⟩)
 
 /-- Pad a second-phase configuration with empty registers. -/
-def right (c : Cfg l Q') : Cfg (max k l + 1) (State k l Q Q') :=
-  ⟨.inr (.inr c.state), pad (by omega) c.regs⟩
+def right (c : Q' × Cfg l) : State k l Q Q' × Cfg (max k l + 1) :=
+  (.inr (.inr c.1), ⟨pad (by omega) c.2.regs⟩)
 
-private theorem observe_pad {r : ℕ} (h : k ≤ r) (c : Cfg k Q) (q : Q') :
-    (observe (Cfg.mk q (pad h c.regs)) : Fin r → Bool) ∘ Fin.castLE h = observe c := by
+private theorem observe_pad {r : ℕ} (h : k ≤ r) (c : Cfg k) :
+    (observe (Cfg.mk (pad h c.regs)) : Fin r → Bool) ∘ Fin.castLE h = observe c := by
   funext i
   simp [pad_get]
 
-@[simp] theorem mass_left (c : Cfg k Q) :
-    (left (l := l) (Q' := Q') c).mass = c.mass + (max k l + 1 - k) :=
+@[simp] theorem mass_left (c : Q × Cfg k) :
+    (left (l := l) (Q' := Q') c).2.mass = c.2.mass + (max k l + 1 - k) :=
   sum_size_pad (by omega) _
 
-@[simp] theorem mass_right (c : Cfg l Q') :
-    (right (k := k) (Q := Q) c).mass = c.mass + (max k l + 1 - l) :=
+@[simp] theorem mass_right (c : Q' × Cfg l) :
+    (right (k := k) (Q := Q) c).2.mass = c.2.mass + (max k l + 1 - l) :=
   sum_size_pad (by omega) _
 
-@[simp] theorem step_left (c : Cfg k Q) (h : ¬M.Halted c) :
+@[simp] theorem step_left (c : Q × Cfg k) (h : ¬M.Halted c) :
     (comp M N).step (left c) = left (M.step c) := by
-  have h' : M.halt c.state = false := Bool.eq_false_iff.mpr h
-  apply Cfg.ext <;> simp [step_eq, comp, left, h', observe_pad, pad_eval]
+  have h' : M.halt c.1 = false := Bool.eq_false_iff.mpr h
+  simp [step_eq, comp, left, h', observe_pad, pad_eval, Cfg.ext_iff]
 
-@[simp] theorem step_right (c : Cfg l Q') :
+@[simp] theorem step_right (c : Q' × Cfg l) :
     (comp M N).step (right c) = right (N.step c) := by
-  by_cases h : N.halt c.state = true
+  by_cases h : N.halt c.1 = true
   · simp [step_eq, comp, right, h]
-  · have h' : N.halt c.state = false := Bool.eq_false_iff.mpr h
-    apply Cfg.ext <;> simp [step_eq, comp, right, h', observe_pad, pad_eval]
+  · have h' : N.halt c.1 = false := Bool.eq_false_iff.mpr h
+    simp [step_eq, comp, right, h', observe_pad, pad_eval, Cfg.ext_iff]
 
-@[simp] theorem actionSum_one_left (c : Cfg k Q) (h : ¬M.Halted c) :
-    ((comp M N).runHistoryFrom (left c) 1).actionSum Action.sizeCost =
-      (M.runHistoryFrom c 1).actionSum Action.sizeCost := by
-  have h' : M.halt c.state = false := Bool.eq_false_iff.mpr h
-  simp [Controller.actionSum_runHistoryFrom_one, Action.sizeCost, comp, left, h', observe_pad,
-    Op.sizeCost_rename, pad_comp_castLE]
+@[simp] theorem actionSum_one_left (c : Q × Cfg k) (h : ¬M.Halted c) :
+    ((comp M N).runHistoryFrom (left c) 1).actionSum (fun a c ↦ a.2.sizeCost c.2) =
+      (M.runHistoryFrom c 1).actionSum (fun a c ↦ a.2.sizeCost c.2) := by
+  have h' : M.halt c.1 = false := Bool.eq_false_iff.mpr h
+  simp [Controller.actionSum_runHistoryFrom_one, comp, left, h', observe_pad,
+    Action.sizeCost_rename, pad_comp_castLE]
 
-@[simp] theorem actionSum_one_right (c : Cfg l Q') :
-    ((comp M N).runHistoryFrom (right c) 1).actionSum Action.sizeCost =
-      (N.runHistoryFrom c 1).actionSum Action.sizeCost := by
-  simp [Controller.actionSum_runHistoryFrom_one, Action.sizeCost, comp, right, observe_pad,
-    Op.sizeCost_rename, pad_comp_castLE]
+@[simp] theorem actionSum_one_right (c : Q' × Cfg l) :
+    ((comp M N).runHistoryFrom (right c) 1).actionSum (fun a c ↦ a.2.sizeCost c.2) =
+      (N.runHistoryFrom c 1).actionSum (fun a c ↦ a.2.sizeCost c.2) := by
+  simp [Controller.actionSum_runHistoryFrom_one, comp, right, observe_pad,
+    Action.sizeCost_rename, pad_comp_castLE]
 
-theorem runFrom_left (c : Cfg k Q) (n : ℕ)
+theorem runFrom_left (c : Q × Cfg k) (n : ℕ)
     (h : ∀ j < n, ¬M.Halted (M.runFrom c j)) :
     (comp M N).runFrom (left c) n = left (M.runFrom c n) := by
   exact Transition.rel_runN_of_not_halted (R := fun c d ↦ d = left c)
     rfl (by rintro c _ rfl hc; exact step_left M N c hc) h
 
-theorem actionSum_left (c : Cfg k Q) (n : ℕ)
+theorem actionSum_left (c : Q × Cfg k) (n : ℕ)
     (h : ∀ j < n, ¬M.Halted (M.runFrom c j)) :
-    ((comp M N).runHistoryFrom (left c) n).actionSum Action.sizeCost =
-      (M.runHistoryFrom c n).actionSum Action.sizeCost := by
+    ((comp M N).runHistoryFrom (left c) n).actionSum (fun a c ↦ a.2.sizeCost c.2) =
+      (M.runHistoryFrom c n).actionSum (fun a c ↦ a.2.sizeCost c.2) := by
   induction n with
   | zero => rfl
   | succ n ih =>
@@ -123,13 +123,13 @@ theorem actionSum_left (c : Cfg k Q) (n : ℕ)
       runFrom_left M N _ n (fun j hj => h j (by omega)),
       actionSum_one_left M N _ (h n (by omega))]
 
-theorem runFrom_right (c : Cfg l Q') (n : ℕ) :
+theorem runFrom_right (c : Q' × Cfg l) (n : ℕ) :
     (comp M N).runFrom (right c) n = right (N.runFrom c n) := by
   exact Transition.runN_map right (step_right M N) c n
 
-theorem actionSum_right (c : Cfg l Q') (n : ℕ) :
-    ((comp M N).runHistoryFrom (right c) n).actionSum Action.sizeCost =
-      (N.runHistoryFrom c n).actionSum Action.sizeCost := by
+theorem actionSum_right (c : Q' × Cfg l) (n : ℕ) :
+    ((comp M N).runHistoryFrom (right c) n).actionSum (fun a c ↦ a.2.sizeCost c.2) =
+      (N.runHistoryFrom c n).actionSum (fun a c ↦ a.2.sizeCost c.2) := by
   induction n with
   | zero => rfl
   | succ n ih =>
@@ -162,20 +162,20 @@ private theorem clear_size_le {r : ℕ} (ρ : Fin r → Tree) (n : ℕ) (j : Fin
 
 /-- The configuration after a prefix of the clearing pass. -/
 def bridge (ρ : Fin (max k l + 1) → Tree) (n : ℕ) :
-    Cfg (max k l + 1) (State k l Q Q') := ⟨next N n, clear ρ n⟩
+    State k l Q Q' × Cfg (max k l + 1) := (next N n, ⟨clear ρ n⟩)
 
 private theorem step_bridge (ρ : Fin (max k l + 1) → Tree)
     (hz : ρ ⟨max k l, by omega⟩ = .nil) {n : ℕ} (hn : n < max k l - 1) :
     (comp M N).step (bridge N ρ n) = bridge N ρ (n + 1) := by
   have hz' : clear ρ n ⟨max k l, by omega⟩ = .nil := by
     simp [clear, hz, show ¬max k l ≤ n by omega]
-  apply Cfg.ext <;> simp [step_eq, bridge, next, hn, comp, hz', clear_succ]
+  simp [step_eq, bridge, next, hn, comp, hz', clear_succ, Cfg.ext_iff]
 
 private theorem actionSum_one_bridge (ρ : Fin (max k l + 1) → Tree)
     (hz : ρ ⟨max k l, by omega⟩ = .nil) {n : ℕ} (hn : n < max k l - 1) :
-    ((comp M N).runHistoryFrom (bridge N ρ n) 1).actionSum Action.sizeCost = 1 := by
-  simp [Controller.actionSum_runHistoryFrom_one, Action.sizeCost, bridge, next, hn, comp,
-    Op.sizeCost, clear, hz, show ¬max k l ≤ n by omega]
+    ((comp M N).runHistoryFrom (bridge N ρ n) 1).actionSum (fun a c ↦ a.2.sizeCost c.2) = 1 := by
+  simp [Controller.actionSum_runHistoryFrom_one, bridge, next, hn, comp,
+    Action.sizeCost, clear, hz, show ¬max k l ≤ n by omega]
 
 private theorem runFrom_bridge (ρ : Fin (max k l + 1) → Tree)
     (hz : ρ ⟨max k l, by omega⟩ = .nil) {n : ℕ} (hn : n ≤ max k l - 1) :
@@ -187,7 +187,7 @@ private theorem runFrom_bridge (ρ : Fin (max k l + 1) → Tree)
 
 private theorem actionSum_bridge (ρ : Fin (max k l + 1) → Tree)
     (hz : ρ ⟨max k l, by omega⟩ = .nil) {n : ℕ} (hn : n ≤ max k l - 1) :
-    ((comp M N).runHistoryFrom (bridge N ρ 0) n).actionSum Action.sizeCost = n := by
+    ((comp M N).runHistoryFrom (bridge N ρ 0) n).actionSum (fun a c ↦ a.2.sizeCost c.2) = n := by
   induction n with
   | zero => rfl
   | succ n ih =>
@@ -195,19 +195,20 @@ private theorem actionSum_bridge (ρ : Fin (max k l + 1) → Tree)
       runFrom_bridge M N ρ hz (by omega), actionSum_one_bridge M N ρ hz (by omega)]
 
 private theorem mass_bridge (ρ : Fin (max k l + 1) → Tree) (n : ℕ) :
-    (bridge (Q := Q) N ρ n).mass ≤ ∑ j, (ρ j).size := by
+    (bridge (Q := Q) N ρ n).2.mass ≤ ∑ j, (ρ j).size := by
+  unfold bridge Cfg.mass
   exact Finset.sum_le_sum fun j _ => clear_size_le ρ n j
 
-private theorem step_left_halted (c : Cfg k Q) (h : M.Halted c) :
+private theorem step_left_halted (c : Q × Cfg k) (h : M.Halted c) :
     (comp M N).step (left c) =
-      bridge N (pad (by omega) c.regs) 0 := by
-  have h' : M.halt c.state = true := h
-  apply Cfg.ext <;> simp [step_eq, comp, left, bridge, h']
+      bridge N (pad (by omega) c.2.regs) 0 := by
+  have h' : M.halt c.1 = true := h
+  simp [step_eq, comp, left, bridge, h']
 
-private theorem actionSum_one_left_halted (c : Cfg k Q) (h : M.Halted c) :
-    ((comp M N).runHistoryFrom (left c) 1).actionSum Action.sizeCost = 1 := by
-  simp [Controller.actionSum_runHistoryFrom_one, Action.sizeCost, left, comp,
-    show M.halt c.state = true from h, Op.sizeCost]
+private theorem actionSum_one_left_halted (c : Q × Cfg k) (h : M.Halted c) :
+    ((comp M N).runHistoryFrom (left c) 1).actionSum (fun a c ↦ a.2.sizeCost c.2) = 1 := by
+  simp [Controller.actionSum_runHistoryFrom_one, left, comp,
+    show M.halt c.1 = true from h, Action.sizeCost]
 
 private theorem clear_eq_input {r : ℕ} (ρ : Fin (r + 1) → Tree)
     (hz : ρ ⟨r, by omega⟩ = .nil) : clear ρ (r - 1) = input 0 (ρ 0) := by
@@ -231,21 +232,21 @@ private theorem clear_eq_input {r : ℕ} (ρ : Fin (r + 1) → Tree)
 
 variable [NeZero k] [NeZero l]
 
-private theorem bridge_end (c : Cfg k Q) :
-    bridge N (pad (by omega) c.regs) (max k l - 1) =
-      right (k := k) (Q := Q) (N.initInput (Config := Cfg l Q') (c.regs 0)) := by
-  have hz : pad (by omega : k ≤ max k l + 1) c.regs ⟨max k l, by omega⟩ = .nil :=
+private theorem bridge_end (c : Q × Cfg k) :
+    bridge N (pad (by omega) c.2.regs) (max k l - 1) =
+      right (k := k) (Q := Q) (N.init (c.2.regs 0)) := by
+  have hz : pad (by omega : k ≤ max k l + 1) c.2.regs ⟨max k l, by omega⟩ = .nil :=
     pad_of_le _ _ _ (Nat.le_max_left k l)
-  have hzero : pad (by omega : k ≤ max k l + 1) c.regs 0 = c.regs 0 :=
+  have hzero : pad (by omega : k ≤ max k l + 1) c.2.regs 0 = c.2.regs 0 :=
     pad_get _ _ 0
   simp only [bridge, clear_eq_input _ hz, hzero, next, lt_self_iff_false, ↓reduceDIte,
-    right, initInput_tree, pad_input]
+    right, Controller.init, hasConfig_init, Cfg.init_regs, pad_input]
   rfl
 
 /-- The bridge leaves the first result in zero and clears every other register. -/
-theorem runFrom_clear (c : Cfg k Q) (h : M.Halted c) :
+theorem runFrom_clear (c : Q × Cfg k) (h : M.Halted c) :
     (comp M N).runFrom (left c) (max k l) =
-      right (N.initInput (Config := Cfg l Q') (c.regs 0)) := by
+      right (N.init (c.2.regs 0)) := by
   have hk : 0 < k := NeZero.pos k
   conv_lhs => arg 3; rw [show max k l = (max k l - 1) + 1 by omega]
   rw [Controller.runFrom_succ, step_left_halted M N c h]
@@ -254,8 +255,9 @@ theorem runFrom_clear (c : Cfg k Q) (h : M.Halted c) :
 
 omit [NeZero l] in
 /-- Clearing writes an empty leaf and charges one per instruction. -/
-theorem actionSum_clear (c : Cfg k Q) (h : M.Halted c) :
-    ((comp M N).runHistoryFrom (left c) (max k l)).actionSum Action.sizeCost = max k l := by
+theorem actionSum_clear (c : Q × Cfg k) (h : M.Halted c) :
+    ((comp M N).runHistoryFrom (left c) (max k l)).actionSum (fun a c ↦ a.2.sizeCost c.2) =
+      max k l := by
   have hk : 0 < k := NeZero.pos k
   conv_lhs => enter [1, 3]; rw [show max k l = 1 + (max k l - 1) by omega]
   rw [Controller.actionSum_runHistoryFrom_add, Controller.runFrom_succ, Controller.runFrom_zero,
@@ -265,9 +267,9 @@ theorem actionSum_clear (c : Cfg k Q) (h : M.Halted c) :
 
 omit [NeZero k] [NeZero l] in
 /-- Every clearing prefix has at most the first phase's final register mass. -/
-theorem mass_clear_le (c : Cfg k Q) (h : M.Halted c) {n : ℕ} (hn : n ≤ max k l) :
-    ((comp M N).runFrom (left c) n).mass ≤
-      (left (l := l) (Q' := Q') c).mass := by
+theorem mass_clear_le (c : Q × Cfg k) (h : M.Halted c) {n : ℕ} (hn : n ≤ max k l) :
+    ((comp M N).runFrom (left c) n).2.mass ≤
+      (left (l := l) (Q' := Q') c).2.mass := by
   cases n with
   | zero => exact le_rfl
   | succ n =>
@@ -277,10 +279,8 @@ theorem mass_clear_le (c : Cfg k Q) (h : M.Halted c) {n : ℕ} (hn : n ≤ max k
 
 omit [NeZero l] in
 /-- Standard initialization embeds the first machine and leaves the shared padding empty. -/
-theorem initInput_eq (x : Tree) :
-    (comp M N).initInput (Config := Cfg (max k l + 1) (State k l Q Q')) x =
-      left (M.initInput (Config := Cfg k Q) x) := by
-  simp only [initInput_tree, comp, left, pad_input]
+theorem init_eq (x : Tree) : (comp M N).init x = left (M.init x) := by
+  simp [Controller.init, comp, left, pad_input]
   rfl
 
 end Comp
@@ -297,42 +297,39 @@ theorem comp_computesWithin [NeZero k] [NeZero l]
   obtain ⟨n, _, hn, ha, hc, _⟩ := hM.exists_haltsAt
   obtain ⟨m, _, hm, hb, hd, _⟩ := hN.exists_haltsAt
   let C := comp M N
-  let c := M.run (Cfg k Q) x n
-  have h₀ : C.initInput (Config := Cfg (max k l + 1) (Comp.State k l Q Q')) x =
-      Comp.left (M.initInput (Config := Cfg k Q) x) :=
-    Comp.initInput_eq M N x
+  let c := M.run x n
+  have h₀ : C.init x = Comp.left (M.init x) :=
+    Comp.init_eq M N x
   have hleft (d : ℕ) (hd : d ≤ n) :
-      C.run (Cfg (max k l + 1) (Comp.State k l Q Q')) x d =
-        Comp.left (M.run (Cfg k Q) x d) := by
+      C.run x d = Comp.left (M.run x d) := by
     rw [Controller.run, h₀]
     exact Comp.runFrom_left M N _ d (fun j hj => hn.2 j (by omega))
-  have h₁ : C.run (Cfg (max k l + 1) (Comp.State k l Q Q')) x n =
-      Comp.left c := hleft n le_rfl
+  have h₁ : C.run x n = Comp.left c := hleft n le_rfl
   have h₂ : C.runFrom (Comp.left c) (max k l) =
-      Comp.right (N.initInput (Config := Cfg l Q') a) := by
+      Comp.right (N.init a) := by
     rw [Comp.runFrom_clear M N c hn.1]
-    exact congrArg (fun a => Comp.right (N.initInput (Config := Cfg l Q') a)) ha
-  have hright (d : ℕ) : C.run
-      (Cfg (max k l + 1) (Comp.State k l Q Q')) x (n + max k l + d) =
-      Comp.right (N.run (Cfg l Q') a d) := by
+    exact congrArg (fun a => Comp.right (N.init a)) ha
+  have hright (d : ℕ) : C.run x (n + max k l + d) = Comp.right (N.run a d) := by
     rw [Controller.run, Controller.runFrom_add, Controller.runFrom_add, ← Controller.run, h₁, h₂]
     exact Comp.runFrom_right M N _ d
-  have hw : (C.runHistory (Cfg (max k l + 1) (Comp.State k l Q Q')) x
-      (n + max k l + m)).actionSum Action.sizeCost ≤ t + max k l + u := by
+  have hw : (C.runHistory x (n + max k l + m)).snd.actionSum Action.sizeCost ≤
+      t + max k l + u := by
+    simp only [Controller.History.actionSum_snd] at hc hd ⊢
     rw [Controller.runHistory, Controller.actionSum_runHistoryFrom_add,
       Controller.actionSum_runHistoryFrom_add, Controller.runFrom_add, ← Controller.run, h₁, h₂, h₀,
       Comp.actionSum_left M N _ n hn.2, Comp.actionSum_clear M N c hn.1, Comp.actionSum_right M N]
     exact Nat.add_le_add (Nat.add_le_add_right hc _) hd
   refine ⟨n + max k l + m, ?_, ?_, hw, ?_⟩
-  · change C.Halted (C.run (Cfg (max k l + 1) (Comp.State k l Q Q')) x (n + max k l + m))
+  · change C.Halted (C.run x (n + max k l + m))
     rw [hright]
     exact hm.1
-  · change (C.run (Cfg (max k l + 1) (Comp.State k l Q Q'))
-      x (n + max k l + m)).regs 0 = b
+  · change (C.run x (n + max k l + m)).2.regs 0 = b
     rw [hright]
-    exact (pad_get (by omega) (N.run (Cfg l Q') a m).regs 0).trans hb
-  · apply (C.configSup_runHistory_le_iff Cfg.mass x _ _).2
+    exact (pad_get (by omega) (N.run a m).2.regs 0).trans hb
+  · simp only [Controller.History.configSup_snd]
+    apply (C.configSup_runHistory_le_iff x (Cfg.mass ∘ Prod.snd) _ _).2
     intro d _
+    rw [Function.comp_apply]
     by_cases hdn : d ≤ n
     · rw [hleft d hdn, Comp.mass_left]
       exact (Nat.add_le_add_right (hM.mass_le d) _).trans (Nat.le_max_left _ _)

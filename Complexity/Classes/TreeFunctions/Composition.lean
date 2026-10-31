@@ -45,7 +45,7 @@ theorem fp_comp (hg : g ∈ FP .sizeCostTree) (hf : f ∈ FP .sizeCostTree) :
 private def identity : TreeMachine Id 1 Unit where
   q₀ := ()
   halt _ := true
-  transition _ _ := pure <| .keep ()
+  transition _ _ := pure ((), .nop)
 
 /-- Leaving the input register unchanged computes the identity at zero time cost. -/
 theorem fp_id : (id : α → α) ∈ FP .sizeCostTree := by
