@@ -65,8 +65,8 @@ example :
 example : ((Program.compile (Program.call machine)).run (Input := List Bool) [] 1).2.output =
     #[false] := by
   rw [Controller.run_succ, Controller.run_zero, TM.step_eq]
-  simp [Program.call, Program.compile, Program.callFrom, Program.callBlock, Program.blockRoute,
-    Program.callControl, Program.Syntax.toControl,
+  simp [Program.call, Program.compile, Program.Syntax.compile, Program.callFrom,
+    Program.callBlock, Program.blockRoute, Program.callControl, Program.Syntax.toControl,
     Program.Syntax.callLabel, Program.Syntax.callCont,
     machine]
   rfl
