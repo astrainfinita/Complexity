@@ -6,7 +6,7 @@ Authors: Yuyang Zhao
 module
 
 public import Complexity.Models.TreeMachine.Configuration
-public import Complexity.Control.Controller.Execution
+public import Complexity.Control.Controller.Computation
 
 /-!
 # Tree register machines with atomic choices
@@ -44,8 +44,8 @@ instance [NeZero k] : Controller.HasConfig (Action k) Tree (fun _ ↦ Cfg k) whe
     Controller.HasConfig.init (Action k) a = Cfg.init k a := rfl
 
 /-- Read the result from register zero. -/
-instance [NeZero k] : Controller.Execution (Cfg k) Tree where
-  HasOutput cfg b := cfg.regs 0 = b
+instance hasOutput [NeZero k] : Controller.HasOutput (Cfg k) Tree where
+  IsOutput cfg b := cfg.regs 0 = b
 
 /-- The deterministic step equation in terms of register roots and actions. -/
 theorem step_eq (M : TreeMachine Id k Q) (c : Q × Cfg k) :

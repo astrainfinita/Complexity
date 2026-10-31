@@ -91,28 +91,7 @@ instance [Apply Config Action] : Apply (Q × Config) (Q × Action) where
 
 end Prod
 
-/-- Programs and machines with actions of type `Action` run on each standard input
-`input : Input` with configurations of type `Config input`, starting from `init input`. The
-instance depends only on the input type, so rewriting an input does not leave a stale instance. -/
-class HasConfig (Action : Type*) (Input : Type*) (Config : outParam (Input → Type*)) where
-  /-- The initial configuration on the standard input. -/
-  init : (input : Input) → Config input
-
 variable {F : Type (max u v) → Type*} {Observation : Type*} {Action : Type u} {Q : Type v}
-
-/-- The initial machine configuration of `M` on the standard input `input`: its initial state
-with the standard initial configuration. -/
-def init {Input : Type*} {Config : Input → Type u} (M : Controller F Observation Action Q)
-    (input : Input) [HasConfig Action Input Config] : Q × Config input :=
-  (M.q₀, HasConfig.init Action input)
-
-@[simp] theorem init_fst {Input : Type*} {Config : Input → Type u}
-    (M : Controller F Observation Action Q) (input : Input) [HasConfig Action Input Config] :
-    (M.init input).1 = M.q₀ := rfl
-
-@[simp] theorem init_snd {Input : Type*} {Config : Input → Type u}
-    (M : Controller F Observation Action Q) (input : Input) [HasConfig Action Input Config] :
-    (M.init input).2 = HasConfig.init Action input := rfl
 
 /-- Halting depends only on finite control, independently of the storage model. -/
 def Halted {Config : Type*} (M : Controller F Observation Action Q)

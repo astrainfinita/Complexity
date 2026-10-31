@@ -6,7 +6,7 @@ Authors: Yuyang Zhao
 module
 
 public import Complexity.Models.StackMachine.Configuration
-public import Complexity.Control.Controller.Execution
+public import Complexity.Control.Controller.Computation
 
 /-! # Multiple-stack machines with finite local observations -/
 
@@ -39,8 +39,8 @@ instance : Controller.HasConfig (Action κ Γ) (List Γ) (fun xs ↦ Cfg κ Γ x
 
 /-- Input and output are ordinary symbol lists. -/
 @[simps (attr := simp↓)]
-instance execution {xs : Array Γ} : Controller.Execution (Cfg κ Γ xs) (List Γ) where
-  HasOutput c ys := c.output = ys.toArray
+instance hasOutput {xs : Array Γ} : Controller.HasOutput (Cfg κ Γ xs) (List Γ) where
+  IsOutput c ys := c.output = ys.toArray
 
 end StackMachine
 

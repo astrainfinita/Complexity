@@ -69,7 +69,7 @@ theorem ComputesWithin.run_spec [Fintype κ] {M : TM Id κ Γ Q}
     {xs ys : List Γ} {t s : ℕ} (h : M.ComputesWithin xs ys t s) :
     M.Halted (M.run xs t) ∧ (M.run xs t).2.output = ys.toArray := by
   have ⟨hh, ho, _⟩ := Controller.computesWith_unit_iff.mp h
-  simpa only [rawExecution_hasOutput] using And.intro hh ho
+  simpa only [hasOutput_isOutput] using And.intro hh ho
 
 theorem ComputesWithin.terminates [Fintype κ] {M : TM Id κ Γ Q}
     {xs ys : List Γ} {t s : ℕ}

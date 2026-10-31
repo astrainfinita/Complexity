@@ -7,7 +7,7 @@ module
 
 public import Complexity.Models.TuringMachine.Configuration
 public import Complexity.Control.Controller.Basic
-public import Complexity.Control.Controller.Execution
+public import Complexity.Control.Controller.Computation
 
 /-!
 # Multi-tape Turing machines with explicit choices
@@ -49,8 +49,8 @@ instance : Controller.HasConfig (Action κ Γ) (List Γ) (fun xs ↦ Cfg κ Γ x
 
 /-- Read the output tape as a list. -/
 @[simps (attr := simp↓)]
-instance rawExecution {xs : Array Γ} : Controller.Execution (Cfg κ Γ xs) (List Γ) where
-  HasOutput cfg ys := cfg.output = ys.toArray
+instance hasOutput {xs : Array Γ} : Controller.HasOutput (Cfg κ Γ xs) (List Γ) where
+  IsOutput cfg ys := cfg.output = ys.toArray
 
 /-- The deterministic step equation in terms of tape observations and actions. -/
 theorem step_eq (M : TM Id κ Γ Q) (c : Q × Cfg κ Γ xs) :

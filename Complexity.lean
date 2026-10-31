@@ -20,8 +20,8 @@ public import Complexity.Control.BinaryChoice.Basic
 public import Complexity.Control.BinaryChoice.Probability
 public import Complexity.Control.Controller.Basic
 public import Complexity.Control.Controller.Binary
+public import Complexity.Control.Controller.Computation
 public import Complexity.Control.Controller.Cost
-public import Complexity.Control.Controller.Execution
 public import Complexity.Control.Controller.History.Basic
 public import Complexity.Control.Controller.History.Cost
 public import Complexity.Control.Controller.RunHistory

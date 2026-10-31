@@ -216,7 +216,7 @@ theorem ComputesWithin.toTM [Fintype κ] {M : StackMachine Id κ Γ Q}
   apply Controller.computesWith_unit_iff.mpr
   refine ⟨?_, ?_, ?_⟩
   · simpa only [hr, Controller.Halted, Controller.state_prod, toTM_halt] using hh
-  · simpa only [TM.rawExecution_hasOutput, hr, Cfg.toTM_output,
+  · simpa only [TM.hasOutput_isOutput, hr, Cfg.toTM_output,
       List.map_toArray] using congrArg (Array.map some) ho
   · have hv := M.space_runHistoryFrom_toTM_le (M.init xs) (fun _ ↦ false) t
     rw [init_toTM] at hv

@@ -8,12 +8,16 @@ module
 public import Complexity.Control.Controller.Cost
 
 /-!
-# Execution with standard input and output
+# Computing on inputs
 
-A machine runs from its initial configuration `M.init input`, its initial control state paired
-with the standard configuration given by `HasConfig`, so running a machine needs no configuration
-type. `Execution` interprets configurations of one type as outputs. Observations,
-actions, and resource measurements are supplied separately when running the controller.
+`Basic`, `RunHistory` and `Cost` treat runs from an arbitrary configuration. Here a machine is a
+computation from a standard input to an output. Two conventions fix the input and the output:
+`HasConfig` gives the configuration type of each input and its initial configuration, and
+`HasOutput` reads outputs from configurations. On top of them come the runs on a standard input
+(`run`, `runWith`, `runHistory`), halting on an input (`Terminates`, `HaltsAt`), measurements of
+these runs, and the complete specification `ComputesWith`. A lemma belongs here when it is the
+counterpart, at `M.init input`, of a lemma about runs from an arbitrary configuration, or when it
+is about a notion that needs the input and output conventions.
 -/
 
 @[expose] public section
@@ -22,12 +26,41 @@ universe u v
 
 namespace Complexity.Controller
 
-/-- An output convention for one configuration type. -/
-class Execution (Config : Type*) (Output : outParam Type*) where
-  /-- Interpret a configuration as an output value. -/
-  HasOutput : Config → Output → Prop
+section Conventions
 
-initialize_simps_projections Execution (HasOutput → hasOutput)
+/-- Programs and machines with actions of type `Action` run on each standard input
+`input : Input` with configurations of type `Config input`, starting from `init input`. The
+instance depends only on the input type, so rewriting an input does not leave a stale instance. -/
+class HasConfig (Action : Type*) (Input : Type*) (Config : outParam (Input → Type*)) where
+  /-- The initial configuration on the standard input. -/
+  init : (input : Input) → Config input
+
+/-- How configurations of type `Config` are read as outputs of type `Output`. The class is keyed by
+the configuration type alone, so an instance contains no input value; the generic interface asks
+for an instance on every configuration type of the family, `∀ x, HasOutput (Config x) Output`. -/
+class HasOutput (Config : Type*) (Output : outParam Type*) where
+  /-- Whether a value is the output read from a configuration. -/
+  IsOutput : Config → Output → Prop
+
+initialize_simps_projections HasOutput (IsOutput → isOutput)
+
+variable {F : Type (max u v) → Type*} {Observation : Type*} {Action : Type u} {Q : Type v}
+
+/-- The initial machine configuration of `M` on the standard input `input`: its initial state
+with the standard initial configuration. -/
+def init {Input : Type*} {Config : Input → Type u} (M : Controller F Observation Action Q)
+    (input : Input) [HasConfig Action Input Config] : Q × Config input :=
+  (M.q₀, HasConfig.init Action input)
+
+@[simp] theorem init_fst {Input : Type*} {Config : Input → Type u}
+    (M : Controller F Observation Action Q) (input : Input) [HasConfig Action Input Config] :
+    (M.init input).1 = M.q₀ := rfl
+
+@[simp] theorem init_snd {Input : Type*} {Config : Input → Type u}
+    (M : Controller F Observation Action Q) (input : Input) [HasConfig Action Input Config] :
+    (M.init input).2 = HasConfig.init Action input := rfl
+
+end Conventions
 
 variable {F : Type (max u v) → Type*} {Input Output Observation : Type*} {Action : Type u}
   {Config : Input → Type u} {Q : Type v} [∀ x, Observe (Config x) Observation]
@@ -141,16 +174,16 @@ end Resources
 
 /-- One terminating history satisfies both budgets under the chosen history measurements. -/
 def ComputesWith (M : Controller Id Observation Action Q) (input : Input)
-    [HasConfig Action Input Config] [∀ x, Execution (Config x) Output] (output : Output)
+    [HasConfig Action Input Config] [∀ x, HasOutput (Config x) Output] (output : Output)
     (timeCost spaceCost : History (Q × Config input) (Q × Action) → ℕ) (time space : ℕ) : Prop :=
   ∃ n,
     let final := M.run input n
     let history := M.runHistory input n
-    M.Halted final ∧ Execution.HasOutput final.2 output ∧
+    M.Halted final ∧ HasOutput.IsOutput final.2 output ∧
       timeCost history ≤ time ∧ spaceCost history ≤ space
 
 variable {M : Controller Id Observation Action Q} {input : Input} [HasConfig Action Input Config]
-  [∀ x, Execution (Config x) Output] {output : Output}
+  [∀ x, HasOutput (Config x) Output] {output : Output}
   {timeCost spaceCost : History (Q × Config input) (Q × Action) → ℕ} {time space : ℕ}
 
 /-- Enlarging budgets preserves the same execution. -/
@@ -190,7 +223,7 @@ theorem computesWith_configSup_le {size : Q × Config input → ℕ}
 /-- Counting recorded actions describes the halted run at the advertised time bound. -/
 theorem computesWith_unit_iff : M.ComputesWith input output History.length spaceCost time space ↔
       M.Halted (M.run input time) ∧
-      Execution.HasOutput (M.run input time).2 output ∧
+      HasOutput.IsOutput (M.run input time).2 output ∧
       spaceCost (M.runHistory input time) ≤ space := by
   unfold ComputesWith
   constructor
