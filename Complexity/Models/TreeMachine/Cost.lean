@@ -107,7 +107,7 @@ theorem Cfg.mass_apply_le (c : Cfg k) (o : Action k) :
   | some i =>
     have he := o.sum_size_eval_add c.regs hd
     have hb := o.written_size_le (c := c) hd
-    change (∑ j, (o.eval c.regs j).size) ≤ (∑ j, (c.regs j).size) + o.sizeCost c
+    rw [mass, mass, Cfg.apply_regs]
     omega
 
 /-- A `nop` does not change any peak measurement of the register bank. -/

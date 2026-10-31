@@ -51,7 +51,7 @@ theorem spec_loop {xs : Array Bool} (M : TreeMachine Id k Q)
           3 * r.2.mass + 1 + q ≤ b)
       (fun _ h b ↦ h.last = bank c₀ (M.runFrom r n).2.regs ∧
         h.configSup StackMachine.Cfg.mass ≤ spaceBound k s ∧ q ≤ b) () := by
-  let W := fun j ↦ (M.runHistoryFrom r j).actionSum fun a c ↦ a.2.sizeCost c.2
+  let W := fun j ↦ (M.runHistoryFrom r j).snd.actionSum Action.sizeCost
   let I : Q → History (StackMachine.Cfg (Work k) Bool xs)
       (StackMachine.Action (Work k) Bool) → ℕ → Prop := fun v h b ↦
     ∃ j ≤ n, v = (M.runFrom r j).1 ∧ h.last = bank c₀ (M.runFrom r j).2.regs ∧
@@ -63,7 +63,7 @@ theorem spec_loop {xs : Array Bool} (M : TreeMachine Id k Q)
   · rintro h b ⟨hc, hS, hb⟩
     refine ⟨0, Nat.zero_le _, rfl, ?_, hS, ?_⟩
     · simpa only [Controller.runFrom_zero, bank_self c₀ r.2.regs hw] using hc
-    · simpa [W, History.actionSum_snd] using hb
+    · simpa [W] using hb
   · intro v h b hv
     simpa only [I, historySemantics_act, History.apply_def, History.last_snoc, idle_apply,
       History.configSup_snoc, sup_eq_left.mpr

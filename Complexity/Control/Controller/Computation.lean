@@ -6,6 +6,7 @@ Authors: Yuyang Zhao
 module
 
 public import Complexity.Control.Controller.Cost
+public import Mathlib.Data.Nat.Find
 
 /-!
 # Computing on inputs
@@ -144,47 +145,83 @@ theorem runHistory_eq_of_halted (M : Controller Id Observation Action Q) (input 
     M.runHistory input k = M.runHistory input n :=
   M.runHistoryFrom_eq_of_halted (M.init input) h hk
 
+section Halting
+
+variable (M : Controller Id Observation Action Q) (input : Input)
+
+/-- The computation eventually reaches a halting state. -/
+def Terminates [HasConfig Action Input Config] : Prop :=
+  ∃ t, M.Halted (M.run input t)
+
+/-- The first halting time, excluding the identity steps that pad a halted execution. -/
+def HaltsAt [HasConfig Action Input Config] (t : ℕ) : Prop :=
+  M.Halted (M.run input t) ∧ ∀ u < t, ¬M.Halted (M.run input u)
+
+/-- Any halting endpoint contains a first halting time. -/
+theorem exists_haltsAt_le [HasConfig Action Input Config] {t : ℕ}
+    (h : M.Halted (M.run input t)) : ∃ n ≤ t, M.HaltsAt input n := by
+  classical
+  have h' : M.Terminates input := ⟨t, h⟩
+  exact ⟨Nat.find h', Nat.find_min' h' h, Nat.find_spec h', fun _ hn ↦ Nat.find_min h' hn⟩
+
+variable {M input} [HasConfig Action Input Config]
+
+theorem HaltsAt.terminates {t : ℕ} (h : M.HaltsAt input t) : M.Terminates input := ⟨t, h.1⟩
+
+theorem HaltsAt.unique {s t : ℕ} (h : M.HaltsAt input s) (h' : M.HaltsAt input t) : s = t := by
+  rcases lt_trichotomy s t with h₁ | h₁ | h₁
+  · exact (h'.2 s h₁ h.1).elim
+  · exact h₁
+  · exact (h.2 t h₁ h'.1).elim
+
+theorem Terminates.exists_haltsAt (h : M.Terminates input) : ∃ t, M.HaltsAt input t :=
+  let ⟨_, ht⟩ := h
+  let ⟨n, _, hn⟩ := M.exists_haltsAt_le input ht
+  ⟨n, hn⟩
+
+end Halting
+
 section Resources
 
 variable (M : Controller Id Observation Action Q) {α : Type*} [SemilatticeSup α]
 
 theorem actionSum_runHistory_mono (input : Input) [HasConfig Action Input Config]
-    (cost : Q × Action → Q × Config input → ℕ) {n k : ℕ} (h : n ≤ k) :
-    (M.runHistory input n).actionSum cost ≤ (M.runHistory input k).actionSum cost :=
+    (cost : Action → Config input → ℕ) {n k : ℕ} (h : n ≤ k) :
+    (M.runHistory input n).snd.actionSum cost ≤
+      (M.runHistory input k).snd.actionSum cost :=
   M.actionSum_runHistoryFrom_mono cost (M.init input) h
 
 theorem configSup_runHistory_mono (input : Input) [HasConfig Action Input Config]
-    (space : Q × Config input → α) {n k : ℕ} (h : n ≤ k) :
-    (M.runHistory input n).configSup space ≤ (M.runHistory input k).configSup space :=
+    (space : Config input → α) {n k : ℕ} (h : n ≤ k) :
+    (M.runHistory input n).snd.configSup space ≤
+      (M.runHistory input k).snd.configSup space :=
   M.configSup_runHistoryFrom_mono space (M.init input) h
 
 theorem config_le_configSup_runHistory (input : Input) [HasConfig Action Input Config]
-    (space : Q × Config input → α) {i n : ℕ} (h : i ≤ n) :
-    space (M.run input i) ≤ (M.runHistory input n).configSup space :=
+    (space : Config input → α) {i n : ℕ} (h : i ≤ n) :
+    space (M.run input i).2 ≤ (M.runHistory input n).snd.configSup space :=
   M.config_le_configSup_runHistoryFrom space (M.init input) h
 
 theorem configSup_runHistory_le_iff (input : Input) [HasConfig Action Input Config]
-    (space : Q × Config input → α)
-    (n : ℕ) (bound : α) :
-    (M.runHistory input n).configSup space ≤ bound ↔
-      ∀ i ≤ n, space (M.run input i) ≤ bound :=
+    (space : Config input → α) (n : ℕ) (bound : α) :
+    (M.runHistory input n).snd.configSup space ≤ bound ↔
+      ∀ i ≤ n, space (M.run input i).2 ≤ bound :=
   M.configSup_runHistoryFrom_le_iff space (M.init input) n bound
 
 end Resources
 
-/-- One terminating history satisfies both budgets under the chosen history measurements. -/
+/-- One terminating run satisfies both budgets. The measurements read its history without the
+control states. -/
 def ComputesWith (M : Controller Id Observation Action Q) (input : Input)
     [HasConfig Action Input Config] [∀ x, HasOutput (Config x) Output] (output : Output)
-    (timeCost spaceCost : History (Q × Config input) (Q × Action) → ℕ) (time space : ℕ) : Prop :=
-  ∃ n,
-    let final := M.run input n
-    let history := M.runHistory input n
-    M.Halted final ∧ HasOutput.IsOutput final.2 output ∧
-      timeCost history ≤ time ∧ spaceCost history ≤ space
+    (timeCost spaceCost : History (Config input) Action → ℕ) (time space : ℕ) : Prop :=
+  ∃ n, M.Halted (M.run input n) ∧ HasOutput.IsOutput (M.run input n).2 output ∧
+    timeCost (M.runHistory input n).snd ≤ time ∧
+    spaceCost (M.runHistory input n).snd ≤ space
 
 variable {M : Controller Id Observation Action Q} {input : Input} [HasConfig Action Input Config]
   [∀ x, HasOutput (Config x) Output] {output : Output}
-  {timeCost spaceCost : History (Q × Config input) (Q × Action) → ℕ} {time space : ℕ}
+  {timeCost spaceCost : History (Config input) Action → ℕ} {time space : ℕ}
 
 /-- Enlarging budgets preserves the same execution. -/
 theorem computesWith_mono {time' space' : ℕ}
@@ -195,9 +232,9 @@ theorem computesWith_mono {time' space' : ℕ}
   exact ⟨n, hn, ho, htime.trans ht, hspace.trans hs⟩
 
 /-- An additive action budget bounds every prefix, including halted padding. -/
-theorem computesWith_actionSum_le {cost : Q × Action → Q × Config input → ℕ}
+theorem computesWith_actionSum_le {cost : Action → Config input → ℕ}
     (h : M.ComputesWith input output (fun h ↦ h.actionSum cost) spaceCost time space) (u : ℕ) :
-    (M.runHistory input u).actionSum cost ≤ time := by
+    (M.runHistory input u).snd.actionSum cost ≤ time := by
   obtain ⟨n, hn, _, ht, _⟩ := h
   by_cases hu : u ≤ n
   · exact (M.actionSum_runHistory_mono input cost hu).trans ht
@@ -206,8 +243,8 @@ theorem computesWith_actionSum_le {cost : Q × Action → Q × Config input → 
 
 /-- A prefix-monotone history measurement bounds space throughout a computation. -/
 theorem computesWith_space_le (h : M.ComputesWith input output timeCost spaceCost time space)
-    (hmono : Monotone fun n ↦ spaceCost (M.runHistory input n))
-    (u : ℕ) : spaceCost (M.runHistory input u) ≤ space := by
+    (hmono : Monotone fun n ↦ spaceCost (M.runHistory input n).snd)
+    (u : ℕ) : spaceCost (M.runHistory input u).snd ≤ space := by
   obtain ⟨n, hn, _, _, hs⟩ := h
   by_cases hu : u ≤ n
   · exact (hmono hu).trans hs
@@ -215,19 +252,19 @@ theorem computesWith_space_le (h : M.ComputesWith input output timeCost spaceCos
     exact hs
 
 /-- A maximum configuration budget bounds every prefix, including halted padding. -/
-theorem computesWith_configSup_le {size : Q × Config input → ℕ}
+theorem computesWith_configSup_le {size : Config input → ℕ}
     (h : M.ComputesWith input output timeCost (fun h ↦ h.configSup size) time space) (u : ℕ) :
-    (M.runHistory input u).configSup size ≤ space :=
+    (M.runHistory input u).snd.configSup size ≤ space :=
   computesWith_space_le h (fun _ _ hn ↦ M.configSup_runHistory_mono input size hn) u
 
 /-- Counting recorded actions describes the halted run at the advertised time bound. -/
 theorem computesWith_unit_iff : M.ComputesWith input output History.length spaceCost time space ↔
       M.Halted (M.run input time) ∧
       HasOutput.IsOutput (M.run input time).2 output ∧
-      spaceCost (M.runHistory input time) ≤ space := by
-  unfold ComputesWith
+      spaceCost (M.runHistory input time).snd ≤ space := by
   constructor
   · rintro ⟨n, hn, ho, ht, hs⟩
+    rw [History.length_snd] at ht
     have he : M.run input (M.runHistory input n).length =
         M.run input n := M.runFrom_length_runHistoryFrom (M.init input) n
     have hh := he.symm ▸ hn
@@ -236,6 +273,7 @@ theorem computesWith_unit_iff : M.ComputesWith input output History.length space
     have hr := hq.trans hp.symm
     simpa only [← last_runHistory, hr] using And.intro hn (And.intro ho hs)
   · rintro ⟨hn, ho, hs⟩
-    exact ⟨time, hn, ho, M.length_runHistory_le input time, hs⟩
+    exact ⟨time, hn, ho, (History.length_snd _).trans_le (M.length_runHistory_le input time),
+      hs⟩
 
 end Complexity.Controller

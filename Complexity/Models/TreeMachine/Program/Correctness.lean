@@ -33,12 +33,8 @@ theorem run_output [NeZero k] {p : TreeMachine.Program k α} {x y : Tree}
     (h : p.Exec semantics (input 0 x) n a ρ) (ho : ρ 0 = y) :
     (compile p).Halted ((compile p).run x n) ∧ ((compile p).run x n).2.regs 0 = y := by
   obtain ⟨e, _, hr⟩ := run_compile h.toControl
-  change (compile p).run x n = _ at hr
-  constructor
-  · change (compile p).halt _ = true
-    rw [hr]
-    rfl
-  · rw [hr]
-    exact ho
+  have hr' : (compile p).run x n = (.inr e, Cfg.mk ρ) := hr
+  rw [hr']
+  exact ⟨rfl, ho⟩
 
 end Complexity.TreeMachine.Program

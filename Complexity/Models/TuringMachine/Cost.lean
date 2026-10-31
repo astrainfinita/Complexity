@@ -21,9 +21,8 @@ variable {κ Γ Q : Type*} [Inhabited Γ] {xs : Array Γ}
 
 /-- Extending a run can only enlarge its visited intervals. -/
 theorem runHistoryFrom_visited_mono (M : TM Id κ Γ Q) (c : Q × Cfg κ Γ xs) :
-    Monotone fun n ↦ (M.runHistoryFrom c n).snd.visited := fun _ _ h ↦ by
-  simpa only [History.visited, History.configSup_snd] using
-    M.configSup_runHistoryFrom_mono _ c h
+    Monotone fun n ↦ (M.runHistoryFrom c n).snd.visited :=
+  fun _ _ h ↦ M.configSup_runHistoryFrom_mono _ c h
 
 theorem runHistoryFrom_space_mono [Fintype κ] (M : TM Id κ Γ Q) (c : Q × Cfg κ Γ xs) :
     Monotone fun n ↦ (M.runHistoryFrom c n).snd.space :=

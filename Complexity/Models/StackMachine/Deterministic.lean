@@ -40,8 +40,7 @@ theorem configSup_mass_le {xs : Array Γ} (h : Controller.History (Cfg κ Γ xs)
 
 /-- One terminating history bounds transitions and the peak total work-stack length. -/
 def ComputesWithin (M : StackMachine Id κ Γ Q) (xs ys : List Γ) (t s : ℕ) : Prop :=
-  M.ComputesWith xs ys Controller.History.length
-    (fun h ↦ h.snd.configSup Cfg.mass) t s
+  M.ComputesWith xs ys Controller.History.length (fun h ↦ h.configSup Cfg.mass) t s
 
 /-- Initially empty work stacks grow by at most one symbol per stack per transition. -/
 theorem ComputesWithin.of_run {M : StackMachine Id κ Γ Q}
@@ -50,10 +49,10 @@ theorem ComputesWithin.of_run {M : StackMachine Id κ Γ Q}
     (ho : (M.run xs n).2.output = ys.toArray) (hn : n ≤ t) :
     M.ComputesWithin xs ys t (Fintype.card κ * t) := by
   have ht := (M.length_runHistory_le xs n).trans hn
-  refine ⟨n, hh, ho, ht, ?_⟩
-  exact (configSup_mass_le _).trans
-    (by simpa [Controller.runHistory, Controller.History.first_snd,
-      Controller.History.length_snd] using Nat.mul_le_mul_left (Fintype.card κ) ht)
+  refine ⟨n, hh, ho, (Controller.History.length_snd _).trans_le ht,
+    (configSup_mass_le _).trans ?_⟩
+  simpa [Controller.runHistory, Controller.History.first_snd,
+      Controller.History.length_snd] using Nat.mul_le_mul_left (Fintype.card κ) ht
 
 /-- Read the halted result at the advertised transition budget. -/
 theorem ComputesWithin.run_spec {M : StackMachine Id κ Γ Q}

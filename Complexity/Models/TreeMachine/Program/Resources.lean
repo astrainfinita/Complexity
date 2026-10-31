@@ -75,7 +75,7 @@ theorem computesInUnitTimeAndSpace_of_exec [NeZero k] {p : TreeMachine.Program k
   have hl := congrArg History.last hr.2
   rw [History.last_snd, Controller.last_runHistoryFrom] at hl
   exact ⟨n, (congrArg p.compile.halt hr.1).trans rfl, (congrArg (fun c ↦ c.regs 0) hl).trans ho,
-    (p.compile.length_runHistory_le x n).trans hn,
+    (History.length_snd _).trans_le ((p.compile.length_runHistory_le x n).trans hn),
     (congrArg (·.configSup Cfg.mass) hr.2).le.trans hs⟩
 
 /-- A program contract yields the machine bound without inspecting compiled control states. -/

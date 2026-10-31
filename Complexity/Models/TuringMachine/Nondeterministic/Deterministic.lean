@@ -31,7 +31,7 @@ variable (M : TM Id κ Γ Q)
 
 @[simp] theorem terminates_toBinary_iff (xs : List Γ) :
     NTM.Terminates M.toBinary xs ↔ M.Terminates xs := by
-  simp only [NTM.Terminates, usesTime_toBinary_iff, Terminates]
+  simp only [NTM.Terminates, usesTime_toBinary_iff, Controller.Terminates]
 
 @[simp] theorem usesSpace_toBinary_iff [Fintype κ] (xs : List Γ) (s : ℕ) :
     NTM.UsesSpace M.toBinary xs s ↔ M.UsesSpace xs s := by

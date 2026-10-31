@@ -21,24 +21,6 @@ namespace Complexity.TM
 
 variable {κ : Type*} {Γ Q : Type*} [Inhabited Γ] {xs : Array Γ}
 
-/-- The computation eventually reaches a halting state. -/
-def Terminates (M : TM Id κ Γ Q) (xs : List Γ) : Prop :=
-  ∃ t, M.Halted (M.run xs t)
-
-/-- The first halting time, excluding the identity steps that pad a halted execution. -/
-def HaltsAt (M : TM Id κ Γ Q) (xs : List Γ) (t : ℕ) : Prop :=
-  M.Halted (M.run xs t) ∧ ∀ u < t, ¬M.Halted (M.run xs u)
-
-theorem HaltsAt.terminates {M : TM Id κ Γ Q} {xs : List Γ} {t : ℕ}
-    (h : M.HaltsAt xs t) : M.Terminates xs := ⟨t, h.1⟩
-
-theorem HaltsAt.unique {M : TM Id κ Γ Q} {xs : List Γ} {s t : ℕ}
-    (h : M.HaltsAt xs s) (h' : M.HaltsAt xs t) : s = t := by
-  rcases lt_trichotomy s t with h₁ | h₁ | h₁
-  · exact (h'.2 s h₁ h.1).elim
-  · exact h₁
-  · exact (h.2 t h₁ h'.1).elim
-
 /-- Every finite execution prefix uses at most `s` work cells, whether or not the run halts. -/
 def UsesSpace [Fintype κ] (M : TM Id κ Γ Q) (xs : List Γ) (s : ℕ) : Prop :=
   ∀ t, (M.runHistory xs t).snd.space ≤ s
@@ -46,8 +28,7 @@ def UsesSpace [Fintype κ] (M : TM Id κ Γ Q) (xs : List Γ) (s : ℕ) : Prop :
 /-- Compute with unit action time and visited-cell space on one execution history. -/
 def ComputesWithin [Fintype κ] (M : TM Id κ Γ Q) (xs ys : List Γ)
     (t s : ℕ) : Prop :=
-  M.ComputesWith xs ys Controller.History.length
-    (fun h ↦ h.snd.space) t s
+  M.ComputesWith xs ys Controller.History.length Controller.History.space t s
 
 theorem ComputesWithin.mono [Fintype κ] {M : TM Id κ Γ Q}
     {xs ys : List Γ} {t s t' s' : ℕ}
@@ -60,9 +41,8 @@ theorem ComputesWithin.space_of_time [Fintype κ] {M : TM Id κ Γ Q}
     {xs ys : List Γ} {t s : ℕ} (h : M.ComputesWithin xs ys t s) :
     M.ComputesWithin xs ys t (Fintype.card κ * (t + 1)) := by
   obtain ⟨n, hh, ho, ht, _⟩ := h
-  refine ⟨n, hh, ho, ht, (Controller.History.space_le_length _).trans ?_⟩
-  rw [Controller.History.length_snd]
-  exact Nat.mul_le_mul_left _ (Nat.succ_le_succ ht)
+  exact ⟨n, hh, ho, ht,
+    (Controller.History.space_le_length _).trans (Nat.mul_le_mul_left _ (Nat.succ_le_succ ht))⟩
 
 /-- Read the ordinary run's result without carrying its visitation history. -/
 theorem ComputesWithin.run_spec [Fintype κ] {M : TM Id κ Γ Q}

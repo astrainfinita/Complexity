@@ -228,9 +228,7 @@ theorem ComputesWithin.toStack [Fintype κ] {M : TM Id κ (Option Bool) Q}
   refine ⟨?_, ?_, ?_⟩
   · simpa only [Controller.Halted, Controller.state_prod, toStack_halt, hr.state_eq] using hh
   · simpa [ho] using hr.output_eq
-  · simp only [Controller.History.configSup_snd]
-    apply (M.toStack.configSup_runHistory_le_iff xs (StackMachine.Cfg.mass ∘ Prod.snd) t
-      (2 * s)).mpr
+  · apply (M.toStack.configSup_runHistory_le_iff xs StackMachine.Cfg.mass t (2 * s)).mpr
     intro i _
     exact (M.run_toStack xs i).mass_le.trans (Nat.mul_le_mul_left 2 (h.usesSpace i))
 

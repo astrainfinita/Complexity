@@ -173,7 +173,7 @@ theorem space_runHistoryFrom_toTM_le [Fintype κ] (M : StackMachine Id κ Γ Q)
     (c : Q × Cfg κ Γ xs) (cached : κ → Bool) (n : ℕ) :
     (M.toTM.runHistoryFrom ((c.1, c.2.cache cached), c.2.toTM cached) n).snd.space ≤
       Fintype.card κ * ((M.runHistoryFrom c n).snd.configSup Cfg.mass + 1) := by
-  let s := (M.runHistoryFrom c n).snd.configSup Cfg.mass
+  set s := (M.runHistoryFrom c n).snd.configSup Cfg.mass
   let v : NonemptyInterval ℤ := ⟨(0, s), by omega⟩
   have hv : (M.toTM.runHistoryFrom ((c.1, c.2.cache cached), c.2.toTM cached) n).snd.visited ≤
       fun _ ↦ v := by
@@ -181,14 +181,11 @@ theorem space_runHistoryFrom_toTM_le [Fintype κ] (M : StackMachine Id κ Γ Q)
     apply (M.toTM.runHistoryFrom_visited_le_iff _ _ i v).mpr
     intro m hm
     obtain ⟨cached', hc⟩ := M.runFrom_toTM c cached m
-    rw [hc, Cfg.toTM_workPos]
+    rw [hc, Cfg.toTM_workPos, NonemptyInterval.mem_def]
     have hi : ((M.runFrom c m).2.stacks i).length ≤ s :=
       (Finset.single_le_sum (fun _ _ ↦ Nat.zero_le _) (Finset.mem_univ i)).trans
-        ((M.config_le_configSup_runHistoryFrom (Cfg.mass ∘ Prod.snd) c hm).trans_eq
-          (Controller.History.configSup_snd _ _).symm)
-    change 0 ≤ _ ∧ _ ≤ (s : ℤ)
-    exact ⟨by omega, by exact_mod_cast hi⟩
-  change _ ≤ Fintype.card κ * (s + 1)
+        (M.config_le_configSup_runHistoryFrom Cfg.mass c hm)
+    exact ⟨by simp [v], by simpa [v] using hi⟩
   simpa [v] using Controller.History.space_le_of_visited_le _ (fun _ ↦ v) hv
 
 theorem init_toTM (M : StackMachine Id κ Γ Q) (xs : List Γ) :
@@ -201,8 +198,7 @@ theorem init_toTM (M : StackMachine Id κ Γ Q) (xs : List Γ) :
 theorem run_toTM (M : StackMachine Id κ Γ Q) (xs : List Γ) (n : ℕ) :
     ∃ cached, M.toTM.run (xs.map some) n =
       (((M.run xs n).1, (M.run xs n).2.cache cached), (M.run xs n).2.toTM cached) := by
-  change ∃ cached, M.toTM.runFrom (M.toTM.init (xs.map some)) _ = _
-  rw [← init_toTM]
+  rw [Controller.run, Controller.run, ← init_toTM]
   exact M.runFrom_toTM (M.init xs) (fun _ ↦ false) n
 
 /-- Simulation preserves time and bounds every tape by the source peak stack space,

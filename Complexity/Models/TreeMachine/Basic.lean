@@ -44,6 +44,7 @@ instance [NeZero k] : Controller.HasConfig (Action k) Tree (fun _ ↦ Cfg k) whe
     Controller.HasConfig.init (Action k) a = Cfg.init k a := rfl
 
 /-- Read the result from register zero. -/
+@[simps -isSimp]
 instance hasOutput [NeZero k] : Controller.HasOutput (Cfg k) Tree where
   IsOutput cfg b := cfg.regs 0 = b
 

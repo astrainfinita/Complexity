@@ -50,7 +50,7 @@ theorem computesWithin_of_exec [Fintype κ] (p : TM.Program κ Γ α) {ys : Arra
   have hl := congrArg History.last hr.2
   rw [History.last_snd, Controller.last_runHistoryFrom] at hl
   exact ⟨n, (congrArg (compile p).halt hr.1).trans rfl, (congrArg Cfg.output hl).trans ho,
-    ((compile p).length_runHistory_le _ n).trans hn,
+    (History.length_snd _).trans_le (((compile p).length_runHistory_le _ n).trans hn),
     (congrArg History.space hr.2).le.trans hs⟩
 
 end Complexity.TM.Program
