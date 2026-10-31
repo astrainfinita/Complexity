@@ -75,8 +75,8 @@ the syntax does not choose its interpreter. The graph has separate internal and 
 with returned values recovered by `p.result`; it neither stores nor numbers the label types.
 
 Both general syntax and `Program`, its value-returning specialization, use `p.toControl eval`.
-`TM.Program.compile` fixes the TM interpreter and turns the graph into a machine with
-initial state, halting test, and transitions. -/
+`compile` turns the graph into a controller with initial state, halting test, and
+transitions. -/
 def toControl (eval : (o : Op) → O → A × Ret o) :
     {u : Kind} → (p : Syntax O A Op Ret α u) → Control O A p.State p.Exit
   | _, .ret _ =>
@@ -125,6 +125,13 @@ def toControl (eval : (o : Op) → O → A × Ret o) :
     (toControl eval (Syntax.call b k)).next (.inl q) o =
       ((b.next q o).1, callLabel b k (fun j ↦ (toControl eval (k j)).start) (b.next q o).2) := by
   simp only [toControl]
+
+/-- Compile finite syntax to a deterministic controller: `toControl eval` gives the control
+graph and `Control.toController` runs it. Exits halt, so `idle` only fills their transition.
+A model fixes `eval` and `idle` once in its own `compile`. -/
+def compile (eval : (o : Op) → O → A × Ret o) (idle : A) (p : Syntax O A Op Ret α u) :
+    Controller Id O A (p.State ⊕ p.Exit) :=
+  (p.toControl eval).toController idle
 
 end Syntax
 

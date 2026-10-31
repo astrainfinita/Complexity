@@ -168,17 +168,11 @@ open Std.WP
       (act { idle (κ := κ) with work := fun j ↦ if j = i then .pop else .nop }).verify
         (semantics xs) := rfl
 
-/-- Compile a stack program to a native machine, with one transition per local action.
-The generic `toControl` supplies the finite control graph; exits become halting states. -/
+/-- Compile a stack program to a native machine with the stack operation interpreter and
+`idle` for the exits, with one transition per local action. -/
 def compile {α : Type} (p : StackMachine.Program κ Γ α) :
-    StackMachine Id κ Γ (p.State ⊕ p.Exit) where
-  q₀ := (p.toControl eval).start
-  halt := Sum.elim (fun _ ↦ false) (fun _ ↦ true)
-  transition q v := pure <| match q with
-    | .inl q =>
-        let (a, q') := (p.toControl eval).next q v
-        (q', a)
-    | .inr e => (.inr e, idle)
+    StackMachine Id κ Γ (p.State ⊕ p.Exit) :=
+  Program.Syntax.compile eval idle p
 
 end Program
 end Complexity.StackMachine

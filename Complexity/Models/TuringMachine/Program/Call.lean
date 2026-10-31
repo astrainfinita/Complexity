@@ -63,7 +63,7 @@ def callRoute (M : TM Id κ Γ Q) (q : Q) :
 /-- A compiled call starts at the imported source label. -/
 @[simp] theorem start_callFrom (M : TM Id κ Γ Q) (q : Q) :
     (compile (callFrom M q)).q₀ = callRoute M q := by
-  change ((callFrom M q).toControl eval).start = _
+  rw [compile, Program.Syntax.compile, Program.Control.toController_q₀]
   simp only [callFrom, Program.callControl, Program.pure,
     Program.ret, Program.Syntax.toControl,
     callBlock]

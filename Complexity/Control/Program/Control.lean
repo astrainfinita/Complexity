@@ -7,8 +7,14 @@ module
 
 public import Mathlib.Control.Monad.Basic
 public import Mathlib.Data.Nat.Notation
+public import Complexity.Control.Controller.Basic
 
-/-! # Controllers with internal states and exits -/
+/-! # Controllers with internal states and exits
+
+A control graph selects actions without a control state of its own in the configuration. Run
+as a `Controller`, its internal states and exits become the control states, so a configuration
+of the graph is the storage of the controller.
+-/
 
 @[expose] public section
 
@@ -115,6 +121,27 @@ theorem Run.lift (f : T → S) (ho : ∀ s, o' s = o (f s))
     ∃ w, f w = t ∧ c.Run out o' a' q u n v w :=
   h.simulate (fun s t ↦ f t = s)
     (by rintro _ t rfl; exact ho t) (by rintro v _ t rfl; exact ha v t) u hu
+
+/-- Run a control graph as a deterministic controller. Its internal states and exits are the
+control states, every exit halts, and each transition of the graph is one transition of the
+controller. Exits never move, so `idle` only fills their transition. -/
+@[simps q₀ halt]
+def toController (c : Control O A Q E) (idle : A) : Controller Id O A (Q ⊕ E) where
+  q₀ := c.start
+  halt := Sum.elim (fun _ ↦ false) (fun _ ↦ true)
+  transition q v := pure <| match q with
+    | .inl q => ((c.next q v).2, (c.next q v).1)
+    | .inr e => (.inr e, idle)
+
+/-- The controller of a control graph follows its executions on every configuration, one
+transition per step, and stops at the exit they reach. -/
+theorem Run.runFrom_toController {C : Type} [Controller.Observe C O] [Controller.Apply C A]
+    {c : Control O A Q E} {out : E → α} {q : Q ⊕ E} {s t : C} {n : ℕ} {a : α} (idle : A)
+    (h : c.Run out Controller.observe Controller.apply q s n a t) :
+    ∃ e, out e = a ∧ (c.toController idle).runFrom (q, s) n = (.inr e, t) := by
+  induction h with
+  | done e s => exact ⟨e, rfl, rfl⟩
+  | step q s h ih => exact ih
 
 end Control
 

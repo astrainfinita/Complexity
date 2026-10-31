@@ -20,15 +20,6 @@ open Controller (History)
 
 variable {κ Γ α : Type} {xs : Array Γ}
 
-/-- Compiling the control graph preserves the action count and final storage. -/
-theorem run_compile {p : StackMachine.Program κ Γ α} {q : p.State ⊕ p.Exit}
-    {s t : Cfg κ Γ xs} {n : ℕ} {a : α}
-    (h : Program.Control.Run (p.toControl eval) p.result observe apply q s n a t) :
-    ∃ e, p.result e = a ∧ (compile p).runFrom (q, s) n = (.inr e, t) := by
-  induction h with
-  | done e s => exact ⟨e, rfl, rfl⟩
-  | step q s h ih => exact ih
-
 /-- Preserve the complete action history while interpreting a stack program. -/
 @[simps -fullyApplied eval observe act]
 def historySemantics (xs : Array Γ) :
@@ -73,16 +64,6 @@ theorem spec_history [Fintype κ] {p : StackMachine.Program κ Γ α}
   apply (run_space_le hx.toControl).trans
   exact sup_le hS (by rw [hc]; exact (Nat.add_le_add_left (Nat.mul_le_mul_left _ hm) _).trans hs)
 
-/-- Running the compiled machine on a history records the program's history. -/
-theorem run_compile_history {p : StackMachine.Program κ Γ α} {q : p.State ⊕ p.Exit}
-    {s t : History (Cfg κ Γ xs) (Action κ Γ)} {n : ℕ} {a : α}
-    (h : Program.Control.Run (p.toControl eval) p.result
-      (historySemantics xs).observe (historySemantics xs).act q s n a t) :
-    ∃ e, p.result e = a ∧ p.compile.runFrom (q, s) n = (.inr e, t) := by
-  induction h with
-  | done e s => exact ⟨e, rfl, rfl⟩
-  | step q s h ih => exact ih
-
 /-- A history specification supplies independent time and peak-space bounds. -/
 theorem computesWithin_history [Fintype κ] {p : StackMachine.Program κ Γ α}
     {xs ys : List Γ} {t s : ℕ}
@@ -91,7 +72,7 @@ theorem computesWithin_history [Fintype κ] {p : StackMachine.Program κ Γ α}
       (fun _ h _ ↦ h.last.output = ys.toArray ∧ h.configSup Cfg.mass ≤ s) ()) :
     p.compile.ComputesWithin xs ys t s := by
   obtain ⟨n, a, v, hn, he, ho, hs⟩ := Program.exec_of_spec h ⟨rfl, le_rfl⟩
-  obtain ⟨e, _, hr⟩ := run_compile_history he.toControl
+  obtain ⟨e, _, hr⟩ := he.runFrom_compile idle
   rw [Controller.runFrom_prod_nil, Prod.mk.injEq] at hr
   have hl := congrArg History.last hr.2
   rw [History.last_snd, Controller.last_runHistoryFrom] at hl

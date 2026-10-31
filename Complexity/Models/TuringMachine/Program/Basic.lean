@@ -146,20 +146,10 @@ transition, including before the first body execution. -/
 def repeatUntil (p : TM.Program κ Γ Bool) : TM.Program κ Γ Unit :=
   Program.repeatUntilWith idle p
 
-/-- Compile a program into a deterministic machine using the TM operation interpreter.
-
-`p.toControl eval` supplies the control graph. This backend fixes `eval`, uses the
-graph's start as the initial state, and makes every exit halt. Internal graph transitions
-become machine transitions with exactly the same step count. Thus this interface produces
-a `TM`, while the generic `Program.Syntax.toControl` leaves the machine representation open. -/
-def compile (p : TM.Program κ Γ α) : TM Id κ Γ (p.State ⊕ p.Exit) where
-  q₀ := (p.toControl eval).start
-  halt := Sum.elim (fun _ ↦ false) (fun _ ↦ true)
-  transition q v := pure <| match q with
-    | .inl q =>
-        let (b, q') := (p.toControl eval).next q v
-        (q', b)
-    | .inr e => (.inr e, idle)
+/-- Compile a program into a deterministic machine with the TM operation interpreter and
+`idle` for the exits. Graph transitions become machine transitions with the same step count. -/
+def compile (p : TM.Program κ Γ α) : TM Id κ Γ (p.State ⊕ p.Exit) :=
+  Program.Syntax.compile eval idle p
 
 end Program
 

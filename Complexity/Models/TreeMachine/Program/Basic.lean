@@ -84,16 +84,11 @@ theorem exec_copy (aux dst src : Fin k) (ρ : Fin k → Tree) :
     (exec_act (.left dst dst) ((TreeMachine.Action.pair dst src aux).eval ρ))
   simpa [copy, Bind.bind] using h
 
-/-- Exits of the generic control graph become halting states. Each action takes one step. -/
+/-- Compile a program to a machine with the tree operation interpreter and `nop` for the
+exits. Each action takes one step. -/
 def compile {α : Type} (p : TreeMachine.Program k α) :
-    TreeMachine Id k (p.State ⊕ p.Exit) where
-  q₀ := (p.toControl eval).start
-  halt := Sum.elim (fun _ ↦ false) (fun _ ↦ true)
-  transition q v := pure <| match q with
-    | .inl q =>
-        let (o, q') := (p.toControl eval).next q v
-        (q', o)
-    | .inr e => (.inr e, .nop)
+    TreeMachine Id k (p.State ⊕ p.Exit) :=
+  Program.Syntax.compile eval .nop p
 
 end Program
 end Complexity.TreeMachine

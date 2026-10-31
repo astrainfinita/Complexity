@@ -147,6 +147,17 @@ theorem Exec.toControl {p : Syntax O A Op Ret α u} {s t : S} {n : ℕ} {x : Kin
   | call b k hb hk ih =>
     simpa only [Syntax.toControl] using run_call_block e b k hb ih
 
+/-- When the semantics observes and acts through the storage's controller instances, a source
+execution is a run of the compiled controller: the same number of transitions reaches an exit
+carrying the result, with the same final storage. -/
+theorem Exec.runFrom_compile [Controller.Observe S O] [Controller.Apply S A]
+    {eval : (o : Op) → O → A × Ret o} {p : Syntax O A Op Ret α u} {s t : S} {n : ℕ}
+    {x : Kind.Value α u} (idle : A)
+    (h : Exec ⟨eval, Controller.observe, Controller.apply⟩ p s n x t) :
+    ∃ e, p.result e = x ∧
+      (compile eval idle p).runFrom ((compile eval idle p).q₀, s) n = (.inr e, t) :=
+  h.toControl.runFrom_toController idle
+
 end Syntax
 
 end Complexity.Program

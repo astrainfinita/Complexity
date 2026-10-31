@@ -54,23 +54,13 @@ theorem spec_root (i : Fin k) (s : History (Cfg k) (TreeMachine.Action k))
       (fun r t c ↦ r = (s.last.regs i).root ∧ t = s.snoc TreeMachine.Action.nop ∧ c = b - 1) x :=
   Program.spec_perform (Op.root i) historySemantics s b hb x
 
-/-- Running the compiled machine on a history records the program's history. -/
-theorem run_compile_history {p : TreeMachine.Program k α} {q : p.State ⊕ p.Exit}
-    {s t : History (Cfg k) (TreeMachine.Action k)} {n : ℕ} {a : α}
-    (h : Program.Control.Run (p.toControl eval) p.result
-      historySemantics.observe historySemantics.act q s n a t) :
-    ∃ e, p.result e = a ∧ p.compile.runFrom (q, s) n = (.inr e, t) := by
-  induction h with
-  | done e s => exact ⟨e, rfl, rfl⟩
-  | step q s h ih => exact ih
-
 /-- A history specification gives actual unit time and peak space for the compiled machine. -/
 theorem computesInUnitTimeAndSpace_of_exec [NeZero k] {p : TreeMachine.Program k α}
     {x y : Tree} {n t s : ℕ} {a : α} {v : History (Cfg k) (TreeMachine.Action k)}
     (h : p.Exec historySemantics (History.nil (Cfg.init k x)) n a v)
     (hn : n ≤ t) (ho : v.last.regs 0 = y) (hs : v.configSup Cfg.mass ≤ s) :
     p.compile.ComputesInUnitTimeAndSpace x y t s := by
-  obtain ⟨e, _, hr⟩ := run_compile_history h.toControl
+  obtain ⟨e, _, hr⟩ := h.runFrom_compile .nop
   rw [Controller.runFrom_prod_nil, Prod.mk.injEq] at hr
   have hl := congrArg History.last hr.2
   rw [History.last_snd, Controller.last_runHistoryFrom] at hl
