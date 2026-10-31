@@ -64,7 +64,7 @@ example : TimeSpaceModel.sizeCostTree.ComputableWithin
 
 -- This difference affects bounded computations, not just reported diagnostic totals.
 example : ¬Controller.ComputesWith pairOnce Tree.nil (Tree.pair Tree.nil Tree.nil)
-    (fun h ↦ h.snd.actionSum Action.sizeCost) (fun h ↦ h.snd.configSup Cfg.mass) 1 3 := by
+    (fun h ↦ h.actionSum Action.sizeCost) (fun h ↦ h.configSup Cfg.mass) 1 3 := by
   intro h
   have hbound : pairOnce.ComputesWithin _ _ _ _ := h
   have := hbound.output_size_le_mass_add_time
@@ -76,7 +76,7 @@ example : Controller.ComputesWith pairOnce Tree.nil (Tree.pair Tree.nil Tree.nil
   refine ⟨1, rfl, rfl, ?_, ?_⟩ <;> decide
 
 example : ¬Controller.ComputesWith pairOnce Tree.nil (Tree.pair Tree.nil Tree.nil)
-    (fun h ↦ h.snd.actionSum Action.sizeCost) (fun h ↦ h.snd.configSup Cfg.mass) 3 2 := by
+    (fun h ↦ h.actionSum Action.sizeCost) (fun h ↦ h.configSup Cfg.mass) 3 2 := by
   intro h
   have hbound : pairOnce.ComputesWithin _ _ _ _ := h
   have := hbound.output_size_le_space

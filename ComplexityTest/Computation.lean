@@ -23,14 +23,14 @@ example {k : ℕ} {Q : Type*} (M : TreeMachine Id k Q) (c : Q × TreeMachine.Cfg
 -- Each model's complete interface recovers its existing resource relation.
 example {k : ℕ} [NeZero k] {Q : Type*} (M : TreeMachine Id k Q)
     (a b : Tree) (t s : ℕ) :
-    M.ComputesWith a b (fun h ↦ h.snd.actionSum TreeMachine.Action.sizeCost)
-      (fun h ↦ h.snd.configSup TreeMachine.Cfg.mass) t s ↔
+    M.ComputesWith a b (fun h ↦ h.actionSum TreeMachine.Action.sizeCost)
+      (fun h ↦ h.configSup TreeMachine.Cfg.mass) t s ↔
       M.ComputesWithin a b t s :=
   Iff.rfl
 
 example {κ Γ Q : Type*} [Inhabited Γ] [Fintype κ]
     (M : TM Id κ Γ Q) (xs ys : List Γ) (t s : ℕ) :
-    M.ComputesWith xs ys Controller.History.length (fun h ↦ h.snd.space) t s ↔
+    M.ComputesWith xs ys Controller.History.length Controller.History.space t s ↔
       M.ComputesWithin xs ys t s :=
   Iff.rfl
 
@@ -62,16 +62,16 @@ private instance : Controller.HasConfig Unit Unit (fun _ ↦ ℕ) where
 private instance : Controller.HasOutput ℕ ℕ where
   IsOutput c n := c = n
 
-example : oneAction.ComputesWith () 1 (fun _ ↦ 0) (fun h ↦ h.snd.configSup id) 0 1 := by
+example : oneAction.ComputesWith () 1 (fun _ ↦ 0) (fun h ↦ h.configSup id) 0 1 := by
   refine ⟨1, rfl, rfl, ?_, ?_⟩ <;> decide
 
 -- Unit costs permit halted padding, but cannot hide the first active step in a zero budget.
 example : oneAction.ComputesWith () 1
-    Controller.History.length (fun h ↦ h.snd.configSup id) 5 1 :=
+    Controller.History.length (fun h ↦ h.configSup id) 5 1 :=
   Controller.computesWith_unit_iff.mpr ⟨rfl, rfl, by decide⟩
 
 example : ¬oneAction.ComputesWith () 1
-    Controller.History.length (fun h ↦ h.snd.configSup id) 0 1 := by
+    Controller.History.length (fun h ↦ h.configSup id) 0 1 := by
   intro h
   have hh := (Controller.computesWith_unit_iff.mp h).1
   contradiction
