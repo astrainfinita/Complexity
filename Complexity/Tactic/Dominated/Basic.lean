@@ -14,13 +14,16 @@ public meta import Lean.Elab.Tactic.Omega.Frontend
 `dominated` proves `Dominated f g` when both sides are given, as left by `source_fun_prop` and
 `model_fun_prop`, whose default discharger it is. It never changes either side. Sums and maxima on
 the left are split; each summand is compared with the target pointwise after destructuring the
-input, splitting the source cases, expanding encoded sizes and adding size facts for `omega`; powers
-and products are compared through their bases. Maxima over lists and sums over tables are compared
-entry by entry. The coefficient is a hidden witness. The list names definitions to unfold in the
-pointwise goals, and statements `a ≤ b`, `a < b` or `a = b` to instantiate there, as for those
-registered with `@[dominated]`: each is instantiated at the matching terms it is about (its left
-side, or its right side when the left side is a variable or a literal), and the terms of its other
-side are looked at in the next round. Statements registered with `@[dominated_forward]` are
+input, splitting the source cases, expanding encoded sizes and adding size facts for `omega`; the
+powers and products the left side depends on, through its terms and the bounds of hypotheses about
+them, are compared through their bases with the powers of the right side. A power that reaches the
+right side only through a hypothesis, even an equation given in the list, is not used: a definition
+on the right is unfolded through the list instead. Maxima over lists and sums over tables are
+compared entry by entry. The coefficient is a hidden witness. The list names definitions to unfold
+in the pointwise goals, and statements `a ≤ b`, `a < b` or `a = b` to instantiate there, as for
+those registered with `@[dominated]`: each is instantiated at the matching terms it is about (its
+left side, or its right side when the left side is a variable or a literal), and the terms of its
+other side are looked at in the next round. Statements registered with `@[dominated_forward]` are
 instantiated at matching hypotheses. Encoded sizes are normalized with `@[dominated_simp]` and
 expanded pointwise with `@[dominated_expand]`. Facts that are genuine properties of the source
 function are `Dominated` hypotheses, matched reducibly. Like `omega`, the pointwise step reads the
@@ -227,35 +230,132 @@ def addSizeFacts (outer : FVarIdSet) (tree premises : DiscrTree Lean.Expr) (goal
     goal := g
   return goal
 
-/-- For powers `a ^ d` and `b ^ e` in the goal with `d ≤ e`, add `a ^ d ≤ k ^ d * b ^ e` whenever
-`a` is `b` or `omega` proves `a ≤ k * b`, and `omega` proves `0 < b`; for a product `a * b` and a
-power `c ^ e` with `2 ≤ e`, add `a * b ≤ k * l * c ^ e` whenever `omega` proves `a ≤ k * c`,
-`0 < c`, and `b ≤ l * c` or `b ≤ l * c ^ d` for a power `c ^ d` of the goal with `d < e`. The
-coefficients are 1, 2, 4 or 8. -/
+/-- A natural-number expression as a linear form: its constant and the coefficients of its atoms,
+the maximal subterms other than sums, multiples by a literal and literals. -/
+partial def linearForm (e : Lean.Expr) : Nat × Array (Lean.Expr × Nat) :=
+  if let some n := e.nat? then (n, #[])
+  else if e.isAppOfArity ``HAdd.hAdd 6 then
+    let (c, xs) := linearForm e.getAppArgs[4]!
+    let (d, ys) := linearForm e.appArg!
+    (c + d, ys.foldl (init := xs) fun acc (t, n) =>
+      match acc.findIdx? (·.1 == t) with
+      | some i => acc.modify i fun (t, m) => (t, m + n)
+      | none => acc.push (t, n))
+  else if e.isAppOfArity ``HMul.hMul 6 then
+    let scale (k : Nat) (x : Nat × Array (Lean.Expr × Nat)) :=
+      if k == 0 then (0, #[]) else (k * x.1, x.2.map fun (t, n) => (t, k * n))
+    match e.getAppArgs[4]!.nat?, e.appArg!.nat? with
+    | some k, _ => scale k (linearForm e.appArg!)
+    | _, some k => scale k (linearForm e.getAppArgs[4]!)
+    | none, none => (0, #[(e, 1)])
+  else (0, #[(e, 1)])
+
+/-- The least `k ≥ 1` with `a ≤ k * c` term by term for a positive `c`: every atom of `a` is an
+atom of `c`, and the constant of `a` is covered by that of `c`, or by `c` itself. -/
+def termwiseCoefficient (a c : Lean.Expr) : Option Nat := Id.run do
+  let (a₀, as) := linearForm a
+  let (c₀, cs) := linearForm c
+  let mut k := 1
+  for (x, n) in as do
+    let some (_, m) := cs.find? (·.1 == x) | return none
+    k := max k ((n + m - 1) / m)
+  if 0 < a₀ then
+    k := if 0 < c₀ then max k ((a₀ + c₀ - 1) / c₀) else k + a₀
+  return some k
+
+/-- The atoms of the linear forms of the sides of a comparison `a ≤ b` or `a < b`. -/
+def comparisonAtoms (e : Lean.Expr) : Array Lean.Expr :=
+  ((linearForm e.appFn!.appArg!).2 ++ (linearForm e.appArg!).2).map (·.1)
+
+/-- Prove the linear statement `p` from the linear `premises`, given with their proofs, by `omega`
+with the atoms abstracted, so that no other hypothesis is read. -/
+def omegaAbstracted (p : Lean.Expr) (premises : Array (Lean.Expr × Lean.Expr) := #[]) :
+    TacticM (Option Lean.Expr) := do
+  let atoms := (#[p] ++ premises.map (·.1)).foldl (init := #[]) fun acc e =>
+    (comparisonAtoms e).foldl (init := acc) fun acc t => if acc.contains t then acc else acc.push t
+  let stmt ← withLocalDeclsDND (atoms.map fun _ => (`x, mkConst ``Nat)) fun xs => do
+    let abstract (e : Lean.Expr) := e.replace fun t => (atoms.idxOf? t).map (xs[·]!)
+    mkForallFVars xs (← premises.foldrM (init := abstract p) fun (q, _) body =>
+      mkArrow (abstract q) body)
+  let saved ← saveState
+  try
+    let proof ← withLCtx {} {} do
+      let m ← mkFreshExprSyntheticOpaqueMVar stmt
+      let (_, g) ← m.mvarId!.introN (atoms.size + premises.size)
+      setGoals [g]
+      Omega.omegaDefault
+      instantiateMVars m
+    return some (mkAppN (mkAppN proof atoms) (premises.map (·.2)))
+  catch _ =>
+    saved.restore
+    return none
+
+/-- The comparisons `a ≤ b`, `a < b` and `a = b` of a conjunction, by their sides, with whether
+each is an equation. -/
+partial def comparisonSides (e : Lean.Expr) : Array (Lean.Expr × Lean.Expr × Bool) :=
+  if e.isAppOfArity ``And 2 then comparisonSides e.appFn!.appArg! ++ comparisonSides e.appArg!
+  else if e.isAppOfArity ``LE.le 4 || e.isAppOfArity ``LT.lt 4 then
+    #[(e.appFn!.appArg!, e.appArg!, false)]
+  else if e.isAppOfArity ``Eq 3 then #[(e.appFn!.appArg!, e.appArg!, true)]
+  else #[]
+
+/-- Bounds for the powers and products that the left side of the goal depends on, against the
+powers of its right side: for a power `a ^ d` and a power `b ^ e` with `d ≤ e`, add
+`a ^ d ≤ k ^ d * b ^ e` whenever `a` is `b` or `a ≤ k * b`, and `0 < b`; for a product `a * b` and a
+power `c ^ e` with `2 ≤ e`, add `a * b ≤ k * l * c ^ e` whenever `a ≤ k * c`, `0 < c`, and
+`b ≤ l * c` or `b ≤ l * c ^ d` for a power `c ^ d` of either side with `d < e`. The left side
+depends on its variables and terms and, transitively, on the bounds of hypotheses `t ≤ u`, `t < u`
+or `t = u` about them, also within conjunctions. A comparison of linear forms whose coefficients
+show it is proved by `omega` without the other hypotheses, with the least such coefficient;
+otherwise `omega` with the hypotheses tries the coefficients 1, 2, 4 and 8. A goal that is not a
+conjunction of comparisons compares all its powers and products. -/
 def addPowerFacts (goal : MVarId) : TacticM MVarId := goal.withContext do
   let target ← instantiateMVars (← goal.getType)
-  let visit (e : Lean.Expr) : StateT (Array (Lean.Expr × Nat) × Array (Lean.Expr × Lean.Expr))
-      MetaM Unit := do
-    unless !e.hasLooseBVars && (e.isAppOfArity ``HPow.hPow 6 || e.isAppOfArity ``HMul.hMul 6) do
-      return
-    unless ← isDefEq (← inferType e) (mkConst ``Nat) do return
-    if e.isAppOfArity ``HPow.hPow 6 then
-      if let some k := e.appArg!.nat? then
-        if k > 0 then modify fun (p, m) => (p.push (e.getAppArgs[4]!, k), m)
-    else if e.isAppOfArity ``HMul.hMul 6 then
-      let (a, b) := (e.getAppArgs[4]!, e.appArg!)
-      if a.nat?.isNone && b.nat?.isNone then modify fun (p, m) => (p, m.push (a, b))
-  let mut exprs := #[target]
+  let isNat (e : Lean.Expr) : TacticM Bool := do isDefEq (← inferType e) (mkConst ``Nat)
+  -- The variables and applications in `e`.
+  let terms (e : Lean.Expr) : TacticM (Array Lean.Expr) := do
+    let (_, ts) ← (e.forEach' fun e => do
+        if e.isFVar || e.isApp && !e.hasLooseBVars then modify (·.push e)
+        return true : StateT (Array Lean.Expr) MetaM Unit).run #[]
+    return ts
+  let power? (e : Lean.Expr) : TacticM (Option (Lean.Expr × Nat)) := do
+    unless e.isAppOfArity ``HPow.hPow 6 do return none
+    let some k := e.appArg!.nat? | return none
+    unless k > 0 && (← isNat e) do return none
+    return some (e.getAppArgs[4]!, k)
+  let product? (e : Lean.Expr) : TacticM (Option (Lean.Expr × Lean.Expr)) := do
+    unless e.isAppOfArity ``HMul.hMul 6 do return none
+    let (a, b) := (e.getAppArgs[4]!, e.appArg!)
+    unless a.nat?.isNone && b.nat?.isNone && (← isNat e) do return none
+    return some (a, b)
+  let sides := (comparisonSides target).filterMap fun (a, b, eq) => if eq then none else some (a, b)
+  let rightSideTerms ← sides.flatMapM fun (_, b) => terms b
+  -- Every fact bounds a term by a power of the right side.
+  if !sides.isEmpty && (← rightSideTerms.filterMapM power?).isEmpty then return goal
+  let mut hyps := #[]
   for decl in ← getLCtx do
-    unless decl.isImplementationDetail do exprs := exprs.push (← instantiateMVars decl.type)
-  let mut found := #[]
-  let mut products := #[]
-  for e in exprs do
-    let (_, (p, m)) ← (e.forEach' fun e => do
-        visit e; return true : StateT _ MetaM Unit).run (#[], #[])
-    found := found ++ p
-    products := products ++ m
-  let powers := found.toList.eraseDups
+    unless decl.isImplementationDetail do hyps := hyps.push (← instantiateMVars decl.type)
+  -- The terms the left side depends on, and those of the right side.
+  let (leftTerms, rightTerms) ← if sides.isEmpty then
+      let all ← (#[target] ++ hyps).flatMapM terms
+      pure (all, all)
+    else do
+      let mut left : Std.HashSet Lean.Expr := {}
+      for (a, _) in sides do
+        for t in ← terms a do left := left.insert t
+      let mut bounds := #[]
+      for h in hyps do
+        for (t, u, eq) in comparisonSides h do bounds := bounds.push (← terms t, ← terms u, eq)
+      for _ in [0:3] do
+        for (t, u, eq) in bounds do
+          if t.any left.contains then
+            for v in u do left := left.insert v
+          if eq && u.any left.contains then
+            for v in t do left := left.insert v
+      pure (left.toArray, rightSideTerms)
+  let rightPowers := (← rightTerms.filterMapM power?).toList.eraseDups
+  let leftPowers := (← leftTerms.filterMapM power?).toList.eraseDups
+  let products := (← leftTerms.filterMapM product?).toList.eraseDups
   let byOmega (p : Lean.Expr) : TacticM (Option Lean.Expr) := do
     let m ← mkFreshExprSyntheticOpaqueMVar p
     let saved ← saveState
@@ -266,45 +366,58 @@ def addPowerFacts (goal : MVarId) : TacticM MVarId := goal.withContext do
     catch _ =>
       saved.restore
       return none
-  let le (a b : Lean.Expr) := do byOmega (← mkAppM ``LE.le #[a, b])
-  let pos (a : Lean.Expr) := do byOmega (← mkAppM ``LT.lt #[mkNatLit 0, a])
-  let powLe (hb : Lean.Expr) (d e : Nat) := do
+  -- `a ≤ k * c` given `hc : 0 < c`, written `a ≤ c` for `k = 1` when `plain`: with `k` read off
+  -- the linear forms, or the least of 1, 2, 4, 8 for which `omega` proves it from the hypotheses.
+  let bound (a c hc : Lean.Expr) (plain : Bool) : TacticM (Option (Nat × Lean.Expr)) := do
+    let times (k : Nat) := if plain && k == 1 then pure c else mkAppM ``HMul.hMul #[mkNatLit k, c]
+    if let some k := termwiseCoefficient a c then
+      if let some h ← omegaAbstracted (← mkAppM ``LE.le #[a, ← times k])
+          #[(← mkAppM ``LT.lt #[mkNatLit 0, c], hc)] then
+        return some (k, h)
+    for k in [1, 2, 4, 8] do
+      if let some h ← byOmega (← mkAppM ``LE.le #[a, ← times k]) then return some (k, h)
+    return none
+  -- `0 < a` when the constant of `a`, or of the base of the power `a`, is positive; otherwise by
+  -- `omega` with the hypotheses.
+  let positiveConstant (a : Lean.Expr) : TacticM (Option Lean.Expr) := do
+    unless 0 < (linearForm a).1 do return none
+    omegaAbstracted (← mkAppM ``LT.lt #[mkNatLit 0, a])
+  let pos (a : Lean.Expr) : TacticM (Option Lean.Expr) := do
+    if let some h ← positiveConstant a then return some h
+    if let some (b, d) ← power? a then
+      if let some h ← positiveConstant b then
+        return some (← mkAppOptM ``Nat.pow_pos #[none, mkNatLit d, h])
+    byOmega (← mkAppM ``LT.lt #[mkNatLit 0, a])
+  let powLe (hb : Lean.Expr) (d e : Nat) : TacticM Lean.Expr := do
     mkAppM ``Nat.pow_le_pow_right
       #[hb, ← mkDecideProof (← mkAppM ``LE.le #[mkNatLit d, mkNatLit e])]
   let mut facts := #[]
-  for (a, d) in powers do
-    for (b, e) in powers do
+  for (a, d) in leftPowers do
+    for (b, e) in rightPowers do
       if d > e || (a == b && d == e) then continue
       let some hb ← pos b | continue
       if a == b then
         facts := facts.push (← powLe hb d e)
         continue
-      if let some hab ← le a b then
+      let some (k, hab) ← bound a b hb true | continue
+      if k == 1 then
         facts := facts.push (← mkAppM ``le_trans
           #[← mkAppM ``Nat.pow_le_pow_left #[hab, mkNatLit d], ← powLe hb d e])
         continue
       -- A coefficient `k` on the base becomes the literal `k ^ d` on the power.
-      for k in [2, 4, 8] do
-        let some hab ← le a (← mkAppM ``HMul.hMul #[mkNatLit k, b]) | continue
-        let scaled ← mkAppM ``le_trans #[← mkAppM ``Nat.pow_le_pow_left #[hab, mkNatLit d],
-          ← mkAppM ``Eq.le #[← mkAppM ``Nat.mul_pow #[mkNatLit k, b, mkNatLit d]]]
-        let h ← mkAppM ``le_trans #[scaled, ← mkAppM ``Nat.mul_le_mul_left
-          #[← mkAppM ``HPow.hPow #[mkNatLit k, mkNatLit d], ← powLe hb d e]]
-        let type ← mkAppM ``LE.le #[← mkAppM ``HPow.hPow #[a, mkNatLit d],
-          ← mkAppM ``HMul.hMul #[mkNatLit (k ^ d), ← mkAppM ``HPow.hPow #[b, mkNatLit e]]]
-        facts := facts.push (← mkExpectedTypeHint h type)
-        break
-  -- The least of the coefficients 1, 2, 4, 8 with `a ≤ k * c`, with its proof.
-  let coefficient (a c : Lean.Expr) : TacticM (Option Lean.Expr) := do
-    for k in [1, 2, 4, 8] do
-      if let some h ← le a (← mkAppM ``HMul.hMul #[mkNatLit k, c]) then return some h
-    return none
-  for (a, b) in products.toList.eraseDups do
-    for (c, e) in powers do
+      let scaled ← mkAppM ``le_trans #[← mkAppM ``Nat.pow_le_pow_left #[hab, mkNatLit d],
+        ← mkAppM ``Eq.le #[← mkAppM ``Nat.mul_pow #[mkNatLit k, b, mkNatLit d]]]
+      let h ← mkAppM ``le_trans #[scaled, ← mkAppM ``Nat.mul_le_mul_left
+        #[← mkAppM ``HPow.hPow #[mkNatLit k, mkNatLit d], ← powLe hb d e]]
+      let type ← mkAppM ``LE.le #[← mkAppM ``HPow.hPow #[a, mkNatLit d],
+        ← mkAppM ``HMul.hMul #[mkNatLit (k ^ d), ← mkAppM ``HPow.hPow #[b, mkNatLit e]]]
+      facts := facts.push (← mkExpectedTypeHint h type)
+  for (a, b) in products do
+    for (c, e) in rightPowers do
       if e < 2 then continue
       let some hc ← pos c | continue
-      let some hac ← coefficient a c | continue
-      if let some hbc ← coefficient b c then
+      let some (_, hac) ← bound a c hc false | continue
+      if let some (_, hbc) ← bound b c hc false then
         let he ← mkDecideProof (← mkAppM ``LE.le #[mkNatLit 2, mkNatLit e])
         facts := facts.push (← mkAppM ``mul_le_mul_pow_of_le_mul #[hac, hbc, he, hc])
         continue
@@ -312,16 +425,19 @@ def addPowerFacts (goal : MVarId) : TacticM MVarId := goal.withContext do
       if b.isAppOfArity ``HPow.hPow 6 then
         if let some d := b.appArg!.nat? then
           if 1 < d && d < e then
-            if let some hx ← coefficient b.getAppArgs[4]! c then
+            if let some (_, hx) ← bound b.getAppArgs[4]! c hc false then
               let hp ← mkAppM ``Nat.pow_le_pow_left #[hx, mkNatLit d]
               let hbc ← mkAppM ``le_of_le_of_eq #[hp, ← mkAppM ``Nat.mul_pow
                 #[(← inferType hx).appArg!.appFn!.appArg!, c, mkNatLit d]]
               let he ← mkDecideProof (← mkAppM ``LE.le #[mkNatLit (d + 1), mkNatLit e])
               facts := facts.push (← mkAppM ``mul_le_mul_pow_of_le_mul_pow #[hac, hbc, he, hc])
               continue
-      for (c', d) in powers do
+      -- `b` depends on its bounds `c ^ d`, which are among the powers of the left side.
+      for (c', d) in (leftPowers ++ rightPowers).eraseDups do
         unless c' == c && 1 < d && d < e do continue
-        let some hbc ← coefficient b (← mkAppM ``HPow.hPow #[c, mkNatLit d]) | continue
+        let cd ← mkAppM ``HPow.hPow #[c, mkNatLit d]
+        let some (_, hbc) ← bound b cd (← mkAppOptM ``Nat.pow_pos #[none, mkNatLit d, hc]) false
+          | continue
         let he ← mkDecideProof (← mkAppM ``LE.le #[mkNatLit (d + 1), mkNatLit e])
         facts := facts.push (← mkAppM ``mul_le_mul_pow_of_le_mul_pow #[hac, hbc, he, hc])
         break
@@ -814,7 +930,9 @@ def proveOrLeave (f g : Lean.Expr) : DominatedM (Option Lean.Expr) := do
 maxima of the left side; equal summands are proved once. Local `Dominated` hypotheses are used
 as facts. The list gives definitions to unfold when comparing pointwise, and statements `a ≤ b`,
 `a < b` or `a = b` to instantiate at matching terms there, as for those registered with
-`@[dominated]`. Summands that cannot be proved are left as goals. -/
+`@[dominated]`. Powers and products are compared with the powers of the right side as written: a
+definition on the right whose unfolding has the power is given in the list, not as an equation
+about it. Summands that cannot be proved are left as goals. -/
 syntax (name := dominated) "dominated" (" [" term,* "]")? : tactic
 
 elab_rules : tactic
