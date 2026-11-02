@@ -139,6 +139,53 @@ example (f : List Bool → ℕ) (hf : ∀ xs, f xs ≤ ⌜(xs, xs)⌝ₜ.size) :
 example : Dominated (fun x : ℕ × ℕ => (2 * x.1 + x.2 + 1) ^ 3) (fun x => (x.1 + x.2 + 1) ^ 3) := by
   dominated
 
+-- Guards the order of the coefficient search: only the hypothesis gives the coefficient 2, and at
+-- the exponent 14 the coefficient 8 would exceed the hidden witness `2 ^ 40`.
+example : Dominated (fun p : {p : ℕ × ℕ // p.1 ≤ 2 * p.2 + 1} => p.1.1 ^ 14)
+    (fun p => (p.1.2 + 1) ^ 14) := by
+  dominated
+
+-- Guards the dependencies of the left side: a product bounding a variable is compared, since the
+-- fields of a destructured input are variables.
+example : Dominated (fun p : {p : ℕ × ℕ × ℕ // p.1 ≤ p.2.1 * p.2.2} => p.1.1)
+    (fun p => (p.1.2.1 + p.1.2.2 + 1) ^ 2) := by
+  dominated
+
+-- Guards the same through a conjunction, as subtype properties often are, and the power `c ^ 2`
+-- bounding a factor of a product against `c ^ 3`.
+example : Dominated (fun p : {p : ℕ × ℕ × ℕ // p.1 ≤ p.2.2 + 1 ∧ p.2.1 ≤ (p.2.2 + 1) ^ 2} =>
+    p.1.1 * p.1.2.1) (fun p => (p.1.2.2 + 1) ^ 3) := by
+  dominated
+
+/-- A right side whose unfolding has a power. -/
+def cubeAbove (x : ℕ) : ℕ := (x + 1) ^ 3 + x
+
+theorem cubeAbove_eq (x : ℕ) : cubeAbove x = (x + 1) ^ 3 + x := rfl
+
+-- Powers are compared with those of the right side as written, so a definition on the right is
+-- unfolded through the list.
+example : Dominated (fun x : ℕ => x ^ 2) cubeAbove := by
+  dominated [cubeAbove]
+
+-- Records a limit of the current design: an equation about the right side only adds a fact, whose
+-- power is not used. When this starts to succeed, the documented limits change.
+example : True := by
+  fail_if_success
+    have : Dominated (fun x : ℕ => x ^ 2) cubeAbove := by
+      dominated [cubeAbove_eq]
+      done
+  trivial
+
+-- Records a limit of the current design: a power bounding the right side from below in a
+-- hypothesis is not used either.
+example : True := by
+  fail_if_success
+    have : Dominated (fun p : {p : ℕ × ℕ // (p.1 + 1) ^ 3 ≤ p.2} => p.1.1 ^ 2)
+        (fun p => p.1.2) := by
+      dominated
+      done
+  trivial
+
 /-- Named fields of a derived structure. -/
 @[tree_encoding]
 structure Pair where
