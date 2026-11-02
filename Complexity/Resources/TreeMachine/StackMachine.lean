@@ -42,13 +42,13 @@ theorem Computes.toStack {k : ℕ} [NeZero k] {Q : Type} [FinEnum Q]
     omega
   exact hc.mono ht le_rfl
 
-/-- Simulation consumes a growth specification and retains its real input-loading overhead.
+/-- Simulation consumes an `O` specification and retains its real input-loading overhead.
 Tree codes have positive size, which absorbs the simulator's fixed setup cost. -/
-theorem _root_.Complexity.TimeSpaceModel.ComputableWithGrowth.toStack_of_tree
+theorem _root_.Complexity.TimeSpaceModel.ComputableInO.toStack_of_tree
     {f : α → β} {t s : α → ℕ}
-    (h : TimeSpaceModel.sizeCostTree.ComputableWithGrowth f t s)
+    (h : TimeSpaceModel.sizeCostTree.ComputableInO f t s)
     (sizeBound : α → ℕ) (hsize : ∀ (r : Tree) a, a ∈ decode α r → r.size ≤ sizeBound a) :
-    TimeSpaceModel.stack.ComputableWithGrowth f
+    TimeSpaceModel.stack.ComputableInO f
       (fun a => t a + sizeBound a) s := by
   classical
   have hpos (a : α) : 0 < sizeBound a := by

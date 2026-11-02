@@ -59,9 +59,9 @@ theorem Computes.decidesWithin {κ : Type*} [Fintype κ] {Q : Type*}
 
 /-- Duplicating a deterministic machine preserves the budgets for the actual input
 code, and retains every halted branch in the nondeterministic output multiset. -/
-theorem nDecidableWithCodeBudgets_of_computable {t s : α → RawWord Bool → ℕ}
-    (h : TimeSpaceModel.tm.ComputableWithCodeBudgets f t s) (hp : Decides f p) :
-    TimeSpaceModel.ntm.NDecidableWithCodeBudgets p t s := by
+theorem nDecidableWithinByCode_of_computable {t s : α → RawWord Bool → ℕ}
+    (h : TimeSpaceModel.tm.ComputableWithinByCode f t s) (hp : Decides f p) :
+    TimeSpaceModel.ntm.NDecidableWithinByCode p t s := by
   obtain ⟨R, ⟨κ, hκ, Q, hQ, M, rfl⟩, h⟩ := h
   refine ⟨_, ⟨κ, hκ, Q, hQ, M.toBinary, rfl⟩, fun a r ha => ?_⟩
   obtain ⟨q, hq, hc⟩ := h a r ha
@@ -78,11 +78,11 @@ theorem nDecidableWithCodeBudgets_of_computable {t s : α → RawWord Bool → �
 theorem nDecidableWithin_of_computable
     (h : TimeSpaceModel.tm.ComputableWithin f t s) (hp : Decides f p) :
     TimeSpaceModel.ntm.NDecidableWithin p t s :=
-  nDecidableWithCodeBudgets_of_computable h hp
+  nDecidableWithinByCode_of_computable h hp
 
-theorem decidableWithGrowth_of_computable
-    (h : TimeSpaceModel.tm.ComputableWithGrowth f t s) (hp : Decides f p) :
-    TimeSpaceModel.ntm.NDecidableWithGrowth p t s := by
+theorem nDecidableInO_of_computable
+    (h : TimeSpaceModel.tm.ComputableInO f t s) (hp : Decides f p) :
+    TimeSpaceModel.ntm.NDecidableInO p t s := by
   obtain ⟨u, v, h, hu, hv⟩ := h
   exact ⟨u, v, nDecidableWithin_of_computable h hp, hu, hv⟩
 

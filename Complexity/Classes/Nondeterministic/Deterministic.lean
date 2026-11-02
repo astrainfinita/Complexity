@@ -24,22 +24,22 @@ variable {α : Type*} [Encoding (RawWord Bool) α]
 theorem dtisp_subset_ntisp {T S : ℕ → ℕ} :
     DTISP .tm (α := α) T S ⊆ NTISP .ntm T S := by
   rintro p ⟨f, ⟨t, s, h, ht, hs⟩, hp⟩
-  have h : TimeSpaceModel.ntm.NDecidableWithSizeBudgets p t s :=
-    nDecidableWithCodeBudgets_of_computable h hp
+  have h : TimeSpaceModel.ntm.NDecidableWithinBySize p t s :=
+    nDecidableWithinByCode_of_computable h hp
   exact h.mem_ntisp_of_dominated ht hs
 
 theorem dtime_subset_ntime {T : ℕ → ℕ} :
     DTIME .tm (α := α) T ⊆ NTIME .ntm T := by
   rintro p ⟨f, ⟨t, ⟨s, h⟩, ht⟩, hp⟩
-  have h : TimeSpaceModel.ntm.NDecidableWithSizeBudgets p t s :=
-    nDecidableWithCodeBudgets_of_computable h hp
+  have h : TimeSpaceModel.ntm.NDecidableWithinBySize p t s :=
+    nDecidableWithinByCode_of_computable h hp
   exact h.mem_ntime_of_dominated ht
 
 theorem dspace_subset_nspace {S : ℕ → ℕ} :
     DSPACE .tm (α := α) S ⊆ NSPACE .ntm S := by
   rintro p ⟨f, ⟨s, ⟨t, h⟩, hs⟩, hp⟩
-  have h : TimeSpaceModel.ntm.NDecidableWithSizeBudgets p t s :=
-    nDecidableWithCodeBudgets_of_computable h hp
+  have h : TimeSpaceModel.ntm.NDecidableWithinBySize p t s :=
+    nDecidableWithinByCode_of_computable h hp
   exact h.mem_nspace_of_dominated hs
 
 theorem p_subset_np : P .tm (α := α) ⊆ NP .ntm := by

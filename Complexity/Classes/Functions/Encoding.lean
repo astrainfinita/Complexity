@@ -13,15 +13,6 @@ public import Complexity.Classes.Functions.Basic
 
 namespace Complexity
 
-/-- Equal output codes preserve the same size-indexed resource certificate. -/
-theorem TimeSpaceModel.ComputableWithSizeBudgets.of_encode {Data α β γ : Type*}
-    [Encoding Data α] [UniqueEncoding Data β] [UniqueEncoding Data γ]
-    {model : TimeSpaceModel Id Data} {f : α → β} {g : α → γ} {t s : ℕ → ℕ}
-    (h : model.ComputableWithSizeBudgets g t s)
-    (hfg : ∀ a, encode Data (f a) = encode Data (g a)) :
-    model.ComputableWithSizeBudgets f t s :=
-  TimeSpaceModel.ComputableWithCodeBudgets.of_encode h hfg
-
 /-- Equal output codes preserve simultaneous asymptotic bounds in the same model. -/
 theorem FDTISP.of_encode {Data α β γ : Type*} [Encoding Data α]
     [UniqueEncoding Data β] [UniqueEncoding Data γ]

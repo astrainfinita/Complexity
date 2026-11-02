@@ -59,8 +59,8 @@ variable {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β] {f : 
   {program : Value → Code Value} {t p : α → ℕ}
 
 /-- Keep loading, controller and peak costs when hiding the fixed machine's register factor. -/
-theorem computableWithGrowth (hf : HasProgram f program t p) :
-    TimeSpaceModel.tree.ComputableWithGrowth f (fun x => t x + 4)
+theorem computableInO (hf : HasProgram f program t p) :
+    TimeSpaceModel.tree.ComputableInO f (fun x => t x + 4)
       (fun x => max ⌜x⌝ₜ.size (p x) + 2) := by
   obtain ⟨b, h, ht, hp⟩ := hf.sound
   exact ⟨fun x => b.time x + 4,
@@ -70,11 +70,11 @@ theorem computableWithGrowth (hf : HasProgram f program t p) :
 
 /-- Compare the input budgets at the machine boundary. Loading and storage overheads remain
 explicit. -/
-theorem computableWithGrowth_of_dominated {T S : α → ℕ} (hf : HasProgram f program t p)
+theorem computableInO_of_dominated {T S : α → ℕ} (hf : HasProgram f program t p)
     (ht : Dominated (fun x => t x + 4) T)
     (hp : Dominated (fun x => max ⌜x⌝ₜ.size (p x) + 2) S) :
-    TimeSpaceModel.tree.ComputableWithGrowth f T S :=
-  hf.computableWithGrowth.mono ht hp
+    TimeSpaceModel.tree.ComputableInO f T S :=
+  hf.computableInO.mono ht hp
 
 end HasProgram
 
@@ -92,7 +92,7 @@ theorem mem_fdtisp (hf : HasProgram f program (fun x => T ⌜x⌝ₜ.size) (fun 
     (time_overhead : Dominated (fun _ : α => 4) (fun x => T ⌜x⌝ₜ.size))
     (space_overhead : Dominated (fun _ : α => 2) (fun x => S ⌜x⌝ₜ.size)) :
     f ∈ FDTISP .tree T S :=
-  (hf.computableWithGrowth_of_dominated
+  (hf.computableInO_of_dominated
     ((Dominated.refl _).add_same time_overhead)
     ((input.max_same (Dominated.refl _)).add_same space_overhead)).mem_fdtisp
 
@@ -101,7 +101,7 @@ theorem mem_fdtisp_of_dominated (hf : HasProgram f program t p)
     (ht : Dominated (fun x => t x + 4) (fun x => T ⌜x⌝ₜ.size))
     (hp : Dominated (fun x => max ⌜x⌝ₜ.size (p x) + 2) (fun x => S ⌜x⌝ₜ.size)) :
     f ∈ FDTISP .tree T S :=
-  (hf.computableWithGrowth_of_dominated ht hp).mem_fdtisp
+  (hf.computableInO_of_dominated ht hp).mem_fdtisp
 
 /-- Exact-size envelopes are used only where an eventual scale comparison is required.
 This permits finite input types to inhabit a zero eventual class without weakening their
@@ -110,7 +110,7 @@ theorem mem_fdtisp_of_sizeEnvelope (hf : HasProgram f program t p)
     (ht : DominatedAtTop (sizeEnvelope (fun x => t x + 4)) T)
     (hp : DominatedAtTop (sizeEnvelope (fun x => max ⌜x⌝ₜ.size (p x) + 2)) S) :
     f ∈ FDTISP .tree T S := by
-  have hm := hf.computableWithGrowth.mono
+  have hm := hf.computableInO.mono
     (Dominated.of_le (le_sizeEnvelope (fun x => t x + 4)))
     (Dominated.of_le (le_sizeEnvelope (fun x => max ⌜x⌝ₜ.size (p x) + 2)))
   exact FDTISP.mono ht hp hm.mem_fdtisp
@@ -861,10 +861,10 @@ private def modelFunPropCore (disch : Option (TSyntax ``Lean.Parser.Tactic.disch
   let originalGoals ← getGoals
   setGoals (originalGoals.take 1)
   let target ← (← getMainGoal).getType
-  let machine := target.isAppOf ``TimeSpaceModel.ComputableWithGrowth
+  let machine := target.isAppOf ``TimeSpaceModel.ComputableInO
   let asymptotic := (target.find? (·.isConstOf ``FDTISP)).isSome
   unless machine || asymptotic do
-    throwError "model_fun_prop expects a tree ComputableWithGrowth or FDTISP target"
+    throwError "model_fun_prop expects a tree ComputableInO or FDTISP target"
   let powers ← if let some application := target.find? (·.isAppOf ``FDTISP) then do
       let args := application.getAppArgs
       let exponent (f : Lean.Expr) : MetaM (Option Nat) :=
@@ -879,7 +879,7 @@ private def modelFunPropCore (disch : Option (TSyntax ``Lean.Parser.Tactic.disch
       pure (do let t ← t; let s ← s; if s > 0 then some (t, s) else none)
     else pure none
   if machine then
-    evalTactic (← `(tactic| refine HasProgram.computableWithGrowth_of_dominated
+    evalTactic (← `(tactic| refine HasProgram.computableInO_of_dominated
       (program := ?program) (hf := ?implementation) (t := ?time_bound) (p := ?peak_bound)
       ?time ?peak))
   else if let some (t, s) := powers then

@@ -85,16 +85,16 @@ theorem Computes.computableWithin {Q : Type} [Finite Q]
   computableWithin_iff.mpr ⟨k, inferInstance, Q, inferInstance, M, h⟩
 
 /-- Changing the time charge keeps the same machine, valid codes, and joint budgets. -/
-theorem _root_.Complexity.TimeSpaceModel.ComputableWithCodeBudgets.toUnitTime {t s : α → Tree → ℕ}
-    (h : TimeSpaceModel.sizeCostTree.ComputableWithCodeBudgets f t s) :
-    TimeSpaceModel.tree.ComputableWithCodeBudgets f t s := by
+theorem _root_.Complexity.TimeSpaceModel.ComputableWithinByCode.toUnitTime {t s : α → Tree → ℕ}
+    (h : TimeSpaceModel.sizeCostTree.ComputableWithinByCode f t s) :
+    TimeSpaceModel.tree.ComputableWithinByCode f t s := by
   obtain ⟨R, ⟨k, hk, Q, hQ, M, rfl⟩, h⟩ := h
   exact ⟨_, ⟨k, hk, Q, hQ, M, rfl⟩, h.mono (fun hc => hc.toUnitTime)⟩
 
 /-- Size charging uses the same machine's peak space to bound each unit-time action. -/
-theorem _root_.Complexity.TimeSpaceModel.ComputableWithCodeBudgets.toSizeCost {t s : α → Tree → ℕ}
-    (h : TimeSpaceModel.tree.ComputableWithCodeBudgets f t s) :
-    TimeSpaceModel.sizeCostTree.ComputableWithCodeBudgets f
+theorem _root_.Complexity.TimeSpaceModel.ComputableWithinByCode.toSizeCost {t s : α → Tree → ℕ}
+    (h : TimeSpaceModel.tree.ComputableWithinByCode f t s) :
+    TimeSpaceModel.sizeCostTree.ComputableWithinByCode f
       (fun a src => t a src * s a src) s := by
   obtain ⟨R, ⟨k, hk, Q, hQ, M, rfl⟩, h⟩ := h
   exact ⟨_, ⟨k, hk, Q, hQ, M, rfl⟩, h.mono (fun hc => hc.toSizeCost)⟩
@@ -102,22 +102,22 @@ theorem _root_.Complexity.TimeSpaceModel.ComputableWithCodeBudgets.toSizeCost {t
 theorem _root_.Complexity.TimeSpaceModel.ComputableWithin.toUnitTime
     (h : TimeSpaceModel.sizeCostTree.ComputableWithin f t s) :
     TimeSpaceModel.tree.ComputableWithin f t s :=
-  TimeSpaceModel.ComputableWithCodeBudgets.toUnitTime h
+  TimeSpaceModel.ComputableWithinByCode.toUnitTime h
 
 theorem _root_.Complexity.TimeSpaceModel.ComputableWithin.toSizeCost
     (h : TimeSpaceModel.tree.ComputableWithin f t s) :
     TimeSpaceModel.sizeCostTree.ComputableWithin f (fun a => t a * s a) s :=
-  TimeSpaceModel.ComputableWithCodeBudgets.toSizeCost h
+  TimeSpaceModel.ComputableWithinByCode.toSizeCost h
 
-theorem _root_.Complexity.TimeSpaceModel.ComputableWithGrowth.toUnitTime
-    (h : TimeSpaceModel.sizeCostTree.ComputableWithGrowth f t s) :
-    TimeSpaceModel.tree.ComputableWithGrowth f t s := by
+theorem _root_.Complexity.TimeSpaceModel.ComputableInO.toUnitTime
+    (h : TimeSpaceModel.sizeCostTree.ComputableInO f t s) :
+    TimeSpaceModel.tree.ComputableInO f t s := by
   obtain ⟨u, v, h, hu, hv⟩ := h
   exact ⟨u, v, TimeSpaceModel.ComputableWithin.toUnitTime h, hu, hv⟩
 
-theorem _root_.Complexity.TimeSpaceModel.ComputableWithGrowth.toSizeCost
-    (h : TimeSpaceModel.tree.ComputableWithGrowth f t s) :
-    TimeSpaceModel.sizeCostTree.ComputableWithGrowth f (fun a => t a * s a) s := by
+theorem _root_.Complexity.TimeSpaceModel.ComputableInO.toSizeCost
+    (h : TimeSpaceModel.tree.ComputableInO f t s) :
+    TimeSpaceModel.sizeCostTree.ComputableInO f (fun a => t a * s a) s := by
   obtain ⟨u, v, h, hu, hv⟩ := h
   exact ⟨_, _, TimeSpaceModel.ComputableWithin.toSizeCost h, hu.mul hv, hv⟩
 

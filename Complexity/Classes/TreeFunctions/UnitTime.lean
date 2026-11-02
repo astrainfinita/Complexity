@@ -19,16 +19,16 @@ variable {α β : Type*} [Encoding Tree α] [Encoding Tree β]
 theorem fdtisp_sizeCost_subset_unitTime (T S : ℕ → ℕ) :
     FDTISP (α := α) (β := β) .sizeCostTree T S ⊆ FDTISP .tree T S := by
   rintro f ⟨t, s, h, ht, hs⟩
-  have h : TimeSpaceModel.tree.ComputableWithSizeBudgets f t s :=
-    TimeSpaceModel.ComputableWithCodeBudgets.toUnitTime h
+  have h : TimeSpaceModel.tree.ComputableWithinBySize f t s :=
+    TimeSpaceModel.ComputableWithinByCode.toUnitTime h
   exact h.mem_fdtisp_of_dominated ht hs
 
 /-- Size charging multiplies the unit-time bound by the space bound. -/
 theorem fdtisp_unitTime_subset_sizeCost (T S : ℕ → ℕ) :
     FDTISP (α := α) (β := β) .tree T S ⊆ FDTISP .sizeCostTree (fun n ↦ T n * S n) S := by
   rintro f ⟨t, s, h, ht, hs⟩
-  have h : TimeSpaceModel.sizeCostTree.ComputableWithSizeBudgets f (fun n => t n * s n) s :=
-    TimeSpaceModel.ComputableWithCodeBudgets.toSizeCost h
+  have h : TimeSpaceModel.sizeCostTree.ComputableWithinBySize f (fun n => t n * s n) s :=
+    TimeSpaceModel.ComputableWithinByCode.toSizeCost h
   exact h.mem_fdtisp_of_dominated (ht.mul hs) hs
 
 /-- Changing action charges preserves every expanded-tree space class. -/

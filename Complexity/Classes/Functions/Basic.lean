@@ -21,39 +21,19 @@ namespace Complexity
 
 variable {Data α β : Type*} [Encoding Data α] [Encoding Data β]
 
-namespace TimeSpaceModel
-
-/-- Budgets at the complexity boundary depend on the size of the actual input code.
-This does not require unique encodings or assign a canonical size to an abstract value. -/
-def ComputableWithSizeBudgets (model : TimeSpaceModel Id Data) (f : α → β)
-    (t s : ℕ → ℕ) : Prop :=
-  model.ComputableWithCodeBudgets f
-    (fun _ src => t (model.inputSize src))
-    (fun _ src => s (model.inputSize src))
-
-theorem ComputableWithSizeBudgets.mono {model : TimeSpaceModel Id Data}
-    {f : α → β} {t s t' s' : ℕ → ℕ}
-    (h : model.ComputableWithSizeBudgets f t s)
-    (ht : ∀ n, t n ≤ t' n) (hs : ∀ n, s n ≤ s' n) :
-    model.ComputableWithSizeBudgets f t' s' :=
-  ComputableWithCodeBudgets.mono h (fun _ r => ht (model.inputSize r))
-    (fun _ r => hs (model.inputSize r))
-
-end TimeSpaceModel
-
 /-- Functions computable in the given model in time `O(T(n))`.
 The unrestricted space budget is still uniform over codes of the same size. -/
 def FDTIME (model : TimeSpaceModel Id Data) (T : ℕ → ℕ) : Set (α → β) :=
-  {f | ∃ t, (∃ s, model.ComputableWithSizeBudgets f t s) ∧ DominatedAtTop t T}
+  {f | ∃ t, (∃ s, model.ComputableWithinBySize f t s) ∧ DominatedAtTop t T}
 
 /-- Functions computable in the given model in space `O(S(n))`.
 The unrestricted time budget is still uniform over codes of the same size. -/
 def FDSPACE (model : TimeSpaceModel Id Data) (S : ℕ → ℕ) : Set (α → β) :=
-  {f | ∃ s, (∃ t, model.ComputableWithSizeBudgets f t s) ∧ DominatedAtTop s S}
+  {f | ∃ s, (∃ t, model.ComputableWithinBySize f t s) ∧ DominatedAtTop s S}
 
 /-- Functions computable by one behavior within both asymptotic bounds. -/
 def FDTISP (model : TimeSpaceModel Id Data) (T S : ℕ → ℕ) : Set (α → β) :=
-  {f | ∃ t s, model.ComputableWithSizeBudgets f t s ∧
+  {f | ∃ t s, model.ComputableWithinBySize f t s ∧
     DominatedAtTop t T ∧ DominatedAtTop s S}
 
 /-- Polynomial-time functions between the chosen encoded types. -/
@@ -96,32 +76,32 @@ namespace TimeSpaceModel
 variable {t s : ℕ → ℕ}
 
 /-- Eventual comparisons only relax the budgets; the computation still handles every code. -/
-theorem ComputableWithSizeBudgets.mem_fdtisp_of_dominated
-    (h : model.ComputableWithSizeBudgets f t s)
+theorem ComputableWithinBySize.mem_fdtisp_of_dominated
+    (h : model.ComputableWithinBySize f t s)
     (ht : DominatedAtTop t T) (hs : DominatedAtTop s S) : f ∈ FDTISP model T S :=
   ⟨t, s, h, ht, hs⟩
 
-theorem ComputableWithSizeBudgets.mem_fdtime_of_dominated
-    (h : model.ComputableWithSizeBudgets f t s)
+theorem ComputableWithinBySize.mem_fdtime_of_dominated
+    (h : model.ComputableWithinBySize f t s)
     (ht : DominatedAtTop t T) : f ∈ FDTIME model T :=
   ⟨t, ⟨s, h⟩, ht⟩
 
-theorem ComputableWithSizeBudgets.mem_fdspace_of_dominated
-    (h : model.ComputableWithSizeBudgets f t s)
+theorem ComputableWithinBySize.mem_fdspace_of_dominated
+    (h : model.ComputableWithinBySize f t s)
     (hs : DominatedAtTop s S) : f ∈ FDSPACE model S :=
   ⟨s, ⟨t, h⟩, hs⟩
 
 /-- Export the same behavior with both actual-code-size budgets. -/
-theorem ComputableWithSizeBudgets.mem_fdtisp
-    (h : model.ComputableWithSizeBudgets f t s) : f ∈ FDTISP model t s :=
+theorem ComputableWithinBySize.mem_fdtisp
+    (h : model.ComputableWithinBySize f t s) : f ∈ FDTISP model t s :=
   h.mem_fdtisp_of_dominated (DominatedAtTop.refl _) (DominatedAtTop.refl _)
 
-theorem ComputableWithSizeBudgets.mem_fdtime
-    (h : model.ComputableWithSizeBudgets f t s) : f ∈ FDTIME model t :=
+theorem ComputableWithinBySize.mem_fdtime
+    (h : model.ComputableWithinBySize f t s) : f ∈ FDTIME model t :=
   h.mem_fdtime_of_dominated (DominatedAtTop.refl _)
 
-theorem ComputableWithSizeBudgets.mem_fdspace
-    (h : model.ComputableWithSizeBudgets f t s) : f ∈ FDSPACE model s :=
+theorem ComputableWithinBySize.mem_fdspace
+    (h : model.ComputableWithinBySize f t s) : f ∈ FDSPACE model s :=
   h.mem_fdspace_of_dominated (DominatedAtTop.refl _)
 
 end TimeSpaceModel
@@ -134,7 +114,7 @@ theorem mem_iff_exists_fdtime :
 
 /-- Polynomial time admits a polynomial bound valid at every input size. -/
 theorem exists_polynomial_bound (h : f ∈ FP model) :
-    ∃ (p : Polynomial ℕ) (s : ℕ → ℕ), model.ComputableWithSizeBudgets f p.eval s := by
+    ∃ (p : Polynomial ℕ) (s : ℕ → ℕ), model.ComputableWithinBySize f p.eval s := by
   obtain ⟨d, t, ⟨s, h⟩, ht⟩ := mem_iff_exists_fdtime.mp h
   obtain ⟨p, hp⟩ := ht.exists_polynomial_bound
   exact ⟨p, s, h.mono hp (fun _ => le_rfl)⟩
@@ -157,29 +137,16 @@ namespace Complexity.TimeSpaceModel
 variable {Data α β : Type*} [UniqueEncoding Data α] [Encoding Data β]
   {model : TimeSpaceModel Id Data} {f : α → β} {T S : ℕ → ℕ}
 
-/-- With unique input encodings, a value budget obtained from that encoding's size
-is exactly the corresponding actual-code-size budget. -/
-theorem ComputableWithin.iff_sizeBudgets :
-    model.ComputableWithin f
-      (fun a => T (model.inputSize (encode Data a)))
-      (fun a => S (model.inputSize (encode Data a))) ↔
-    model.ComputableWithSizeBudgets f T S := by
-  constructor <;> rintro ⟨R, hR, h⟩ <;> refine ⟨R, hR, ?_⟩
-  all_goals
-    intro a src ha
-    obtain rfl := UniqueEncoding.mem_decode_iff.mp ha
-    exact h a _ (by simp)
-
 /-- A size-indexed specialization of an all-input certificate reaches the complexity boundary. -/
 theorem ComputableWithin.mem_fdtisp
     (h : model.ComputableWithin f
       (fun a => T (model.inputSize (encode Data a)))
       (fun a => S (model.inputSize (encode Data a)))) : f ∈ FDTISP model T S :=
-  (ComputableWithin.iff_sizeBudgets.mp h).mem_fdtisp
+  (ComputableWithin.iff_bySize.mp h).mem_fdtisp
 
 /-- Export the same machine; an eventual class conclusion is never used as a call specification. -/
-theorem ComputableWithGrowth.mem_fdtisp
-    (h : model.ComputableWithGrowth f
+theorem ComputableInO.mem_fdtisp
+    (h : model.ComputableInO f
       (fun a => T (model.inputSize (encode Data a)))
       (fun a => S (model.inputSize (encode Data a)))) : f ∈ FDTISP model T S := by
   obtain ⟨t, s, h, ⟨C, ht⟩, ⟨D, hs⟩⟩ := h

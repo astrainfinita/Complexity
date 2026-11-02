@@ -25,30 +25,22 @@ namespace Complexity
 
 variable {Data α : Type*} [Encoding Data α] [Encoding Data Bool]
 
-/-- Code-length budgets for one complete nondeterministic computation. Both resources
-refer to the actual input representation, independently of its decoded value. -/
-def TimeSpaceModel.NDecidableWithSizeBudgets (model : TimeSpaceModel Multiset Data)
-    (p : α → Prop) (t s : ℕ → ℕ) : Prop :=
-  model.NDecidableWithCodeBudgets p
-    (fun _ src => t (model.inputSize src))
-    (fun _ src => s (model.inputSize src))
-
 /-- Predicates decidable nondeterministically in time `O(T(n))`. The other resource
 still has one bound for each input length. -/
 def NTIME (model : TimeSpaceModel Multiset Data) (T : ℕ → ℕ) : Set (α → Prop) :=
-  {p | ∃ t, (∃ s, model.NDecidableWithSizeBudgets p t s) ∧
+  {p | ∃ t, (∃ s, model.NDecidableWithinBySize p t s) ∧
     DominatedAtTop t T}
 
 /-- Predicates decidable nondeterministically in space `O(S(n))`, with
 all branches terminating on every valid input. -/
 def NSPACE (model : TimeSpaceModel Multiset Data) (S : ℕ → ℕ) : Set (α → Prop) :=
-  {p | ∃ s, (∃ t, model.NDecidableWithSizeBudgets p t s) ∧
+  {p | ∃ s, (∃ t, model.NDecidableWithinBySize p t s) ∧
     DominatedAtTop s S}
 
 /-- Predicates decidable by one nondeterministic behavior satisfying both
 asymptotic bounds on every branch. -/
 def NTISP (model : TimeSpaceModel Multiset Data) (T S : ℕ → ℕ) : Set (α → Prop) :=
-  {p | ∃ t s, model.NDecidableWithSizeBudgets p t s ∧
+  {p | ∃ t s, model.NDecidableWithinBySize p t s ∧
     DominatedAtTop t T ∧ DominatedAtTop s S}
 
 variable {model : TimeSpaceModel Multiset Data} {p q : α → Prop} {T S T' S' : ℕ → ℕ}
@@ -124,77 +116,54 @@ end Complexity
 
 namespace Complexity.TimeSpaceModel
 
-section SizeBudgets
+section BySize
 
 variable {Data α : Type*} [Encoding Data α] [Encoding Data Bool]
   {model : TimeSpaceModel Multiset Data} {p q : α → Prop} {t s t' s' T S : ℕ → ℕ}
 
-theorem NDecidableWithSizeBudgets.mono (h : model.NDecidableWithSizeBudgets p t s)
-    (ht : ∀ n, t n ≤ t' n) (hs : ∀ n, s n ≤ s' n) :
-    model.NDecidableWithSizeBudgets p t' s' :=
-  NDecidableWithCodeBudgets.mono h (fun _ src => ht (model.inputSize src))
-    (fun _ src => hs (model.inputSize src))
-
-theorem NDecidableWithSizeBudgets.congr (h : model.NDecidableWithSizeBudgets p t s)
-    (hp : ∀ a, p a ↔ q a) : model.NDecidableWithSizeBudgets q t s :=
-  NDecidableWithCodeBudgets.congr h hp
-
 /-- Export the same complete branch computation with both asymptotic bounds. -/
-theorem NDecidableWithSizeBudgets.mem_ntisp_of_dominated
-    (h : model.NDecidableWithSizeBudgets p t s)
+theorem NDecidableWithinBySize.mem_ntisp_of_dominated
+    (h : model.NDecidableWithinBySize p t s)
     (ht : DominatedAtTop t T) (hs : DominatedAtTop s S) : p ∈ NTISP model T S :=
   ⟨t, s, h, ht, hs⟩
 
-theorem NDecidableWithSizeBudgets.mem_ntime_of_dominated
-    (h : model.NDecidableWithSizeBudgets p t s) (ht : DominatedAtTop t T) :
+theorem NDecidableWithinBySize.mem_ntime_of_dominated
+    (h : model.NDecidableWithinBySize p t s) (ht : DominatedAtTop t T) :
     p ∈ NTIME model T :=
   ⟨t, ⟨s, h⟩, ht⟩
 
-theorem NDecidableWithSizeBudgets.mem_nspace_of_dominated
-    (h : model.NDecidableWithSizeBudgets p t s) (hs : DominatedAtTop s S) :
+theorem NDecidableWithinBySize.mem_nspace_of_dominated
+    (h : model.NDecidableWithinBySize p t s) (hs : DominatedAtTop s S) :
     p ∈ NSPACE model S :=
   ⟨s, ⟨t, h⟩, hs⟩
 
-theorem NDecidableWithSizeBudgets.mem_ntisp
-    (h : model.NDecidableWithSizeBudgets p t s) : p ∈ NTISP model t s :=
+theorem NDecidableWithinBySize.mem_ntisp
+    (h : model.NDecidableWithinBySize p t s) : p ∈ NTISP model t s :=
   h.mem_ntisp_of_dominated (DominatedAtTop.refl _) (DominatedAtTop.refl _)
 
-theorem NDecidableWithSizeBudgets.mem_ntime
-    (h : model.NDecidableWithSizeBudgets p t s) : p ∈ NTIME model t :=
+theorem NDecidableWithinBySize.mem_ntime
+    (h : model.NDecidableWithinBySize p t s) : p ∈ NTIME model t :=
   h.mem_ntime_of_dominated (DominatedAtTop.refl _)
 
-theorem NDecidableWithSizeBudgets.mem_nspace
-    (h : model.NDecidableWithSizeBudgets p t s) : p ∈ NSPACE model s :=
+theorem NDecidableWithinBySize.mem_nspace
+    (h : model.NDecidableWithinBySize p t s) : p ∈ NSPACE model s :=
   h.mem_nspace_of_dominated (DominatedAtTop.refl _)
 
-end SizeBudgets
+end BySize
 
 variable {Data α : Type*} [UniqueEncoding Data α] [Encoding Data Bool]
   {model : TimeSpaceModel Multiset Data} {p : α → Prop} {T S : ℕ → ℕ}
-
-/-- With unique input encodings, value budgets obtained from encoding size are exactly
-actual-code-size budgets; the complete branch specification is unchanged. -/
-theorem NDecidableWithin.iff_sizeBudgets :
-    model.NDecidableWithin p
-      (fun a => T (model.inputSize (encode Data a)))
-      (fun a => S (model.inputSize (encode Data a))) ↔
-    model.NDecidableWithSizeBudgets p T S := by
-  constructor <;> rintro ⟨R, hR, h⟩ <;> refine ⟨R, hR, ?_⟩
-  all_goals
-    intro a src hsrc
-    obtain rfl := UniqueEncoding.mem_decode_iff.mp hsrc
-    exact h a _ (by simp)
 
 /-- Export one all-branch certificate specialized to encoding size. -/
 theorem NDecidableWithin.mem_ntisp
     (h : model.NDecidableWithin p
       (fun a => T (model.inputSize (encode Data a)))
       (fun a => S (model.inputSize (encode Data a)))) : p ∈ NTISP model T S :=
-  (NDecidableWithin.iff_sizeBudgets.mp h).mem_ntisp
+  (NDecidableWithin.iff_bySize.mp h).mem_ntisp
 
 /-- The same behavior supplies both eventual bounds and still covers every legal input. -/
-theorem NDecidableWithGrowth.mem_ntisp
-    (h : model.NDecidableWithGrowth p
+theorem NDecidableInO.mem_ntisp
+    (h : model.NDecidableInO p
       (fun a => T (model.inputSize (encode Data a)))
       (fun a => S (model.inputSize (encode Data a)))) : p ∈ NTISP model T S := by
   obtain ⟨t, s, h, ⟨C, ht⟩, ⟨D, hs⟩⟩ := h

@@ -17,9 +17,10 @@ Time and space are upper bounds, witnessed jointly by that computation.
 
 The common resource predicate accepts budgets `α → Data → ℕ`. Ordinary specifications
 specialize these to `α → ℕ`, shared by every legal code of a value, and
-`ComputableWithGrowth` uses one all-input coefficient for each resource. A value with
+`ComputableInO` uses one all-input coefficient for each resource. A value with
 unbounded processing costs over its codes cannot satisfy a finite value-indexed budget.
-Complexity classes measure actual code sizes at their own boundary.
+`ComputableWithinBySize` instead measures the size of the actual input code, as
+complexity classes do at their boundary.
 -/
 
 @[expose] public section
@@ -46,7 +47,7 @@ variable {Data α β : Type*} [Encoding Data α] [Encoding Data β]
 /-- One behavior handles all valid codes with joint budgets depending on both the
 input value and its actual representation. Mentioning the value in a mathematical
 budget does not give the machine a free decoding operation. -/
-def ComputableWithCodeBudgets (model : TimeSpaceModel Id Data) (f : α → β)
+def ComputableWithinByCode (model : TimeSpaceModel Id Data) (f : α → β)
     (t s : α → Data → ℕ) : Prop :=
   ∃ R ∈ model.behaviors,
     Encoding.Computes f fun a src dst =>
@@ -55,68 +56,62 @@ def ComputableWithCodeBudgets (model : TimeSpaceModel Id Data) (f : α → β)
 /-- Value budgets uniformly cover every legal representation of that value. -/
 def ComputableWithin (model : TimeSpaceModel Id Data) (f : α → β)
     (t s : α → ℕ) : Prop :=
-  model.ComputableWithCodeBudgets f (fun a _ => t a) (fun a _ => s a)
+  model.ComputableWithinByCode f (fun a _ => t a) (fun a _ => s a)
 
-def ComputableInTime (model : TimeSpaceModel Id Data) (f : α → β) (t : α → ℕ) : Prop :=
-  ∃ s, model.ComputableWithin f t s
-
-def ComputableInSpace (model : TimeSpaceModel Id Data) (f : α → β) (s : α → ℕ) : Prop :=
-  ∃ t, model.ComputableWithin f t s
-
-/-- A single behavior satisfies both all-input growth bounds. Correctness and termination
-hold at every input, including where either target budget is zero. -/
-def ComputableWithGrowth (model : TimeSpaceModel Id Data) (f : α → β)
+/-- `f` is computable within time `O(T a)` and space `O(S a)` on every input `a`: a single
+behavior satisfies both bounds, each up to one coefficient for all inputs. Correctness and
+termination hold at every input, including where either target budget is zero. -/
+def ComputableInO (model : TimeSpaceModel Id Data) (f : α → β)
     (T S : α → ℕ) : Prop :=
   ∃ t s, model.ComputableWithin f t s ∧ Dominated t T ∧ Dominated s S
 
+/-- Budgets at the complexity boundary depend on the size of the actual input code.
+This does not require unique encodings or assign a canonical size to an abstract value. -/
+def ComputableWithinBySize (model : TimeSpaceModel Id Data) (f : α → β)
+    (t s : ℕ → ℕ) : Prop :=
+  model.ComputableWithinByCode f
+    (fun _ src => t (model.inputSize src))
+    (fun _ src => s (model.inputSize src))
+
 variable {model : TimeSpaceModel Id Data} {f : α → β} {t s t' s' : α → ℕ}
 
-theorem ComputableWithCodeBudgets.mono {t s t' s' : α → Data → ℕ}
-    (h : model.ComputableWithCodeBudgets f t s)
+theorem ComputableWithinByCode.mono {t s t' s' : α → Data → ℕ}
+    (h : model.ComputableWithinByCode f t s)
     (ht : ∀ a src, t a src ≤ t' a src)
     (hs : ∀ a src, s a src ≤ s' a src) :
-    model.ComputableWithCodeBudgets f t' s' := by
+    model.ComputableWithinByCode f t' s' := by
   obtain ⟨R, hR, h⟩ := h
   exact ⟨R, hR, h.mono (fun hc => model.budget_mono hR hc (ht _ _) (hs _ _))⟩
 
 theorem ComputableWithin.mono (h : model.ComputableWithin f t s)
     (ht : ∀ a, t a ≤ t' a) (hs : ∀ a, s a ≤ s' a) :
     model.ComputableWithin f t' s' :=
-  ComputableWithCodeBudgets.mono h (fun a _ => ht a) (fun a _ => hs a)
+  ComputableWithinByCode.mono h (fun a _ => ht a) (fun a _ => hs a)
 
-theorem ComputableWithin.computableInTime
-    (h : model.ComputableWithin f t s) : model.ComputableInTime f t := ⟨s, h⟩
+theorem ComputableWithinBySize.mono {t s t' s' : ℕ → ℕ}
+    (h : model.ComputableWithinBySize f t s)
+    (ht : ∀ n, t n ≤ t' n) (hs : ∀ n, s n ≤ s' n) :
+    model.ComputableWithinBySize f t' s' :=
+  ComputableWithinByCode.mono h (fun _ r => ht (model.inputSize r))
+    (fun _ r => hs (model.inputSize r))
 
-theorem ComputableWithin.computableInSpace
-    (h : model.ComputableWithin f t s) : model.ComputableInSpace f s := ⟨t, h⟩
-
-theorem ComputableInTime.mono (h : model.ComputableInTime f t)
-    (ht : ∀ a, t a ≤ t' a) : model.ComputableInTime f t' := by
-  obtain ⟨s, h⟩ := h
-  exact ⟨s, h.mono ht (fun _ => le_rfl)⟩
-
-theorem ComputableInSpace.mono (h : model.ComputableInSpace f s)
-    (hs : ∀ a, s a ≤ s' a) : model.ComputableInSpace f s' := by
-  obtain ⟨t, h⟩ := h
-  exact ⟨t, h.mono (fun _ => le_rfl) hs⟩
-
-theorem ComputableWithin.computableWithGrowth
-    (h : model.ComputableWithin f t s) : model.ComputableWithGrowth f t s :=
+theorem ComputableWithin.computableInO
+    (h : model.ComputableWithin f t s) : model.ComputableInO f t s :=
   ⟨t, s, h, Dominated.refl _, Dominated.refl _⟩
 
-theorem ComputableWithGrowth.mono (h : model.ComputableWithGrowth f t s)
-    (ht : Dominated t t') (hs : Dominated s s') : model.ComputableWithGrowth f t' s' := by
+theorem ComputableInO.mono (h : model.ComputableInO f t s)
+    (ht : Dominated t t') (hs : Dominated s s') : model.ComputableInO f t' s' := by
   obtain ⟨u, v, h, hu, hv⟩ := h
   exact ⟨u, v, h, hu.trans ht, hv.trans hs⟩
 
 end TimeSpaceModel
 
-theorem TimeSpaceModel.ComputableWithCodeBudgets.of_encode {Data α β γ : Type*}
+theorem TimeSpaceModel.ComputableWithinByCode.of_encode {Data α β γ : Type*}
     [Encoding Data α] [UniqueEncoding Data β] [UniqueEncoding Data γ]
     {model : TimeSpaceModel Id Data} {f : α → β} {g : α → γ} {t s : α → Data → ℕ}
-    (h : model.ComputableWithCodeBudgets g t s)
+    (h : model.ComputableWithinByCode g t s)
     (hfg : ∀ a, encode Data (f a) = encode Data (g a)) :
-    model.ComputableWithCodeBudgets f t s := by
+    model.ComputableWithinByCode f t s := by
   obtain ⟨R, hR, h⟩ := h
   exact ⟨R, hR, h.of_encode hfg⟩
 
@@ -126,6 +121,35 @@ theorem TimeSpaceModel.ComputableWithin.of_encode {Data α β γ : Type*}
     (h : model.ComputableWithin g t s)
     (hfg : ∀ a, encode Data (f a) = encode Data (g a)) :
     model.ComputableWithin f t s :=
-  TimeSpaceModel.ComputableWithCodeBudgets.of_encode h hfg
+  TimeSpaceModel.ComputableWithinByCode.of_encode h hfg
+
+/-- Equal output codes preserve the same size-indexed resource certificate. -/
+theorem TimeSpaceModel.ComputableWithinBySize.of_encode {Data α β γ : Type*}
+    [Encoding Data α] [UniqueEncoding Data β] [UniqueEncoding Data γ]
+    {model : TimeSpaceModel Id Data} {f : α → β} {g : α → γ} {t s : ℕ → ℕ}
+    (h : model.ComputableWithinBySize g t s)
+    (hfg : ∀ a, encode Data (f a) = encode Data (g a)) :
+    model.ComputableWithinBySize f t s :=
+  TimeSpaceModel.ComputableWithinByCode.of_encode h hfg
+
+namespace TimeSpaceModel
+
+variable {Data α β : Type*} [UniqueEncoding Data α] [Encoding Data β]
+  {model : TimeSpaceModel Id Data} {f : α → β} {T S : ℕ → ℕ}
+
+/-- With unique input encodings, a value budget obtained from that encoding's size
+is exactly the corresponding actual-code-size budget. -/
+theorem ComputableWithin.iff_bySize :
+    model.ComputableWithin f
+      (fun a => T (model.inputSize (encode Data a)))
+      (fun a => S (model.inputSize (encode Data a))) ↔
+    model.ComputableWithinBySize f T S := by
+  constructor <;> rintro ⟨R, hR, h⟩ <;> refine ⟨R, hR, ?_⟩
+  all_goals
+    intro a src ha
+    obtain rfl := UniqueEncoding.mem_decode_iff.mp ha
+    exact h a _ (by simp)
+
+end TimeSpaceModel
 
 end Complexity

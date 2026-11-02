@@ -37,10 +37,10 @@ theorem Computes.comp {M : TreeMachine Id k Q} {N : TreeMachine Id l Q'}
   obtain ⟨dst, hdst, hn⟩ := hg (f a) mid hmid
   exact ⟨dst, hdst, comp_computesWithin M N hm hn⟩
 
-/-- Compose growth specifications of two fixed machines. The clearing pass and
+/-- Compose `O` specifications on every input of two fixed machines. The clearing pass and
 register padding remain in the bound, including when either component has zero
 time. All valid codes of an intermediate value share its resource specification. -/
-theorem comp_computesWithGrowth {M : TreeMachine Id k Q} {N : TreeMachine Id l Q'}
+theorem comp_computesInO {M : TreeMachine Id k Q} {N : TreeMachine Id l Q'}
     {f : α → β} {g : β → γ} {T S : α → ℕ} {U V : β → ℕ}
     (hg : ∃ u v, Computes N g u v ∧ Dominated u U ∧ Dominated v V)
     (hf : ∃ t s, Computes M f t s ∧ Dominated t T ∧ Dominated s S) :

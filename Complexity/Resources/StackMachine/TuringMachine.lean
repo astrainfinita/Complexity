@@ -38,9 +38,9 @@ theorem _root_.Complexity.TimeSpaceModel.ComputableWithin.toTM
   exact ⟨Fintype.card κ, h.toTM.computableWithin⟩
 
 /-- Blank tape cells remain a real additive cost even after hiding multiplicative constants. -/
-theorem _root_.Complexity.TimeSpaceModel.ComputableWithGrowth.toTM
-    (h : TimeSpaceModel.stack.ComputableWithGrowth f t s) :
-    TimeSpaceModel.tm.ComputableWithGrowth f t (fun a => s a + 1) := by
+theorem _root_.Complexity.TimeSpaceModel.ComputableInO.toTM
+    (h : TimeSpaceModel.stack.ComputableInO f t s) :
+    TimeSpaceModel.tm.ComputableInO f t (fun a => s a + 1) := by
   obtain ⟨u, v, h, hu, hv⟩ := h
   obtain ⟨c, h⟩ := TimeSpaceModel.ComputableWithin.toTM h
   exact ⟨_, _, h, hu, (hv.add (Dominated.refl _)).const_mul_left c⟩
@@ -60,9 +60,9 @@ theorem _root_.Complexity.TimeSpaceModel.ComputableWithin.toStack_of_tm
   obtain ⟨κ, hκ, Q, hQ, M, h⟩ := computableWithin_iff.mp h
   exact h.toStack.computableWithin
 
-theorem _root_.Complexity.TimeSpaceModel.ComputableWithGrowth.toStack_of_tm
-    (h : TimeSpaceModel.tm.ComputableWithGrowth f t s) :
-    TimeSpaceModel.stack.ComputableWithGrowth f t s := by
+theorem _root_.Complexity.TimeSpaceModel.ComputableInO.toStack_of_tm
+    (h : TimeSpaceModel.tm.ComputableInO f t s) :
+    TimeSpaceModel.stack.ComputableInO f t s := by
   obtain ⟨u, v, h, hu, hv⟩ := h
   exact ⟨_, _, TimeSpaceModel.ComputableWithin.toStack_of_tm h, hu, hv.const_mul_left 2⟩
 
