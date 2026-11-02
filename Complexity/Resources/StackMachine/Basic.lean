@@ -23,6 +23,7 @@ namespace Complexity.StackMachine
 variable {α β : Type*} [Encoding (RawWord Bool) α] [Encoding (RawWord Bool) β]
 
 /-- Finite stack machines with transition time and peak work-stack space. -/
+@[simps inputSize]
 def _root_.Complexity.TimeSpaceModel.stack : TimeSpaceModel Id (RawWord Bool) where
   inputSize := RawWord.length
   behaviors := {R | ∃ (κ : Type) (_ : Fintype κ) (Q : Type) (_ : Finite Q)

@@ -25,26 +25,22 @@ variable {α β : Type*} [Encoding (RawWord Bool) α] [Encoding (RawWord Bool) �
 theorem fdtime_eq_tm (T : ℕ → ℕ) :
     FDTIME (α := α) (β := β) .stack T = FDTIME .tm T := by
   apply Set.Subset.antisymm
-  · rintro f ⟨t, ⟨s, R, ⟨κ, hκ, Q, hQ, M, rfl⟩, h⟩, ht⟩
-    exact ⟨t, ⟨fun n => Fintype.card κ * (s n + 1), _,
-      ⟨κ, hκ, _, inferInstance, M.toTM, rfl⟩, h.mono (fun hc => hc.toTM)⟩, ht⟩
-  · rintro f ⟨t, ⟨s, R, ⟨κ, hκ, Q, hQ, M, rfl⟩, h⟩, ht⟩
-    exact ⟨t, ⟨fun n => 2 * s n, _,
-      ⟨_, inferInstance, _, inferInstance, M.toStack, rfl⟩,
-      h.mono (fun hc => hc.toStack)⟩, ht⟩
+  · rintro f ⟨t, ⟨s, h⟩, ht⟩
+    obtain ⟨c, h⟩ := TimeSpaceModel.ComputableWithinByCode.toTM h
+    exact ⟨t, ⟨fun n => c * (s n + 1), h⟩, ht⟩
+  · rintro f ⟨t, ⟨s, h⟩, ht⟩
+    exact ⟨t, ⟨fun n => 2 * s n, TimeSpaceModel.ComputableWithinByCode.toStack_of_tm h⟩, ht⟩
 
 /-- Both simulations preserve simultaneous time and eventually positive space bounds. -/
 theorem fdtisp_eq_tm (T S : ℕ → ℕ) (hS : DominatedAtTop (fun _ ↦ 1) S) :
     FDTISP (α := α) (β := β) .stack T S = FDTISP .tm T S := by
   apply Set.Subset.antisymm
-  · rintro f ⟨t, s, ⟨R, ⟨κ, hκ, Q, hQ, M, rfl⟩, h⟩, ht, hs⟩
-    exact ⟨t, fun n => Fintype.card κ * (s n + 1),
-      ⟨_, ⟨κ, hκ, _, inferInstance, M.toTM, rfl⟩,
-        h.mono (fun hc => hc.toTM)⟩, ht, (hs.add_same hS).const_mul_left _⟩
-  · rintro f ⟨t, s, ⟨R, ⟨κ, hκ, Q, hQ, M, rfl⟩, h⟩, ht, hs⟩
-    exact ⟨t, fun n => 2 * s n,
-      ⟨_, ⟨_, inferInstance, _, inferInstance, M.toStack, rfl⟩,
-        h.mono (fun hc => hc.toStack)⟩, ht, hs.const_mul_left 2⟩
+  · rintro f ⟨t, s, h, ht, hs⟩
+    obtain ⟨c, h⟩ := TimeSpaceModel.ComputableWithinByCode.toTM h
+    exact ⟨t, fun n => c * (s n + 1), h, ht, (hs.add_same hS).const_mul_left c⟩
+  · rintro f ⟨t, s, h, ht, hs⟩
+    exact ⟨t, fun n => 2 * s n, TimeSpaceModel.ComputableWithinByCode.toStack_of_tm h, ht,
+      hs.const_mul_left 2⟩
 
 /-- Eventually positive asymptotic space classes agree. -/
 theorem fdspace_eq_tm (S : ℕ → ℕ) (hS : DominatedAtTop (fun _ ↦ 1) S) :

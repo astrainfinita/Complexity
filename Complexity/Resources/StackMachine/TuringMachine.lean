@@ -31,11 +31,18 @@ theorem Computes.toTM {κ : Type} [Fintype κ] {Q : Type}
     TM.Computes M.toTM f t (fun a => Fintype.card κ * (s a + 1)) :=
   Encoding.Computes.mono h (fun hc => hc.toTM)
 
+/-- Simulation keeps the time budget; each of the `c` tapes is bounded by the peak stack
+space plus its blank initial cell. -/
+theorem _root_.Complexity.TimeSpaceModel.ComputableWithinByCode.toTM
+    {t s : α → RawWord Bool → ℕ} (h : TimeSpaceModel.stack.ComputableWithinByCode f t s) :
+    ∃ c : ℕ, TimeSpaceModel.tm.ComputableWithinByCode f t (fun a r => c * (s a r + 1)) := by
+  obtain ⟨R, ⟨κ, hκ, Q, hQ, M, rfl⟩, h⟩ := h
+  exact ⟨Fintype.card κ, _, ⟨κ, hκ, _, inferInstance, M.toTM, rfl⟩, h.mono fun hc => hc.toTM⟩
+
 theorem _root_.Complexity.TimeSpaceModel.ComputableWithin.toTM
     (h : TimeSpaceModel.stack.ComputableWithin f t s) :
-    ∃ c : ℕ, TimeSpaceModel.tm.ComputableWithin f t (fun a => c * (s a + 1)) := by
-  obtain ⟨κ, hκ, Q, hQ, M, h⟩ := computableWithin_iff.mp h
-  exact ⟨Fintype.card κ, h.toTM.computableWithin⟩
+    ∃ c : ℕ, TimeSpaceModel.tm.ComputableWithin f t (fun a => c * (s a + 1)) :=
+  TimeSpaceModel.ComputableWithinByCode.toTM h
 
 /-- Blank tape cells remain a real additive cost even after hiding multiplicative constants. -/
 theorem _root_.Complexity.TimeSpaceModel.ComputableInO.toTM
@@ -54,11 +61,18 @@ theorem Computes.toStack {κ : Type} [Fintype κ] {Q : Type}
     StackMachine.Computes M.toStack f t (fun a => 2 * s a) :=
   Encoding.Computes.mono h (fun hc => hc.toStack)
 
+/-- Simulation keeps the time budget; the Boolean stacks use at most twice the visited
+tape space. -/
+theorem _root_.Complexity.TimeSpaceModel.ComputableWithinByCode.toStack_of_tm
+    {t s : α → RawWord Bool → ℕ} (h : TimeSpaceModel.tm.ComputableWithinByCode f t s) :
+    TimeSpaceModel.stack.ComputableWithinByCode f t (fun a r => 2 * s a r) := by
+  obtain ⟨R, ⟨κ, hκ, Q, hQ, M, rfl⟩, h⟩ := h
+  exact ⟨_, ⟨_, inferInstance, _, inferInstance, M.toStack, rfl⟩, h.mono fun hc => hc.toStack⟩
+
 theorem _root_.Complexity.TimeSpaceModel.ComputableWithin.toStack_of_tm
     (h : TimeSpaceModel.tm.ComputableWithin f t s) :
-    TimeSpaceModel.stack.ComputableWithin f t (fun a => 2 * s a) := by
-  obtain ⟨κ, hκ, Q, hQ, M, h⟩ := computableWithin_iff.mp h
-  exact h.toStack.computableWithin
+    TimeSpaceModel.stack.ComputableWithin f t (fun a => 2 * s a) :=
+  TimeSpaceModel.ComputableWithinByCode.toStack_of_tm h
 
 theorem _root_.Complexity.TimeSpaceModel.ComputableInO.toStack_of_tm
     (h : TimeSpaceModel.tm.ComputableInO f t s) :

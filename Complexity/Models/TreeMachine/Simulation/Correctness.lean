@@ -126,6 +126,15 @@ def Program.program (M : TreeMachine Id k Q) (i o : Fin k) :
 def timeBound (k N t : ℕ) : ℕ :=
   (6 * N + 5) + (40 * t + 3 * (N + k) + 1) + (3 * (N + k + t) + 2)
 
+/-- On a nonempty input, the simulation time is linear in the source time and the input
+size, with the factor of `spaceBound`. -/
+theorem timeBound_le {k N t : ℕ} (hN : 0 < N) :
+    timeBound k N t ≤ (42 * (k + 4) + 1) * (t + N) := by
+  have := Nat.le_mul_of_pos_right (42 * k + 126) (Nat.add_pos_right t hN)
+  rw [show 42 * (k + 4) + 1 = 43 + (42 * k + 126) by omega, Nat.add_mul]
+  unfold timeBound
+  omega
+
 /-- The complete simulator preserves output and an independent source-space bound. -/
 theorem Program.spec_program (M : TreeMachine Id k Q)
     {x a : Tree} {t s : ℕ} (h : M.ComputesWithin x a t s) :

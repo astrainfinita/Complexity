@@ -47,6 +47,20 @@ instance (priority := low) {α : Type*} [e : Encoding Tree α] : Encoding (RawWo
 instance (priority := 1100) {α : Type*} [e : UniqueEncoding Tree α] :
     UniqueEncoding (RawWord Bool) α := RawWord.treeEncoding.comp e
 
+/-- A specification on tree codes transports to serialized codes: each legal raw input is a
+serialized legal tree input, and the tree output is serialized in the same way. -/
+theorem Encoding.Computes.toRawWord {α β : Type*} [Encoding Tree α] [Encoding Tree β]
+    {f : α → β} {P : α → Tree → Tree → Prop} {Q : α → RawWord Bool → RawWord Bool → Prop}
+    (h : Encoding.Computes f P)
+    (hPQ : ∀ {a x y}, P a x y →
+      Q a (RawWord.treeEncoding.encode x) (RawWord.treeEncoding.encode y)) :
+    Encoding.Computes f Q := by
+  intro a xs ha
+  obtain ⟨x, hx, hax⟩ := (Encoding.mem_comp_iff RawWord.treeEncoding.toEncoding _).mp ha
+  obtain rfl := RawWord.treeEncoding.mem_decode_iff.mp hx
+  obtain ⟨y, hy, hP⟩ := h a x hax
+  exact ⟨_, (Encoding.mem_comp_encode RawWord.treeEncoding _).mpr hy, hPQ hP⟩
+
 /-- The serialized tree code of a value, as a raw Boolean word. -/
 scoped notation3 "⌜" x "⌝₂" => encode (RawWord Bool) x
 

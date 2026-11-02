@@ -36,6 +36,7 @@ variable [Encoding Tree α] [Encoding Tree β]
 
 /-- Finite tree machines with input and output register zero. Time sums destination
 sizes; space is the maximum total expanded register size. -/
+@[simps inputSize]
 def _root_.Complexity.TimeSpaceModel.sizeCostTree : TimeSpaceModel Id Tree where
   inputSize := Tree.size
   behaviors := {R | ∃ (k : ℕ) (_ : NeZero k) (Q : Type) (_ : Finite Q)

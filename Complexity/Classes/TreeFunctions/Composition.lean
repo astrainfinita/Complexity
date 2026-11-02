@@ -56,7 +56,7 @@ theorem fp_id : (id : α → α) ∈ FP .sizeCostTree := by
   refine ⟨a, hx, 0, rfl, ?_, ?_, ?_⟩
   · exact TreeMachine.input_get (0 : Fin 1) a
   · simp
-  · simp [TreeMachine.Cfg.mass, TimeSpaceModel.sizeCostTree]
+  · simp [TreeMachine.Cfg.mass]
 
 end Complexity.TreeMachine
 

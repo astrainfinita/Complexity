@@ -20,59 +20,57 @@ open Simulation
 
 section InputBudgets
 
-variable {α β : Type*} [e : Encoding Tree α] [d : Encoding Tree β]
+variable {α β : Type*} [e : Encoding Tree α] [Encoding Tree β]
 
 /-- Serialization keeps budgets indexed by the source input. Loading still costs the
-actual tree size, even when the chosen time budget is zero. -/
+actual tree size, even when the chosen time budget is zero; the space budget bounds that
+size because tree space counts the input. -/
 theorem Computes.toStack {k : ℕ} [NeZero k] {Q : Type} [FinEnum Q]
-    {M : TreeMachine Id k Q} {f : α → β} {t s : α → ℕ} (h : Computes M f t s)
-    (sizeBound : α → ℕ) (hsize : ∀ (r : Tree) a, a ∈ decode α r → r.size ≤ sizeBound a) :
+    {M : TreeMachine Id k Q} {f : α → β} {t s : α → ℕ} (h : Computes M f t s) :
     StackMachine.Computes (compiler M) f
-      (fun a => timeBound k (sizeBound a) (t a)) (fun a => spaceBound k (s a)) := by
-  intro a xs ha
-  obtain ⟨x, hx, hax⟩ := (Encoding.mem_comp_iff RawWord.treeEncoding.toEncoding e).mp ha
-  obtain rfl := RawWord.treeEncoding.mem_decode_iff.mp hx
-  obtain ⟨y, hy, hrun⟩ := h a x hax
-  refine ⟨RawWord.treeEncoding.encode y,
-    (Encoding.mem_comp_encode RawWord.treeEncoding d).mpr hy, ?_⟩
-  have hc := computesWithin M hrun
-  have ht : timeBound k x.size (t a) ≤ timeBound k (sizeBound a) (t a) := by
-    have hs := hsize x a hax
+      (fun a => timeBound k (s a) (t a)) (fun a => spaceBound k (s a)) :=
+  h.toRawWord fun hrun => (computesWithin M hrun).mono (by
+    have := hrun.input_size_le_space
     simp only [timeBound]
-    omega
-  exact hc.mono ht le_rfl
+    omega) le_rfl
 
-/-- Simulation consumes an `O` specification and retains its real input-loading overhead.
-Tree codes have positive size, which absorbs the simulator's fixed setup cost. -/
-theorem _root_.Complexity.TimeSpaceModel.ComputableInO.toStack_of_tree
-    {f : α → β} {t s : α → ℕ}
-    (h : TimeSpaceModel.sizeCostTree.ComputableInO f t s)
-    (sizeBound : α → ℕ) (hsize : ∀ (r : Tree) a, a ∈ decode α r → r.size ≤ sizeBound a) :
-    TimeSpaceModel.stack.ComputableInO f
-      (fun a => t a + sizeBound a) s := by
+/-- A serialized code is as long as its tree, so code-size budgets transfer directly.
+Tree codes have positive size, which absorbs the simulator's fixed setup cost; the real
+input-loading cost remains. -/
+theorem _root_.Complexity.TimeSpaceModel.ComputableWithinBySize.toStack_of_tree
+    {f : α → β} {t s : ℕ → ℕ}
+    (h : TimeSpaceModel.sizeCostTree.ComputableWithinBySize f t s) :
+    ∃ c : ℕ, TimeSpaceModel.stack.ComputableWithinBySize f
+      (fun n => c * (t n + n)) (fun n => c * s n) := by
   classical
-  have hpos (a : α) : 0 < sizeBound a := by
-    obtain ⟨r, hr⟩ := e.exists_code a
-    exact (Tree.size_pos r).trans_le (hsize r a hr)
-  obtain ⟨u, v, h, hu, hv⟩ := h
-  obtain ⟨k, hk, Q, hQ, M, h⟩ := computableWithin_iff.mp h
+  obtain ⟨R, ⟨k, hk, Q, hQ, M, rfl⟩, h⟩ := h
   let : Fintype Q := Fintype.ofFinite Q
   let : FinEnum Q := FinEnum.ofEquiv (Fin (Fintype.card Q)) (Fintype.equivFin Q)
-  refine ⟨_, _, (h.toStack sizeBound hsize).computableWithin, ?_, ?_⟩
-  · have hsize : Dominated (fun a : α => sizeBound a)
-        (fun a => t a + sizeBound a) :=
-      Dominated.of_le fun _ => Nat.le_add_left _ _
-    have htime := hu.mono (fun a => Nat.le_add_right (t a) (sizeBound a))
-    have hconst : Dominated (fun _ : α => 6 * k + 8)
-        (fun a => t a + sizeBound a) :=
-      (Dominated.of_le_mul (6 * k + 8) fun a =>
-        Nat.le_mul_of_pos_right _ (hpos a)).trans hsize
-    convert ((htime.const_mul_left 43).add_same (hsize.const_mul_left 12)).add_same hconst
-      using 1
-    funext a
-    simp only [timeBound]
-    omega
-  · exact hv.const_mul_left _
+  refine ⟨42 * (k + 4) + 1, _, ⟨_, inferInstance, _, inferInstance, compiler M, rfl⟩,
+    h.toRawWord fun {_ x _} hrun => (computesWithin M hrun).mono ?_ ?_⟩ <;>
+    simp only [TimeSpaceModel.sizeCostTree_inputSize, TimeSpaceModel.stack_inputSize,
+      RawWord.length_treeEncoding, spaceBound, le_refl]
+  exact timeBound_le x.size_pos
+
+/-- Simulation consumes an `O` specification and retains its real input-loading overhead,
+bounded by the space budget. Tree codes have positive size, which absorbs the simulator's
+fixed setup cost. -/
+theorem _root_.Complexity.TimeSpaceModel.ComputableInO.toStack_of_tree
+    {f : α → β} {t s : α → ℕ}
+    (h : TimeSpaceModel.sizeCostTree.ComputableInO f t s) :
+    TimeSpaceModel.stack.ComputableInO f (fun a => t a + s a) s := by
+  classical
+  obtain ⟨u, v, h, hu, hv⟩ := h
+  obtain ⟨k, hk, Q, hQ, M, h⟩ := computableWithin_iff.mp h
+  have hpos (a : α) : 0 < v a := by
+    obtain ⟨r, hr⟩ := e.exists_code a
+    obtain ⟨_, _, hrun⟩ := h a r hr
+    exact r.size_pos.trans_le hrun.input_size_le_space
+  let : Fintype Q := Fintype.ofFinite Q
+  let : FinEnum Q := FinEnum.ofEquiv (Fin (Fintype.card Q)) (Fintype.equivFin Q)
+  exact ⟨_, _, h.toStack.computableWithin,
+    (Dominated.of_le_mul _ fun a => timeBound_le (hpos a)).trans (hu.add hv),
+    hv.const_mul_left _⟩
 
 end InputBudgets
 

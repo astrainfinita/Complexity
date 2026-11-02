@@ -66,9 +66,7 @@ theorem nDecidableWithinByCode_of_computable {t s : α → RawWord Bool → ℕ}
   refine ⟨_, ⟨κ, hκ, Q, hQ, M.toBinary, rfl⟩, fun a r ha => ?_⟩
   obtain ⟨q, hq, hc⟩ := h a r ha
   obtain rfl := UniqueEncoding.mem_decode_iff.mp hq
-  dsimp only [Id.run, pure] at hc
-  change M.ComputesWithin (r.toList.map some)
-    ((encode (RawWord Bool) (f a)).toList.map some) (t a r) (s a r) at hc
+  simp only [Id.run_pure] at hc
   obtain ⟨ht, hs, hvalid, haccept⟩ := toBinary_decides hc
   simp only [and_assoc, exists_and_left]
   refine ⟨ht, hs, (NTM.exists_boolean_outputs_iff _ _ _).mpr ?_⟩
