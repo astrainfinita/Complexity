@@ -139,7 +139,7 @@ private theorem halted_growth :
 -- space still includes padding, and constant substitution needs no size condition.
 example : ∃ t s, Computes ((halted 1).comp (halted 1)) (fun _ : Unit => ()) t s ∧
     Dominated t (fun _ => 1) ∧ Dominated s (fun _ => 2) := by
-  exact comp_computesWithGrowth halted_growth halted_growth
+  exact comp_computesInO halted_growth halted_growth
 
 end NonuniqueEncoding
 

@@ -43,16 +43,16 @@ example : TM.Computes bit (id : Bool → Bool) (fun _ => 5) (fun _ => 0) :=
 example : TM.Computes bit (id : Bool → Bool) (fun b => if b then 5 else 4) (fun _ => 0) :=
   bit_spec.mono (fun b => by cases b <;> decide) (fun _ => le_rfl)
 
--- A zero resource remains zero on a finite input type in the growth interface.
-example : TimeSpaceModel.tm.ComputableWithGrowth (id : Bool → Bool)
+-- A zero resource remains zero on a finite input type in the `ComputableInO` interface.
+example : TimeSpaceModel.tm.ComputableInO (id : Bool → Bool)
     (fun _ => 1) (fun _ => 0) :=
-  bit_spec.computableWithin.computableWithGrowth.mono
+  bit_spec.computableWithin.computableInO.mono
     ⟨4, fun _ => le_rfl⟩ (Dominated.refl _)
 
 -- The same proof supplies a nondeterministic machine bounding every branch.
-example : TimeSpaceModel.ntm.NDecidableWithGrowth (fun b : Bool => b = true)
+example : TimeSpaceModel.ntm.NDecidableInO (fun b : Bool => b = true)
     (fun _ => 4) (fun _ => 0) :=
-  TM.decidableWithGrowth_of_computable bit_spec.computableWithin.computableWithGrowth
+  TM.nDecidableInO_of_computable bit_spec.computableWithin.computableInO
     (fun _ => Iff.rfl)
 
 -- The exact proof supplies a single machine for both asymptotic bounds.
@@ -97,7 +97,7 @@ example : ¬TreeMachine.Computes tree (id : Bool → Bool) (fun _ => 0) (fun _ =
 -- Eventual size bounds may ignore the finitely many legal sizes of a finite encoded type.
 -- This does not turn the all-input machine specification above into a zero-space one.
 example : (id : Bool → Bool) ∈ FDTISP .sizeCostTree (fun _ => 0) (fun _ => 0) := by
-  have h : TimeSpaceModel.sizeCostTree.ComputableWithSizeBudgets (id : Bool → Bool)
+  have h : TimeSpaceModel.sizeCostTree.ComputableWithinBySize (id : Bool → Bool)
       (fun _ => 0) (fun n => if n ≤ 3 then n else 0) := by
     obtain ⟨R, hR, h⟩ := tree_spec.computableWithin
     refine ⟨R, hR, fun a r ha => ?_⟩
@@ -139,7 +139,7 @@ private def codeCost : TimeSpaceModel Id ℕ where
     exact h.trans ht
 
 private theorem codeCost_spec :
-    codeCost.ComputableWithSizeBudgets (id : Unit → Unit) id (fun _ => 0) := by
+    codeCost.ComputableWithinBySize (id : Unit → Unit) id (fun _ => 0) := by
   refine ⟨_, rfl, fun a r _ => ?_⟩
   cases a
   exact ⟨0, Part.mem_some_iff.mpr rfl, le_rfl⟩
@@ -168,14 +168,14 @@ private def constantCost : TimeSpaceModel Id ℕ where
     exact ⟨h.1, h.2.trans ht⟩
 
 -- Nonunique input and output codes are supported; only one legal output is required.
-example : constantCost.ComputableWithGrowth (id : Unit → Unit) (fun _ => 1) (fun _ => 0) := by
-  apply TimeSpaceModel.ComputableWithin.computableWithGrowth
+example : constantCost.ComputableInO (id : Unit → Unit) (fun _ => 1) (fun _ => 0) := by
+  apply TimeSpaceModel.ComputableWithin.computableInO
   refine ⟨_, rfl, fun a _ _ => ?_⟩
   cases a
   exact ⟨0, Part.mem_some_iff.mpr rfl, rfl, le_rfl⟩
 
 -- The common resource layer permits budgets to depend on the actual legal code.
-example : codeCost.ComputableWithCodeBudgets (id : Unit → Unit)
+example : codeCost.ComputableWithinByCode (id : Unit → Unit)
     (fun _ src => src) (fun _ _ => 0) := by
   refine ⟨_, rfl, fun a _ _ => ?_⟩
   cases a
@@ -193,11 +193,11 @@ private def resourceTradeoff : TimeSpaceModel Id ℕ where
 example : (id : Unit → Unit) ∈ FDTIME resourceTradeoff (fun _ => 0) ∩
     FDSPACE resourceTradeoff (fun _ => 0) := by
   constructor
-  · apply TimeSpaceModel.ComputableWithSizeBudgets.mem_fdtime (s := fun _ => 1)
+  · apply TimeSpaceModel.ComputableWithinBySize.mem_fdtime (s := fun _ => 1)
     refine ⟨_, Or.inl rfl, fun a _ _ => ?_⟩
     cases a
     exact ⟨0, Part.mem_some_iff.mpr rfl, le_rfl⟩
-  · apply TimeSpaceModel.ComputableWithSizeBudgets.mem_fdspace (t := fun _ => 1)
+  · apply TimeSpaceModel.ComputableWithinBySize.mem_fdspace (t := fun _ => 1)
     refine ⟨_, Or.inr rfl, fun a _ _ => ?_⟩
     cases a
     exact ⟨0, Part.mem_some_iff.mpr rfl, le_rfl⟩

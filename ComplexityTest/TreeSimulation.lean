@@ -38,19 +38,20 @@ example (h : (id : Redundant → Redundant) ∈ FP .sizeCostTree) :
     (id : Redundant → Redundant) ∈ FP .stack :=
   TreeMachine.fp_subset_stack h
 
--- Growth conversions are methods of the shared specification, with distinct stack sources.
+-- `ComputableInO` conversions are methods of the shared specification, with distinct stack
+-- sources.
 example {α β : Type*} [Encoding Tree α] [Encoding Tree β]
     {f : α → β} {t s sizeBound : α → ℕ}
-    (h : TimeSpaceModel.sizeCostTree.ComputableWithGrowth f t s)
+    (h : TimeSpaceModel.sizeCostTree.ComputableInO f t s)
     (hsize : ∀ (src : Tree) a, a ∈ decode α src → src.size ≤ sizeBound a) :
-    TimeSpaceModel.stack.ComputableWithGrowth f
+    TimeSpaceModel.stack.ComputableInO f
       (fun a => t a * s a + sizeBound a) s :=
   h.toUnitTime.toSizeCost.toStack_of_tree sizeBound hsize
 
 -- The opposite route retains the real initial-cell space cost on returning to TM.
 example {f : Bool → Bool} {t s : Bool → ℕ}
-    (h : TimeSpaceModel.tm.ComputableWithGrowth f t s) :
-    TimeSpaceModel.tm.ComputableWithGrowth f t (fun a => s a + 1) :=
+    (h : TimeSpaceModel.tm.ComputableInO f t s) :
+    TimeSpaceModel.tm.ComputableInO f t (fun a => s a + 1) :=
   h.toStack_of_tm.toTM
 
 end TreeSimulationTest

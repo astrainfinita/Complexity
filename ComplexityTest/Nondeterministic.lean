@@ -108,7 +108,7 @@ theorem guess_spec : guess.DecidesWithin (fun _ : List Bool => True)
   intro n c _
   simp [History.space]
 
-private theorem guess_size_spec : TimeSpaceModel.ntm.NDecidableWithSizeBudgets
+private theorem guess_size_spec : TimeSpaceModel.ntm.NDecidableWithinBySize
     (fun _ : List Bool => True) (fun _ => 3) (fun _ => 0) :=
   guess_spec.nDecidableWithin
 
@@ -125,15 +125,15 @@ example : (fun _ : List Bool => True) ∈ NSPACE .ntm (fun _ => 0) :=
 -- Changing the predicate and budget preserves every accepting and rejecting branch.
 -- Only the final comparison with O(n) excludes n=0; the machine still terminates there.
 example : (fun xs : List Bool => xs = xs) ∈ NTISP .ntm id (fun _ => 0) := by
-  have h : TimeSpaceModel.ntm.NDecidableWithSizeBudgets
+  have h : TimeSpaceModel.ntm.NDecidableWithinBySize
       (fun xs : List Bool => xs = xs) (fun n => n + 3) (fun _ => 0) :=
     (guess_size_spec.mono (fun n => by omega) (fun _ => le_rfl)).congr (fun _ => by simp)
   exact h.mem_ntisp_of_dominated
     (dominatedAtTop_iff.mpr ⟨4, 1, fun n hn => by dsimp; omega⟩) (DominatedAtTop.refl _)
 
 -- A space-only machine proof supplies its implicit time bound through the model bridge.
-example : TimeSpaceModel.ntm.NDecidableInSpace (fun _ : List Bool => True) (fun _ => 0) :=
-  guess_spec.nDecidableWithin.nDecidableInSpace
+example : ∃ t, TimeSpaceModel.ntm.NDecidableWithin (fun _ : List Bool => True) t (fun _ => 0) :=
+  ⟨_, guess_spec.nDecidableWithin⟩
 
 -- The two branches visit [-1,0] and [0,1]: each uses two cells.
 def splitHeads : NTM (Fin 1) (Option Bool) Bool where

@@ -18,14 +18,14 @@ example := (by source_fun_prop :
 
 def nested (xs : List Bool) := id (id xs)
 
-theorem nested_machine : TimeSpaceModel.tree.ComputableWithGrowth nested
+theorem nested_machine : TimeSpaceModel.tree.ComputableInO nested
     (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) := by
   model_fun_prop
 
 -- The selected linear program, not the zero-cost identity, runs inside the nested calls.
 example : True := by
   fail_if_success
-    have : TimeSpaceModel.tree.ComputableWithGrowth nested
+    have : TimeSpaceModel.tree.ComputableInO nested
         (fun _ => 1) (fun xs => ⌜xs⌝ₜ.size) := by
       model_fun_prop
       all_goals

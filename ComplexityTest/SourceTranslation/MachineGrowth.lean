@@ -13,21 +13,21 @@ open Complexity TreeProgram Complexity.TreeProgram.Source
 namespace ComplexityTest.SourceTranslation.MachineGrowth
 
 -- The time budget depends on the value, without imposing a size envelope.
-theorem identity_machine : TimeSpaceModel.tree.ComputableWithGrowth
+theorem identity_machine : TimeSpaceModel.tree.ComputableInO
     (id : List Bool → List Bool) (fun xs => xs.length + 1) (fun xs => ⌜xs⌝ₜ.size) := by
   model_fun_prop
 
 -- A local implementation is used by the machine exit.
 example {program : Value → Code Value}
     (_hf : HasProgram (id : List Bool → List Bool) program (fun _ => 0) (fun _ => 0)) :
-    TimeSpaceModel.tree.ComputableWithGrowth (id : List Bool → List Bool)
+    TimeSpaceModel.tree.ComputableInO (id : List Bool → List Bool)
       (fun _ => 1) (fun xs => ⌜xs⌝ₜ.size) := by
   model_fun_prop
 
 -- Loading and running still cost time: a zero machine allowance cannot replace the program.
 example : True := by
   fail_if_success
-    have : TimeSpaceModel.tree.ComputableWithGrowth (id : List Bool → List Bool)
+    have : TimeSpaceModel.tree.ComputableInO (id : List Bool → List Bool)
         (fun _ => 0) (fun xs => ⌜xs⌝ₜ.size) := by
       model_fun_prop
       all_goals exact Dominated.zero
@@ -36,7 +36,7 @@ example : True := by
 -- The all-input machine budget does not become vacuous on finite input types.
 example : True := by
   fail_if_success
-    have : TimeSpaceModel.tree.ComputableWithGrowth (id : Unit → Unit)
+    have : TimeSpaceModel.tree.ComputableInO (id : Unit → Unit)
         (fun _ => 0) (fun _ => 0) := by
       model_fun_prop
       all_goals exact Dominated.zero
@@ -52,10 +52,10 @@ example : True := by
       (Dominated.of_le_mul 2 fun _ => by simp; omega) (Dominated.of_le fun _ => by simp)
 
 -- Direct exits keep the stated growth of the selected implementation.
-theorem canonical_machine : TimeSpaceModel.tree.ComputableWithGrowth
+theorem canonical_machine : TimeSpaceModel.tree.ComputableInO
     (id : List Bool → List Bool) (fun xs => ⌜xs⌝ₜ.size + 4)
       (fun xs => max ⌜xs⌝ₜ.size ⌜xs⌝ₜ.size + 2) :=
-  hasProgram_selected.computableWithGrowth
+  hasProgram_selected.computableInO
 
 example := (by source_fun_prop : HasProgram (id : List Bool → List Bool) programSelected _ _)
 
