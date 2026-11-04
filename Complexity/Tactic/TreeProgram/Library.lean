@@ -95,7 +95,7 @@ theorem hasProgram_lookup {α : Type*} [UniqueEncoding Tree α] :
   case check_peak => exact lookup_size
   case step_peak => exact lookup_size
   case stop_peak => exact lookup_size
-  case step_time => exact lookup_size.mono_left fun z => size_encode_fst_le z.1.2
+  case step_time => have := lookup_size (α := α); dominated
   case check_time => exact Dominated.one fun _ => Tree.size_pos _
   case stop_time => exact Dominated.refl _
   case step_pos => exact fun _ => Tree.size_pos _

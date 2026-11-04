@@ -100,7 +100,7 @@ theorem hasProgram_unrollStep : HasProgram unrollStep hole(⊢ program)
     (x.2.2.1.relabel
       (Fin.snoc (Fin.natAdd (x.1 + (x.2.1 + 1))) (Fin.castAdd x.1 (Fin.last (x.1 + x.2.1)))))
   fill_hole program in
-    source_fun_prop (disch := (try simp only [Sigma.size_encode_eq, Prod.size_encode_eq]); dominated
+    source_fun_prop (disch := dominated
       [unrollStepScale, relabelScale, keepScale, compScale, Circuit.size_relabel,
         Circuit.size_keepInputs, Circuit.size_comp]) using tabulate
 
@@ -120,7 +120,7 @@ theorem hasProgram_unrollInitial : HasProgram unrollInitial hole(⊢ program)
     (.of_le fun x => by dsimp [unrollScale]; omega)
     (.of_le fun x => by dsimp [unrollScale]; nlinarith) fun x => by dsimp [unrollScale]; omega
   fill_hole program in
-    source_fun_prop (disch := (try simp only [Sigma.size_encode_eq, Prod.size_encode_eq]); dominated
+    source_fun_prop (disch := dominated
       [unrollScale, Circuit.id]) using tabulate
 
 /-- The result projection is selected independently of its eventual budget. -/

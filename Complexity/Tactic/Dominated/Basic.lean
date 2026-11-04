@@ -12,23 +12,47 @@ public meta import Lean.Elab.Tactic.Omega.Frontend
 /-! # Closing growth comparisons
 
 `dominated` proves `Dominated f g` when both sides are given, as left by `source_fun_prop` and
-`model_fun_prop`, whose default discharger it is. It never changes either side. Sums and maxima on
-the left are split; each summand is compared with the target pointwise after destructuring the
-input, splitting the source cases, expanding encoded sizes and adding size facts for `omega`; the
-powers and products the left side depends on, through its terms and the bounds of hypotheses about
-them, are compared through their bases with the powers of the right side. A power that reaches the
-right side only through a hypothesis, even an equation given in the list, is not used: a definition
-on the right is unfolded through the list instead. Maxima over lists and sums over tables are
-compared entry by entry. The coefficient is a hidden witness. The list names definitions to unfold
-in the pointwise goals, and statements `a ≤ b`, `a < b` or `a = b` to instantiate there, as for
-those registered with `@[dominated]`: each is instantiated at the matching terms it is about (its
-left side, or its right side when the left side is a variable or a literal), and the terms of its
-other side are looked at in the next round. Statements registered with `@[dominated_forward]` are
-instantiated at matching hypotheses. Encoded sizes are normalized with `@[dominated_simp]` and
-expanded pointwise with `@[dominated_expand]`. Facts that are genuine properties of the source
-function are `Dominated` hypotheses, matched reducibly. Like `omega`, the pointwise step reads the
-other hypotheses without changing them. Every comparison is settled once per call. A difference is
-compared through its minuend. Summands that cannot be proved are left as goals.
+`model_fun_prop`, whose default discharger it is. It never changes either side, and leaves the
+summands it cannot prove as goals. Every comparison is settled once per call.
+
+## Splitting
+
+The left side is normalized with `@[dominated_simp]`, and its sums and maxima are split. A
+difference is compared as stated when it is the target or a fact, and through its minuend
+otherwise. Each summand is tried in turn through a `Dominated` hypothesis, a genuine property of
+the source function matched reducibly; entry by entry for maxima over lists and sums over tables;
+by the pointwise step; and, against a power of degree at least 2 on the right, for its products and
+powers.
+
+## The pointwise step
+
+The pointwise step destructures the input, splits the source cases, expands encoded sizes with
+`@[dominated_expand]` and the definitions of the list, adds size facts and closes each case with
+`omega`; the coefficient is the hidden witness `2 ^ 40`. The size facts are the statements
+`a ≤ b`, `a < b` or `a = b` of the list and those registered with `@[dominated]`, instantiated at
+the terms they are about (their left side, or their right side when the left side is a variable or
+a literal), the terms of their other side being looked at in the next round, and the statements
+registered with `@[dominated_forward]`, instantiated at matching hypotheses. Like `omega`, it reads
+the other hypotheses without changing them. Products and powers are atoms there.
+
+## Products and powers
+
+A summand that the pointwise step cannot prove is proved by degree synthesis against a base `S`
+taken from the powers of the right side: every subterm `t` of the left side gets a degree `d` with
+`Dominated (fun x => t) (fun x => S x ^ d)`, sums and maxima taking the larger degree, products
+adding and powers multiplying the degrees, and `Dominated (fun x => S x ^ e) g` closes it when
+`d ≤ e`. The constants stay hidden in `Dominated`, so nested products and powers need no
+coefficient, and `Dominated` hypotheses give degrees of any size. An atom has degree 1 when it is
+linearly within a multiple of `S`, and otherwise the degree of an upper bound of it.
+
+Splitting sums and maxima loses nothing, but splitting a product, a power or a difference loses what
+is known about it as a whole, such as `x * y ≤ z` or `x ^ 2 ≤ y`. So when the rules alone fail, a
+second pass also bounds products, powers and differences as atoms are, and keeps the lower degree.
+An `if` whose condition depends only on the input is split losslessly by cases on the condition,
+which each part has as the property of its subtype input. A `match` on a pattern binds variables
+that degree synthesis cannot see: such a summand is still compared pointwise, with facts about the
+products and powers it depends on (`addPowerFacts`), a provisional treatment (plan W2). See
+`degree`, `viaDegree` and `viaCases`.
 -/
 
 @[expose] public section
@@ -278,6 +302,7 @@ def omegaAbstracted (p : Lean.Expr) (premises : Array (Lean.Expr × Lean.Expr) :
     mkForallFVars xs (← premises.foldrM (init := abstract p) fun (q, _) body =>
       mkArrow (abstract q) body)
   let saved ← saveState
+  let goals ← getGoals
   try
     let proof ← withLCtx {} {} do
       let m ← mkFreshExprSyntheticOpaqueMVar stmt
@@ -285,6 +310,7 @@ def omegaAbstracted (p : Lean.Expr) (premises : Array (Lean.Expr × Lean.Expr) :
       setGoals [g]
       Omega.omegaDefault
       instantiateMVars m
+    setGoals goals
     return some (mkAppN (mkAppN proof atoms) (premises.map (·.2)))
   catch _ =>
     saved.restore
@@ -308,7 +334,8 @@ depends on its variables and terms and, transitively, on the bounds of hypothese
 or `t = u` about them, also within conjunctions. A comparison of linear forms whose coefficients
 show it is proved by `omega` without the other hypotheses, with the least such coefficient;
 otherwise `omega` with the hypotheses tries the coefficients 1, 2, 4 and 8. A goal that is not a
-conjunction of comparisons compares all its powers and products. -/
+conjunction of comparisons compares all its powers and products. Since degree synthesis, these facts
+serve only the summands with a `match` on a pattern (`viaPowerFacts`), provisionally (plan W2). -/
 def addPowerFacts (goal : MVarId) : TacticM MVarId := goal.withContext do
   let target ← instantiateMVars (← goal.getType)
   let isNat (e : Lean.Expr) : TacticM Bool := do isDefEq (← inferType e) (mkConst ``Nat)
@@ -675,6 +702,9 @@ structure Context where
   sizesMul : Simp.Context
   /-- Expansion of encoded sizes in the pointwise step, unfolding the definitions of the list. -/
   expand : Simp.Context
+  /-- The normalization of `sizes`, also unfolding the definitions of the list: degree synthesis
+  reads atoms and the right side with it, without rewriting the goals left to the user. -/
+  sizesUnfold : Simp.Context
   /-- Numeral arithmetic used with `expand`, so that exponents such as `2 * 3` become literals. -/
   numerals : Simp.SimprocsArray
 
@@ -684,6 +714,9 @@ structure State where
   cache : Std.HashMap Lean.Expr (Option Lean.Expr) := {}
   /-- Summands left as goals, by type. -/
   left : Array (Lean.Expr × MVarId) := #[]
+  /-- Whether the pointwise step adds the facts about products and powers, as for a `match` on a
+  pattern (`viaPowerFacts`). -/
+  nonlinear : Bool := false
 
 /-- The solver monad: one context and one cache per `dominated` call. -/
 abbrev DominatedM := ReaderT Context (StateRefT State TacticM)
@@ -705,7 +738,9 @@ def memo (p : Lean.Expr) (k : DominatedM (Option Lean.Expr)) : DominatedM (Optio
   let p ← instantiateMVars p
   let key := unfoldTypeAbbrevs (← getEnv) p
   -- The proof is stated at `p`, so assembling proofs never rechecks definitional equality.
-  if let some r := (← get).cache[key]? then return ← r.mapM (mkExpectedTypeHint · p)
+  if let some r := (← get).cache[key]? then
+    -- A failure settled without the facts about products and powers is tried again with them.
+    if r.isSome || !(← get).nonlinear then return ← r.mapM (mkExpectedTypeHint · p)
   let r ← match ← k with
     | some proof => pure (some (← mkExpectedTypeHint (← instantiateMVars proof) p))
     | none => pure none
@@ -751,9 +786,10 @@ def domainOf (f : Lean.Expr) : MetaM Lean.Expr := do
 partial def eraseMData (e : Lean.Expr) : Lean.Expr :=
   e.replace fun | .mdata _ b => some (eraseMData b) | _ => none
 
-/-- Close one case of the pointwise step by `omega` with the size and power facts, expanding the
-encoded sizes that splitting has exposed. -/
+/-- Close one case of the pointwise step by `omega` with the size facts, and the facts about
+products and powers when `nonlinear`, expanding the encoded sizes that splitting has exposed. -/
 def closeCase (outer : FVarIdSet) (goal : MVarId) : DominatedM Bool := do
+  let nonlinear := (← get).nonlinear
   let ctx ← read
   -- `omega` takes a term under metadata, as the alternatives of a `match` carry, for an atom.
   let goal ← goal.replaceTargetDefEq (eraseMData (← instantiateMVars (← goal.getType)))
@@ -761,7 +797,7 @@ def closeCase (outer : FVarIdSet) (goal : MVarId) : DominatedM Bool := do
     let some g ← simpOwn outer ctx.expand
         (← addSizeFacts outer ctx.statements ctx.premises goal) ctx.numerals
       | setGoals []
-    setGoals [← addPowerFacts g]
+    setGoals [← if nonlinear then addPowerFacts g else pure g]
     Omega.omegaDefault
 
 /-- The pointwise step: prove `goal : ∀ x, p x` by destructuring `x`, splitting its cases,
@@ -827,6 +863,311 @@ def proveBase (f g : Lean.Expr) : DominatedM (Option Lean.Expr) := do
         return some (← mkAppM ``Dominated.const_of_pos #[body, h])
   pointwise f g
 
+/-- The structures whose projections occur in `es`. Degree synthesis reads the size of such a
+structure as the size of its fields, and of no other structure. -/
+def projectedIn (es : Array Lean.Expr) : MetaM (Std.HashSet Lean.Expr) := do
+  let env ← getEnv
+  let (_, s) ← (es.forM fun e => e.forEach' fun t => do
+      if let .proj _ _ b := t then modify (·.insert b)
+      if let some n := t.getAppFn.constName? then
+        if let some info := env.getProjectionFnInfo? n then
+          if t.getAppNumArgs == info.numParams + 1 then modify (·.insert t.appArg!)
+      return true : StateT (Std.HashSet Lean.Expr) MetaM Unit).run {}
+  return s
+
+/-- `⌜y⌝ₜ.size` with `y` replaced by its constructor applied to its projections, when `y`
+has a structure type and is not a constructor application. Equal by structure eta. -/
+def etaSize? (t : Lean.Expr) : MetaM (Option Lean.Expr) := do
+  unless t.isAppOfArity ``Tree.size 1 do return none
+  let e := t.appArg!
+  unless e.isAppOfArity ``UniqueEncoding.encode 4 do return none
+  let y := e.appArg!
+  let ty ← whnfR (← inferType y)
+  let .const name us := ty.getAppFn | return none
+  let env ← getEnv
+  let some info := getStructureInfo? env name | return none
+  let ctor := getStructureCtor env name
+  if (← whnfR y).getAppFn.isConstOf ctor.name then return none
+  let projs ← info.fieldNames.mapM fun f => mkProjection y f
+  let y' := mkAppN (mkConst ctor.name us) (ty.getAppArgs ++ projs)
+  return some (mkApp t.appFn! (mkApp e.appFn! y'))
+
+/-- `Dominated (fun x => t) (fun x => S x ^ d)` for a degree `d` read off the structure of `t`, with
+`x` standing for the input and `hS` the positivity of `S`. Literals have degree 0; sums and maxima
+take the larger degree of their parts, products add and powers multiply them (the exponent is
+evaluated), and a difference takes the degree of its minuend. Any other term is an atom, bounded as
+a whole by `bound`:
+* with degree 1 when it is within a multiple of `S`: read off when it is an atom of the linear form
+  of `S`, and otherwise by the pointwise step, run in `outer`, the context without `x`, so that its
+  auxiliary proofs do not capture `x`;
+* otherwise with the degree of an upper bound: a `Dominated` hypothesis about it, or `t ≤ u` from
+  a comparison whose left side has `t` in its linear form, `u` not containing `t`, among the
+  conjuncts of the property of a subtype input and the statements instantiated at `t`;
+* an atom also through the definitions of the list, and the size of a structure in `projected`
+  through the sizes of its fields.
+
+Splitting a product, a power or a difference loses what is known about it as a whole, such as
+`x * y ≤ z` or `x ^ 2 ≤ y`. In the `thorough` pass these are also bounded as atoms are, first, and
+the lower degree is kept; degree 1 is the least for a term with an atom, so the parts are then not
+read. That pass also tries every upper bound instead of the first one. The degree found is not
+always the least: degrees are integers, and one base is used throughout. -/
+partial def degree (outer : LocalContext × LocalInstances) (projected : Std.HashSet Lean.Expr)
+    (thorough : Bool) (x S hS t : Lean.Expr) :
+    DominatedM (Option (Nat × Lean.Expr)) := do
+  -- Pointwise comparisons run without `x` in scope, so their auxiliary proofs do not capture it.
+  let outside {β : Type} (k : DominatedM β) : DominatedM β := withLCtx outer.1 outer.2 k
+  let Sx := (mkApp S x).headBeta
+  let fn (e : Lean.Expr) : MetaM Lean.Expr := mkLambdaFVars #[x] e
+  let powFn (d : Nat) : MetaM Lean.Expr := do fn (← mkAppM ``HPow.hPow #[Sx, mkNatLit d])
+  let lift (p : Lean.Expr) (d e : Nat) : MetaM Lean.Expr := do
+    if d == e then return p
+    mkAppM ``Dominated.mono_pow
+      #[p, ← mkDecideProof (← mkAppM ``LE.le #[mkNatLit d, mkNatLit e]), hS]
+  let hinted (p : Lean.Expr) (t : Lean.Expr) (d : Nat) : MetaM Lean.Expr := do
+    mkExpectedTypeHint p (← mkAppM ``Dominated #[← fn t, ← powFn d])
+  let lower (a b : Option (Nat × Lean.Expr)) : Option (Nat × Lean.Expr) :=
+    match a, b with
+    | some (d, p), some (e, q) => if e < d then some (e, q) else some (d, p)
+    | some r, none => some r
+    | none, r => r
+  let sub := degree outer projected thorough x S hS
+  if t.nat?.isSome then
+    let hpos ← fn (← mkAppOptM ``Nat.pow_pos #[none, mkNatLit 0, mkApp hS x])
+    return some (0, ← mkAppM ``Dominated.const_of_pos #[t, hpos])
+  let two (a b : Lean.Expr) := do
+    let some (da, pa) ← sub a | return none
+    let some (db, pb) ← sub b | return none
+    return some (da, pa, db, pb)
+  if t.isAppOfArity ``HAdd.hAdd 6 || t.isAppOfArity ``Max.max 4 then
+    let (a, b) := if t.isAppOfArity ``HAdd.hAdd 6 then (t.getAppArgs[4]!, t.appArg!)
+      else (t.appFn!.appArg!, t.appArg!)
+    let some (da, pa, db, pb) ← two a b | return none
+    let d := max da db
+    let rule := if t.isAppOfArity ``HAdd.hAdd 6 then ``Dominated.add_same else ``Dominated.max_same
+    return some (d, ← hinted (← mkAppM rule #[← lift pa da d, ← lift pb db d]) t d)
+  -- `t ≤ u` from a comparison whose left side has `t` in its linear form.
+  let upper (h : Lean.Expr) : DominatedM (Option (Lean.Expr × Lean.Expr)) := do
+    let ty ← whnfR (← instantiateMVars (← inferType h))
+    unless ty.getAppNumArgs > 0 && ty.getAppArgs[0]!.isConstOf ``Nat do return none
+    let le ← if ty.isAppOfArity ``LE.le 4 then pure h
+      else if ty.isAppOfArity ``LT.lt 4 then mkAppM ``Nat.le_of_lt #[h]
+      else if ty.isAppOfArity ``Eq 3 then mkAppM ``Nat.le_of_eq #[h]
+      else return none
+    let leTy ← whnfR (← inferType le)
+    let (l, u) := (leTy.appFn!.appArg!, leTy.appArg!)
+    if (u.find? (· == t)).isSome then return none
+    if ← withReducible (isDefEq l t) then return some (u, le)
+    unless (linearForm l).2.any (·.1 == t) do return none
+    let some h' ← omegaAbstracted (← mkAppM ``LE.le #[t, u]) #[(leTy, le)] | return none
+    return some (u, h')
+  -- The comparisons about `t`: the conjuncts of the property of a subtype input, and the given
+  -- and registered statements instantiated at `t`.
+  let comparisons : DominatedM (Array Lean.Expr) := do
+    let mut out := #[]
+    let ty ← whnfR (← inferType x)
+    if ty.isAppOfArity ``Subtype 2 then
+      let rec conjuncts (h : Lean.Expr) (p : Lean.Expr) (fuel : Nat) : MetaM (Array Lean.Expr) := do
+        if fuel == 0 then return #[]
+        let p ← whnfR p
+        if p.isAppOfArity ``And 2 then
+          return (← conjuncts (← mkAppM ``And.left #[h]) p.appFn!.appArg! (fuel - 1)) ++
+            (← conjuncts (← mkAppM ``And.right #[h]) p.appArg! (fuel - 1))
+        return #[h]
+      let hx ← mkAppM ``Subtype.property #[x]
+      out := out ++ (← conjuncts hx (← inferType hx) 4)
+    for l in ← (← read).statements.getMatch t do
+      let some (h, _) ← instanceAt l t | continue
+      out := out.push h
+    return out
+  -- `t` bounded as a whole: degree 1 by a linear comparison, or the degree of an upper bound.
+  let bound (atomic : Bool) : DominatedM (Option (Nat × Lean.Expr)) := do
+    let atom ← fn t
+    -- An atom of the base's linear form has degree 1, read off without the pointwise step.
+    if let some k := termwiseCoefficient t Sx then
+      if let some h ← omegaAbstracted
+          (← mkAppM ``LE.le #[t, ← mkAppM ``HMul.hMul #[mkNatLit k, Sx]])
+          #[(← mkAppM ``LT.lt #[mkNatLit 0, Sx], mkApp hS x)] then
+        let p ← mkAppM ``Dominated.of_le_mul #[mkNatLit k, ← fn h]
+        return some (1, ← hinted (← mkAppM ``Dominated.le_pow #[p, ← mkDecideProof
+          (← mkAppM ``LT.lt #[mkNatLit 0, mkNatLit 1])]) t 1)
+    -- Otherwise degree 1 by a pointwise linear comparison.
+    if let some p ← outside (memo (← mkAppM ``Dominated #[atom, S]) (attempt (proveBase atom S)))
+    then
+      return some (1, ← hinted (← mkAppM ``Dominated.le_pow #[p, ← mkDecideProof
+        (← mkAppM ``LT.lt #[mkNatLit 0, mkNatLit 1])]) t 1)
+    let mut best : Option (Nat × Lean.Expr) := none
+    -- A `Dominated` hypothesis about the term, of some degree.
+    for (h, type) in (← read).facts do
+      unless ← withReducible (isDefEq type.appFn!.appArg! atom) do continue
+      let some (d, po) ← sub (mkApp type.appArg! x).headBeta | continue
+      best := lower best (some (d, ← hinted (← mkAppM ``Dominated.trans #[h, po]) t d))
+      unless thorough do return best
+    -- An upper bound from a comparison, of some degree.
+    for h in ← comparisons do
+      let some (u, le) ← upper h | continue
+      let some (d, po) ← sub u | continue
+      let p ← mkAppM ``Dominated.trans #[← mkAppM ``Dominated.of_le #[← fn le], po]
+      best := lower best (some (d, ← hinted p t d))
+      unless thorough do return best
+    -- An atom read through the definitions of the list.
+    if atomic then
+      let (r, _) ← simp t (← read).sizesUnfold
+      if r.expr != t then
+        let eq ← r.getProof
+        if let some (d, po) ← sub r.expr then
+          let p ← mkAppM ``Dominated.trans
+            #[← mkAppM ``Dominated.of_le #[← fn (← mkAppM ``Nat.le_of_eq #[eq])], po]
+          best := lower best (some (d, ← hinted p t d))
+    return best
+  -- Products, powers and differences: by their rule, and in the thorough pass also as a whole.
+  let composed? : Option (DominatedM (Option (Nat × Lean.Expr))) ←
+    if t.isAppOfArity ``HMul.hMul 6 then
+      pure (some do
+        let some (da, pa, db, pb) ← two t.getAppArgs[4]! t.appArg! | pure none
+        let p ← mkAppM ``Dominated.mul #[pa, pb]
+        let h ← fn (← mkAppM ``Eq.ge #[← mkAppM ``Nat.pow_add #[Sx, mkNatLit da, mkNatLit db]])
+        pure (some (da + db, ← hinted (← mkAppM ``Dominated.mono #[p, h]) t (da + db))))
+    else if t.isAppOfArity ``HPow.hPow 6 then do
+      match ← (evalNat t.appArg!).run with
+      | some n => pure (some do
+          let some (da, pa) ← sub t.getAppArgs[4]! | pure none
+          let p ← mkAppM ``Dominated.pow #[pa, mkNatLit n]
+          let h ← fn (← mkAppM ``Eq.ge #[← mkAppM ``Nat.pow_mul #[Sx, mkNatLit da, mkNatLit n]])
+          pure (some (da * n, ← hinted (← mkAppM ``Dominated.mono #[p, h]) t (da * n))))
+      | none => pure none
+    else if t.isAppOfArity ``HSub.hSub 6 then
+      pure (some do
+        let some (da, pa) ← sub t.getAppArgs[4]! | pure none
+        pure (some (da, ← hinted (← mkAppM ``Dominated.sub_left #[pa, ← fn t.appArg!]) t da)))
+    else pure none
+  if let some composed := composed? then
+    unless thorough do return ← composed
+    -- A whole bound of degree 1 is the least possible, so the parts need not be read.
+    let whole ← bound false
+    if whole.any (·.1 ≤ 1) then return whole
+    return lower (← composed) whole
+  -- The size of a structure whose projections occur: read through its projections.
+  if let some t' ← etaSize? t then
+    if projected.contains t.appArg!.appArg! then
+      let (r, _) ← simp t' (← read).expand
+      if r.expr != t' then
+        let eq ← mkEqTrans (← mkExpectedTypeHint (← mkEqRefl t) (← mkEq t t')) (← r.getProof)
+        if let some (d, po) ← sub r.expr then
+          let p ← mkAppM ``Dominated.trans
+            #[← mkAppM ``Dominated.of_le #[← fn (← mkAppM ``Nat.le_of_eq #[eq])], po]
+          return some (d, ← hinted p t d)
+  bound true
+
+/-- Whether the body of `f` matches on a pattern (a `match`, `casesOn` or recursor), whose variables
+degree synthesis cannot see. -/
+def matchesPattern (f : Lean.Expr) : MetaM Bool := do
+  withLocalDeclD `x (← domainOf f) fun x => do
+    let body := (mkApp f x).headBeta
+    let env ← getEnv
+    return (body.find? fun e =>
+      (e.getAppFn.constName?.any fun n => n.isStr && (n.getString! == "casesOn" ||
+        n.getString! == "rec" || (Lean.Meta.Match.Extension.getMatcherInfo? env n).isSome))).isSome
+
+/-- The condition of an `if` in the body of `f` that depends only on the input, not on variables
+bound in the body, as a predicate on the input. -/
+def conditionOf? (f : Lean.Expr) : MetaM (Option Lean.Expr) := do
+  withLocalDeclD `x (← domainOf f) fun x => do
+    let some t := (mkApp f x).headBeta.find? fun t =>
+        (t.isAppOfArity ``ite 5 || t.isAppOfArity ``dite 5) && !t.getAppArgs[1]!.hasLooseBVars
+      | return none
+    return some (← mkLambdaFVars #[x] t.getAppArgs[1]!)
+
+/-- Whether the right side has a power of degree at least 2, also once the definitions of the list
+are unfolded. Products and powers are compared only then: a product or power of non-constant terms
+has degree at least 2. -/
+def hasHighPower (g : Lean.Expr) : DominatedM Bool := do
+  withLocalDeclD `x (← domainOf g) fun x => do
+    let r := (mkApp g x).headBeta
+    let high (r : Lean.Expr) := (r.find? fun t => t.isAppOfArity ``HPow.hPow 6 &&
+      (t.appArg!.nat?.any (2 ≤ ·) || !t.appArg!.isLit && t.appArg!.nat?.isNone)).isSome
+    if high r then return true
+    -- The right side read through the definitions of the list.
+    let (r', _) ← simp r (← read).sizesUnfold
+    return high r'.expr
+
+/-- `Dominated f g` by degree synthesis. The candidate bases `S`, with exponents `e`, are the powers
+of `g`, first those of its linear form and then those within its terms, also once the definitions
+of the list are unfolded (read only here: the goals left to the user keep `g`), and lastly `g`
+itself with exponent 1. For a positive `S`, the degree `d` of the left side comes from `degree`,
+and when `d ≤ e`, `Dominated (fun x => S x ^ e) g` from the pointwise step. All candidates are
+tried by the rules alone before any is tried thoroughly. On the element domain of a traversal, the
+`Dominated` hypotheses about the outer input are composed with the projection to it. -/
+def viaDegree (f g : Lean.Expr) : DominatedM (Option Lean.Expr) := do
+  let outer := (← getLCtx, ← getLocalInstances)
+  withLocalDeclD `x (← domainOf f) fun x => do
+    let body := (mkApp f x).headBeta
+    let r := (mkApp g x).headBeta
+    -- The powers of the right side: those of its linear form first, then those within its terms.
+    let powers (e : Lean.Expr) : MetaM (Array (Lean.Expr × Nat)) := do
+      let (_, nested) ← (e.forEach' fun t => do
+          if t.isAppOfArity ``HPow.hPow 6 && !t.hasLooseBVars then modify (·.push t)
+          return true : StateT (Array Lean.Expr) MetaM Unit).run #[]
+      let mut out := #[]
+      for t in (linearForm e).2.map (·.1) ++ nested do
+        unless t.isAppOfArity ``HPow.hPow 6 do continue
+        let some n ← (evalNat t.appArg!).run | continue
+        let b := t.getAppArgs[4]!
+        unless 0 < n && (← isDefEq (← inferType b) (mkConst ``Nat)) do continue
+        unless out.contains (b, n) do out := out.push (b, n)
+      return out
+    let mut candidates : Array (Lean.Expr × Nat) := ← powers r
+    -- Facts about the outer input, along the projection to it on an element domain.
+    let domain ← whnfR (← domainOf f)
+    let mut composedFacts : Array (Lean.Expr × Lean.Expr) := #[]
+    if domain.isAppOf ``Sigma then
+      let projection ← withLocalDeclD `z domain fun z => do
+        mkLambdaFVars #[z] (← mkAppM ``Sigma.fst #[z])
+      for (h, type) in (← read).facts do
+        if let some h' ← (observing? (mkAppM ``Dominated.comp #[h, projection]) : MetaM _) then
+          let lam (k : Lean.Expr) := withLocalDeclD `z domain fun z => do
+            mkLambdaFVars #[z] (mkApp k (mkApp projection z)).headBeta
+          let composed ← mkAppM ``Dominated #[← lam type.appFn!.appArg!, ← lam type.appArg!]
+          composedFacts := composedFacts.push (← mkExpectedTypeHint h' composed, composed)
+    let (r', _) ← simp r (← read).sizesUnfold
+    let projected ← projectedIn #[body, r, r'.expr]
+    if r'.expr != r then
+      for c in ← powers r'.expr do
+        unless candidates.contains c do candidates := candidates.push c
+    -- The right side itself, unless it is already a power among the candidates.
+    unless r.isAppOfArity ``HPow.hPow 6 && candidates.any (·.1 == r.getAppArgs[4]!) do
+      candidates := candidates.push (r, 1)
+    -- First by the rules alone, then also bounding products, powers and differences as wholes.
+    for thorough in [false, true] do
+      for (base, e) in candidates do
+        let S ← mkLambdaFVars #[x] base
+        let some hS ← withLCtx outer.1 outer.2 (positive S) | continue
+        let saved ← show TacticM _ from saveState
+        let run : DominatedM (Option (Nat × Lean.Expr)) :=
+          withReader (fun c => { c with facts := c.facts ++ composedFacts })
+            (degree outer projected thorough x S hS body)
+        let res ← try run catch _ => do
+          saved.restore
+          pure none
+        let some (d, p) := res | continue
+        if d > e then continue
+        let p ← (do
+          if d == e then return p
+          mkAppM ``Dominated.mono_pow
+            #[p, ← mkDecideProof (← mkAppM ``LE.le #[mkNatLit d, mkNatLit e]), hS] :
+            MetaM Lean.Expr)
+        let Se ← mkLambdaFVars #[x] (← mkAppM ``HPow.hPow #[base, mkNatLit e])
+        let mut q? : Option Lean.Expr := none
+        if base == r && e == 1 then
+          q? := some (← mkAppM ``Dominated.of_le #[← mkLambdaFVars #[x] (← mkAppM ``Nat.le_of_eq
+            #[← mkAppM ``Nat.pow_one #[base]])])
+        else
+          q? ← withLCtx outer.1 outer.2 (attempt (proveBase Se g))
+        let some q := q? | continue
+        let h ← instantiateMVars (← mkAppM ``Dominated.trans #[p, q])
+        if h.containsFVar x.fvarId! || h.hasMVar then continue
+        return some h
+    return none
+
 /-- Unfold compositions, so that matching a fact is reducible and cheap to fail. -/
 def unfoldComp (e : Lean.Expr) : MetaM Lean.Expr := Meta.transform e (post := fun t => do
   if t.isAppOfArity ``Function.comp 5 then
@@ -835,9 +1176,24 @@ def unfoldComp (e : Lean.Expr) : MetaM Lean.Expr := Meta.transform e (post := fu
       mkLambdaFVars #[x] (mkApp args[3]! (mkApp args[4]! x).headBeta).headBeta)
   return .continue)
 
-/-- `Dominated f g` through a fact `Dominated f g'`: directly when `g'` is `g`, otherwise with
-`Dominated g' g` from `proveBase`, so facts are never chained. On the element domain of a
-traversal, a fact about the outer input is used along the projection to that input. -/
+/-- Whether `f` is the encoded size of a projection, possibly nested, of the value whose encoded
+size is `f'`: a fact about `f'` then bounds `f` through the pointwise step. -/
+def sizeOfProjection (f f' : Lean.Expr) : MetaM Bool := do
+  withLocalDeclD `z (← domainOf f) fun z => do
+    let a := (mkApp f z).headBeta
+    let b := (mkApp f' z).headBeta
+    let value? (e : Lean.Expr) : Option Lean.Expr :=
+      if e.isAppOfArity ``Tree.size 1 && e.appArg!.isAppOfArity ``UniqueEncoding.encode 4 then
+        some e.appArg!.appArg! else none
+    let some va := value? a | return false
+    let some vb := value? b | return false
+    return va != vb && (va.find? (· == vb)).isSome
+
+/-- `Dominated f g` through a fact `Dominated f' g'`: directly when `g'` is `g`, otherwise with
+`Dominated g' g` from `proveBase`, or by degree synthesis when `g` has a power of degree at least 2,
+so facts are never chained. `f'` is `f`, or a value of which `f` is the size of a projection, with
+`Dominated f f'` from `proveBase`. On the element domain of a traversal, a fact about the outer
+input is used along the projection to that input. -/
 def viaFacts (f g : Lean.Expr) : DominatedM (Option Lean.Expr) := do
   let domain ← whnfR (← domainOf f)
   let projection? : Option Lean.Expr ←
@@ -857,10 +1213,19 @@ def viaFacts (f g : Lean.Expr) : DominatedM (Option Lean.Expr) := do
         let composed ← mkAppM ``Dominated #[← lam type.appFn!.appArg!, ← lam type.appArg!]
         candidates := candidates.push (← mkExpectedTypeHint h' composed, composed)
     for (h, type) in candidates do
-      unless ← withReducible (isDefEq type.appFn!.appArg! f) do continue
+      let f' := type.appFn!.appArg!
+      let mut h := h
+      unless ← withReducible (isDefEq f' f) do
+        -- A fact about a value also bounds the size of its projections.
+        unless ← sizeOfProjection f f' do continue
+        let some hf ← memo (← mkAppM ``Dominated #[f, f']) (attempt (proveBase f f')) | continue
+        h ← mkAppM ``Dominated.trans #[hf, h]
       let g' := type.appArg!
       if ← withReducible (isDefEq g' g) then return some h
-      if let some rest ← memo (← mkAppM ``Dominated #[g', g]) (attempt (proveBase g' g)) then
+      if let some rest ← memo (← mkAppM ``Dominated #[g', g]) (do
+          if let some h ← attempt (proveBase g' g) then return some h
+          unless ← hasHighPower g do return none
+          attempt (viaDegree g' g)) then
         return some (← mkAppM ``Dominated.trans #[h, rest])
   return none
 
@@ -898,10 +1263,64 @@ partial def split (f g : Lean.Expr) (ctx : Simp.Context)
   let proof ← mkExpectedTypeHint proof (← mkAppM ``Dominated #[r.expr, g])
   return some (← mkEqMPR (← mkCongrArg motive eq) proof)
 
-/-- One summand against the target: a fact, the base rules, or a traversal rule; a maximum over
-a list, possibly of dependent elements, is compared element by element, and a table sum entry
-by entry after multiplying each entry by the table length. Traversal rules read the target on
-the element domain and split the element, which must be proved completely. -/
+/-- `Dominated f g` pointwise with the facts about the products and powers that `f` depends on
+(`addPowerFacts`), for a `match` on a pattern, whose variables degree synthesis cannot see. This
+keeps the earlier treatment of products and powers for these summands, provisionally (plan W2). -/
+def viaPowerFacts (f g : Lean.Expr) : DominatedM (Option Lean.Expr) := do
+  modify fun s => { s with nonlinear := true }
+  let r ← attempt (do
+    if let some h ← viaFacts f g then return some h
+    proveBase f g)
+  modify fun s => { s with nonlinear := false }
+  return r
+
+/-- `Dominated f g` for a left side with an `if` whose condition depends only on the
+input, by `Dominated.of_cases` on the condition. On each part the condition is the property of the
+subtype, which settles the `if`s on it, and the part is split and proved again. -/
+def viaCases (prove : Lean.Expr → Lean.Expr → DominatedM (Option Lean.Expr)) (f g : Lean.Expr) :
+    DominatedM (Option Lean.Expr) := do
+  let α ← domainOf f
+  let some p ← conditionOf? f | return none
+  let part (holds : Bool) : DominatedM (Option Lean.Expr) := do
+    let pred ← if holds then pure p else withLocalDeclD `x α fun x => do
+      mkLambdaFVars #[x] (mkNot (mkApp p x).headBeta)
+    -- The part is proved outside the scope of `y`, so that no auxiliary proof captures it.
+    let (f', g', funEq) ← withLocalDeclD `y (← mkAppM ``Subtype #[pred]) fun y => do
+      let val ← mkAppM ``Subtype.val #[y]
+      let hy ← mkAppM ``Subtype.property #[y]
+      let c := (mkApp p val).headBeta
+      let body := (mkApp f val).headBeta
+      let mut cur := body
+      let mut eq ← mkEqRefl body
+      -- Settle the `if`s on the condition, one at a time.
+      repeat
+        let some t := cur.find? fun t => (t.isAppOfArity ``ite 5 || t.isAppOfArity ``dite 5) &&
+            t.getAppArgs[1]! == c | break
+        let args := t.getAppArgs
+        let rule := if t.isAppOfArity ``ite 5 then
+            (if holds then ``ite_eq_left else ``ite_eq_right)
+          else (if holds then ``dite_eq_left else ``dite_eq_right)
+        let h ← mkAppOptM rule #[c, args[2]!, hy, args[0]!, args[3]!, args[4]!]
+        let abst ← kabstract cur t
+        let motive := Lean.mkLambda `z .default args[0]! abst
+        eq ← mkEqTrans eq (← mkCongrArg motive h)
+        cur := abst.instantiate1 (← inferType h).appArg!
+      return (← mkLambdaFVars #[y] cur, ← mkLambdaFVars #[y] (mkApp g val).headBeta,
+        ← mkFunExt (← mkLambdaFVars #[y] eq))
+    let some proof ← split f' g' (← read).sizes prove | return none
+    let motive ← withLocalDeclD `F (← inferType f') fun F => do
+      mkLambdaFVars #[F] (← mkAppM ``Dominated #[F, g'])
+    return some (← mkEqMPR (← mkCongrArg motive funEq) proof)
+  let some yes ← part true | return none
+  let some no ← part false | return none
+  return some (← mkAppOptM ``Dominated.of_cases #[α, f, g, p, yes, no])
+
+/-- One summand against the target: a fact; a traversal rule, comparing a maximum over a list,
+possibly of dependent elements, element by element and a table sum entry by entry after multiplying
+each entry by the table length; the linear pointwise step; and, against a power of degree at least
+2 on the right, the facts about products and powers for a `match` on a pattern, cases on the
+condition of an `if`, or degree synthesis. Traversal rules read the target on the element domain
+and split the element, which must be proved completely. -/
 partial def prove (f g : Lean.Expr) : DominatedM (Option Lean.Expr) := do
   memo (← mkAppM ``Dominated #[f, g]) do
     if let some h ← attempt (viaFacts f g) then return some h
@@ -915,7 +1334,11 @@ partial def prove (f g : Lean.Expr) : DominatedM (Option Lean.Expr) := do
       if let some h ← viaRule rule type (element ctx.sizes) then return some h
     if let some h ← viaRule ``Dominated.sum_finRange_of_mul type (element ctx.sizesMul) then
       return some h
-    attempt (proveBase f g)
+    if let some h ← attempt (proveBase f g) then return some h
+    unless ← hasHighPower g do return none
+    if ← matchesPattern f then return ← viaPowerFacts f g
+    if (← conditionOf? f).isSome then return ← attempt (viaCases prove f g)
+    attempt (viaDegree f g)
 
 /-- Prove a summand, or leave it as a goal; equal summands share one goal. -/
 def proveOrLeave (f g : Lean.Expr) : DominatedM (Option Lean.Expr) := do
@@ -930,9 +1353,9 @@ def proveOrLeave (f g : Lean.Expr) : DominatedM (Option Lean.Expr) := do
 maxima of the left side; equal summands are proved once. Local `Dominated` hypotheses are used
 as facts. The list gives definitions to unfold when comparing pointwise, and statements `a ≤ b`,
 `a < b` or `a = b` to instantiate at matching terms there, as for those registered with
-`@[dominated]`. Powers and products are compared with the powers of the right side as written: a
-definition on the right whose unfolding has the power is given in the list, not as an equation
-about it. Summands that cannot be proved are left as goals. -/
+`@[dominated]`. Products and powers are compared by their degrees against the powers of the
+right side, read through the definitions of the list: an equation about the right side given in the
+list is not used for this. Summands that cannot be proved are left as goals. -/
 syntax (name := dominated) "dominated" (" [" term,* "]")? : tactic
 
 elab_rules : tactic
@@ -961,6 +1384,8 @@ elab_rules : tactic
       if type.isAppOf ``Dominated then facts := facts.push (decl.toExpr, ← unfoldComp type)
     let sizes ← simpContext #[``Function.comp_apply, ``Nat.mul_one, ``Tree.size_pair]
       (attrs := #[`dominated_simp])
+    let sizesUnfold ← simpContext #[``Function.comp_apply, ``Nat.mul_one, ``Tree.size_pair] unfolds
+      (attrs := #[`dominated_simp])
     let sizesMul ← simpContext
       #[``Function.comp_apply, ``Nat.mul_add, ``Nat.mul_one, ``Nat.mul_zero]
       (attrs := #[`dominated_simp])
@@ -972,7 +1397,7 @@ elab_rules : tactic
       true).add ``encodeParts true]
     let ctx : Context :=
       { statements := ← factTree lemmas, premises := ← premiseTree, facts, sizes, sizesMul,
-        expand, numerals }
+        expand, numerals, sizesUnfold }
     let (proof, state) ← (split target.appFn!.appArg! target.appArg! ctx.sizes proveOrLeave
       |>.run ctx).run {}
     let some proof := proof | throwError "dominated: no proof"
