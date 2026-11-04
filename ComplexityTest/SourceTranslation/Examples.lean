@@ -491,7 +491,7 @@ def repeatFlag (x : Bool × List Unit) : List Bool := x.2.map (fun _ => x.1)
 theorem repeatFlag_fdtisp : repeatFlag ∈ FDTISP .tree (fun n => n) (fun n => n) := by
   model_fun_prop
   · have hs : Dominated (fun x : Bool × List Unit => ⌜x.2⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) :=
-      Dominated.of_le size_encode_snd_le
+      by dominated
     have hout : Dominated (fun x : Bool × List Unit => ⌜x.2.map (fun _ => x.1)⌝ₜ.size)
         (fun x => ⌜x⌝ₜ.size) :=
       (Dominated.of_le_mul 3 fun (x : Bool × List Unit) =>

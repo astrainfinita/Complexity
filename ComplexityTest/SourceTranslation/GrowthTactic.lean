@@ -139,20 +139,21 @@ example (f : List Bool → ℕ) (hf : ∀ xs, f xs ≤ ⌜(xs, xs)⌝ₜ.size) :
 example : Dominated (fun x : ℕ × ℕ => (2 * x.1 + x.2 + 1) ^ 3) (fun x => (x.1 + x.2 + 1) ^ 3) := by
   dominated
 
--- Guards the order of the coefficient search: only the hypothesis gives the coefficient 2, and at
--- the exponent 14 the coefficient 8 would exceed the hidden witness `2 ^ 40`.
+-- Guards degrees without coefficients: the base is within a multiple of `p.1.2 + 1` only through
+-- the property of the input, and at the exponent 14 a coefficient as large as 8 on the base would
+-- exceed the hidden witness `2 ^ 40` if it were carried.
 example : Dominated (fun p : {p : ℕ × ℕ // p.1 ≤ 2 * p.2 + 1} => p.1.1 ^ 14)
     (fun p => (p.1.2 + 1) ^ 14) := by
   dominated
 
--- Guards the dependencies of the left side: a product bounding a variable is compared, since the
--- fields of a destructured input are variables.
+-- Guards upper bounds from the property of a subtype input: a variable bounded by a product has the
+-- degree of the product.
 example : Dominated (fun p : {p : ℕ × ℕ × ℕ // p.1 ≤ p.2.1 * p.2.2} => p.1.1)
     (fun p => (p.1.2.1 + p.1.2.2 + 1) ^ 2) := by
   dominated
 
--- Guards the same through a conjunction, as subtype properties often are, and the power `c ^ 2`
--- bounding a factor of a product against `c ^ 3`.
+-- Guards the same through a conjunction, as subtype properties often are: the factor bounded by
+-- `c ^ 2` has degree 2, and the degrees of the factors add up to 3.
 example : Dominated (fun p : {p : ℕ × ℕ × ℕ // p.1 ≤ p.2.2 + 1 ∧ p.2.1 ≤ (p.2.2 + 1) ^ 2} =>
     p.1.1 * p.1.2.1) (fun p => (p.1.2.2 + 1) ^ 3) := by
   dominated
@@ -162,13 +163,14 @@ def cubeAbove (x : ℕ) : ℕ := (x + 1) ^ 3 + x
 
 theorem cubeAbove_eq (x : ℕ) : cubeAbove x = (x + 1) ^ 3 + x := rfl
 
--- Powers are compared with those of the right side as written, so a definition on the right is
--- unfolded through the list.
+-- Guards reading the right side through the definitions of the list for its powers, without
+-- rewriting it.
 example : Dominated (fun x : ℕ => x ^ 2) cubeAbove := by
   dominated [cubeAbove]
 
--- Records a limit of the current design: an equation about the right side only adds a fact, whose
--- power is not used. When this starts to succeed, the documented limits change.
+-- Records a limit of the current design: the right side is read for its powers through the
+-- definitions of the list, not through equations about it. When this starts to succeed, the
+-- documented limits change.
 example : True := by
   fail_if_success
     have : Dominated (fun x : ℕ => x ^ 2) cubeAbove := by
@@ -176,12 +178,112 @@ example : True := by
       done
   trivial
 
--- Records a limit of the current design: a power bounding the right side from below in a
--- hypothesis is not used either.
+-- Records a limit of the current design: the bases are taken from the right side, not from a power
+-- bounding it from below in a hypothesis.
 example : True := by
   fail_if_success
     have : Dominated (fun p : {p : ℕ × ℕ // (p.1 + 1) ^ 3 ≤ p.2} => p.1.1 ^ 2)
         (fun p => p.1.2) := by
+      dominated
+      done
+  trivial
+
+-- Guards degree synthesis: the degrees of the factors add, with no coefficient to keep.
+example : Dominated (fun x : ℕ × ℕ × ℕ => x.1 * x.2.1 * x.2.2)
+    (fun x => (x.1 + x.2.1 + x.2.2 + 1) ^ 3) := by
+  dominated
+
+-- Guards products and powers of powers, whose factors are not linear in the base.
+example : Dominated (fun x : ℕ => (x + 1) ^ 2 * (x ^ 2) ^ 3) (fun x => (x + 1) ^ 8) := by
+  dominated
+
+-- Guards degrees without coefficients: the coefficient `8 ^ 14` would exceed the hidden witness.
+example : Dominated (fun x : ℕ => (8 * x + 1) ^ 14) (fun x => (x + 1) ^ 14) := by
+  dominated
+
+-- Guards degrees from `Dominated` hypotheses, of any size.
+example (f g : ℕ → ℕ) (hf : Dominated f (fun x => (x + 1) ^ 2))
+    (hg : Dominated g (fun x => (x + 1) ^ 3)) :
+    Dominated (fun x => f x * g x) (fun x => (x + 1) ^ 5) := by
+  dominated
+
+-- Guards degrees from statements of the list: `f x` has the degree of its bound `x * x`.
+example (f : ℕ → ℕ) (hf : ∀ x, f x ≤ x * x) :
+    Dominated (fun x => f x * x) (fun x => (x + 1) ^ 3) := by
+  dominated [hf]
+
+-- Guards reading a comparison through linear forms: `p.1 + 1 ≤ p.2 * p.2` bounds `p.1`.
+example : Dominated (fun p : {p : ℕ × ℕ // p.1 + 1 ≤ p.2 * p.2} => p.1.1)
+    (fun p => (p.1.2 + 1) ^ 2) := by
+  dominated
+
+-- Guards bases taken from powers within the terms of the right side.
+example : Dominated (fun x : ℕ × ℕ => x.1 * x.1) (fun x => max ((x.1 + 1) ^ 2) x.2) := by
+  dominated
+
+-- Guards cases on the condition of an `if`: on its part, the condition bounds the factor.
+example : Dominated (fun x : ℕ × ℕ => if x.1 ≤ x.2 then x.1 * x.1 else 0)
+    (fun x => (x.2 + 1) ^ 2) := by
+  dominated
+
+-- Guards the second pass: the product of the first two factors is bounded as a whole, while each
+-- factor alone has degree 1.
+example : Dominated (fun p : {p : ℕ × ℕ × ℕ // p.1 * p.2.1 ≤ p.2.2} => p.1.1 * p.1.2.1 * p.1.2.2)
+    (fun p => (p.1.1 + p.1.2.1 + p.1.2.2 + 1) ^ 2) := by
+  dominated
+
+-- Guards the second pass for a power: `x ^ 2` is bounded as a whole by `y`, while `x` alone, of
+-- degree 1/2, counts as degree 1.
+example : Dominated (fun p : {p : ℕ × ℕ // p.1 ^ 2 ≤ p.2} => p.1.1 ^ 2 * p.1.2)
+    (fun p => (p.1.2 + 1) ^ 2) := by
+  dominated
+
+-- Guards the second pass for a difference, whose subtrahend splitting drops.
+example : Dominated (fun p : {p : ℕ × ℕ × ℕ // p.1 ≤ p.2.1 + p.2.2} => (p.1.1 - p.1.2.1) ^ 2)
+    (fun p => (p.1.2.2 + 1) ^ 2) := by
+  dominated
+
+-- Records the provisional treatment of a `match` on a pattern, whose variable `a` degree synthesis
+-- cannot see: it is compared pointwise with facts about products and powers.
+example : Dominated (fun x : Option (List Bool) × List Bool =>
+      match x.1 with | some a => a.length * x.2.length | none => 0)
+    (fun x => ⌜x⌝ₜ.size ^ 2) := by
+  dominated
+
+-- Records a limit of the current design: one base is used at a time, so a power of a sum of two
+-- bases is not compared with the sum of their powers. When this starts to succeed, the documented
+-- limits change.
+example : True := by
+  fail_if_success
+    have : Dominated (fun p : ℕ × ℕ => (p.1 + p.2) ^ 2)
+        (fun p => (p.1 + 1) ^ 2 + (p.2 + 1) ^ 2) := by
+      dominated
+      done
+  trivial
+
+-- Records a limit of the current design: a product of two bases is not compared with the sum of
+-- their squares.
+example : True := by
+  fail_if_success
+    have : Dominated (fun p : ℕ × ℕ => p.1 * p.2) (fun p => (p.1 + 1) ^ 2 + (p.2 + 1) ^ 2) := by
+      dominated
+      done
+  trivial
+
+-- Records a limit of the current design: an atom bounded by a constant still has degree 1.
+example : True := by
+  fail_if_success
+    have : Dominated (fun x : Bool × ℕ => ⌜x.1⌝ₜ.size * x.2 * x.2) (fun x => (x.2 + 1) ^ 2) := by
+      dominated
+      done
+  trivial
+
+-- Records a limit of the current design: splitting keeps only the minuend of a difference that is
+-- neither the target nor a fact.
+example : True := by
+  fail_if_success
+    have : Dominated (fun p : {p : ℕ × ℕ × ℕ // p.1 ≤ p.2.1 + p.2.2} => p.1.1 - p.1.2.1)
+        (fun p => p.1.2.2 + 1) := by
       dominated
       done
   trivial

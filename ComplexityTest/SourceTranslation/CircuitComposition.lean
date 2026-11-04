@@ -72,11 +72,6 @@ abbrev StoredRelabelInput := Σ n, Σ m, Circuit .booleanAlgebra n m × (Fin n �
     Dominated.of_le fun x => Nat.le_self_pow (by decide) _
   have ho4 := ho.trans (Dominated.of_le fun x => Nat.pow_le_pow_right (hpos x) (by decide : 2 ≤ 4))
   fill_hole program in source_fun_prop
-  · simp only [Dominated.add_iff]
-    repeat' apply And.intro
-    all_goals first
-      | exact Dominated.const_of_pos _ (fun _ => Nat.pow_pos (Tree.size_pos _))
-      | exact hR.pow 7
   · have hp : Dominated (fun x => 2 * S x + o x + 2 + relabelScale (u x) ^ 4)
         (fun x => S x ^ 4) := by
       simp only [Dominated.add_iff]
@@ -131,13 +126,6 @@ def layersStored (x : Σ n, Circuit .booleanAlgebra (n + 1) n × List Unit) :
     ((hu.le_pow (by decide : 0 < 8)).max_same hpeak)
   simp only [Function.comp_def, u] at hout
   fill_hole program in source_fun_prop
-  all_goals
-    simp only [Sigma.encode_mk, size_encode_prod, Dominated.add_iff, Dominated.max_iff]
-    repeat' apply And.intro
-  all_goals with_reducible first
-    | assumption
-    | exact Dominated.const_of_pos _ (fun x => Nat.pow_pos (hS x))
-    | exact Dominated.le_pow (by first | assumption | exact Dominated.refl _) (by decide)
 
 theorem layersStored_fdtisp :
     layersStored ∈ FDTISP .tree (fun n => n ^ 18) (fun n => n ^ 8) :=
