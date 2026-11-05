@@ -38,19 +38,19 @@ example (h : (id : Redundant → Redundant) ∈ FP .sizeCostTree) :
     (id : Redundant → Redundant) ∈ FP .stack :=
   TreeMachine.fp_subset_stack h
 
--- `ComputableInO` conversions are methods of the shared specification, with distinct stack
+-- `ComputableIn` conversions are methods of the shared specification, with distinct stack
 -- sources. Tree space counts the input, so it also bounds the stack machine's loading time.
 example {α β : Type*} [Encoding Tree α] [Encoding Tree β]
     {f : α → β} {t s : α → ℕ}
-    (h : TimeSpaceModel.sizeCostTree.ComputableInO f t s) :
-    TimeSpaceModel.stack.ComputableInO f
-      (fun a => t a * s a + s a) s :=
+    (h : TimeSpaceModel.sizeCostTree.ComputableIn f IsO(t) IsO(s)) :
+    TimeSpaceModel.stack.ComputableIn f
+      IsO(fun a => t a * s a + s a) IsO(s) :=
   h.toUnitTime.toSizeCost.toStack_of_tree
 
 -- The opposite route retains the real initial-cell space cost on returning to TM.
 example {f : Bool → Bool} {t s : Bool → ℕ}
-    (h : TimeSpaceModel.tm.ComputableInO f t s) :
-    TimeSpaceModel.tm.ComputableInO f t (fun a => s a + 1) :=
+    (h : TimeSpaceModel.tm.ComputableIn f IsO(t) IsO(s)) :
+    TimeSpaceModel.tm.ComputableIn f IsO(t) IsO(fun a => s a + 1) :=
   h.toStack_of_tm.toTM
 
 end TreeSimulationTest

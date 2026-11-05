@@ -43,16 +43,16 @@ example : TM.Computes bit (id : Bool → Bool) (fun _ => 5) (fun _ => 0) :=
 example : TM.Computes bit (id : Bool → Bool) (fun b => if b then 5 else 4) (fun _ => 0) :=
   bit_spec.mono (fun b => by cases b <;> decide) (fun _ => le_rfl)
 
--- A zero resource remains zero on a finite input type in the `ComputableInO` interface.
-example : TimeSpaceModel.tm.ComputableInO (id : Bool → Bool)
-    (fun _ => 1) (fun _ => 0) :=
-  bit_spec.computableWithin.computableInO.mono
-    ⟨4, fun _ => le_rfl⟩ (Dominated.refl _)
+-- A zero resource remains zero on a finite input type in the `ComputableIn` interface.
+example : TimeSpaceModel.tm.ComputableIn (id : Bool → Bool)
+    IsO(fun _ => 1) IsO(fun _ => 0) :=
+  bit_spec.computableWithin.computableIn.mono
+    (fun _ h => h.trans ⟨4, fun _ => le_rfl⟩) fun _ h => h
 
 -- The same proof supplies a nondeterministic machine bounding every branch.
-example : TimeSpaceModel.ntm.NDecidableInO (fun b : Bool => b = true)
-    (fun _ => 4) (fun _ => 0) :=
-  TM.nDecidableInO_of_computable bit_spec.computableWithin.computableInO
+example : TimeSpaceModel.ntm.NDecidableIn (fun b : Bool => b = true)
+    IsO(fun _ => 4) IsO(fun _ => 0) :=
+  TM.nDecidableIn_of_computable bit_spec.computableWithin.computableIn
     (fun _ => Iff.rfl)
 
 -- The exact proof supplies a single machine for both asymptotic bounds.
@@ -168,8 +168,8 @@ private def constantCost : TimeSpaceModel Id ℕ where
     exact ⟨h.1, h.2.trans ht⟩
 
 -- Nonunique input and output codes are supported; only one legal output is required.
-example : constantCost.ComputableInO (id : Unit → Unit) (fun _ => 1) (fun _ => 0) := by
-  apply TimeSpaceModel.ComputableWithin.computableInO
+example : constantCost.ComputableIn (id : Unit → Unit) IsO(fun _ => 1) IsO(fun _ => 0) := by
+  apply TimeSpaceModel.ComputableWithin.computableIn
   refine ⟨_, rfl, fun a _ _ => ?_⟩
   cases a
   exact ⟨0, Part.mem_some_iff.mpr rfl, rfl, le_rfl⟩

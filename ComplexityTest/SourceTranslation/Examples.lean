@@ -513,6 +513,10 @@ theorem repeatFlag_fdtisp : repeatFlag ∈ FDTISP .tree (fun n => n) (fun n => n
         omega
 
 -- Imported public exits retain the selected implementations and their callback specifications.
+theorem gateClauses_fdtisp {α : Type*} [UniqueEncoding Tree α] :
+    gateClauses (α := α) ∈ FDTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
+  model_fun_prop
+
 theorem accumulateGate_fdtisp :
     accumulateGate ∈ FDTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
   model_fun_prop
@@ -520,5 +524,18 @@ theorem accumulateGate_fdtisp :
 theorem circuitStep_fdtisp :
     circuitStep ∈ FDTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by
   model_fun_prop
+
+theorem circuitContinues_fdtisp :
+    circuitContinues ∈ FDTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
+  model_fun_prop
+
+theorem circuitFinish_fdtisp :
+    circuitFinish ∈ FDTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by
+  model_fun_prop
+
+theorem tseitinLoop_fdtisp :
+    (fun x : TseitinState => tseitinLoop x.1 x.2) ∈
+      FDTISP .tree (fun n => n ^ 2) (fun n => n ^ 2) :=
+  hasProgram_tseitinLoop.mem_fdtisp_pow (by decide)
 
 end ComplexityTest.SourceTranslation.Examples
