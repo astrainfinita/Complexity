@@ -162,10 +162,10 @@ theorem NDecidableWithin.mem_ntisp
   (NDecidableWithin.iff_bySize.mp h).mem_ntisp
 
 /-- The same behavior supplies both eventual bounds and still covers every legal input. -/
-theorem NDecidableInO.mem_ntisp
-    (h : model.NDecidableInO p
-      (fun a => T (model.inputSize (encode Data a)))
-      (fun a => S (model.inputSize (encode Data a)))) : p ∈ NTISP model T S := by
+theorem NDecidableIn.mem_ntisp
+    (h : model.NDecidableIn p
+      IsO(fun a => T (model.inputSize (encode Data a)))
+      IsO(fun a => S (model.inputSize (encode Data a)))) : p ∈ NTISP model T S := by
   obtain ⟨t, s, h, ⟨C, ht⟩, ⟨D, hs⟩⟩ := h
   exact NTISP.mono ((Dominated.refl T).const_mul_left C).atTop
     ((Dominated.refl S).const_mul_left D).atTop (h.mono ht hs).mem_ntisp

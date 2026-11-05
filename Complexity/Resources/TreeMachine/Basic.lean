@@ -110,15 +110,16 @@ theorem _root_.Complexity.TimeSpaceModel.ComputableWithin.toSizeCost
     TimeSpaceModel.sizeCostTree.ComputableWithin f (fun a => t a * s a) s :=
   TimeSpaceModel.ComputableWithinByCode.toSizeCost h
 
-theorem _root_.Complexity.TimeSpaceModel.ComputableInO.toUnitTime
-    (h : TimeSpaceModel.sizeCostTree.ComputableInO f t s) :
-    TimeSpaceModel.tree.ComputableInO f t s := by
+theorem _root_.Complexity.TimeSpaceModel.ComputableIn.toUnitTime
+    {time space : (α → ℕ) → Prop}
+    (h : TimeSpaceModel.sizeCostTree.ComputableIn f time space) :
+    TimeSpaceModel.tree.ComputableIn f time space := by
   obtain ⟨u, v, h, hu, hv⟩ := h
   exact ⟨u, v, TimeSpaceModel.ComputableWithin.toUnitTime h, hu, hv⟩
 
-theorem _root_.Complexity.TimeSpaceModel.ComputableInO.toSizeCost
-    (h : TimeSpaceModel.tree.ComputableInO f t s) :
-    TimeSpaceModel.sizeCostTree.ComputableInO f (fun a => t a * s a) s := by
+theorem _root_.Complexity.TimeSpaceModel.ComputableIn.toSizeCost
+    (h : TimeSpaceModel.tree.ComputableIn f IsO(t) IsO(s)) :
+    TimeSpaceModel.sizeCostTree.ComputableIn f IsO(fun a => t a * s a) IsO(s) := by
   obtain ⟨u, v, h, hu, hv⟩ := h
   exact ⟨_, _, TimeSpaceModel.ComputableWithin.toSizeCost h, hu.mul hv, hv⟩
 

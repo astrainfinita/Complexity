@@ -16,9 +16,10 @@ Each behavior belongs to one fixed computation across all inputs and budgets.
 Time and space are upper bounds, witnessed jointly by that computation.
 
 The common resource predicate accepts budgets `α → Data → ℕ`. Ordinary specifications
-specialize these to `α → ℕ`, shared by every legal code of a value, and
-`ComputableInO` uses one all-input coefficient for each resource. A value with
-unbounded processing costs over its codes cannot satisfy a finite value-indexed budget.
+specialize these to `α → ℕ`, shared by every legal code of a value, and `ComputableIn` states
+properties of these budgets, such as `IsO(T)` for one all-input coefficient for each resource.
+A value with unbounded processing costs over its codes cannot satisfy a finite value-indexed
+budget.
 `ComputableWithinBySize` instead measures the size of the actual input code, as
 complexity classes do at their boundary.
 -/
@@ -58,12 +59,14 @@ def ComputableWithin (model : TimeSpaceModel Id Data) (f : α → β)
     (t s : α → ℕ) : Prop :=
   model.ComputableWithinByCode f (fun a _ => t a) (fun a _ => s a)
 
-/-- `f` is computable within time `O(T a)` and space `O(S a)` on every input `a`: a single
-behavior satisfies both bounds, each up to one coefficient for all inputs. Correctness and
-termination hold at every input, including where either target budget is zero. -/
-def ComputableInO (model : TimeSpaceModel Id Data) (f : α → β)
-    (T S : α → ℕ) : Prop :=
-  ∃ t s, model.ComputableWithin f t s ∧ Dominated t T ∧ Dominated s S
+/-- `f` is computable within a time budget with property `time` and a space budget with
+property `space`, by a single behavior on every input. `model.ComputableIn f IsO(T) IsO(S)` is
+computability in time `O(T a)` and space `O(S a)`, each up to one coefficient for all inputs;
+the space is unrestricted by default. Correctness and termination hold at every input,
+including where a budget is zero. -/
+def ComputableIn (model : TimeSpaceModel Id Data) (f : α → β)
+    (time : (α → ℕ) → Prop) (space : (α → ℕ) → Prop := fun _ => True) : Prop :=
+  ∃ t s, model.ComputableWithin f t s ∧ time t ∧ space s
 
 /-- Budgets at the complexity boundary depend on the size of the actual input code.
 This does not require unique encodings or assign a canonical size to an abstract value. -/
@@ -95,14 +98,16 @@ theorem ComputableWithinBySize.mono {t s t' s' : ℕ → ℕ}
   ComputableWithinByCode.mono h (fun _ r => ht (model.inputSize r))
     (fun _ r => hs (model.inputSize r))
 
-theorem ComputableWithin.computableInO
-    (h : model.ComputableWithin f t s) : model.ComputableInO f t s :=
+theorem ComputableWithin.computableIn
+    (h : model.ComputableWithin f t s) : model.ComputableIn f IsO(t) IsO(s) :=
   ⟨t, s, h, Dominated.refl _, Dominated.refl _⟩
 
-theorem ComputableInO.mono (h : model.ComputableInO f t s)
-    (ht : Dominated t t') (hs : Dominated s s') : model.ComputableInO f t' s' := by
-  obtain ⟨u, v, h, hu, hv⟩ := h
-  exact ⟨u, v, h, hu.trans ht, hv.trans hs⟩
+theorem ComputableIn.mono {time space time' space' : (α → ℕ) → Prop}
+    (h : model.ComputableIn f time space)
+    (ht : ∀ t, time t → time' t) (hs : ∀ s, space s → space' s) :
+    model.ComputableIn f time' space' := by
+  obtain ⟨t, s, h, htime, hspace⟩ := h
+  exact ⟨t, s, h, ht t htime, hs s hspace⟩
 
 end TimeSpaceModel
 

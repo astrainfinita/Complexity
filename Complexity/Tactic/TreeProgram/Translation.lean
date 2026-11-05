@@ -15,6 +15,7 @@ public import Complexity.Models.TreeMachine.Language.Derive
 public meta import Complexity.Models.TreeMachine.Language.Semantics
 public import Complexity.Resources.TreeMachine.Program
 public import Complexity.Classes.Functions.Basic
+public import Complexity.Classes.TreeFunctions.UnitTime
 public import Complexity.Encoding.TreeSize
 public meta import Lean.Meta.Match.MatcherApp.Transform
 public meta import Lean.Meta.RecExt
@@ -59,9 +60,9 @@ variable {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β] {f : 
   {program : Value → Code Value} {t p : α → ℕ}
 
 /-- Keep loading, controller and peak costs when hiding the fixed machine's register factor. -/
-theorem computableInO (hf : HasProgram f program t p) :
-    TimeSpaceModel.tree.ComputableInO f (fun x => t x + 4)
-      (fun x => max ⌜x⌝ₜ.size (p x) + 2) := by
+theorem computableIn (hf : HasProgram f program t p) :
+    TimeSpaceModel.tree.ComputableIn f IsO(fun x => t x + 4)
+      IsO(fun x => max ⌜x⌝ₜ.size (p x) + 2) := by
   obtain ⟨b, h, ht, hp⟩ := hf.sound
   exact ⟨fun x => b.time x + 4,
     fun x => (program .input).registers * (max ⌜x⌝ₜ.size (b.peak x) + 2),
@@ -70,11 +71,11 @@ theorem computableInO (hf : HasProgram f program t p) :
 
 /-- Compare the input budgets at the machine boundary. Loading and storage overheads remain
 explicit. -/
-theorem computableInO_of_dominated {T S : α → ℕ} (hf : HasProgram f program t p)
+theorem computableIn_of_dominated {T S : α → ℕ} (hf : HasProgram f program t p)
     (ht : Dominated (fun x => t x + 4) T)
     (hp : Dominated (fun x => max ⌜x⌝ₜ.size (p x) + 2) S) :
-    TimeSpaceModel.tree.ComputableInO f T S :=
-  hf.computableInO.mono ht hp
+    TimeSpaceModel.tree.ComputableIn f IsO(T) IsO(S) :=
+  hf.computableIn.mono (fun _ h => h.trans ht) (fun _ h => h.trans hp)
 
 end HasProgram
 
@@ -92,7 +93,7 @@ theorem mem_fdtisp (hf : HasProgram f program (fun x => T ⌜x⌝ₜ.size) (fun 
     (time_overhead : Dominated (fun _ : α => 4) (fun x => T ⌜x⌝ₜ.size))
     (space_overhead : Dominated (fun _ : α => 2) (fun x => S ⌜x⌝ₜ.size)) :
     f ∈ FDTISP .tree T S :=
-  (hf.computableInO_of_dominated
+  (hf.computableIn_of_dominated
     ((Dominated.refl _).add_same time_overhead)
     ((input.max_same (Dominated.refl _)).add_same space_overhead)).mem_fdtisp
 
@@ -101,7 +102,7 @@ theorem mem_fdtisp_of_dominated (hf : HasProgram f program t p)
     (ht : Dominated (fun x => t x + 4) (fun x => T ⌜x⌝ₜ.size))
     (hp : Dominated (fun x => max ⌜x⌝ₜ.size (p x) + 2) (fun x => S ⌜x⌝ₜ.size)) :
     f ∈ FDTISP .tree T S :=
-  (hf.computableInO_of_dominated ht hp).mem_fdtisp
+  (hf.computableIn_of_dominated ht hp).mem_fdtisp
 
 /-- Exact-size envelopes are used only where an eventual scale comparison is required.
 This permits finite input types to inhabit a zero eventual class without weakening their
@@ -110,9 +111,9 @@ theorem mem_fdtisp_of_sizeEnvelope (hf : HasProgram f program t p)
     (ht : DominatedAtTop (sizeEnvelope (fun x => t x + 4)) T)
     (hp : DominatedAtTop (sizeEnvelope (fun x => max ⌜x⌝ₜ.size (p x) + 2)) S) :
     f ∈ FDTISP .tree T S := by
-  have hm := hf.computableInO.mono
-    (Dominated.of_le (le_sizeEnvelope (fun x => t x + 4)))
-    (Dominated.of_le (le_sizeEnvelope (fun x => max ⌜x⌝ₜ.size (p x) + 2)))
+  have hm := hf.computableIn.mono
+    (fun _ h => h.trans (Dominated.of_le (le_sizeEnvelope (fun x => t x + 4))))
+    (fun _ h => h.trans (Dominated.of_le (le_sizeEnvelope (fun x => max ⌜x⌝ₜ.size (p x) + 2))))
   exact FDTISP.mono ht hp hm.mem_fdtisp
 
 /-- The usual positive powers of encoding size absorb the model's input storage,
@@ -125,7 +126,50 @@ theorem mem_fdtisp_pow {t s : ℕ}
   · exact Dominated.const_of_pos 4 (fun x => Nat.pow_pos (Tree.size_pos ⌜x⌝ₜ))
   · exact Dominated.const_of_pos 2 (fun x => Nat.pow_pos (Tree.size_pos ⌜x⌝ₜ))
 
+/-- A time growth polynomial in the input code size gives polynomial time, with no degree
+written. -/
+theorem mem_fp (hf : HasProgram f program t p) (ht : IsPoly (fun x => ⌜x⌝ₜ.size) t) :
+    f ∈ FP .tree := by
+  obtain ⟨d, ht⟩ := ht
+  have h := hf.mem_fdtisp_of_dominated (T := fun n => (n + 1) ^ d)
+    (S := sizeEnvelope fun x => max ⌜x⌝ₜ.size (p x) + 2)
+    (ht.add_same (Dominated.const_of_pos 4 fun _ => Nat.pow_pos (Nat.succ_pos _)))
+    (Dominated.of_le (le_sizeEnvelope _))
+  exact FP.of_time_le (FDTISP.subset_time h) 1 d fun n => by simp
+
+/-- Time and peak growths polynomial in the input code size give polynomial time in the size-cost
+model, which charges each step by the size of its trees, with no degree written. -/
+theorem mem_fp_sizeCost (hf : HasProgram f program t p) (ht : IsPoly (fun x => ⌜x⌝ₜ.size) t)
+    (hp : IsPoly (fun x => ⌜x⌝ₜ.size) p) : f ∈ FP .sizeCostTree := by
+  obtain ⟨d, ht⟩ := ht
+  obtain ⟨e, hp⟩ := hp
+  have hpos (x : α) : 0 < ⌜x⌝ₜ.size + 1 := Nat.succ_pos _
+  have hs : Dominated (fun x : α => ⌜x⌝ₜ.size) fun x => (⌜x⌝ₜ.size + 1) ^ (e + 1) :=
+    Dominated.of_le fun x => (Nat.le_succ _).trans (Nat.le_self_pow (Nat.succ_ne_zero e) _)
+  have h := hf.mem_fdtisp_of_dominated (T := fun n => (n + 1) ^ d)
+    (S := fun n => (n + 1) ^ (e + 1))
+    (ht.add_same (Dominated.const_of_pos 4 fun _ => Nat.pow_pos (Nat.succ_pos _)))
+    ((hs.max_same (hp.mono_pow (Nat.le_succ e) hpos)).add_same
+      (Dominated.const_of_pos 2 fun _ => Nat.pow_pos (Nat.succ_pos _)))
+  exact FP.of_time_le
+    (FDTISP.subset_time (TreeMachine.fdtisp_unitTime_subset_sizeCost _ _ h)) 1 (d + (e + 1))
+    fun n => by simp [pow_add]
+
 end TreeProgram.Source.HasProgram
+
+/-- A program with time polynomial in the input code size gives polynomial time. -/
+theorem TreeProgram.Source.HasProgramIn.mem_fp {α β : Type*} [UniqueEncoding Tree α]
+    [UniqueEncoding Tree β] {f : α → β} {program : Value → Code Value} {P : (α → ℕ) → Prop}
+    (h : HasProgramIn f program (IsPoly fun x => ⌜x⌝ₜ.size) P) : f ∈ FP .tree :=
+  h.hasProgram.mem_fp h.time_spec
+
+/-- A program with time and peak polynomial in the input code size gives polynomial time in the
+size-cost model. -/
+theorem TreeProgram.Source.HasProgramIn.mem_fp_sizeCost {α β : Type*} [UniqueEncoding Tree α]
+    [UniqueEncoding Tree β] {f : α → β} {program : Value → Code Value}
+    (h : HasProgramIn f program (IsPoly fun x => ⌜x⌝ₜ.size) (IsPoly fun x => ⌜x⌝ₜ.size)) :
+    f ∈ FP .sizeCostTree :=
+  h.hasProgram.mem_fp_sizeCost h.time_spec h.peak_spec
 
 end Complexity
 
@@ -831,8 +875,8 @@ private def proveRecursion (method : TSyntax `sourceRecursion) (scope : Option I
   setGoals rest
   return obligations ++ comparisons
 open Lean Elab Tactic in
-/-- Close the growth comparisons among `goals` by the discharger, `dominated` unless one is given;
-a comparison it does not close completely is left unchanged. -/
+/-- Close the growth comparisons and polynomial growths among `goals` by the discharger, `dominated`
+unless one is given; a goal it does not close completely is left unchanged. -/
 def dischargeGrowth (disch : Option (TSyntax ``Lean.Parser.Tactic.discharger))
     (goals : List MVarId) : TacticM (List MVarId) := do
   let tac ← match disch with
@@ -840,20 +884,17 @@ def dischargeGrowth (disch : Option (TSyntax ``Lean.Parser.Tactic.discharger))
     | some d => match d with
       | `(Lean.Parser.Tactic.discharger| (discharger := $tac)) => pure tac
       | _ => throwUnsupportedSyntax
-  goals.filterM fun goal => do
-    unless (← instantiateMVars (← goal.getType)).consumeMData.isAppOf ``Dominated do return true
+  goals.flatMapM fun goal => do
+    let target := (← instantiateMVars (← goal.getType)).consumeMData
+    -- Growth comparisons and polynomial growths alike.
+    unless target.isAppOf ``Dominated || target.isAppOf ``IsPoly do return [goal]
     let saved ← saveState
     try
-      if (← evalTacticAt tac goal).isEmpty then return false
+      if (← evalTacticAt tac goal).isEmpty then return []
     catch _ => pure ()
     saved.restore
-    return true
+    return [goal]
 
-open Lean Meta Elab Tactic in
-elab_rules : tactic
-  | `(tactic| source_fun_prop $[$disch]? $[using $scope:ident]? $[via $replacement]?) => do
-    let obligations ← dischargeGrowth disch (← proveSource scope replacement)
-    setGoals (obligations ++ (← getGoals))
 open Lean Meta Elab Tactic in
 /-- Translate a source function and reduce its model time-space bound to arithmetic goals. -/
 private def modelFunPropCore (disch : Option (TSyntax ``Lean.Parser.Tactic.discharger))
@@ -861,10 +902,12 @@ private def modelFunPropCore (disch : Option (TSyntax ``Lean.Parser.Tactic.disch
   let originalGoals ← getGoals
   setGoals (originalGoals.take 1)
   let target ← (← getMainGoal).getType
-  let machine := target.isAppOf ``TimeSpaceModel.ComputableInO
+  let machine := target.isAppOf ``TimeSpaceModel.ComputableIn
+  let program := target.consumeMData.isAppOf ``HasProgramIn
+  let polynomial := (target.find? (·.isConstOf ``FP)).isSome
   let asymptotic := (target.find? (·.isConstOf ``FDTISP)).isSome
-  unless machine || asymptotic do
-    throwError "model_fun_prop expects a tree ComputableInO or FDTISP target"
+  unless machine || program || polynomial || asymptotic do
+    throwError "model_fun_prop expects a tree ComputableIn, HasProgramIn, FP or FDTISP target"
   let powers ← if let some application := target.find? (·.isAppOf ``FDTISP) then do
       let args := application.getAppArgs
       let exponent (f : Lean.Expr) : MetaM (Option Nat) :=
@@ -878,10 +921,19 @@ private def modelFunPropCore (disch : Option (TSyntax ``Lean.Parser.Tactic.disch
       let s ← exponent args.back!
       pure (do let t ← t; let s ← s; if s > 0 then some (t, s) else none)
     else pure none
-  if machine then
-    evalTactic (← `(tactic| refine HasProgram.computableInO_of_dominated
+  if program then
+    -- Unified with the target first: the output encodings may depend on the input.
+    evalTactic (← `(tactic| apply HasProgram.hasProgramIn))
+  else if machine then
+    evalTactic (← `(tactic| refine HasProgram.computableIn_of_dominated
       (program := ?program) (hf := ?implementation) (t := ?time_bound) (p := ?peak_bound)
       ?time ?peak))
+  else if polynomial && (target.find? (·.isConstOf ``TimeSpaceModel.sizeCostTree)).isSome then
+    evalTactic (← `(tactic| refine HasProgram.mem_fp_sizeCost (program := ?program)
+      (hf := ?implementation) (t := ?time_bound) (p := ?peak_bound) ?time ?peak))
+  else if polynomial then
+    evalTactic (← `(tactic| refine HasProgram.mem_fp (program := ?program)
+      (hf := ?implementation) (t := ?time_bound) (p := ?peak_bound) ?time))
   else if let some (t, s) := powers then
     evalTactic (← `(tactic| refine HasProgram.mem_fdtisp_pow (program := ?program)
       (hf := ?implementation) (t := $(quote t)) (s := $(quote s)) (by decide)))
@@ -903,6 +955,15 @@ def modelFunProp (disch : Option (TSyntax ``Lean.Parser.Tactic.discharger))
   let saved ← saveState
   try modelFunPropCore disch translate
   catch ex => saved.restore; throw ex
+
+open Lean Meta Elab Tactic in
+elab_rules : tactic
+  | `(tactic| source_fun_prop $[$disch]? $[using $scope:ident]? $[via $replacement]?) => do
+    -- Growth predicates are met by the translated growths.
+    if (← instantiateMVars (← getMainTarget)).consumeMData.isAppOf ``HasProgramIn then
+      return ← modelFunProp disch (proveSource scope replacement)
+    let obligations ← dischargeGrowth disch (← proveSource scope replacement)
+    setGoals (obligations ++ (← getGoals))
 
 /-- Reduce a model time-space bound of a source function to its translation and arithmetic goals;
 the options and methods are those of `source_fun_prop`, and the growth comparisons left are
@@ -927,6 +988,8 @@ elab_rules : tactic
   | `(tactic| model_fun_prop $[$disch]? using $method:sourceRecursion $[using $scope:ident]?) =>
     modelFunProp disch (proveRecursion method scope)
   | `(tactic| source_fun_prop $[$disch]? using $method:sourceRecursion $[using $scope:ident]?) => do
+    if (← instantiateMVars (← getMainTarget)).consumeMData.isAppOf ``HasProgramIn then
+      return ← modelFunProp disch (proveRecursion method scope)
     let obligations ← dischargeGrowth disch (← proveRecursion method scope)
     setGoals (obligations ++ (← getGoals))
 open Lean Meta in
@@ -969,6 +1032,24 @@ initialize registerBuiltinAttribute {
     try
       let `(attr| source $[using $scope:ident]?) := stx | throwUnsupportedSyntax
       let info ← getConstInfo name
+      -- An implementation with growth predicates is used with its chosen growths.
+      if ← forallTelescope info.type fun _ type => return type.isAppOf ``HasProgramIn then
+        if scope.isSome then
+          throwError "`source using` selects rules for a function equality"
+        -- `fun_prop` takes declarations concluding `HasProgram`: an unexported one restates it.
+        let certificate ← forallTelescope info.type fun parameters _ => withoutExporting do
+          let result ← mkAppM ``HasProgramIn.hasProgram
+            #[mkAppN (mkConst name (info.levelParams.map mkLevelParam)) parameters]
+          let closure ← Closure.mkValueTypeClosure (← mkForallFVars parameters (← inferType result))
+            (← mkLambdaFVars parameters result) false
+          let certificate ← mkFreshUserName (name ++ `sourceProgram)
+          addDecl <| .thmDecl { name := certificate, type := closure.type, value := closure.value
+                                levelParams := closure.levelParams.toList }
+          pure certificate
+        checkUniqueSource certificate
+        sourceSavedImplementationExt.add certificate kind
+        addTheorem certificate kind 1001
+        return
       if ← forallTelescope info.type fun _ type =>
           return type.isAppOfArity ``HasProgram 8 then
         if scope.isSome then

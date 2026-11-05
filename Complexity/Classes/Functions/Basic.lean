@@ -145,10 +145,10 @@ theorem ComputableWithin.mem_fdtisp
   (ComputableWithin.iff_bySize.mp h).mem_fdtisp
 
 /-- Export the same machine; an eventual class conclusion is never used as a call specification. -/
-theorem ComputableInO.mem_fdtisp
-    (h : model.ComputableInO f
-      (fun a => T (model.inputSize (encode Data a)))
-      (fun a => S (model.inputSize (encode Data a)))) : f ∈ FDTISP model T S := by
+theorem ComputableIn.mem_fdtisp
+    (h : model.ComputableIn f
+      IsO(fun a => T (model.inputSize (encode Data a)))
+      IsO(fun a => S (model.inputSize (encode Data a)))) : f ∈ FDTISP model T S := by
   obtain ⟨t, s, h, ⟨C, ht⟩, ⟨D, hs⟩⟩ := h
   exact FDTISP.mono ((Dominated.refl T).const_mul_left C).atTop
     ((Dominated.refl S).const_mul_left D).atTop (h.mono ht hs).mem_fdtisp

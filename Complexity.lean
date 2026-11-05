@@ -150,6 +150,7 @@ public import Complexity.Resources.TuringMachine
 public import Complexity.Tactic.Dominated.Attr
 public import Complexity.Tactic.Dominated.Basic
 public import Complexity.Tactic.Dominated.Facts
+public import Complexity.Tactic.Dominated.Pointwise
 public import Complexity.Tactic.Hole
 public import Complexity.Tactic.TreeProgram.Arithmetic
 public import Complexity.Tactic.TreeProgram.Assembly

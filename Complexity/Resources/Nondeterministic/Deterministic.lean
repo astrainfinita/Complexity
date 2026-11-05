@@ -78,9 +78,9 @@ theorem nDecidableWithin_of_computable
     TimeSpaceModel.ntm.NDecidableWithin p t s :=
   nDecidableWithinByCode_of_computable h hp
 
-theorem nDecidableInO_of_computable
-    (h : TimeSpaceModel.tm.ComputableInO f t s) (hp : Decides f p) :
-    TimeSpaceModel.ntm.NDecidableInO p t s := by
+theorem nDecidableIn_of_computable {time space : (α → ℕ) → Prop}
+    (h : TimeSpaceModel.tm.ComputableIn f time space) (hp : Decides f p) :
+    TimeSpaceModel.ntm.NDecidableIn p time space := by
   obtain ⟨u, v, h, hu, hv⟩ := h
   exact ⟨u, v, nDecidableWithin_of_computable h hp, hu, hv⟩
 

@@ -26,6 +26,11 @@ variable {α β M : Type*} [AddCommMonoid M] [PartialOrder M] [CanonicallyOrdere
 /-- One natural additive coefficient bounds every input, including all callback arguments. -/
 def Dominated (f g : α → M) : Prop := ∃ C : ℕ, ∀ x, f x ≤ C • g x
 
+/-- `IsO(T)` is the property of a function of being `O(T)`, on every input:
+`fun t => Dominated t T`. It states budgets in specifications, as in
+`ComputableIn f IsO(T) IsO(S)`. -/
+scoped notation "IsO(" T ")" => fun t => Dominated t T
+
 omit [CanonicallyOrderedAdd M] in
 theorem dominated_iff {f g : α → M} : Dominated f g ↔ ∃ C : ℕ, ∀ x, f x ≤ C • g x :=
   Iff.rfl

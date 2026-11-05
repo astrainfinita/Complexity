@@ -45,9 +45,9 @@ theorem _root_.Complexity.TimeSpaceModel.ComputableWithin.toTM
   TimeSpaceModel.ComputableWithinByCode.toTM h
 
 /-- Blank tape cells remain a real additive cost even after hiding multiplicative constants. -/
-theorem _root_.Complexity.TimeSpaceModel.ComputableInO.toTM
-    (h : TimeSpaceModel.stack.ComputableInO f t s) :
-    TimeSpaceModel.tm.ComputableInO f t (fun a => s a + 1) := by
+theorem _root_.Complexity.TimeSpaceModel.ComputableIn.toTM
+    (h : TimeSpaceModel.stack.ComputableIn f IsO(t) IsO(s)) :
+    TimeSpaceModel.tm.ComputableIn f IsO(t) IsO(fun a => s a + 1) := by
   obtain ⟨u, v, h, hu, hv⟩ := h
   obtain ⟨c, h⟩ := TimeSpaceModel.ComputableWithin.toTM h
   exact ⟨_, _, h, hu, (hv.add (Dominated.refl _)).const_mul_left c⟩
@@ -74,9 +74,9 @@ theorem _root_.Complexity.TimeSpaceModel.ComputableWithin.toStack_of_tm
     TimeSpaceModel.stack.ComputableWithin f t (fun a => 2 * s a) :=
   TimeSpaceModel.ComputableWithinByCode.toStack_of_tm h
 
-theorem _root_.Complexity.TimeSpaceModel.ComputableInO.toStack_of_tm
-    (h : TimeSpaceModel.tm.ComputableInO f t s) :
-    TimeSpaceModel.stack.ComputableInO f t s := by
+theorem _root_.Complexity.TimeSpaceModel.ComputableIn.toStack_of_tm
+    (h : TimeSpaceModel.tm.ComputableIn f IsO(t) IsO(s)) :
+    TimeSpaceModel.stack.ComputableIn f IsO(t) IsO(s) := by
   obtain ⟨u, v, h, hu, hv⟩ := h
   exact ⟨_, _, TimeSpaceModel.ComputableWithin.toStack_of_tm h, hu, hv.const_mul_left 2⟩
 

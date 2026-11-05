@@ -9,6 +9,7 @@ public import Complexity.Asymptotics.Nat
 public import Complexity.Models.TreeMachine.Language.Bounds
 public import Complexity.Encoding.Prod
 public import Complexity.Tactic.TreeProgram.Attributes
+public import Complexity.Tactic.Dominated.Attr
 public import Mathlib.Tactic.FunProp
 
 /-! # Certified implementations of source functions
@@ -171,16 +172,24 @@ theorem map_input {α γ : Type*} {β : α → Type*} [UniqueEncoding Tree α]
 
 end Implements
 
-/-- `f` is implemented by `program`, whose exact budgets grow at most like `time` and `peak`. The
-hidden coefficient is uniform over all inputs, including repeated calls on small inputs. The
-program is a parameter, as the derivative is in `HasDerivAt`, so that one program at every type is
-a statement. A `fun_prop` property of `f`. -/
+/-- `f` is implemented by `program`, whose exact budgets have growths satisfying `time` and `peak`,
+such as `IsPoly s` or `IsO(T)`. The program is a parameter, as the derivative is in `HasDerivAt`,
+so that one program at every type is a statement. Statements take this form, as `ComputableIn`
+does for a model. -/
+def HasProgramIn {α : Type*} {β : α → Type*} [UniqueEncoding Tree α]
+    [∀ x, UniqueEncoding Tree (β x)] (f : (x : α) → β x) (program : Value → Code Value)
+    (time peak : (α → ℕ) → Prop) : Prop :=
+  ∃ b : Bounds α, Implements program f b ∧ time b.time ∧ peak b.peak
+
+/-- `HasProgramIn` within `O(time)` and `O(peak)`, the form the translation composes: a `fun_prop`
+property of `f`. The hidden coefficient is uniform over all inputs, including repeated calls on
+small inputs. A structure, so that a unification that fails is not unfolded into `Dominated`. -/
 @[fun_prop]
 structure HasProgram {α : Type*} {β : α → Type*} [UniqueEncoding Tree α]
     [∀ x, UniqueEncoding Tree (β x)] (f : (x : α) → β x) (program : Value → Code Value)
     (time peak : α → ℕ) : Prop where
-  /-- Some exact budgets certify the program and are dominated by the stated growth. -/
-  sound : ∃ b : Bounds α, Implements program f b ∧ Dominated b.time time ∧ Dominated b.peak peak
+  /-- The program within `O(time)` and `O(peak)`. -/
+  toHasProgramIn : HasProgramIn f program IsO(time) IsO(peak)
 
 namespace HasProgram
 
@@ -189,6 +198,11 @@ section
 variable {α : Type*} {β γ : α → Type*} [UniqueEncoding Tree α] [∀ x, UniqueEncoding Tree (β x)]
   [∀ x, UniqueEncoding Tree (γ x)] {f : (x : α) → β x} {program : Value → Code Value}
   {t p : α → ℕ}
+
+/-- Some exact budgets certify the program and are dominated by the stated growth. -/
+theorem sound (hf : HasProgram f program t p) :
+    ∃ b : Bounds α, Implements program f b ∧ Dominated b.time t ∧ Dominated b.peak p :=
+  hf.toHasProgramIn
 
 /-- Use the exact budgets of a certified program as its growth specification. -/
 theorem of_implements (b : Bounds α) (h : Implements program f b) :
@@ -255,5 +269,49 @@ theorem map_input {f : (x : α) → ε x} (hf : HasProgram f program t p) (i : �
   exact ⟨_, h.map_input i hi, ht.comp i, hp.comp i⟩
 
 end HasProgram
+
+namespace HasProgramIn
+
+variable {α : Type*} {β : α → Type*} [UniqueEncoding Tree α] [∀ x, UniqueEncoding Tree (β x)]
+  {f : (x : α) → β x} {program : Value → Code Value} {T P : (α → ℕ) → Prop}
+
+/-- The time growth of some certifying budgets. -/
+noncomputable def time (h : HasProgramIn f program T P) : α → ℕ := h.choose.time
+
+/-- The peak growth of the same budgets. -/
+noncomputable def peak (h : HasProgramIn f program T P) : α → ℕ := h.choose.peak
+
+/-- The program with the growths of the chosen budgets, for the translation. -/
+theorem hasProgram (h : HasProgramIn f program T P) : HasProgram f program h.time h.peak :=
+  ⟨h.choose, h.choose_spec.1, .refl _, .refl _⟩
+
+theorem time_spec (h : HasProgramIn f program T P) : T h.time := h.choose_spec.2.1
+
+theorem peak_spec (h : HasProgramIn f program T P) : P h.peak := h.choose_spec.2.2
+
+/-- The chosen time growth of an implementation polynomial in `s` is polynomial in `s`. -/
+@[dominated] theorem isPoly_time {s : α → ℕ} (h : HasProgramIn f program (IsPoly s) P) :
+    IsPoly s h.time :=
+  h.time_spec
+
+/-- The chosen peak growth of an implementation polynomial in `s` is polynomial in `s`. -/
+@[dominated] theorem isPoly_peak {s : α → ℕ} (h : HasProgramIn f program T (IsPoly s)) :
+    IsPoly s h.peak :=
+  h.peak_spec
+
+theorem mono {T' P' : (α → ℕ) → Prop} (h : HasProgramIn f program T P)
+    (ht : ∀ t, T t → T' t) (hp : ∀ p, P p → P' p) : HasProgramIn f program T' P' :=
+  let ⟨b, hb, hT, hP⟩ := h
+  ⟨b, hb, ht _ hT, hp _ hP⟩
+
+end HasProgramIn
+
+/-- Growths polynomial in `s` and `s'` make the program polynomial in them. -/
+theorem HasProgram.hasProgramIn {α : Type*} {β : α → Type*} [UniqueEncoding Tree α]
+    [∀ x, UniqueEncoding Tree (β x)] {f : (x : α) → β x} {program : Value → Code Value}
+    {t p s s' : α → ℕ} (hf : HasProgram f program t p) (ht : IsPoly s t) (hp : IsPoly s' p) :
+    HasProgramIn f program (IsPoly s) (IsPoly s') :=
+  let ⟨b, hb, hbt, hbp⟩ := hf
+  ⟨b, hb, ht.of_dominated hbt, hp.of_dominated hbp⟩
 
 end Complexity.TreeProgram.Source

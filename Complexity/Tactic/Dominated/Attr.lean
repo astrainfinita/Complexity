@@ -22,7 +22,9 @@ namespace Complexity.Tactic.Dominated
 /-- Statements `a ≤ b`, `a < b` or `a = b` about a term, such as the size of an encoding, that
 `dominated` instantiates at every matching term when comparing pointwise. The term is the left
 side, without an added literal, or the right side when the left side is a variable or a literal;
-the terms of the other side are looked at in the next round. -/
+the terms of the other side are looked at in the next round. Statements `IsPoly r T`, possibly
+with premises determined by `T`, are used on `IsPoly` goals at the parts `T a` they match; each
+kind is indexed by its own shape. -/
 initialize dominatedAttr : Lean.LabelExtension ←
   Lean.registerLabelAttr `dominated
     "instantiate this statement at matching terms when `dominated` compares pointwise"

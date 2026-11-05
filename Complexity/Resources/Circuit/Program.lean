@@ -32,10 +32,6 @@ theorem gateClauses_size_le {α : Type*} [UniqueEncoding Tree α]
   abstract_hole program using programGateClauses
   fill_hole program in source_fun_prop
 
-theorem gateClauses_fdtisp {α : Type*} [UniqueEncoding Tree α] :
-    gateClauses (α := α) ∈ FDTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
-  model_fun_prop
-
 /-- Add a gate's clauses to the reversed clause accumulator. -/
 def accumulateGate
     (input : CNF ℕ ×
@@ -54,10 +50,6 @@ abbrev AccumulateInput := CNF ℕ ×
       simpa only [gateClauses, Nat.mul_one] using
         CNF.length_ofGate_le x.2.2.1 x.2.2.2.1 x.2.2.2.2)
   fill_hole program in source_fun_prop (disch := dominated [gateClauses_size_le])
-
-theorem accumulateGate_fdtisp :
-    accumulateGate ∈ FDTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
-  model_fun_prop
 
 /-- Output size is an ordinary property of the list fold, independent of its certification. -/
 theorem accumulateGate_size (input : CNF ℕ ×
@@ -92,10 +84,6 @@ theorem size_encode_val_comp {n k : ℕ} (args : Fin k → Fin n) :
   fill_hole program in
     source_fun_prop (disch := dominated [accumulateGate_size, gateClauses_size_le,
       size_encode_val_comp, size_encode_nat_succ_le])
-
-theorem circuitStep_fdtisp :
-    circuitStep ∈ FDTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by
-  model_fun_prop
 
 /-- Whether the circuit still has a gate to process. -/
 def circuitContinues (input : TseitinState) : Bool :=
@@ -154,18 +142,10 @@ theorem tseitinLoop_state_size (x y : TseitinState)
   abstract_hole program using programCircuitContinues
   fill_hole program in source_fun_prop
 
-theorem circuitContinues_fdtisp :
-    circuitContinues ∈ FDTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
-  model_fun_prop
-
 @[source] theorem hasProgram_circuitFinish :
     HasProgram circuitFinish hole(⊢ program) (fun x => ⌜x⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programCircuitFinish
   fill_hole program in source_fun_prop
-
-theorem circuitFinish_fdtisp :
-    circuitFinish ∈ FDTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by
-  model_fun_prop
 
 theorem circuitStep_circuit_size_lt
     (x : TseitinState) (ht : circuitContinues x = true) :
@@ -201,20 +181,14 @@ theorem hasProgram_tseitinLoop :
   case stop_pos => exact fun _ => Nat.pow_pos (Tree.size_pos _)
   all_goals exact Dominated.of_le_mul _ (fun z => tseitinLoop_state_size z.1.1 z.1.2 z.2)
 
-theorem tseitinLoop_fdtisp :
-    (fun x : TseitinState => tseitinLoop x.1 x.2) ∈
-      FDTISP .tree (fun n => n ^ 2) (fun n => n ^ 2) :=
-  hasProgram_tseitinLoop.mem_fdtisp_pow (by decide)
-
 attribute [source] hasProgram_tseitinLoop
 
 @[local source] theorem tseitin_source :
     (fun input : Σ n, Circuit .booleanAlgebra n 1 => input.2.tseitin) =
       (fun input => tseitinLoop input []) := (funext tseitinLoop_nil).symm
 
-theorem _root_.Complexity.Circuit.tseitin_fdtisp :
-    (fun input : Σ n, Circuit .booleanAlgebra n 1 => input.2.tseitin) ∈
-      FDTISP .tree (fun n => n ^ 2) (fun n => n ^ 2) := by
+theorem _root_.Complexity.Circuit.tseitin_fp :
+    (fun input : Σ n, Circuit .booleanAlgebra n 1 => input.2.tseitin) ∈ FP .sizeCostTree := by
   model_fun_prop
 
 end Complexity.TreeProgram.Source

@@ -68,12 +68,13 @@ def NDecidableWithin (model : TimeSpaceModel Multiset Data) (p : α → Prop)
     (t s : α → ℕ) : Prop :=
   model.NDecidableWithinByCode p (fun a _ => t a) (fun a _ => s a)
 
-/-- `p` is decidable nondeterministically within time `O(T a)` and space `O(S a)` on every
-input `a`: both bounds use the same nondeterministic behavior, and every branch must still
-terminate within its resource bounds. -/
-def NDecidableInO (model : TimeSpaceModel Multiset Data) (p : α → Prop)
-    (T S : α → ℕ) : Prop :=
-  ∃ t s, model.NDecidableWithin p t s ∧ Dominated t T ∧ Dominated s S
+/-- `p` is decidable nondeterministically within a time budget with property `time` and a
+space budget with property `space` on every input: both budgets bound the same nondeterministic
+behavior, and every branch must still terminate within them. `model.NDecidableIn p IsO(T) IsO(S)`
+uses one coefficient for all inputs for each resource; the space is unrestricted by default. -/
+def NDecidableIn (model : TimeSpaceModel Multiset Data) (p : α → Prop)
+    (time : (α → ℕ) → Prop) (space : (α → ℕ) → Prop := fun _ => True) : Prop :=
+  ∃ t s, model.NDecidableWithin p t s ∧ time t ∧ space s
 
 /-- Code-length budgets for one complete nondeterministic computation. Both resources
 refer to the actual input representation, independently of its decoded value. -/
@@ -108,14 +109,16 @@ theorem NDecidableWithin.congr (h : model.NDecidableWithin p t s)
     (hp : ∀ a, p a ↔ q a) : model.NDecidableWithin q t s :=
   NDecidableWithinByCode.congr h hp
 
-theorem NDecidableWithin.nDecidableInO
-    (h : model.NDecidableWithin p t s) : model.NDecidableInO p t s :=
+theorem NDecidableWithin.nDecidableIn
+    (h : model.NDecidableWithin p t s) : model.NDecidableIn p IsO(t) IsO(s) :=
   ⟨t, s, h, Dominated.refl _, Dominated.refl _⟩
 
-theorem NDecidableInO.mono (h : model.NDecidableInO p t s)
-    (ht : Dominated t t') (hs : Dominated s s') : model.NDecidableInO p t' s' := by
-  obtain ⟨u, v, h, hu, hv⟩ := h
-  exact ⟨u, v, h, hu.trans ht, hv.trans hs⟩
+theorem NDecidableIn.mono {time space time' space' : (α → ℕ) → Prop}
+    (h : model.NDecidableIn p time space)
+    (ht : ∀ t, time t → time' t) (hs : ∀ s, space s → space' s) :
+    model.NDecidableIn p time' space' := by
+  obtain ⟨t, s, h, htime, hspace⟩ := h
+  exact ⟨t, s, h, ht t htime, hs s hspace⟩
 
 theorem NDecidableWithinBySize.mono {t s t' s' : ℕ → ℕ}
     (h : model.NDecidableWithinBySize p t s)

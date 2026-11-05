@@ -40,18 +40,10 @@ def toKSAT (input : Σ n, Circuit .booleanAlgebra n 1) : KCNF 3 ℕ :=
 theorem toKSAT_correct (input : Σ n, Circuit .booleanAlgebra n 1) :
     CircuitSAT input ↔ KSAT 3 (toKSAT input) := iff_ksat input.2
 
-theorem toKSAT_unitTime :
-    toKSAT ∈ FDTISP .tree (fun n => n ^ 2) (fun n => n ^ 2) :=
-  FDTISP.of_encode Circuit.tseitin_fdtisp (fun _ => rfl)
-
-theorem toKSAT_sizeCost :
-    toKSAT ∈ FDTISP .sizeCostTree (fun n => n ^ 4) (fun n => n ^ 2) := by
-  have h := TreeMachine.fdtisp_unitTime_subset_sizeCost
-    (fun n => n ^ 2) (fun n => n ^ 2) toKSAT_unitTime
-  simpa only [← pow_add] using h
-
-theorem toKSAT_fp : toKSAT ∈ FP .sizeCostTree :=
-  FP.fdtime_subset 4 (FDTISP.subset_time toKSAT_sizeCost)
+/-- The reduction has the code of the Tseitin formula. -/
+theorem toKSAT_fp : toKSAT ∈ FP .sizeCostTree := by
+  obtain ⟨d, t, ⟨s, h⟩, ht⟩ := FP.mem_iff_exists_fdtime.mp Circuit.tseitin_fp
+  exact FP.mem_iff_exists_fdtime.mpr ⟨d, t, ⟨s, h.of_encode fun _ => rfl⟩, ht⟩
 
 theorem polytimeManyOneReducible_ksat :
     PolytimeManyOneReducible .sizeCostTree CircuitSAT (KSAT 3) :=

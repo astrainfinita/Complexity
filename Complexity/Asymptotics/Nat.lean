@@ -349,4 +349,98 @@ theorem max_same (hf : DominatedAtTop f g) (hh : DominatedAtTop f' g) :
 
 end DominatedAtTop
 
+/-- `t` is polynomial in `s` on every input: `t` is `O((s + 1) ^ d)` for some `d`. The shift
+by one makes constants and sums polynomial also where `s` vanishes. -/
+structure IsPoly {α : Type*} (s t : α → ℕ) : Prop where
+  /-- A degree bounding `t` by a power of `s + 1`. -/
+  exists_dominated : ∃ d, Dominated t fun a => (s a + 1) ^ d
+
+namespace IsPoly
+
+variable {α : Type*} {s f g : α → ℕ}
+
+theorem const (c : ℕ) : IsPoly s fun _ => c :=
+  ⟨0, Dominated.const_of_pos c fun _ => Nat.pow_pos (Nat.succ_pos _)⟩
+
+theorem refl : IsPoly s s :=
+  ⟨1, Dominated.of_le fun a => by simp⟩
+
+theorem of_dominated (hg : IsPoly s g) (h : Dominated f g) : IsPoly s f :=
+  let ⟨d, hd⟩ := hg
+  ⟨d, h.trans hd⟩
+
+theorem add (hf : IsPoly s f) (hg : IsPoly s g) : IsPoly s fun a => f a + g a := by
+  obtain ⟨d, hf⟩ := hf
+  obtain ⟨e, hg⟩ := hg
+  have hpos (a : α) : 0 < s a + 1 := Nat.succ_pos _
+  exact ⟨max d e, (hf.mono_pow (le_max_left d e) hpos).add_same
+    (hg.mono_pow (le_max_right d e) hpos)⟩
+
+theorem max (hf : IsPoly s f) (hg : IsPoly s g) : IsPoly s fun a => max (f a) (g a) := by
+  obtain ⟨d, hf⟩ := hf
+  obtain ⟨e, hg⟩ := hg
+  have hpos (a : α) : 0 < s a + 1 := Nat.succ_pos _
+  exact ⟨Max.max d e, (hf.mono_pow (le_max_left d e) hpos).max_same
+    (hg.mono_pow (le_max_right d e) hpos)⟩
+
+theorem mul (hf : IsPoly s f) (hg : IsPoly s g) : IsPoly s fun a => f a * g a := by
+  obtain ⟨d, hf⟩ := hf
+  obtain ⟨e, hg⟩ := hg
+  exact ⟨d + e, (hf.mul hg).mono fun a => (pow_add (s a + 1) d e).ge⟩
+
+theorem pow (hf : IsPoly s f) (n : ℕ) : IsPoly s fun a => f a ^ n := by
+  obtain ⟨d, hf⟩ := hf
+  exact ⟨d * n, (hf.pow n).mono fun a => (pow_mul (s a + 1) d n).ge⟩
+
+theorem sub (hf : IsPoly s f) (g : α → ℕ) : IsPoly s fun a => f a - g a :=
+  hf.of_dominated (Dominated.of_le fun _ => Nat.sub_le _ _)
+
+/-- A maximum over a list, possibly of dependent elements, is polynomial when its elements are,
+uniformly in the measure of their input. -/
+theorem foldr_max {ι : α → Type*} (xs : (x : α) → List (ι x)) {a : (x : α) → ι x → ℕ}
+    (h : IsPoly (fun z : Σ x, ι x => s z.1) fun z => a z.1 z.2) :
+    IsPoly s fun x => (xs x).foldr (fun i m => Max.max (a x i) m) 0 :=
+  let ⟨d, h⟩ := h
+  ⟨d, Dominated.foldr_max_le xs h⟩
+
+/-- A maximum over a list is polynomial when the elements that occur are, uniformly in the measure
+of their input. -/
+theorem list_foldr_max {ι : Type*} (xs : α → List ι) {a : α → ι → ℕ}
+    (h : IsPoly (fun z : {p : α × ι // p.2 ∈ xs p.1} => s z.1.1) fun z => a z.1.1 z.1.2) :
+    IsPoly s fun x => (xs x).foldr (fun i m => Max.max (a x i) m) 0 :=
+  let ⟨d, h⟩ := h
+  ⟨d, Dominated.list_foldr_max_le xs h⟩
+
+/-- A table sum is polynomial when its length and its entries are, the entries uniformly in the
+measure of their input. -/
+theorem sum_finRange {n : α → ℕ} {a : (x : α) → Fin (n x) → ℕ} (hn : IsPoly s n)
+    (h : IsPoly (fun z : Σ x, Fin (n x) => s z.1) fun z => a z.1 z.2) :
+    IsPoly s fun x => ((List.finRange (n x)).map (a x)).sum := by
+  obtain ⟨e, hn⟩ := hn
+  obtain ⟨d, h⟩ := (IsPoly.mul ⟨e, hn.comp Sigma.fst⟩ h :
+    IsPoly (fun z : Σ x, Fin (n x) => s z.1) fun z => n z.1 * a z.1 z.2)
+  exact ⟨d, Dominated.sum_finRange_of_mul h⟩
+
+/-- A function polynomial on the inputs where `p` holds and on those where it fails is
+polynomial. -/
+theorem of_cases (p : α → Prop)
+    (yes : IsPoly (s ∘ Subtype.val : {x // p x} → ℕ) (f ∘ Subtype.val))
+    (no : IsPoly (s ∘ Subtype.val : {x // ¬p x} → ℕ) (f ∘ Subtype.val)) : IsPoly s f := by
+  obtain ⟨d, yes⟩ := yes
+  obtain ⟨e, no⟩ := no
+  have hpos (a : α) : 0 < s a + 1 := Nat.succ_pos _
+  exact ⟨Max.max d e, Dominated.of_cases p (yes.mono_pow (le_max_left d e) fun _ => hpos _)
+    (no.mono_pow (le_max_right d e) fun _ => hpos _)⟩
+
+/-- A polynomial in `r`, applied where `r` is polynomial in `s`, is polynomial in `s`. -/
+theorem comp {β : Type*} {r T : β → ℕ} {h : α → β} (hT : IsPoly r T)
+    (hh : IsPoly s fun a => r (h a)) : IsPoly s fun a => T (h a) := by
+  obtain ⟨d, hT⟩ := hT
+  obtain ⟨e, hh⟩ := hh
+  have h1 : Dominated (fun a => r (h a) + 1) fun a => (s a + 1) ^ e :=
+    hh.add_same (Dominated.const_of_pos 1 fun _ => Nat.pow_pos (Nat.succ_pos _))
+  exact ⟨e * d, (hT.comp h).trans ((h1.pow d).mono fun a => (pow_mul (s a + 1) e d).ge)⟩
+
+end IsPoly
+
 end Complexity

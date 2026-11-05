@@ -55,10 +55,10 @@ theorem _root_.Complexity.TimeSpaceModel.ComputableWithinBySize.toStack_of_tree
 /-- Simulation consumes an `O` specification and retains its real input-loading overhead,
 bounded by the space budget. Tree codes have positive size, which absorbs the simulator's
 fixed setup cost. -/
-theorem _root_.Complexity.TimeSpaceModel.ComputableInO.toStack_of_tree
+theorem _root_.Complexity.TimeSpaceModel.ComputableIn.toStack_of_tree
     {f : α → β} {t s : α → ℕ}
-    (h : TimeSpaceModel.sizeCostTree.ComputableInO f t s) :
-    TimeSpaceModel.stack.ComputableInO f (fun a => t a + s a) s := by
+    (h : TimeSpaceModel.sizeCostTree.ComputableIn f IsO(t) IsO(s)) :
+    TimeSpaceModel.stack.ComputableIn f IsO(fun a => t a + s a) IsO(s) := by
   classical
   obtain ⟨u, v, h, hu, hv⟩ := h
   obtain ⟨k, hk, Q, hQ, M, h⟩ := computableWithin_iff.mp h
