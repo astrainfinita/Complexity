@@ -8,6 +8,7 @@ module
 public import Complexity.Asymptotics.Basic
 public import Mathlib.Algebra.Ring.Nat
 public import Mathlib.Order.Filter.AtTopBot.Basic
+public import Mathlib.Data.Fintype.Order
 
 /-! # Natural resources and polynomial substitutions -/
 
@@ -87,6 +88,11 @@ variable {α : Type*} {f g : α → ℕ}
 
 theorem of_le_mul (C : ℕ) (h : ∀ x, f x ≤ C * g x) : Dominated f g :=
   dominated_iff.mpr ⟨C, h⟩
+
+/-- On a finite type every function is bounded, hence within a multiple of any positive one. -/
+theorem of_finite [Finite α] (hg : ∀ x, 0 < g x) : Dominated f g :=
+  have ⟨C, hC⟩ := Finite.exists_le f
+  ((Dominated.const C).mono_left hC).trans (one hg)
 
 /-- A constant cost has a uniform allowance, without choosing its value in the caller. -/
 theorem of_forall_eq (h : ∀ x y, f x = f y) : Dominated f (fun _ => 1) := by
@@ -364,6 +370,10 @@ theorem const (c : ℕ) : IsPoly s fun _ => c :=
 
 theorem refl : IsPoly s s :=
   ⟨1, Dominated.of_le fun a => by simp⟩
+
+/-- On a finite type every function is polynomial in any measure. -/
+theorem of_finite [Finite α] : IsPoly s f :=
+  ⟨0, Dominated.of_finite fun _ => by simp⟩
 
 theorem of_dominated (hg : IsPoly s g) (h : Dominated f g) : IsPoly s f :=
   let ⟨d, hd⟩ := hg

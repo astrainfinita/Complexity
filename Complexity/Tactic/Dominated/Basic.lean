@@ -253,7 +253,21 @@ def pointwise (f g : Lean.Expr) : DominatedM (Option Lean.Expr) := do
     | return none
   return some (← mkAppM ``Dominated.of_le_mul #[C, h])
 
-/-- `∀ x, 0 < g x`, from a hypothesis or pointwise. -/
+/-- `0 < e` read off its form: a code size, a positive literal, or a sum with a positive part. -/
+private partial def positiveByForm? (e : Lean.Expr) : MetaM (Option Lean.Expr) := do
+  if e.isAppOfArity ``Tree.size 1 then return some (← mkAppM ``Tree.size_pos #[e.appArg!])
+  if let some n := e.nat? then
+    if n > 0 then return some (← mkDecideProof (← mkAppM ``LT.lt #[mkNatLit 0, e]))
+  if e.isAppOfArity ``HAdd.hAdd 6 then
+    let a := e.getAppArgs[4]!
+    let b := e.appArg!
+    if let some h ← positiveByForm? b then
+      return some (← mkAppM ``Nat.lt_of_lt_of_le #[h, ← mkAppM ``Nat.le_add_left #[b, a]])
+    if let some h ← positiveByForm? a then
+      return some (← mkAppM ``Nat.lt_of_lt_of_le #[h, ← mkAppM ``Nat.le_add_right #[a, b]])
+  return none
+
+/-- `∀ x, 0 < g x`, from a hypothesis, read off its form, or pointwise. -/
 def positive (g : Lean.Expr) : DominatedM (Option Lean.Expr) := do
   let p ← withLocalDeclD `x (← domainOf g) fun x => do
     mkForallFVars #[x] (← mkAppM ``LT.lt #[mkNatLit 0, (mkApp g x).headBeta])
@@ -261,6 +275,10 @@ def positive (g : Lean.Expr) : DominatedM (Option Lean.Expr) := do
     for decl in ← getLCtx do
       if !decl.isImplementationDetail && (← withReducible (isDefEq decl.type p)) then
         return some decl.toExpr
+    let direct ← withLocalDeclD `x (← domainOf g) fun x => do
+      let some h ← positiveByForm? (mkApp g x).headBeta | return none
+      return some (← mkLambdaFVars #[x] h)
+    if direct.isSome then return direct
     bySizeOmega g fun x => mkAppM ``LT.lt #[mkNatLit 0, (mkApp g x).headBeta]
 
 /-- `Dominated f g` without facts: the target itself, a constant, or a pointwise bound. A
