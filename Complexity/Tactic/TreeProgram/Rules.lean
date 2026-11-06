@@ -549,16 +549,7 @@ theorem _root_.Complexity.BitList.hasProgram_increment :
       have := Tree.size_pos ⌜xs⌝ₜ
       omega⟩
 
-theorem _root_.Nat.hasProgram_succ :
-    HasProgram Nat.succ Nat.Code.succ (fun n => ⌜n⌝ₜ.size) (fun n => ⌜n⌝ₜ.size) :=
-  .of_encode (by intro n; simp [encode_nat_tree])
-    (BitList.hasProgram_increment.map_input Nat.bits (fun _ => rfl))
-
-theorem hasProgram_addOne :
-    HasProgram (fun a : ℕ => a + 1) Nat.Code.succ (fun n => ⌜n⌝ₜ.size) (fun n => ⌜n⌝ₜ.size) :=
-  Nat.hasProgram_succ
-
-attribute [scoped fun_prop] BitList.hasProgram_increment Nat.hasProgram_succ hasProgram_addOne
+attribute [scoped fun_prop] BitList.hasProgram_increment
 
 section Constructor
 

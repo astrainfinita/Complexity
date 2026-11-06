@@ -19,56 +19,50 @@ open Complexity TreeProgram
 
 namespace Complexity.TreeProgram.Source
 
-/-- A Boolean result has a constant-size code. -/
-theorem dominated_size_encode_bool {α : Type*} [UniqueEncoding Tree α] (f : α → Bool) :
-    Dominated (fun x => max ⌜x⌝ₜ.size ⌜f x⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) :=
-  (Dominated.refl _).max_same ((Dominated.const_of_pos 3 fun _ => Tree.size_pos _).mono_left
-    fun _ => size_encode_bool_le _)
-
 theorem _root_.Bool.hasProgram_not :
-    HasProgram Bool.not hole(⊢ program) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
+    HasProgram Bool.not hole(⊢ program) (fun _ => 1) (fun _ => 1) := by
   abstract_hole program using programNot
   fill_hole program in
     exact .of_encode (by intro x; cases x <;> rfl)
       (by source_fun_prop :
         HasProgram (fun x => match x with | false => true | true => false) _
-          (fun _ => 1) (fun x => ⌜x⌝ₜ.size))
+          (fun _ => 1) (fun _ => 1))
 
 theorem hasProgram_boolAnd : HasProgram (fun x : Bool × Bool => x.1 && x.2) hole(⊢ program)
-    (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
+    (fun _ => 1) (fun _ => 1) := by
   abstract_hole program using programBoolAnd
   fill_hole program in
     exact .of_encode (by rintro ⟨a, b⟩; cases a <;> cases b <;> rfl)
       (by source_fun_prop :
         HasProgram (fun x : Bool × Bool => match x.1 with | false => false | true => x.2) _
-          (fun _ => 1) (fun x => ⌜x⌝ₜ.size))
+          (fun _ => 1) (fun _ => 1))
 
 theorem hasProgram_boolOr : HasProgram (fun x : Bool × Bool => x.1 || x.2) hole(⊢ program)
-    (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
+    (fun _ => 1) (fun _ => 1) := by
   abstract_hole program using programBoolOr
   fill_hole program in
     exact .of_encode (by rintro ⟨a, b⟩; cases a <;> cases b <;> rfl)
       (by source_fun_prop :
         HasProgram (fun x : Bool × Bool => match x.1 with | false => x.2 | true => true) _
-          (fun _ => 1) (fun x => ⌜x⌝ₜ.size))
+          (fun _ => 1) (fun _ => 1))
 
 attribute [local fun_prop] Bool.hasProgram_not in
 theorem hasProgram_boolXor : HasProgram (fun x : Bool × Bool => xor x.1 x.2) hole(⊢ program)
-    (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
+    (fun _ => 1) (fun _ => 1) := by
   abstract_hole program using programBoolXor
   fill_hole program in
     exact .of_encode (by rintro ⟨a, b⟩; cases a <;> cases b <;> rfl)
       (by source_fun_prop :
         HasProgram (fun x : Bool × Bool => match x.1 with | false => x.2 | true => !x.2) _
-          (fun _ => 1) (fun x => ⌜x⌝ₜ.size))
+          (fun _ => 1) (fun _ => 1))
 
 theorem hasProgram_boolBeq : HasProgram (fun x : Bool × Bool => x.1 == x.2) hole(⊢ program)
-    (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
+    (fun _ => 1) (fun _ => 1) := by
   abstract_hole program using programBoolBeq
   fill_hole program in
     exact (HasProgram.of_encode (by rintro ⟨a, b⟩; cases a <;> cases b <;> rfl)
       (hasProgram_boolXor.comp Bool.hasProgram_not)).mono (Dominated.const 2)
-      (dominated_size_encode_bool _)
+      ((Dominated.refl _).max_same (Dominated.refl _))
 
 /-- Testing a list for emptiness inspects its root. -/
 theorem _root_.List.hasProgram_isEmpty {α : Type*} [UniqueEncoding Tree α] :

@@ -320,6 +320,19 @@ theorem hasProgram_lt :
 
 attribute [scoped fun_prop] hasProgram_add hasProgram_ble hasProgram_lt
 
+/-- Addition of one by the program of the addition; its growth is stated once here. -/
+theorem hasProgram_addOne :
+    HasProgram (fun n : ℕ => n + 1) hole(⊢ program) (fun n => ⌜n⌝ₜ.size)
+      (fun n => ⌜n⌝ₜ.size) := by
+  abstract_hole program using programAddOne
+  fill_hole program in source_fun_prop
+
+theorem _root_.Nat.hasProgram_succ :
+    HasProgram Nat.succ programAddOne (fun n => ⌜n⌝ₜ.size) (fun n => ⌜n⌝ₜ.size) :=
+  hasProgram_addOne
+
+attribute [scoped fun_prop] hasProgram_addOne Nat.hasProgram_succ
+
 theorem hasProgram_natBeq :
     HasProgram (fun x : ℕ × ℕ => Nat.beq x.1 x.2) hole(⊢ program) (fun x => ⌜x⌝ₜ.size)
       (fun x => ⌜x⌝ₜ.size) := by
