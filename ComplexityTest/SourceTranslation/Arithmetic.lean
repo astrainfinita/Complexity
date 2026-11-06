@@ -39,7 +39,11 @@ example : HasProgram (fun x : Bool × List Bool => if x.1 = true then x.2.revers
 example := (by source_fun_prop : HasProgram (fun x : Bool × Bool × Bool =>
     (x.1 && x.2.1) || (x.2.2 && (x.1 || x.2.1))) _ _ _)
 
--- Addition by one keeps the selected successor program.
-example := (by source_fun_prop : HasProgram (fun n : ℕ => n + 1) Nat.Code.succ _ _)
+-- Addition of one and the successor share the program of the addition, with the growth stated by
+-- `hasProgram_addOne`.
+example := (by source_fun_prop : HasProgram (fun n : ℕ => n + 1) programAddOne
+  (fun n => ⌜n⌝ₜ.size) (fun n => ⌜n⌝ₜ.size))
+example := (by source_fun_prop : HasProgram Nat.succ programAddOne
+  (fun n => ⌜n⌝ₜ.size) (fun n => ⌜n⌝ₜ.size))
 
 end ComplexityTest.SourceTranslation.Arithmetic

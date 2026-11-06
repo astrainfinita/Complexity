@@ -67,9 +67,7 @@ theorem drainTwice_fdtisp :
     drainTwice ∈ FDTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by
   model_fun_prop (disch := dominated [drain])
 
--- A zero atTop conclusion on a finite type retains the positive selected callback.
-example := (by source_fun_prop : HasProgram Bool.not programFiniteNot _ _)
-
+-- A composition on a finite type keeps the constant growths stated by the selected implementation.
 example : HasProgram (fun b => !!b) hole(⊢ program) (fun _ => 1 + 1) (fun _ => max 1 1) := by
   fill_hole program in source_fun_prop
 

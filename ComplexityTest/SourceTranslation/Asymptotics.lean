@@ -174,14 +174,9 @@ theorem finiteIdentity_fdtisp :
     have hs : ⌜x⌝ₜ.size = 1 := size_encode_unit x
     omega
 
--- The selected all-input callback has positive cost even though its final size class is zero.
-@[source] theorem hasProgram_finiteNot :
-    HasProgram Bool.not hole(⊢ program) (fun _ => 1) (fun _ => 1) := by
-  abstract_hole program using programFiniteNot
-  fill_hole program in source_fun_prop
-
+-- A program on a finite type has positive cost on every input, even though its size class is zero.
 theorem finiteNot_fdtisp : Bool.not ∈ FDTISP .tree (fun _ => 0) (fun _ => 0) := by
-  apply hasProgram_finiteNot.mem_fdtisp_of_sizeEnvelope
+  apply Bool.hasProgram_not.mem_fdtisp_of_sizeEnvelope
   all_goals
     refine ⟨0, eventually_atTop.mpr ⟨4, fun n hn => ?_⟩⟩
     simp only [Nat.zero_mul]
