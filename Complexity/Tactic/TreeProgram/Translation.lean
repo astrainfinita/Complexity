@@ -37,7 +37,7 @@ open Complexity TreeProgram
 
 namespace Complexity.TreeProgram.Source
 
-open Internal (HasProgram)
+open Internal (HasProgramInO)
 
 /-- Compile a fixed source program with budgets indexed by its actual input. -/
 theorem Implements.computableWithin {α β : Type*}
@@ -56,13 +56,13 @@ theorem Implements.computableWithin {α β : Type*}
   exact (hr.compile (Nat.le_max_left _ _)).mono (hb x).1
     (Nat.mul_le_mul_left _ (hb x).2)
 
-namespace Internal.HasProgram
+namespace Internal.HasProgramInO
 
 variable {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β] {f : α → β}
   {program : Value → Code Value} {t p : α → ℕ}
 
 /-- Keep loading, controller and peak costs when hiding the fixed machine's register factor. -/
-theorem computableIn (hf : HasProgram f program t p) :
+theorem computableIn (hf : HasProgramInO f program t p) :
     TimeSpaceModel.tree.ComputableIn f IsO(fun x => t x + 4)
       IsO(fun x => max ⌜x⌝ₜ.size (p x) + 2) := by
   obtain ⟨b, h, ht, hp⟩ := hf.sound
@@ -73,24 +73,24 @@ theorem computableIn (hf : HasProgram f program t p) :
 
 /-- Compare the input budgets at the machine boundary. Loading and storage overheads remain
 explicit. -/
-theorem computableIn_of_dominated {T S : α → ℕ} (hf : HasProgram f program t p)
+theorem computableIn_of_dominated {T S : α → ℕ} (hf : HasProgramInO f program t p)
     (ht : Dominated (fun x => t x + 4) T)
     (hp : Dominated (fun x => max ⌜x⌝ₜ.size (p x) + 2) S) :
     TimeSpaceModel.tree.ComputableIn f IsO(T) IsO(S) :=
   hf.computableIn.mono (fun _ h => h.trans ht) (fun _ h => h.trans hp)
 
-end Internal.HasProgram
+end Internal.HasProgramInO
 
 end Complexity.TreeProgram.Source
 
 namespace Complexity
 
-namespace TreeProgram.Source.Internal.HasProgram
+namespace TreeProgram.Source.Internal.HasProgramInO
 
 variable {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
   {f : α → β} {program : Value → Code Value} {t p : α → ℕ} {T S : ℕ → ℕ}
 
-theorem mem_fdtisp (hf : HasProgram f program (fun x => T ⌜x⌝ₜ.size) (fun x => S ⌜x⌝ₜ.size))
+theorem mem_fdtisp (hf : HasProgramInO f program (fun x => T ⌜x⌝ₜ.size) (fun x => S ⌜x⌝ₜ.size))
     (input : Dominated (fun x : α => ⌜x⌝ₜ.size) (fun x => S ⌜x⌝ₜ.size))
     (time_overhead : Dominated (fun _ : α => 4) (fun x => T ⌜x⌝ₜ.size))
     (space_overhead : Dominated (fun _ : α => 2) (fun x => S ⌜x⌝ₜ.size)) :
@@ -100,7 +100,7 @@ theorem mem_fdtisp (hf : HasProgram f program (fun x => T ⌜x⌝ₜ.size) (fun 
     ((input.max_same (Dominated.refl _)).add_same space_overhead)).mem_fdtisp
 
 /-- Compare the structural growth with the scale functions at the model boundary. -/
-theorem mem_fdtisp_of_dominated (hf : HasProgram f program t p)
+theorem mem_fdtisp_of_dominated (hf : HasProgramInO f program t p)
     (ht : Dominated (fun x => t x + 4) (fun x => T ⌜x⌝ₜ.size))
     (hp : Dominated (fun x => max ⌜x⌝ₜ.size (p x) + 2) (fun x => S ⌜x⌝ₜ.size)) :
     f ∈ FDTISP .tree T S :=
@@ -109,7 +109,7 @@ theorem mem_fdtisp_of_dominated (hf : HasProgram f program t p)
 /-- Exact-size envelopes are used only where an eventual scale comparison is required.
 This permits finite input types to inhabit a zero eventual class without weakening their
 all-input program or machine specifications. -/
-theorem mem_fdtisp_of_sizeEnvelope (hf : HasProgram f program t p)
+theorem mem_fdtisp_of_sizeEnvelope (hf : HasProgramInO f program t p)
     (ht : DominatedAtTop (sizeEnvelope (fun x => t x + 4)) T)
     (hp : DominatedAtTop (sizeEnvelope (fun x => max ⌜x⌝ₜ.size (p x) + 2)) S) :
     f ∈ FDTISP .tree T S := by
@@ -121,7 +121,7 @@ theorem mem_fdtisp_of_sizeEnvelope (hf : HasProgram f program t p)
 /-- The usual positive powers of encoding size absorb the model's input storage,
 fixed controller overheads and fixed register factor. -/
 theorem mem_fdtisp_pow {t s : ℕ}
-    (hf : HasProgram f program (fun x => ⌜x⌝ₜ.size ^ t) (fun x => ⌜x⌝ₜ.size ^ s))
+    (hf : HasProgramInO f program (fun x => ⌜x⌝ₜ.size ^ t) (fun x => ⌜x⌝ₜ.size ^ s))
     (hs : 0 < s) : f ∈ FDTISP .tree (fun n => n ^ t) (fun n => n ^ s) := by
   apply hf.mem_fdtisp
   · exact Dominated.of_le fun x => Nat.le_self_pow (by omega) _
@@ -130,7 +130,7 @@ theorem mem_fdtisp_pow {t s : ℕ}
 
 /-- A time growth polynomial in the input code size gives polynomial time, with no degree
 written. -/
-theorem mem_fp (hf : HasProgram f program t p) (ht : IsPoly (fun x => ⌜x⌝ₜ.size) t) :
+theorem mem_fp (hf : HasProgramInO f program t p) (ht : IsPoly (fun x => ⌜x⌝ₜ.size) t) :
     f ∈ FP .tree := by
   obtain ⟨d, ht⟩ := ht
   have h := hf.mem_fdtisp_of_dominated (T := fun n => (n + 1) ^ d)
@@ -141,7 +141,7 @@ theorem mem_fp (hf : HasProgram f program t p) (ht : IsPoly (fun x => ⌜x⌝ₜ
 
 /-- Time and peak growths polynomial in the input code size give polynomial time in the size-cost
 model, which charges each step by the size of its trees, with no degree written. -/
-theorem mem_fp_sizeCost (hf : HasProgram f program t p) (ht : IsPoly (fun x => ⌜x⌝ₜ.size) t)
+theorem mem_fp_sizeCost (hf : HasProgramInO f program t p) (ht : IsPoly (fun x => ⌜x⌝ₜ.size) t)
     (hp : IsPoly (fun x => ⌜x⌝ₜ.size) p) : f ∈ FP .sizeCostTree := by
   obtain ⟨d, ht⟩ := ht
   obtain ⟨e, hp⟩ := hp
@@ -157,13 +157,13 @@ theorem mem_fp_sizeCost (hf : HasProgram f program t p) (ht : IsPoly (fun x => �
     (FDTISP.subset_time (TreeMachine.fdtisp_unitTime_subset_sizeCost _ _ h)) 1 (d + (e + 1))
     fun n => by simp [pow_add]
 
-end TreeProgram.Source.Internal.HasProgram
+end TreeProgram.Source.Internal.HasProgramInO
 
 /-- A program with time polynomial in the input code size gives polynomial time. -/
 theorem TreeProgram.Source.HasProgramIn.mem_fp {α β : Type*} [UniqueEncoding Tree α]
     [UniqueEncoding Tree β] {f : α → β} {program : Value → Code Value} {P : (α → ℕ) → Prop}
     (h : HasProgramIn f program (IsPoly fun x => ⌜x⌝ₜ.size) P) : f ∈ FP .tree :=
-  h.hasProgram.mem_fp h.time_spec
+  h.hasProgramInO.mem_fp h.time_spec
 
 /-- A program with time and peak polynomial in the input code size gives polynomial time in the
 size-cost model. -/
@@ -171,14 +171,14 @@ theorem TreeProgram.Source.HasProgramIn.mem_fp_sizeCost {α β : Type*} [UniqueE
     [UniqueEncoding Tree β] {f : α → β} {program : Value → Code Value}
     (h : HasProgramIn f program (IsPoly fun x => ⌜x⌝ₜ.size) (IsPoly fun x => ⌜x⌝ₜ.size)) :
     f ∈ FP .sizeCostTree :=
-  h.hasProgram.mem_fp_sizeCost h.time_spec h.peak_spec
+  h.hasProgramInO.mem_fp_sizeCost h.time_spec h.peak_spec
 
 /-! The exits of an implementation within `O(t)` and `O(p)` are those of the form the translation
 composes, with the same growths. -/
 
 namespace TreeProgram.Source.HasProgramIn
 
-open Internal (HasProgram)
+open Internal (HasProgramInO)
 
 variable {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
   {f : α → β} {program : Value → Code Value} {t p : α → ℕ} {T S : ℕ → ℕ}
@@ -186,18 +186,18 @@ variable {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
 theorem computableIn (h : HasProgramIn f program IsO(t) IsO(p)) :
     TimeSpaceModel.tree.ComputableIn f IsO(fun x => t x + 4)
       IsO(fun x => max ⌜x⌝ₜ.size (p x) + 2) :=
-  h.toHasProgram.computableIn
+  h.toHasProgramInO.computableIn
 
 theorem mem_fdtisp_of_sizeEnvelope (h : HasProgramIn f program IsO(t) IsO(p))
     (ht : DominatedAtTop (sizeEnvelope (fun x => t x + 4)) T)
     (hp : DominatedAtTop (sizeEnvelope (fun x => max ⌜x⌝ₜ.size (p x) + 2)) S) :
     f ∈ FDTISP .tree T S :=
-  h.toHasProgram.mem_fdtisp_of_sizeEnvelope ht hp
+  h.toHasProgramInO.mem_fdtisp_of_sizeEnvelope ht hp
 
 theorem mem_fdtisp_pow {t s : ℕ}
     (h : HasProgramIn f program IsO(fun x => ⌜x⌝ₜ.size ^ t) IsO(fun x => ⌜x⌝ₜ.size ^ s))
     (hs : 0 < s) : f ∈ FDTISP .tree (fun n => n ^ t) (fun n => n ^ s) :=
-  h.toHasProgram.mem_fdtisp_pow hs
+  h.toHasProgramInO.mem_fdtisp_pow hs
 
 end TreeProgram.Source.HasProgramIn
 
@@ -209,7 +209,7 @@ public meta section
 
 namespace Complexity.TreeProgram.Source
 
-open Internal (HasProgram)
+open Internal (HasProgramInO)
 
 /-- Compose source-function implementations and their growth.
 `using ns` activates the namespace's scoped rules for this translation and its callbacks;
@@ -229,12 +229,12 @@ def typedSourceProof (type proof : Lean.Expr) : MetaM Lean.Expr := do
   mkAuxTheorem type proof
 
 open Lean Meta in
-/-- The arguments of a goal `HasProgram f program time peak`, with its implicit types and
+/-- The arguments of a goal `HasProgramInO f program time peak`, with its implicit types and
 encodings. -/
 def sourceGoalArgs (goal : MVarId) : MetaM (Array Lean.Expr) := do
   let target := (← instantiateMVars (← goal.getType)).consumeMData
-  unless target.isAppOfArity ``HasProgram 8 do
-    throwError "source translation: expected HasProgram, got {target}"
+  unless target.isAppOfArity ``HasProgramInO 8 do
+    throwError "source translation: expected HasProgramInO, got {target}"
   return target.getAppArgs
 
 open Lean Meta in
@@ -251,7 +251,7 @@ def programGoal (f : Lean.Expr) : MetaM Lean.Expr := do
   let growth ← mkArrow (← whnf (← inferType f)).bindingDomain! (mkConst ``Nat)
   let program ← mkFreshExprMVar
     (← mkArrow (mkConst ``Value) (mkApp (mkConst ``Code) (mkConst ``Value)))
-  mkAppM ``HasProgram #[f, program, ← mkFreshExprMVar growth, ← mkFreshExprMVar growth]
+  mkAppM ``HasProgramInO #[f, program, ← mkFreshExprMVar growth, ← mkFreshExprMVar growth]
 
 open Lean Meta in
 /-- Close a program request. Growth placeholders take the produced growth; a stated growth
@@ -260,8 +260,8 @@ def finishProgram (goal : MVarId) (result : Lean.Expr) : MetaM (List MVarId) :=
     goal.withContext do
   let target := (← whnfR (← instantiateMVars (← goal.getType))).consumeMData
   let actual := (← whnfR (← instantiateMVars (← inferType result))).consumeMData
-  unless target.isAppOfArity ``HasProgram 8 && actual.isAppOfArity ``HasProgram 8 do
-    throwError "source translation: expected a HasProgram goal, got {target} and {actual}"
+  unless target.isAppOfArity ``HasProgramInO 8 && actual.isAppOfArity ``HasProgramInO 8 do
+    throwError "source translation: expected a HasProgramInO goal, got {target} and {actual}"
   -- A named placeholder takes the produced program or growth, like an anonymous one; a hole is
   -- left to `fill_hole`.
   let placeholder? (e : Lean.Expr) : MetaM (Option MVarId) := do
@@ -286,7 +286,7 @@ def finishProgram (goal : MVarId) (result : Lean.Expr) : MetaM (List MVarId) :=
       comparisons := comparisons.push h
       obligations := obligations ++ [h.mvarId!]
   let value ← if obligations.isEmpty then pure result
-    else mkAppM ``HasProgram.mono #[result, comparisons[0]!, comparisons[1]!]
+    else mkAppM ``HasProgramInO.mono #[result, comparisons[0]!, comparisons[1]!]
   unless ← isDefEq (← goal.getType) (← inferType value) do
     -- A program left as a hole is filled only by `fill_hole`.
     if let .mvar hole := (target.getArg! 5).getAppFn then
@@ -314,7 +314,7 @@ same program within `IsO(time)` and `IsO(peak)` with these growths, and under ot
 properties with the growths of its chosen budgets. -/
 private def composedProgram? (h : Lean.Expr) : MetaM (Option Lean.Expr) := do
   let type := (← instantiateMVars (← inferType h)).consumeMData
-  if type.isAppOfArity ``HasProgram 8 then return some h
+  if type.isAppOfArity ``HasProgramInO 8 then return some h
   unless type.isAppOfArity ``HasProgramIn 8 do return none
   -- The arguments are read off the statement, so no instance is synthesized again.
   let levels := type.getAppFn.constLevels!
@@ -325,8 +325,8 @@ private def composedProgram? (h : Lean.Expr) : MetaM (Option Lean.Expr) := do
         !body.appArg!.hasLooseBVars then some body.appArg! else none
     | _ => none
   if let (some t, some p) := (bound? args[6]!, bound? args[7]!) then
-    return some (mkAppN (mkConst ``HasProgram.mk levels) (args.extract 0 6 ++ #[t, p, h]))
-  return some (mkAppN (mkConst ``HasProgramIn.hasProgram levels) (args ++ #[h]))
+    return some (mkAppN (mkConst ``HasProgramInO.mk levels) (args.extract 0 6 ++ #[t, p, h]))
+  return some (mkAppN (mkConst ``HasProgramIn.hasProgramInO levels) (args ++ #[h]))
 
 open Lean in
 /-- The rule turning a `HasProgramIn` target into the form the translation composes: within
@@ -336,18 +336,18 @@ private def programInRule (target : Lean.Expr) : Name :=
     | .lam _ _ body _ => body.isAppOf ``Dominated
     | _ => false
   let args := target.consumeMData.getAppArgs
-  if args.size == 8 && isBigO args[6]! && isBigO args[7]! then ``HasProgram.toHasProgramIn
-  else ``HasProgram.hasProgramIn
+  if args.size == 8 && isBigO args[6]! && isBigO args[7]! then ``HasProgramInO.toHasProgramIn
+  else ``HasProgramInO.hasProgramIn
 
 open Lean Meta Mathlib.Meta.FunProp in
 private def localSourceCertificate (goal : Lean.Expr) : FunPropM (Option Result) := do
-  unless goal.isAppOfArity ``HasProgram 8 do return none
+  unless goal.isAppOfArity ``HasProgramInO 8 do return none
   if goal.getAppArgs[4]!.hasExprMVar then return none
   let locals := (← getLCtx).foldl (fun ds d => d :: ds) []
   for decl in locals do
     if decl.kind == .auxDecl then continue
     let type ← instantiateMVars decl.type
-    unless type.isAppOfArity ``HasProgram 8 do continue
+    unless type.isAppOfArity ``HasProgramInO 8 do continue
     if let some result ← Search.attempt do
         if ← withReducible (isDefEq type goal) then return some ⟨decl.toExpr⟩
         return none then
@@ -355,7 +355,7 @@ private def localSourceCertificate (goal : Lean.Expr) : FunPropM (Option Result)
   return none
 open Lean Meta in
 private def typedSourceImplementation (target implementation : Lean.Expr) : MetaM Lean.Expr := do
-  unless target.isAppOfArity ``HasProgram 8 do return implementation
+  unless target.isAppOfArity ``HasProgramInO 8 do return implementation
   let actual ← inferType implementation
   if ← withReducible (isDefEq actual target) then return implementation
   unless ← withDefault (isDefEq actual target) do
@@ -363,13 +363,13 @@ private def typedSourceImplementation (target implementation : Lean.Expr) : Meta
   let source := actual.getAppArgs[4]!
   let desired := (← instantiateMVars target).getAppArgs[4]!
   let equality ← typedSourceProof (← mkEq source desired) (← mkEqRefl source)
-  mkAppM ``HasProgram.congr #[implementation, equality]
+  mkAppM ``HasProgramInO.congr #[implementation, equality]
 
 open Lean in
 /-- Program and growth arguments are results of a query, so they do not distinguish cached
 requests. -/
 private def implementationKey (goal : Lean.Expr) : Lean.Expr :=
-  if goal.isAppOfArity ``HasProgram 8 then mkAppN goal.getAppFn (goal.getAppArgs.extract 0 5)
+  if goal.isAppOfArity ``HasProgramInO 8 then mkAppN goal.getAppFn (goal.getAppArgs.extract 0 5)
   else goal
 
 open Lean Meta Mathlib.Meta.FunProp in
@@ -407,22 +407,22 @@ private def constructorRule (search : Lean.Expr → FunPropM (Option Result)) (g
     for (field, type) in fields do
       -- A field is computed at its declared type, whose encoding is found by that name.
       let inst ← synthInstance (← mkAppM ``UniqueEncoding #[mkConst ``Tree, type])
-      let fieldGoal ← mkAppOptM ``HasProgram #[none, ← mkLambdaFVars #[x] type, none,
+      let fieldGoal ← mkAppOptM ``HasProgramInO #[none, ← mkLambdaFVars #[x] type, none,
         ← mkLambdaFVars #[x] inst, ← mkLambdaFVars #[x] field,
         ← mkFreshExprMVar (← mkArrow (mkConst ``Value) (mkApp (mkConst ``Code) (mkConst ``Value))),
         ← mkFreshExprMVar growth, ← mkFreshExprMVar growth]
       let some r ← search fieldGoal | return none
       proofs := proofs.push r.proof
-    let mut chain ← mkAppM ``HasProgram.with_size #[proofs.back!]
+    let mut chain ← mkAppM ``HasProgramInO.with_size #[proofs.back!]
     for h in proofs.pop.reverse do
-      chain ← mkAppM ``HasProgram.field_cons #[h, chain]
+      chain ← mkAppM ``HasProgramInO.field_cons #[h, chain]
     let some (first, T) := tag |
-      return some ⟨← mkAppM ``HasProgram.of_fields #[← mkLambdaFVars #[x] proof, chain]⟩
+      return some ⟨← mkAppM ``HasProgramInO.of_fields #[← mkLambdaFVars #[x] proof, chain]⟩
     let tuple := ((← inferType chain).getArg! 4).beta #[x]
     let tagged ← mkEq code (mkApp2 (mkConst ``Tree.pair) T (← encodeTree tuple))
     let henc ← mkExpectedTypeHint
       (← mkEqTrans proof (← mkAppM ``encode_prod #[first, tuple])) tagged
-    return some ⟨← mkAppM ``HasProgram.of_tagged_fields #[T, ← mkLambdaFVars #[x] henc, chain]⟩
+    return some ⟨← mkAppM ``HasProgramInO.of_tagged_fields #[T, ← mkLambdaFVars #[x] henc, chain]⟩
 
 open Lean Meta in
 /-- Whether the function applied in `e` is data: a local other than the input `x`, or a field. -/
@@ -478,11 +478,11 @@ private def viewRequest? (goal : Lean.Expr) (reads : Bool) :
         if let some info ← getProjectionFnInfo? name then
           if let some value ← projectCore? body info.i then
             return some (← mkExpectedTypeHint h (← mkEq code (mkApp r.appFn! value)))
-        if (← getTheoremsForFunction name ``HasProgram).isEmpty then return none
+        if (← getTheoremsForFunction name ``HasProgramInO).isEmpty then return none
         return some h
     let some h ← do if let some h ← field then pure (some h) else form | return none
     let some (_, _, value) := (← inferType h).eq? | return none
-    let next ← mkAppOptM ``HasProgram #[none, ← mkLambdaFVars #[x] (value.getArg! 1), none,
+    let next ← mkAppOptM ``HasProgramInO #[none, ← mkLambdaFVars #[x] (value.getArg! 1), none,
       ← mkLambdaFVars #[x] (value.getArg! 2), ← mkLambdaFVars #[x] value.appArg!,
       goal.getArg! 5, goal.getArg! 6, goal.getArg! 7]
     return some (next, ← mkLambdaFVars #[x] h)
@@ -494,7 +494,7 @@ private def viewRule (search : Lean.Expr → FunPropM (Option Result)) (goal : L
     (reads := false) : FunPropM (Option Result) := do
   let some (next, h) ← viewRequest? goal reads | return none
   let some r ← search next | return none
-  return some ⟨← mkAppM ``HasProgram.of_encode #[h, r.proof]⟩
+  return some ⟨← mkAppM ``HasProgramInO.of_encode #[h, r.proof]⟩
 
 open Lean Meta in
 /-- The value of codes corresponding to `e`, where `pattern` is the argument type of a fact: the
@@ -528,7 +528,7 @@ private partial def codesView (pattern e : Lean.Expr) : MetaM (Option (Lean.Expr
   return none
 
 open Lean Meta in
-/-- A registered `HasProgram` fact instantiated where its function applied to `argument` is
+/-- A registered `HasProgramInO` fact instantiated where its function applied to `argument` is
 `value`, or at `Tree` for every type parameter. -/
 private def instantiateFact (fact : Name) (at? : Option (Lean.Expr × Lean.Expr)) :
     MetaM Lean.Expr := do
@@ -573,7 +573,7 @@ private def codesInstance (x body : Lean.Expr) (fact : FunctionTheorem) :
 open Lean Meta Mathlib.Meta.FunProp in
 /-- A function with one program at every type applied to arguments whose types depend on the
 input: the tuple of the arguments is computed and the program runs on its code
-(`HasProgram.comp_codes`). The growth is stated on the arguments, not on their codes. -/
+(`HasProgramInO.comp_codes`). The growth is stated on the arguments, not on their codes. -/
 private def codesComposition (search : Lean.Expr → FunPropM (Option Result))
     (goal : Lean.Expr) : FunPropM (Option Result) := do
   let some (argument, view, equation, atCodes, atTypes, viewed) ←
@@ -583,7 +583,7 @@ private def codesComposition (search : Lean.Expr → FunPropM (Option Result))
         -- A projection of the input is a subtree of its code, read by the structural stage.
         if ← Search.isProjectionOf x body then return none
         let some name := body.getAppFn.constName? | return none
-        for fact in ← getTheoremsForFunction name ``HasProgram do
+        for fact in ← getTheoremsForFunction name ``HasProgramInO do
           let some (argument, view, equation, atCodes, atType) ← codesInstance x body fact |
             continue
           return some (← mkLambdaFVars xs argument, ← mkLambdaFVars xs view,
@@ -592,7 +592,7 @@ private def codesComposition (search : Lean.Expr → FunPropM (Option Result))
         return none
     | return none
   let some hx ← search (← programGoal argument) | return none
-  let result ← mkAppM ``HasProgram.comp_codes #[hx.proof, view, equation, atCodes, atTypes]
+  let result ← mkAppM ``HasProgramInO.comp_codes #[hx.proof, view, equation, atCodes, atTypes]
   let type ← whnfR (← inferType result)
   -- The growth at the codes is restated on the arguments.
   let lemmas ← [``encode_list_codes, ``List.length_map, ``Tree.encode_self].foldlM
@@ -603,7 +603,7 @@ private def codesComposition (search : Lean.Expr → FunPropM (Option Result))
     match (← simp growth codes).1.proof? with
     | some equation => mkAppM ``dominated_of_eq #[equation]
     | none => mkAppM ``Dominated.refl #[growth]
-  return some ⟨← mkAppM ``HasProgram.mono #[result, comparisons[0]!, comparisons[1]!]⟩
+  return some ⟨← mkAppM ``HasProgramInO.mono #[result, comparisons[0]!, comparisons[1]!]⟩
 
 open Lean Meta in
 /-- Record the definition a source function is, up to eta, uncurrying and an encoder: `g`,
@@ -641,7 +641,7 @@ private partial def sourceSearch (session : Search.Session)
     if proof.getUsedConstants.all (← getEnv).contains then
       if ← isDefEq goal (← inferType proof) then return some ⟨proof⟩
   -- Only requests with unconstrained growth are failures of the source function itself.
-  let unconstrained := !goal.isAppOfArity ``HasProgram 8 ||
+  let unconstrained := !goal.isAppOfArity ``HasProgramInO 8 ||
     (goal.getAppArgs[6]!.isMVar && goal.getAppArgs[7]!.isMVar)
   if unconstrained && (← get).failureCache.contains key then return none
   if ancestors.contains key then return none
@@ -676,7 +676,7 @@ private partial def sourceSearch (session : Search.Session)
   -- Certify a specified source; a speculative rule must not invent missing callbacks.
   if f.hasExprMVar then return ← finish none
   -- A field of a field of the input is a subtree of its code; a closed value is a constant.
-  if goal.isAppOfArity ``HasProgram 8 then
+  if goal.isAppOfArity ``HasProgramInO 8 then
     if let some r ← Search.attempt (fieldRule goal) then return ← finish (some r)
     if let some r ← Search.attempt (closedRule goal) then return ← finish (some r)
   -- Encoding an unsupported source call is not an instruction to translate its encoder.
@@ -722,7 +722,7 @@ private partial def sourceSearch (session : Search.Session)
           if let some r ← Search.attempt (casesRule search target) then return some r
       -- A function with one program at every type, at an argument whose type depends on the input.
       if let .const name _ := d.fn then
-        unless (← getTheoremsForFunction name ``HasProgram).isEmpty do
+        unless (← getTheoremsForFunction name ``HasProgramInO).isEmpty do
           if let some r ← Search.attempt (codesComposition search target) then return some r
       -- A value with a view is computed through it.
       if let some r ← Search.attempt (viewRule search target) then return some r
@@ -760,7 +760,7 @@ private partial def sourceSearch (session : Search.Session)
       -- A local function is implemented only by a local certificate.
       if d.fn.isFVar && d.fn != d.mainVar then
         session.reject ancestors m!"source translation: `{d.fn}` needs an implementation (a \
-          `HasProgram` hypothesis)"
+          `HasProgramIn` hypothesis)"
         return none
       if let .const name _ := d.fn then
         if ← isRecursiveDefinition name then
@@ -844,7 +844,7 @@ private def withComposedLocals (translate : TacticM (List MVarId)) : TacticM (Li
   (← translate).mapM fun g => fvars.foldrM (fun f g => g.tryClear f) g
 
 open Lean Meta Elab Tactic Mathlib.Meta.FunProp in
-/-- Translate the main `HasProgram` goal and return the remaining obligations. -/
+/-- Translate the main `HasProgramInO` goal and return the remaining obligations. -/
 private def proveSource (scope : Option Ident := none) (replacement : Option Term := none) :
     TacticM (List MVarId) :=
     withComposedLocals <| withSourceSpecs scope <| withMainContext do
@@ -854,8 +854,8 @@ private def proveSource (scope : Option Ident := none) (replacement : Option Ter
   let context ← sourceContext
   try
     let original := (← instantiateMVars (← goal.getType)).consumeMData
-    unless original.isAppOfArity ``HasProgram 8 do
-      throwError "source_fun_prop expects a HasProgram goal, got {original}"
+    unless original.isAppOfArity ``HasProgramInO 8 do
+      throwError "source_fun_prop expects a HasProgramIn goal, got {original}"
     let f := original.getAppArgs[4]!
     let (source, equality) ← match replacement with
       | none => pure (f, none)
@@ -877,7 +877,7 @@ private def proveSource (scope : Option Ident := none) (replacement : Option Ter
       session.report
     let result ← match equality with
       | none => pure result
-      | some h => mkAppM ``HasProgram.congr #[result, ← mkEqSymm h]
+      | some h => mkAppM ``HasProgramInO.congr #[result, ← mkEqSymm h]
     let obligations ← finishProgram goal result
     replaceMainGoal []
     return equality.toList.map (·.mvarId!) ++ obligations
@@ -939,7 +939,7 @@ private def proveRecursion (method : TSyntax `sourceRecursion) (scope : Option I
     mkLambdaFVars #[x] (mkAppN resume #[← mkAppM ``Sigma.fst #[x], ← mkAppM ``Sigma.snd #[x]])
   let hr ← certify `resume resume
   -- The callbacks' encoding families agree with the recursion's by definition.
-  let implementation ← Term.elabTerm (← `(Recursion.hasProgram $(← Term.exprToSyntax r)
+  let implementation ← Term.elabTerm (← `(Recursion.hasProgramInO $(← Term.exprToSyntax r)
     $(← Term.exprToSyntax hc) $(← Term.exprToSyntax hs) $(← Term.exprToSyntax hd)
     $(← Term.exprToSyntax hr))) none
   Term.synthesizeSyntheticMVarsNoPostponing
@@ -950,7 +950,7 @@ private def proveRecursion (method : TSyntax `sourceRecursion) (scope : Option I
     let rhs ← mkAppM ``encode #[mkConst ``Tree, mkApp actual x]
     let proof ← typedSourceProof (← mkEq lhs rhs) (← mkEqRefl lhs)
     mkLambdaFVars #[x] proof
-  let result ← mkAppM ``HasProgram.of_encode #[equality, implementation]
+  let result ← mkAppM ``HasProgramInO.of_encode #[equality, implementation]
   let comparisons ← finishProgram goal result
   trace[source.translation] "source recursion: program combined"
   setGoals rest
@@ -1007,24 +1007,24 @@ private def modelFunPropCore (disch : Option (TSyntax ``Lean.Parser.Tactic.disch
     -- `IsO(time)` and `IsO(peak)` are those of the translation; others are polynomial ones.
     evalTactic (← `(tactic| apply $(mkCIdent (programInRule target))))
   else if machine then
-    evalTactic (← `(tactic| refine HasProgram.computableIn_of_dominated
+    evalTactic (← `(tactic| refine HasProgramInO.computableIn_of_dominated
       (program := ?program) (hf := ?implementation) (t := ?time_bound) (p := ?peak_bound)
       ?time ?peak))
   else if polynomial && (target.find? (·.isConstOf ``TimeSpaceModel.sizeCostTree)).isSome then
-    evalTactic (← `(tactic| refine HasProgram.mem_fp_sizeCost (program := ?program)
+    evalTactic (← `(tactic| refine HasProgramInO.mem_fp_sizeCost (program := ?program)
       (hf := ?implementation) (t := ?time_bound) (p := ?peak_bound) ?time ?peak))
   else if polynomial then
-    evalTactic (← `(tactic| refine HasProgram.mem_fp (program := ?program)
+    evalTactic (← `(tactic| refine HasProgramInO.mem_fp (program := ?program)
       (hf := ?implementation) (t := ?time_bound) (p := ?peak_bound) ?time))
   else if let some (t, s) := powers then
-    evalTactic (← `(tactic| refine HasProgram.mem_fdtisp_pow (program := ?program)
+    evalTactic (← `(tactic| refine HasProgramInO.mem_fdtisp_pow (program := ?program)
       (hf := ?implementation) (t := $(quote t)) (s := $(quote s)) (by decide)))
   else
-    evalTactic (← `(tactic| refine HasProgram.mem_fdtisp_of_dominated (program := ?program)
+    evalTactic (← `(tactic| refine HasProgramInO.mem_fdtisp_of_dominated (program := ?program)
       (hf := ?implementation) (t := ?time_bound) (p := ?peak_bound) ?time ?peak))
   let pending ← getGoals
   let some implementation ← pending.findM? fun g =>
-      return (← g.getType).consumeMData.isAppOf ``HasProgram |
+      return (← g.getType).consumeMData.isAppOf ``HasProgramInO |
     throwError "source model: missing implementation"
   setGoals [implementation]
   let obligations ← translate
@@ -1126,7 +1126,7 @@ initialize registerBuiltinAttribute {
       if ← forallTelescope info.type fun _ type => return type.isAppOf ``HasProgramIn then
         if scope.isSome then
           throwError "`program using` selects rules for a function equality"
-        -- `fun_prop` takes declarations concluding `HasProgram`: an unexported one restates it.
+        -- `fun_prop` takes declarations concluding `HasProgramInO`: an unexported one restates it.
         let certificate ← forallTelescope info.type fun parameters _ => withoutExporting do
           let some result ← composedProgram?
               (mkAppN (mkConst name (info.levelParams.map mkLevelParam)) parameters) |
@@ -1142,7 +1142,7 @@ initialize registerBuiltinAttribute {
         addTheorem certificate kind
         return
       if ← forallTelescope info.type fun _ type =>
-          return type.isAppOfArity ``HasProgram 8 then
+          return type.isAppOfArity ``HasProgramInO 8 then
         if scope.isSome then
           throwError "`program using` selects rules for a function equality"
         checkUniqueProgram name
@@ -1169,7 +1169,7 @@ initialize registerBuiltinAttribute {
           let proof ← instantiateMVars goal
           if proof.hasExprMVar || proof.hasSorry then
             throwError "the selected implementation has unfinished obligations"
-          let result ← mkAppM ``HasProgram.congr
+          let result ← mkAppM ``HasProgramInO.congr
             #[proof, ← mkEqSymm (mkAppN equality parameters)]
           let certificate ← withoutExporting do
             let certificate ← mkFreshUserName (name ++ `sourceProgram)

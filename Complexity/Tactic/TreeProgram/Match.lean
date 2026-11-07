@@ -14,7 +14,7 @@ public meta import Lean.Meta.Match.MatcherApp.Transform
 
 /-! # Translating `match`
 
-`HasProgram.cases` is the elimination rule of every type with a `CaseView`: a value computed from
+`HasProgramInO.cases` is the elimination rule of every type with a `CaseView`: a value computed from
 the input selects a constructor, and the branch of that constructor receives the input with the
 constructor's fields. Its growth is stated by branch (`CaseView.atBranch`). `casesRule` translates a
 `match` on a part of the input by this rule: the branch of a constructor is the source at the input
@@ -47,7 +47,7 @@ end Complexity.TreeProgram.CaseView
 
 namespace Complexity.TreeProgram.Source
 
-open Internal (HasProgram)
+open Internal (HasProgramInO)
 
 open TreeProgram CaseView
 
@@ -69,12 +69,12 @@ variable {β : α → Type*} [∀ x, UniqueEncoding Tree (β x)]
 
 /-- Branch on the constructor of a computed value: the branch of each constructor receives the
 input with the constructor's fields. One decision `D` on codes serves every input. -/
-theorem Internal.HasProgram.cases (D : CaseTree k) (hD : ∀ x, dispatch (T x) = D)
+theorem Internal.HasProgramInO.cases (D : CaseTree k) (hD : ∀ x, dispatch (T x) = D)
     {d : (x : α) → T x} {f : (x : α) → β x} {qd : Value → Code Value} {td pd : α → ℕ}
-    (hd : HasProgram d qd td pd) {q : Fin k → Value → Code Value}
+    (hd : HasProgramInO d qd td pd) {q : Fin k → Value → Code Value}
     {t p : (i : Fin k) → Branch d i → ℕ}
-    (hb : ∀ i, HasProgram (fun y : Branch d i => f y.1.1) (q i) (t i) (p i)) :
-    HasProgram f
+    (hb : ∀ i, HasProgramInO (fun y : Branch d i => f y.1.1) (q i) (t i) (p i)) :
+    HasProgramInO f
       (fun v => do let w ← qd v; D.run w fun i a => do let e ← Value.pair v a; q i e)
       (fun x => td x + atBranch d t x + 1)
       (fun x => max (pd x)
@@ -131,8 +131,8 @@ theorem Internal.HasProgram.cases (D : CaseTree k) (hD : ∀ x, dispatch (T x) =
       exact ⟨hr, fun j hj => (hw j (by omega)).trans (by simp [Nat.ne_of_lt hj])⟩
 
 /-- A branch no input reaches, such as a constructor excluded by a subtype, has every program. -/
-theorem Internal.HasProgram.of_false {f : (x : α) → β x} (h : α → False) :
-    HasProgram f (fun _ => pure .nil) (fun _ => 0) (fun _ => 0) :=
+theorem Internal.HasProgramInO.of_false {f : (x : α) → β x} (h : α → False) :
+    HasProgramInO f (fun _ => pure .nil) (fun _ => 0) (fun _ => 0) :=
   ⟨⟨fun _ => 0, fun _ => 0⟩, ⟨fun _ _ _ => ⟨le_rfl, Nat.zero_le _⟩,
     fun _ _ _ x => (h x).elim⟩, .refl _, .refl _⟩
 
@@ -144,7 +144,7 @@ public meta section
 
 namespace Complexity.TreeProgram.Source
 
-open Internal (HasProgram)
+open Internal (HasProgramInO)
 
 open Lean Meta in
 /-- Unfold the `match` at the head of a source body and reduce: eliminations of constructors and
@@ -384,7 +384,7 @@ private def caseBranch (f β : Lean.Expr) (c : CaseSplit) (i : Lean.Expr) :
     return (B, .inl (← mkLambdaFVars #[y] body, ← mkLambdaFVars #[y] equation))
 
 open Lean Meta Mathlib.Meta.FunProp in
-/-- A `match` on a part of the input, by the elimination rule `HasProgram.cases` of the type's
+/-- A `match` on a part of the input, by the elimination rule `HasProgramInO.cases` of the type's
 `CaseView`. The branch of a constructor is the source at the input rebuilt with the constructor
 at that part, which reduces the `match`; an unreachable branch is a contradiction. -/
 def casesRule (search : Lean.Expr → FunPropM (Option Result)) (goal : Lean.Expr) :
@@ -394,7 +394,7 @@ def casesRule (search : Lean.Expr → FunPropM (Option Result)) (goal : Lean.Exp
   let k := c.constructors
   let nat := mkConst ``Nat
   let programType ← mkArrow (mkConst ``Value) (mkApp (mkConst ``Code) (mkConst ``Value))
-  let some hd ← search (← mkAppOptM ``HasProgram #[α, c.type, instα, c.encoding, c.part,
+  let some hd ← search (← mkAppOptM ``HasProgramInO #[α, c.type, instα, c.encoding, c.part,
       ← mkFreshExprMVar programType, ← mkFreshExprMVar (← mkArrow α nat),
       ← mkFreshExprMVar (← mkArrow α nat)]) | return none
   -- The source at the input of a branch, its type and encoding.
@@ -412,15 +412,15 @@ def casesRule (search : Lean.Expr → FunPropM (Option Result)) (goal : Lean.Exp
     let (source, outType, outInst) ← atBase B
     let proof ← match branch with
       | .inr contradiction =>
-        mkAppOptM ``HasProgram.of_false #[B, instB, outType, outInst, source, contradiction]
+        mkAppOptM ``HasProgramInO.of_false #[B, instB, outType, outInst, source, contradiction]
       | .inl (body, equation) =>
         let growth ← mkArrow B nat
-        let some r ← search (← mkAppOptM ``HasProgram #[B, outType, instB, outInst, body,
+        let some r ← search (← mkAppOptM ``HasProgramInO #[B, outType, instB, outInst, body,
             ← mkFreshExprMVar programType, ← mkFreshExprMVar growth,
             ← mkFreshExprMVar growth]) | return none
         let eq ← mkFunExt (← withLocalDeclD `y B fun y => do
           mkLambdaFVars #[y] (← mkEqSymm (equation.beta #[y])))
-        mkAppM ``HasProgram.congr #[r.proof, eq]
+        mkAppM ``HasProgramInO.congr #[r.proof, eq]
     branches := branches.push (proof, (← instantiateMVars (← inferType proof)).getAppArgs)
   -- The branches' programs, growths and certificates as functions of the constructor.
   let fin := mkApp (mkConst ``Fin) (mkNatLit k)
@@ -434,13 +434,13 @@ def casesRule (search : Lean.Expr → FunPropM (Option Result)) (goal : Lean.Exp
   let hb ← byIndex (fun i => do
     let B ← branchType i
     let (source, outType, outInst) ← atBase B
-    mkAppOptM ``HasProgram #[B, outType,
+    mkAppOptM ``HasProgramInO #[B, outType,
       ← synthInstance (← mkAppM ``UniqueEncoding #[mkConst ``Tree, B]), outInst, source,
       q.beta #[i], t.beta #[i], p.beta #[i]]) (branches.map (·.1))
   let hD ← lambdaTelescope c.view fun xs v => do
     let dispatch ← mkAppOptM ``CaseView.dispatch #[none, none, mkNatLit k, v]
     mkLambdaFVars xs (← mkExpectedTypeHint (← mkEqRefl c.dispatch) (← mkEq dispatch c.dispatch))
-  let proof ← mkAppOptM ``HasProgram.cases #[α, c.type, instα, c.encoding, mkNatLit k, c.view,
+  let proof ← mkAppOptM ``HasProgramInO.cases #[α, c.type, instα, c.encoding, mkNatLit k, c.view,
     β, instβ, c.dispatch, hD, c.part, f, none, none, none, hd.proof, q, t, p, hb]
   let type ← instantiateMVars (← inferType proof)
   let type := type.setArg 6 (← readableBranches (type.getArg! 6)) |>.setArg 7

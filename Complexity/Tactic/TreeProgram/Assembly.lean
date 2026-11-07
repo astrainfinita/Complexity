@@ -13,8 +13,8 @@ public meta import Complexity.Tactic.TreeProgram.Search
 
 A field of a field of the input, a closed value, and a constructor of such values have codes
 assembled from subtrees of the input's code and constant trees. An `Assembly` describes such a
-code; one assignment builds it, so `HasProgram.assemble` is proved once and each use only proves the
-equation of the trees.
+code; one assignment builds it, so `HasProgramInO.assemble` is proved once and each use only proves
+the equation of the trees.
 -/
 
 @[expose] public section
@@ -86,17 +86,17 @@ end Complexity.TreeProgram
 
 namespace Complexity.TreeProgram.Source
 
-open Internal (HasProgram)
+open Internal (HasProgramInO)
 
 variable {α : Type*} {β : α → Type*} [UniqueEncoding Tree α] [∀ x, UniqueEncoding Tree (β x)]
 
 /-- A value whose code is assembled from subtrees of the input's code and constant trees, such as
 a constructor of fields of the input, is built in one assignment. -/
-theorem Internal.HasProgram.assemble {f : (x : α) → β x} (A : Assembly)
+theorem Internal.HasProgramInO.assemble {f : (x : α) → β x} (A : Assembly)
     (h : ∀ x, A.eval ⌜x⌝ₜ = ⌜f x⌝ₜ) :
-    HasProgram f (fun v => Code.eval (A.expr v.expression)) (fun _ => 1)
+    HasProgramInO f (fun v => Code.eval (A.expr v.expression)) (fun _ => 1)
       (fun x => max ⌜x⌝ₜ.size ⌜f x⌝ₜ.size) :=
-  (HasProgram.of_implements ⟨fun _ => A.steps + 2, fun x => max ⌜x⌝ₜ.size ⌜f x⌝ₜ.size⟩
+  (HasProgramInO.of_implements ⟨fun _ => A.steps + 2, fun x => max ⌜x⌝ₜ.size ⌜f x⌝ₜ.size⟩
     ⟨fun v n hv => by change n ≤ n + 1 ∧ n + 1 ≤ n + 1; omega,
       fun v n s x hv hx => by
         have hs := A.maxSize_expr_le v s
@@ -108,17 +108,17 @@ theorem Internal.HasProgram.assemble {f : (x : α) → β x} (A : Assembly)
 
 /-- Read the subtree of the input's code at a path, such as a field of a field, whose code is a
 subtree by the structures' `T.encode_field`: one step for every path. -/
-theorem Internal.HasProgram.subtree {f : (x : α) → β x} (path : List Bool)
+theorem Internal.HasProgramInO.subtree {f : (x : α) → β x} (path : List Bool)
     (h : ∀ x, ⌜f x⌝ₜ = ⌜x⌝ₜ.subtree path) :
-    HasProgram f (fun v => Code.eval (v.expression.subtree path)) (fun _ => 1)
+    HasProgramInO f (fun v => Code.eval (v.expression.subtree path)) (fun _ => 1)
       (fun x => ⌜x⌝ₜ.size) :=
-  (HasProgram.assemble (.read path) fun x => (h x).symm).mono (.refl _)
+  (HasProgramInO.assemble (.read path) fun x => (h x).symm).mono (.refl _)
     (Dominated.of_le fun x => by simp [h, Tree.size_subtree_le])
 
 /-- A closed value is written as its code in one step. -/
-theorem Internal.HasProgram.const {γ : Type*} [UniqueEncoding Tree γ] (c : γ) :
-    HasProgram (fun _ : α => c) (fun _ => Code.eval (.ofTree ⌜c⌝ₜ)) (fun _ => 1) (fun _ => 1) :=
-  (HasProgram.of_implements
+theorem Internal.HasProgramInO.const {γ : Type*} [UniqueEncoding Tree γ] (c : γ) :
+    HasProgramInO (fun _ : α => c) (fun _ => Code.eval (.ofTree ⌜c⌝ₜ)) (fun _ => 1) (fun _ => 1) :=
+  (HasProgramInO.of_implements
     ⟨fun _ => (Expr.ofTree ⌜c⌝ₜ : Expr ℕ).assignSteps, fun _ => ⌜c⌝ₜ.size⟩
     ⟨fun v n hv => by change n ≤ n + 1 ∧ n + 1 ≤ n + 1; omega,
       fun v n s x hv hx => by
@@ -134,7 +134,7 @@ public meta section
 
 namespace Complexity.TreeProgram.Source
 
-open Internal (HasProgram)
+open Internal (HasProgramInO)
 
 open Lean Meta in
 /-- The first equation of `thms` rewriting `e` at the root only, to an encoding if `encoding`,
@@ -266,7 +266,7 @@ private def atInput {γ : Type} (f : Lean.Expr) (k : Lean.Expr → Lean.Expr →
   else withLocalDeclD `x (← whnf (← inferType f)).bindingDomain! fun x => k x (mkApp f x)
 
 open Lean Meta Mathlib.Meta.FunProp in
-/-- A field of a field of the input is read as the subtree at its path (`HasProgram.subtree`). -/
+/-- A field of a field of the input is read as the subtree at its path (`HasProgramInO.subtree`). -/
 def fieldRule (goal : Lean.Expr) : MetaM (Option Result) := do
   let #[α, β, instα, instβ, f, _, _, _] := goal.getAppArgs | return none
   atInput f fun x body => do
@@ -277,13 +277,13 @@ def fieldRule (goal : Lean.Expr) : MetaM (Option Result) := do
     let some (path, h) ← fieldPath? x code body | return none
     -- The input itself is not a read.
     if path.isEmpty then return none
-    return some ⟨← mkAppOptM ``HasProgram.subtree
+    return some ⟨← mkAppOptM ``HasProgramInO.subtree
       #[α, β, instα, instβ, f, toExpr path, ← mkLambdaFVars #[x] h]⟩
 
 open Lean Meta Mathlib.Meta.FunProp in
-/-- A closed value is written as its code (`HasProgram.const`), without computing it. A constructor
-whose code is the empty tree is computed by no step, like `()`, also when it mentions types and
-instances, such as `([] : List α)`; only its code's root is reduced. -/
+/-- A closed value is written as its code (`HasProgramInO.const`), without computing it. A
+constructor whose code is the empty tree is computed by no step, like `()`, also when it mentions
+types and instances, such as `([] : List α)`; only its code's root is reduced. -/
 def closedRule (goal : Lean.Expr) : MetaM (Option Result) := do
   let #[α, β, instα, instβ, f, _, _, _] := goal.getAppArgs | return none
   atInput f fun x body => do
@@ -307,21 +307,21 @@ def closedRule (goal : Lean.Expr) : MetaM (Option Result) := do
     let code ← mkAppOptM ``encode #[mkConst ``Tree, type, inst, body]
     if ← isConstructorApp (← whnfR body) then
       if (← whnfD code).isAppOf ``BinaryTree.nil then
-        let unit ← mkAppOptM ``HasProgram.unit #[α, instα]
+        let unit ← mkAppOptM ``HasProgramInO.unit #[α, instα]
         let empty ← mkExpectedTypeHint (← mkEqRefl code)
           (← mkEq code (← mkAppM ``encode #[mkConst ``Tree, mkConst ``Unit.unit]))
-        return some ⟨← mkAppM ``HasProgram.of_encode #[← mkLambdaFVars #[x] empty, unit]⟩
+        return some ⟨← mkAppM ``HasProgramInO.of_encode #[← mkLambdaFVars #[x] empty, unit]⟩
     if body.hasFVar then return none
-    return some ⟨← mkAppOptM ``HasProgram.const #[α, instα, type, inst, body]⟩
+    return some ⟨← mkAppOptM ``HasProgramInO.const #[α, instα, type, inst, body]⟩
 
 open Lean Meta Mathlib.Meta.FunProp in
 /-- Whether a function has a selected implementation: a registered one, or a local hypothesis. -/
 private def hasSelectedImplementation (name : Name) : MetaM Bool := do
-  unless (← getTheoremsForFunction name ``HasProgram).isEmpty do return true
+  unless (← getTheoremsForFunction name ``HasProgramInO).isEmpty do return true
   (← getLCtx).anyM fun decl => do
     if decl.isImplementationDetail then return false
     let type ← instantiateMVars decl.type
-    unless type.isAppOfArity ``HasProgram 8 do return false
+    unless type.isAppOfArity ``HasProgramInO 8 do return false
     lambdaTelescope (type.getArg! 4) fun _ body => return body.getAppFn.isConstOf name
 
 open Lean Meta in
@@ -362,14 +362,14 @@ private partial def assembly? (x code e : Lean.Expr) (root := false) :
   stated A (← mkEqTrans h (← mkEqSymm proof))
 
 open Lean Meta Mathlib.Meta.FunProp in
-/-- A constructor of values at hand is built in one step by its assembly (`HasProgram.assemble`),
+/-- A constructor of values at hand is built in one step by its assembly (`HasProgramInO.assemble`),
 found on the source's form `source` and stated on the requested function. -/
 def assembleRule (goal source : Lean.Expr) : MetaM (Option Result) := do
   let #[α, β, instα, instβ, f, _, _, _] := goal.getAppArgs | return none
   atInput source fun x body => do
     let code ← mkAppOptM ``encode #[mkConst ``Tree, α, instα, x]
     let some (A, h) ← assembly? x code body.headBeta (root := true) | return none
-    return some ⟨← mkAppOptM ``HasProgram.assemble
+    return some ⟨← mkAppOptM ``HasProgramInO.assemble
       #[α, β, instα, instβ, f, A, ← mkLambdaFVars #[x] h]⟩
 
 end Complexity.TreeProgram.Source

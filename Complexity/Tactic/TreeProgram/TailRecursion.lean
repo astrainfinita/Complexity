@@ -17,7 +17,7 @@ space bounds every reachable state relative to the initial input, without a save
 
 namespace Complexity.TreeProgram.Source
 
-open Internal (HasProgram)
+open Internal (HasProgramInO)
 
 /-- Source equations discharge the loop's functional invariant. Time itself proves termination. -/
 theorem Implements.tail_loop {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
@@ -47,7 +47,7 @@ theorem Implements.tail_loop {α β : Type*} [UniqueEncoding Tree α] [UniqueEnc
     refine ⟨(stop_bounds x y hi.1 hi.2 ht).2, ?_⟩
     simpa only [ht, Bool.false_eq_true, ↓reduceIte] using (equation y).symm.trans hi.2
 
-namespace Internal.HasProgram
+namespace Internal.HasProgramInO
 
 variable {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
   {test : α → Bool} {next : α → α} {finish result : α → β} {tc pc ts ps td pd : α → ℕ}
@@ -56,8 +56,8 @@ variable {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
 /-- A tail loop of selected callbacks. A remaining-work potential pays for the rounds, so round
 costs may vary between states; one coefficient covers every reachable state of every initial
 input. The terminal callback is paid once, and space is a peak over the run. -/
-theorem tail_loop_potential (hc : HasProgram test qc tc pc) (hs : HasProgram next qs ts ps)
-    (hd : HasProgram finish qd td pd)
+theorem tail_loop_potential (hc : HasProgramInO test qc tc pc) (hs : HasProgramInO next qs ts ps)
+    (hd : HasProgramInO finish qd td pd)
     (I : α → α → Prop) (potential : α → α → ℕ) (stop peak : α → ℕ)
     (equation : ∀ y, result y = if test y then result (next y) else finish y)
     (initial : ∀ x, I x x)
@@ -75,7 +75,8 @@ theorem tail_loop_potential (hc : HasProgram test qc tc pc) (hs : HasProgram nex
     (round_time : Dominated
       (fun z : {p : α × α // I p.1 p.2 ∧ test p.2 = true} => ts z.1.2 + tc (next z.1.2) + 1)
       (fun z => potential z.1.1 z.1.2 - potential z.1.1 (next z.1.2))) :
-    HasProgram result (loopCode qc qs qd) (fun x => tc x + (potential x x + stop x) + 1) peak := by
+    HasProgramInO result (loopCode qc qs qd) (fun x => tc x + (potential x x + stop x) + 1)
+      peak := by
   obtain ⟨bc, hbc, hct, hcp⟩ := hc.sound
   obtain ⟨bs, hbs, hst, hsp⟩ := hs.sound
   obtain ⟨bd, hbd, hdt, hdp⟩ := hd.sound
@@ -164,8 +165,8 @@ theorem tail_loop_potential (hc : HasProgram test qc tc pc) (hs : HasProgram nex
 
 /-- A decreasing measure with one round allowance: the potential is
 `measure state * step initial`. -/
-theorem tail_loop (hc : HasProgram test qc tc pc) (hs : HasProgram next qs ts ps)
-    (hd : HasProgram finish qd td pd)
+theorem tail_loop (hc : HasProgramInO test qc tc pc) (hs : HasProgramInO next qs ts ps)
+    (hd : HasProgramInO finish qd td pd)
     (I : α → α → Prop) (measure step stop peak : α → ℕ)
     (equation : ∀ y, result y = if test y then result (next y) else finish y)
     (initial : ∀ x, I x x)
@@ -181,7 +182,7 @@ theorem tail_loop (hc : HasProgram test qc tc pc) (hs : HasProgram next qs ts ps
       (fun z => step z.1.1))
     (stop_time : Dominated (fun z : {p : α × α // I p.1 p.2} => td z.1.2) (fun z => stop z.1.1))
     (step_pos : ∀ x, 0 < step x) (stop_pos : ∀ x, 0 < stop x) :
-    HasProgram result (loopCode qc qs qd) (fun x => tc x + (measure x * step x + stop x) + 1)
+    HasProgramInO result (loopCode qc qs qd) (fun x => tc x + (measure x * step x + stop x) + 1)
       peak :=
   tail_loop_potential hc hs hd I (fun x y => measure y * step x) stop peak equation initial
     next_state input_size check_peak
@@ -200,7 +201,7 @@ theorem tail_loop (hc : HasProgram test qc tc pc) (hs : HasProgram next qs ts ps
       have := decreases z.1.1 z.1.2 z.2.1 z.2.2
       exact Nat.le_mul_of_pos_left _ (by omega))
 
-end Internal.HasProgram
+end Internal.HasProgramInO
 
 end Complexity.TreeProgram.Source
 
@@ -210,7 +211,7 @@ public meta section
 
 namespace Complexity.TreeProgram.Source
 
-open Internal (HasProgram)
+open Internal (HasProgramInO)
 
 /-- A measured loop separates per-round work from its single terminal call. -/
 declare_syntax_cat sourceMeasuredLoop
@@ -260,7 +261,7 @@ private def proveMeasuredLoop (method : TSyntax `sourceMeasuredLoop) (scope : Op
   let parameters := #[some args[0]!, none, some args[2]!, none] ++
     ((#[test, next, finish, source] ++ growth).map some) ++ #[none, none, none] ++
     ((callbacks ++ #[inv, measure, step, stop, peak]).map some)
-  let mut result ← mkAppOptM ``HasProgram.tail_loop parameters
+  let mut result ← mkAppOptM ``HasProgramInO.tail_loop parameters
   let mut obligations := []
   let context ← Simp.mkContext
     (config := { iota := false, zeta := false, zetaDelta := false })

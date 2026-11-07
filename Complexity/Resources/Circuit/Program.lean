@@ -16,7 +16,7 @@ open Complexity TreeProgram
 
 namespace Complexity.TreeProgram.Source
 
-open Internal (HasProgram)
+open Internal (HasProgramInO)
 
 /-- The Tseitin clauses of a gate, its input wires and its output wire. -/
 def gateClauses {α : Type*}
@@ -48,7 +48,7 @@ abbrev AccumulateInput := CNF ℕ ×
 @[program] theorem hasProgramIn_accumulateGate :
     HasProgramIn accumulateGate hole(⊢ program) IsO(fun _ => 1) IsO(fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programAccumulateGate
-  refine HasProgram.toHasProgramIn ?_
+  refine HasProgramInO.toHasProgramIn ?_
   have : Dominated (fun x : AccumulateInput => (gateClauses x.2).length) (fun _ => 1) :=
     Dominated.of_le_mul 3 (fun x => by
       simpa only [gateClauses, Nat.mul_one] using
@@ -85,7 +85,7 @@ theorem size_encode_val_comp {n k : ℕ} (args : Fin k → Fin n) :
 @[program] theorem hasProgramIn_circuitStep :
     HasProgramIn circuitStep hole(⊢ program) IsO(fun x => ⌜x.1⌝ₜ.size) IsO(fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programCircuitStep
-  refine HasProgram.toHasProgramIn ?_
+  refine HasProgramInO.toHasProgramIn ?_
   fill_hole program in
     source_fun_prop (disch := dominated [accumulateGate_size, gateClauses_size_le,
       size_encode_val_comp, size_encode_nat_succ_le])
@@ -168,7 +168,7 @@ theorem hasProgramIn_tseitinLoop :
     HasProgramIn (fun x : TseitinState => tseitinLoop x.1 x.2) hole(⊢ program)
       IsO(fun x => ⌜x⌝ₜ.size ^ 2) IsO(fun x => ⌜x⌝ₜ.size ^ 2) := by
   abstract_hole program using programTseitinLoop
-  refine HasProgram.toHasProgramIn ?_
+  refine HasProgramInO.toHasProgramIn ?_
   fill_hole program in
     source_fun_prop using loop
       (test := circuitContinues) (next := circuitStep) (finish := circuitFinish)

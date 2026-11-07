@@ -19,7 +19,7 @@ intermediate accumulators, and every stored state contributes to the peak.
 open Complexity TreeProgram TreeProgram.Code
 namespace Complexity.TreeProgram.Source
 
-open Internal (HasProgram)
+open Internal (HasProgramInO)
 
 section Cost
 
@@ -406,10 +406,10 @@ theorem Implements.foldl {α β : Type*} [UniqueEncoding Tree α] [UniqueEncodin
         simpa (disch := omega) using hf j (by omega)
 
 /-- Fold a callback; its growth is charged at every actual intermediate accumulator. -/
-theorem Internal.HasProgram.foldl {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
+theorem Internal.HasProgramInO.foldl {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
     {f : β → α → β} {pf : Value → Code Value} {t p : β × α → ℕ}
-    (hf : HasProgram (Function.uncurry f) pf t p) :
-    HasProgram (fun x : β × List α => x.2.foldl f x.1) (Traversal.foldProgram pf)
+    (hf : HasProgramInO (Function.uncurry f) pf t p) :
+    HasProgramInO (fun x : β × List α => x.2.foldl f x.1) (Traversal.foldProgram pf)
       (fun x => foldlTime f t x.1 x.2 + x.2.length + 1)
       (fun x => max ⌜x⌝ₜ.size (foldlPeak f p x.1 x.2)) := by
   obtain ⟨b, h, hbt, hbp⟩ := hf.sound

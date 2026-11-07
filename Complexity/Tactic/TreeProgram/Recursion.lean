@@ -17,7 +17,7 @@ reachable inputs; the compiled program stores source arguments on a stack and er
 
 namespace Complexity.TreeProgram.Source
 
-open Internal (HasProgram)
+open Internal (HasProgramInO)
 
 /-- Sequential time and the maximum size of an intermediate tree. -/
 @[ext] structure Cost where
@@ -435,16 +435,16 @@ variable {tc pc ts ps : α → ℕ} {td pd : {x // r.test x = false} → ℕ} {t
 /-- Callback programs and the source recursion equation determine one program.
 Its growth is the structural recursion cost of the callback growths; controller constants
 and the factor for the descending and ascending passes are hidden. -/
-theorem hasProgram
+theorem hasProgramInO
     {instD : ∀ x : {x // r.test x = false}, UniqueEncoding Tree (β x.1)}
     {instR : ∀ x : r.Return, UniqueEncoding Tree (β x.1.1)} {qc qs qd qr : Value → Code Value}
-    (hc : HasProgram r.test qc tc pc) (hs : HasProgram r.next qs ts ps)
-    (hd : HasProgram r.finish qd td pd)
-    (hr : HasProgram (fun x : r.Return => r.resume x.1 x.2) qr tr pr)
+    (hc : HasProgramInO r.test qc tc pc) (hs : HasProgramInO r.next qs ts ps)
+    (hd : HasProgramInO r.finish qd td pd)
+    (hr : HasProgramInO (fun x : r.Return => r.resume x.1 x.2) qr tr pr)
     -- The callbacks' encodings, elaborated with their own types, are those of `f`.
     (hD : ∀ x, instD x = instβ x.1 := by intros; rfl)
     (hR : ∀ x, instR x = instβ x.1.1 := by intros; rfl) :
-    HasProgram f (code qc qs qd qr)
+    HasProgramInO f (code qc qs qd qr)
       (fun x => tc x + (r.cost ⟨tc, pc⟩ ⟨ts, ps⟩ ⟨td, pd⟩ ⟨tr, pr⟩ x).time + 1)
       (fun x => (r.cost ⟨tc, pc⟩ ⟨ts, ps⟩ ⟨td, pd⟩ ⟨tr, pr⟩ x).peak + 1) := by
   obtain rfl : instD = _ := funext hD
@@ -484,7 +484,7 @@ end Complexity.TreeProgram.Source
 
 namespace Complexity.TreeProgram.Source.Recursion
 
-open Internal (HasProgram)
+open Internal (HasProgramInO)
 
 variable {α ρ : Type*} {β : α → Type*} [UniqueEncoding Tree α]
   {f : (x : α) → β x} (r : Recursion f)
@@ -685,12 +685,12 @@ variable [instβ : ∀ x, UniqueEncoding Tree (β x)]
   {tc pc ts ps : α → ℕ} {td pd : {x // r.test x = false} → ℕ} {tr pr : r.Return → ℕ}
 
 /-- The recursive program, with the growth of `dominated_cost_of_scale`. -/
-theorem hasProgram_of_scale
+theorem hasProgramInO_of_scale
     {instD : ∀ x : {x // r.test x = false}, UniqueEncoding Tree (β x.1)}
     {instR : ∀ x : r.Return, UniqueEncoding Tree (β x.1.1)} {qc qs qd qr : Value → Code Value}
-    (hc : HasProgram r.test qc tc pc) (hs : HasProgram r.next qs ts ps)
-    (hd : HasProgram r.finish qd td pd)
-    (hr : HasProgram (fun x : r.Return => r.resume x.1 x.2) qr tr pr)
+    (hc : HasProgramInO r.test qc tc pc) (hs : HasProgramInO r.next qs ts ps)
+    (hd : HasProgramInO r.finish qd td pd)
+    (hr : HasProgramInO (fun x : r.Return => r.resume x.1 x.2) qr tr pr)
     (S : α → ℕ) (hS : ∀ x, 0 < S x)
     (hnext : ∀ x, r.test x = true → S (r.next x) ≤ S x) {e a b c : ℕ}
     (hsize : Dominated (fun x => ⌜x⌝ₜ.size) (fun x => S x ^ e))
@@ -703,13 +703,13 @@ theorem hasProgram_of_scale
       (fun x => S x.1 ^ b))
     (hD : ∀ x, instD x = instβ x.1 := by intros; rfl)
     (hR : ∀ x, instR x = instβ x.1.1 := by intros; rfl) :
-    HasProgram f (code qc qs qd qr) (fun x => (r.measure x + 1) * S x ^ a + S x ^ c)
+    HasProgramInO f (code qc qs qd qr) (fun x => (r.measure x + 1) * S x ^ a + S x ^ c)
       (fun x => S x ^ b + (r.measure x + 1) * (S x ^ e + 1)) :=
   have h := r.dominated_cost_of_scale ⟨tc, pc⟩ ⟨ts, ps⟩ ⟨td, pd⟩ ⟨tr, pr⟩ S hS hnext hsize
     ⟨htc, hpc⟩ ⟨hts, hps⟩ ⟨htd, hpd⟩ ⟨htr, hpr⟩
   have hpos x : 0 < (r.measure x + 1) * S x ^ a + S x ^ c :=
     Nat.add_pos_right _ (Nat.pow_pos (hS x))
-  (r.hasProgram hc hs hd hr hD hR).mono
+  (r.hasProgramInO hc hs hd hr hD hR).mono
     (((htc.trans (Dominated.of_le fun _ => (Nat.le_mul_of_pos_left _ (Nat.succ_pos _)).trans
         (Nat.le_add_right _ _))).add_same (h.1.trans (Dominated.of_le fun _ =>
           Nat.add_le_add_right (Nat.mul_le_mul_right _ (Nat.le_succ _)) _))).add_same

@@ -19,7 +19,7 @@ implementation is a tail loop over the counter and the state.
 open Complexity TreeProgram
 namespace Complexity.TreeProgram.Source
 
-open Internal (HasProgram)
+open Internal (HasProgramInO)
 
 section Cost
 
@@ -224,21 +224,21 @@ theorem Iteration.hasProgramIn_continues {α : Type*} [UniqueEncoding Tree α] :
   fill_hole program in source_fun_prop
 
 /-- One counter step and one callback, with the counter's binary size charged. -/
-theorem Internal.HasProgram.iteration_step {α : Type*} [UniqueEncoding Tree α] {f : α → α}
-    {qf : Value → Code Value} {t p : α → ℕ} (hf : HasProgram f qf t p) :
-    HasProgram (fun x : ℕ × α => (x.1.pred, f x.2)) hole(qf ⊢ program)
+theorem Internal.HasProgramInO.iteration_step {α : Type*} [UniqueEncoding Tree α] {f : α → α}
+    {qf : Value → Code Value} {t p : α → ℕ} (hf : HasProgramInO f qf t p) :
+    HasProgramInO (fun x : ℕ × α => (x.1.pred, f x.2)) hole(qf ⊢ program)
       (fun x => ⌜x.1⌝ₜ.size + t x.2) (fun x => max ⌜x⌝ₜ.size (p x.2)) := by
-  have := Nat.hasProgramIn_pred.toHasProgram.size_encode.comp (Prod.fst : ℕ × α → ℕ)
+  have := Nat.hasProgramIn_pred.toHasProgramInO.size_encode.comp (Prod.fst : ℕ × α → ℕ)
   have := hf.size_encode.comp (Prod.snd : ℕ × α → α)
   fill_hole program in
-    refine ((Prod.hasProgramIn_fst.toHasProgram.comp Nat.hasProgramIn_pred.toHasProgram).pair
-      (Prod.hasProgramIn_snd.toHasProgram.comp hf)).mono ?_ ?_
+    refine ((Prod.hasProgramIn_fst.toHasProgramInO.comp Nat.hasProgramIn_pred.toHasProgramInO).pair
+      (Prod.hasProgramIn_snd.toHasProgramInO.comp hf)).mono ?_ ?_
   all_goals dominated
 
 /-- Compile one callback for every count as a tail loop over the counter and the state. -/
-theorem Internal.HasProgram.iterate {α : Type*} [UniqueEncoding Tree α] {f : α → α}
-    {qf : Value → Code Value} {t p : α → ℕ} (hf : HasProgram f qf t p) :
-    HasProgram (fun x : ℕ × α => f^[x.1] x.2) hole(qf ⊢ program)
+theorem Internal.HasProgramInO.iterate {α : Type*} [UniqueEncoding Tree α] {f : α → α}
+    {qf : Value → Code Value} {t p : α → ℕ} (hf : HasProgramInO f qf t p) :
+    HasProgramInO (fun x : ℕ × α => f^[x.1] x.2) hole(qf ⊢ program)
       (fun x => iterateTime f t x.1 x.2 + 1) (fun x => iteratePeak f p x.1 x.2) := by
   let I (x y : ℕ × α) := ∃ k ≤ x.1, y = (x.1 - k, f^[k] x.2)
   have size (z : {p : (ℕ × α) × (ℕ × α) // I p.1 p.2}) :
@@ -247,9 +247,9 @@ theorem Internal.HasProgram.iterate {α : Type*} [UniqueEncoding Tree α] {f : �
     rw [hy]
     exact size_le_iteratePeak p _ hk
   fill_hole program in
-    refine (HasProgram.tail_loop_potential Iteration.hasProgramIn_continues.toHasProgram
+    refine (HasProgramInO.tail_loop_potential Iteration.hasProgramIn_continues.toHasProgramInO
       hf.iteration_step
-      Prod.hasProgramIn_snd.toHasProgram I (fun _ y => iterateTime f t y.1 y.2)
+      Prod.hasProgramIn_snd.toHasProgramInO I (fun _ y => iterateTime f t y.1 y.2)
       (fun _ => 1) (fun x => iteratePeak f p x.1 x.2) ?_ ?_ ?_ (Dominated.of_le size)
       (Dominated.of_le size) ?_ (Dominated.of_le fun z => size ⟨z.1, z.2.1⟩)
       (Dominated.of_le_mul 2 fun _ => le_rfl) ?_).mono (Dominated.of_le_mul 3 fun x => by omega)
@@ -285,25 +285,26 @@ theorem Internal.HasProgram.iterate {α : Type*} [UniqueEncoding Tree α] {f : �
     omega
 
 /-- Captured values stay in the loop state; one callback covers all runtime environments. -/
-theorem Internal.HasProgram.iterate_with {ρ α : Type*} [UniqueEncoding Tree ρ]
+theorem Internal.HasProgramInO.iterate_with {ρ α : Type*} [UniqueEncoding Tree ρ]
     [UniqueEncoding Tree α]
     {f : ρ → α → α} {count : ρ → ℕ} {initial : ρ → α} {qi qs : Value → Code Value}
     {ti pi : ρ → ℕ} {ts ps : ρ × α → ℕ}
-    (hi : HasProgram (fun e => (count e, (e, initial e))) qi ti pi)
-    (hs : HasProgram (fun x : ρ × α => f x.1 x.2) qs ts ps) :
-    HasProgram (fun e => (f e)^[count e] (initial e)) hole(qi, qs ⊢ program)
+    (hi : HasProgramInO (fun e => (count e, (e, initial e))) qi ti pi)
+    (hs : HasProgramInO (fun x : ρ × α => f x.1 x.2) qs ts ps) :
+    HasProgramInO (fun e => (f e)^[count e] (initial e)) hole(qi, qs ⊢ program)
       (fun e => ti e + (iterateTime (f e) (fun a => ts (e, a)) (count e) (initial e) + 1))
       (fun e => max (pi e) (⌜e⌝ₜ.size + 1 + iteratePeak (f e)
         (fun a => max ⌜(e, a)⌝ₜ.size (ps (e, a))) (count e) (initial e))) := by
   have hout := hs.size_encode
-  have carry : HasProgram (fun x : ρ × α => (x.1, f x.1 x.2)) _ (fun x => ts x + 1)
+  have carry : HasProgramInO (fun x : ρ × α => (x.1, f x.1 x.2)) _ (fun x => ts x + 1)
       (fun x => max ⌜x⌝ₜ.size (ps x)) :=
-    (Prod.hasProgramIn_fst.toHasProgram.pair hs).mono (by dominated) (by dominated)
+    (Prod.hasProgramIn_fst.toHasProgramInO.pair hs).mono (by dominated) (by dominated)
   have hiter (n : ℕ) (e : ρ) (a : α) :
       (fun x : ρ × α => (x.1, f x.1 x.2))^[n] (e, a) = (e, (f e)^[n] a) :=
     (Function.Semiconj.iterate_right (f := fun a => (e, a)) (fun _ => rfl) n a).symm
   fill_hole program in
-    refine ((hi.comp (carry.iterate.comp Prod.hasProgramIn_snd.toHasProgram)).congr ?_).mono ?_ ?_
+    refine ((hi.comp (carry.iterate.comp Prod.hasProgramIn_snd.toHasProgramInO)).congr ?_).mono
+      ?_ ?_
   · funext e
     simp only [Function.comp_apply, hiter]
   · apply Dominated.of_le_mul 2
@@ -320,6 +321,6 @@ theorem Internal.HasProgram.iterate_with {ρ α : Type*} [UniqueEncoding Tree ρ
     simp only [hiter, max_le_iff, size_encode_prod] at hlift ⊢
     omega
 
-attribute [scoped fun_prop] HasProgram.iterate HasProgram.iterate_with
+attribute [scoped fun_prop] HasProgramInO.iterate HasProgramInO.iterate_with
 
 end Complexity.TreeProgram.Source

@@ -16,7 +16,7 @@ open Complexity TreeProgram
 
 namespace Complexity.TreeProgram.Source
 
-open Internal (HasProgram)
+open Internal (HasProgramInO)
 
 theorem _root_.List.hasProgramIn_tail {α : Type*} [UniqueEncoding Tree α] :
     HasProgramIn (List.tail : List α → List α) hole(⊢ program)
@@ -41,8 +41,8 @@ theorem hasProgramIn_lookupStep {α : Type*} [UniqueEncoding Tree α] :
     HasProgramIn (lookupStep (α := α)) hole(⊢ program)
       IsO(fun x => ⌜x.1⌝ₜ.size) IsO(fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programLookupStep
-  refine HasProgram.toHasProgramIn ?_
-  have := Nat.hasProgramIn_pred.toHasProgram.size_encode.comp (fun x : ℕ × List α => x.1)
+  refine HasProgramInO.toHasProgramIn ?_
+  have := Nat.hasProgramIn_pred.toHasProgramInO.size_encode.comp (fun x : ℕ × List α => x.1)
   fill_hole program in source_fun_prop
 
 theorem hasProgramIn_lookupFinish {α : Type*} [UniqueEncoding Tree α] :
@@ -64,11 +64,11 @@ theorem hasProgramIn_lookup {α : Type*} [UniqueEncoding Tree α] :
     HasProgramIn (fun x : ℕ × List α => x.2[x.1]?) hole(⊢ program) IsO(fun x => ⌜x⌝ₜ.size ^ 2)
       IsO(fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programLookup
-  refine HasProgram.toHasProgramIn ?_
+  refine HasProgramInO.toHasProgramIn ?_
   fill_hole program in
-    refine (HasProgram.tail_loop hasProgramIn_lookupContinues.toHasProgram
-      hasProgramIn_lookupStep.toHasProgram
-      hasProgramIn_lookupFinish.toHasProgram lookupInvariant
+    refine (HasProgramInO.tail_loop hasProgramIn_lookupContinues.toHasProgramInO
+      hasProgramIn_lookupStep.toHasProgramInO
+      hasProgramIn_lookupFinish.toHasProgramInO lookupInvariant
       (fun x => x.2.length) (fun x => ⌜x⌝ₜ.size) (fun _ => 1) (fun x => ⌜x⌝ₜ.size)
       ?equation ?initial ?next_state ?decreases ?input_size ?check_peak ?step_peak ?stop_peak
       ?step_time ?check_time ?stop_time ?step_pos ?stop_pos).mono ?time (Dominated.refl _)
@@ -113,9 +113,9 @@ theorem _root_.List.hasProgramIn_getElem? {γ : Type*} [UniqueEncoding Tree γ] 
     HasProgramIn (fun p : List γ × ℕ => p.1[p.2]?)
       (fun v => (do let w ← Value.right v; let z ← Value.left v; Value.pair w z) >>= programLookup)
       IsO(fun p => ⌜p⌝ₜ.size ^ 2) IsO(fun p => ⌜p⌝ₜ.size) := by
-  refine HasProgram.toHasProgramIn ?_
-  refine ((Prod.hasProgramIn_snd.toHasProgram.pair Prod.hasProgramIn_fst.toHasProgram).comp
-    hasProgramIn_lookup.toHasProgram).mono ?_ ?_ <;>
+  refine HasProgramInO.toHasProgramIn ?_
+  refine ((Prod.hasProgramIn_snd.toHasProgramInO.pair Prod.hasProgramIn_fst.toHasProgramInO).comp
+    hasProgramIn_lookup.toHasProgramInO).mono ?_ ?_ <;>
     dominated
 
 attribute [scoped program] List.hasProgramIn_getElem?
@@ -193,8 +193,8 @@ theorem hasProgramIn_rangeContinues :
 theorem hasProgramIn_rangeStep :
     HasProgramIn rangeStep hole(⊢ program) IsO(fun x => ⌜x.1⌝ₜ.size) IsO(fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programRangeStep
-  refine HasProgram.toHasProgramIn ?_
-  have := Nat.hasProgramIn_pred.toHasProgram.size_encode.comp (fun x : ℕ × List ℕ => x.1)
+  refine HasProgramInO.toHasProgramIn ?_
+  have := Nat.hasProgramIn_pred.toHasProgramInO.size_encode.comp (fun x : ℕ × List ℕ => x.1)
   fill_hole program in source_fun_prop
 
 def rangeLoop (x : ℕ × List ℕ) := List.range x.1 ++ x.2
@@ -225,11 +225,11 @@ theorem range_size :
 theorem hasProgramIn_rangeLoop : HasProgramIn rangeLoop hole(⊢ program) IsO(fun x => (x.1 + 1) ^ 2)
     IsO(fun x => (x.1 + 1) ^ 2 + ⌜x.2⌝ₜ.size) := by
   abstract_hole program using programRangeLoop
-  refine HasProgram.toHasProgramIn ?_
+  refine HasProgramInO.toHasProgramIn ?_
   fill_hole program in
-    refine (HasProgram.tail_loop hasProgramIn_rangeContinues.toHasProgram
-      hasProgramIn_rangeStep.toHasProgram
-      Prod.hasProgramIn_snd.toHasProgram rangeInvariant Prod.fst (fun x => x.1 + 1) (fun _ => 1)
+    refine (HasProgramInO.tail_loop hasProgramIn_rangeContinues.toHasProgramInO
+      hasProgramIn_rangeStep.toHasProgramInO
+      Prod.hasProgramIn_snd.toHasProgramInO rangeInvariant Prod.fst (fun x => x.1 + 1) (fun _ => 1)
       (fun x => (x.1 + 1) ^ 2 + ⌜x.2⌝ₜ.size)
       ?equation ?initial ?next_state ?decreases ?input_size ?check_peak ?step_peak ?stop_peak
       ?step_time ?check_time ?stop_time ?step_pos ?stop_pos).mono ?time (Dominated.refl _)
@@ -268,8 +268,8 @@ theorem _root_.List.hasProgramIn_range :
     HasProgramIn List.range hole(⊢ program) IsO(fun n => (n + 1) ^ 2)
       IsO(fun n => (n + 1) ^ 2) := by
   abstract_hole program using programRange
-  refine HasProgram.toHasProgramIn ?_
-  let hr := hasProgramIn_rangeLoop.toHasProgram
+  refine HasProgramInO.toHasProgramIn ?_
+  let hr := hasProgramIn_rangeLoop.toHasProgramInO
   fill_hole program in source_fun_prop via (fun n => rangeLoop (n, []))
   case source_eq => funext n; simp [rangeLoop]
 
@@ -292,7 +292,7 @@ theorem _root_.List.hasProgramIn_length {α : Type*} [UniqueEncoding Tree α] :
     HasProgramIn (List.length : List α → ℕ) hole(⊢ program) IsO(fun xs => ⌜xs⌝ₜ.size ^ 2)
       IsO(fun xs => ⌜xs⌝ₜ.size) := by
   abstract_hole program using programLength
-  refine HasProgram.toHasProgramIn ?_
+  refine HasProgramInO.toHasProgramIn ?_
   let I (xs rest : List α) (acc : ℕ) :=
     acc + rest.length ≤ xs.length ∧ ⌜rest⌝ₜ.size ≤ ⌜xs⌝ₜ.size
   have hs : Dominated (fun z : {z : List α × List α × ℕ // I z.1 z.2.1 z.2.2} =>
@@ -334,20 +334,20 @@ theorem _root_.List.hasProgramIn_length {α : Type*} [UniqueEncoding Tree α] :
   obtain ⟨htime, hpeak⟩ := hfold
   obtain ⟨-, hpeak⟩ := Dominated.max_iff.mp hpeak
   fill_hole program in
-    refine (HasProgram.of_encode (by simp) (hasProgramIn_lengthInitial.toHasProgram.comp
-      (hasProgramIn_lengthStep.toHasProgram.foldl (f := fun n (_ : α) => n + 1)))).mono ?_ ?_
+    refine (HasProgramInO.of_encode (by simp) (hasProgramIn_lengthInitial.toHasProgramInO.comp
+      (hasProgramIn_lengthStep.toHasProgramInO.foldl (f := fun n (_ : α) => n + 1)))).mono ?_ ?_
   all_goals dominated
 
 attribute [scoped program] List.hasProgramIn_length
 
 /-- Construct a represented tuple using one selected callback for every environment and index.
 Tabulation sums the callback growth; one coefficient covers every environment and index. -/
-theorem Internal.HasProgram.fin_function {ρ : Type*} {β : ρ → Type*}
+theorem Internal.HasProgramInO.fin_function {ρ : Type*} {β : ρ → Type*}
     [UniqueEncoding Tree ρ] [instβ : ∀ e, UniqueEncoding Tree (β e)]
     {n : ρ → ℕ} {f : (e : ρ) → Fin (n e) → β e} {qn qf : Value → Code Value} {tn pn : ρ → ℕ}
-    {tf pf : (Σ e, Fin (n e)) → ℕ} (hn : HasProgram n qn tn pn)
-    (hf : HasProgram (fun p : Σ e, Fin (n e) => f p.1 p.2) qf tf pf) :
-    HasProgram (fun e => Vector.ofFn (f e)) hole(qn, qf ⊢ program)
+    {tf pf : (Σ e, Fin (n e)) → ℕ} (hn : HasProgramInO n qn tn pn)
+    (hf : HasProgramInO (fun p : Σ e, Fin (n e) => f p.1 p.2) qf tf pf) :
+    HasProgramInO (fun e => Vector.ofFn (f e)) hole(qn, qf ⊢ program)
       (fun e => (tn e + (n e + 1) ^ 2 + 1) +
         (((List.finRange (n e)).map (fun i => tf ⟨e, i⟩)).sum + n e + 1))
       (fun e => max (max (pn e) ((n e + 1) ^ 2))
@@ -355,10 +355,10 @@ theorem Internal.HasProgram.fin_function {ρ : Type*} {β : ρ → Type*}
           ((List.finRange (n e)).foldr (fun i s => max (pf ⟨e, i⟩) s) 0)))) := by
   have heq (e : ρ) : ⌜(⟨e, List.finRange (n e)⟩ : Σ e, List (Fin (n e)))⌝ₜ =
       ⌜(e, List.range (n e))⌝ₜ := by simp only [Sigma.encode_mk, encode_prod, encode_finRange]
-  have he := HasProgram.of_encode heq
-    (HasProgram.identity.pair (hn.comp List.hasProgramIn_range.toHasProgram))
+  have he := HasProgramInO.of_encode heq
+    (HasProgramInO.identity.pair (hn.comp List.hasProgramIn_range.toHasProgramInO))
   fill_hole program in
-    refine (HasProgram.of_encode
+    refine (HasProgramInO.of_encode
       (fun e => by rw [encode_vector, Vector.toList_ofFn, List.ofFn_eq_map])
       (he.map_dependent_with hf)).mono ?_ ?_
   · apply Dominated.of_le
@@ -375,17 +375,17 @@ end Complexity.TreeProgram.Source
 namespace tabulate
 
 -- Enumeration is an optional library rule, after stored-field extraction and lookup.
-attribute [scoped source_fallback] Complexity.TreeProgram.Source.Internal.HasProgram.fin_function
+attribute [scoped source_fallback] Complexity.TreeProgram.Source.Internal.HasProgramInO.fin_function
 
 open Lean Meta Mathlib.Meta.FunProp in
 run_elab do
-  addTheorem ``Complexity.TreeProgram.Source.Internal.HasProgram.fin_function .scoped 50
+  addTheorem ``Complexity.TreeProgram.Source.Internal.HasProgramInO.fin_function .scoped 50
 
 end tabulate
 
 namespace Complexity.TreeProgram.Source
 
-open Internal (HasProgram)
+open Internal (HasProgramInO)
 
 abbrev FinCompInput := Σ n, Σ k, Σ m, (Fin n → Fin k) × (Fin k → Fin m)
 
@@ -401,23 +401,23 @@ theorem hasProgramIn_finComp :
     HasProgramIn (fun x : FinCompInput => Vector.ofFn (x.2.2.2.2 ∘ x.2.2.2.1)) hole(⊢ program)
     IsO(fun x => ⌜x⌝ₜ.size ^ 3) IsO(fun x => ⌜x⌝ₜ.size ^ 2) := by
   abstract_hole program using programFinComp
-  refine HasProgram.toHasProgramIn ?_
+  refine HasProgramInO.toHasProgramIn ?_
   fill_hole program in
     -- The entry encodings are a family over the environment, which the callback states only at
     -- `z.1`; unification cannot recover the family from there.
-    refine (HasProgram.fin_function Sigma.hasProgramIn_fst.toHasProgram
-      hasProgramIn_finCompStep.toHasProgram).mono ?_ ?_
+    refine (HasProgramInO.fin_function Sigma.hasProgramIn_fst.toHasProgramInO
+      hasProgramIn_finCompStep.toHasProgramInO).mono ?_ ?_
   all_goals dominated
 
 /-- Reuse the existing table-composition backend while retaining the caller's program. -/
-theorem Internal.HasProgram.fin_comp {ρ : Type*} [UniqueEncoding Tree ρ]
+theorem Internal.HasProgramInO.fin_comp {ρ : Type*} [UniqueEncoding Tree ρ]
     {n k m : ρ → ℕ} {f : (e : ρ) → Fin (n e) → Fin (k e)}
     {g : (e : ρ) → Fin (k e) → Fin (m e)} {q : Value → Code Value} {t p : ρ → ℕ}
-    (h : HasProgram (fun e => (⟨n e, k e, m e, f e, g e⟩ :
+    (h : HasProgramInO (fun e => (⟨n e, k e, m e, f e, g e⟩ :
       Σ n, Σ k, Σ m, (Fin n → Fin k) × (Fin k → Fin m))) q t p) :
-    HasProgram (fun e => Vector.ofFn (g e ∘ f e)) (fun v => q v >>= programFinComp)
+    HasProgramInO (fun e => Vector.ofFn (g e ∘ f e)) (fun v => q v >>= programFinComp)
       (fun e => t e + ⌜(⟨n e, k e, m e, f e, g e⟩ : FinCompInput)⌝ₜ.size ^ 3)
       (fun e => max (p e) (⌜(⟨n e, k e, m e, f e, g e⟩ : FinCompInput)⌝ₜ.size ^ 2)) :=
-  h.comp_dependent hasProgramIn_finComp.toHasProgram
+  h.comp_dependent hasProgramIn_finComp.toHasProgramInO
 
 end Complexity.TreeProgram.Source

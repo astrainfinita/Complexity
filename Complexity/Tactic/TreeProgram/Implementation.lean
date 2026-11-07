@@ -17,10 +17,11 @@ public import Mathlib.Tactic.FunProp
 `Implements` fixes one program and certifies its result, time and intermediate-tree peak with
 exact budgets. Implementations are stated as `HasProgramIn f program time peak`: some exact budgets
 have growths satisfying the properties `time` and `peak`, such as `IsO(T)` or `IsPoly s`.
-`Internal.HasProgram f program time peak`, the form the translation composes, is `HasProgramIn` at
-`IsO(time)` and `IsO(peak)`: one hidden coefficient covers every input, while sums, maxima and
-local constants of `time` and `peak` stay visible. Each rule states the program and the growth it
-produces, so a selected program carries exactly one specification and calls reuse it directly.
+`Internal.HasProgramInO f program time peak`, the form the translation composes, is
+`HasProgramIn` at `IsO(time)` and `IsO(peak)`: one hidden coefficient covers every input, while
+sums, maxima and local constants of `time` and `peak` stay visible. Each rule states the program
+and the growth it produces, so a selected program carries exactly one specification and calls
+reuse it directly.
 -/
 
 @[expose] public section
@@ -189,13 +190,13 @@ namespace Internal
 property of `f`. The hidden coefficient is uniform over all inputs, including repeated calls on
 small inputs. A structure, so that a unification that fails is not unfolded into `Dominated`. -/
 @[fun_prop]
-structure HasProgram {α : Type*} {β : α → Type*} [UniqueEncoding Tree α]
+structure HasProgramInO {α : Type*} {β : α → Type*} [UniqueEncoding Tree α]
     [∀ x, UniqueEncoding Tree (β x)] (f : (x : α) → β x) (program : Value → Code Value)
     (time peak : α → ℕ) : Prop where
   /-- The program within `O(time)` and `O(peak)`. -/
   toHasProgramIn : HasProgramIn f program IsO(time) IsO(peak)
 
-namespace HasProgram
+namespace HasProgramInO
 
 section
 
@@ -204,35 +205,35 @@ variable {α : Type*} {β γ : α → Type*} [UniqueEncoding Tree α] [∀ x, Un
   {t p : α → ℕ}
 
 /-- Some exact budgets certify the program and are dominated by the stated growth. -/
-theorem sound (hf : HasProgram f program t p) :
+theorem sound (hf : HasProgramInO f program t p) :
     ∃ b : Bounds α, Implements program f b ∧ Dominated b.time t ∧ Dominated b.peak p :=
   hf.toHasProgramIn
 
 /-- Use the exact budgets of a certified program as its growth specification. -/
 theorem of_implements (b : Bounds α) (h : Implements program f b) :
-    HasProgram f program b.time b.peak :=
+    HasProgramInO f program b.time b.peak :=
   ⟨b, h, .refl _, .refl _⟩
 
 /-- Weaken the growth specification of the same program. -/
-theorem mono (hf : HasProgram f program t p) {t' p' : α → ℕ} (ht : Dominated t t')
-    (hp : Dominated p p') : HasProgram f program t' p' := by
+theorem mono (hf : HasProgramInO f program t p) {t' p' : α → ℕ} (ht : Dominated t t')
+    (hp : Dominated p p') : HasProgramInO f program t' p' := by
   obtain ⟨b, h, hbt, hbp⟩ := hf.sound
   exact ⟨b, h, hbt.trans ht, hbp.trans hp⟩
 
 /-- A call's output fits in either its input storage or its intermediate peak. -/
-theorem size_encode (hf : HasProgram f program t p) :
+theorem size_encode (hf : HasProgramInO f program t p) :
     Dominated (fun x => ⌜f x⌝ₜ.size) (fun x => max ⌜x⌝ₜ.size (p x)) := by
   obtain ⟨b, h, -, hbp⟩ := hf.sound
   exact ((Dominated.refl _).max hbp).mono_left h.size_le
 
 /-- Change the source function by equality, retaining the program and growth. -/
-theorem congr (hf : HasProgram f program t p) {g : (x : α) → β x} (h : f = g) :
-    HasProgram g program t p :=
+theorem congr (hf : HasProgramInO f program t p) {g : (x : α) → β x} (h : f = g) :
+    HasProgramInO g program t p :=
   h ▸ hf
 
 /-- Retain a program when only the interpretation of its encoded result changes. -/
 theorem of_encode {g : (x : α) → γ x} (hfg : ∀ x, ⌜f x⌝ₜ = ⌜g x⌝ₜ)
-    (hg : HasProgram g program t p) : HasProgram f program t p := by
+    (hg : HasProgramInO g program t p) : HasProgramInO f program t p := by
   obtain ⟨b, h, ht, hp⟩ := hg.sound
   exact ⟨b, h.of_encode hfg, ht, hp⟩
 
@@ -240,7 +241,7 @@ end
 
 /-- Returning the supplied input incurs no assignment or intermediate-tree cost. -/
 theorem identity {α : Type*} [UniqueEncoding Tree α] :
-    HasProgram (id : α → α) (fun v => pure v) (fun _ => 0) (fun _ => 0) :=
+    HasProgramInO (id : α → α) (fun v => pure v) (fun _ => 0) (fun _ => 0) :=
   of_implements ⟨fun _ => 0, fun _ => 0⟩ Implements.id
 
 variable {α β γ : Type*} {δ : β → Type*} {ε : α → Type*} [UniqueEncoding Tree α]
@@ -251,32 +252,32 @@ variable {α β γ : Type*} {δ : β → Type*} {ε : α → Type*} [UniqueEncod
 /-- Compose programs; the second call is charged at the intermediate value, and its result type
 may depend on that value. Rules state their results through this; a family of encodings applied
 to a computed value is not a pattern `fun_prop` can unify, so it composes with `comp`. -/
-theorem comp_dependent {f : α → β} {g : (y : β) → δ y} (hf : HasProgram f pf t p)
-    (hg : HasProgram g pg u q) :
-    HasProgram (fun x => g (f x)) (fun v => pf v >>= pg) (fun x => t x + u (f x))
+theorem comp_dependent {f : α → β} {g : (y : β) → δ y} (hf : HasProgramInO f pf t p)
+    (hg : HasProgramInO g pg u q) :
+    HasProgramInO (fun x => g (f x)) (fun v => pf v >>= pg) (fun x => t x + u (f x))
       (fun x => max (p x) (q (f x))) := by
   obtain ⟨b, hb, hbt, hbp⟩ := hf.sound
   obtain ⟨c, hc, hct, hcp⟩ := hg.sound
   exact ⟨_, hb.comp hc, hbt.add (hct.comp f), hbp.max (hcp.comp f)⟩
 
 /-- Compose programs; the second call is charged at the intermediate value. -/
-theorem comp {f : α → β} {g : β → γ} (hf : HasProgram f pf t p) (hg : HasProgram g pg u q) :
-    HasProgram (g ∘ f) (fun v => pf v >>= pg) (fun x => t x + u (f x))
+theorem comp {f : α → β} {g : β → γ} (hf : HasProgramInO f pf t p) (hg : HasProgramInO g pg u q) :
+    HasProgramInO (g ∘ f) (fun v => pf v >>= pg) (fun x => t x + u (f x))
       (fun x => max (p x) (q (f x))) :=
   hf.comp_dependent hg
 
 /-- Reinterpret inputs with the same codes, retaining the program. -/
-theorem map_input {f : (x : α) → ε x} (hf : HasProgram f program t p) (i : γ → α)
+theorem map_input {f : (x : α) → ε x} (hf : HasProgramInO f program t p) (i : γ → α)
     (hi : ∀ x, ⌜i x⌝ₜ = ⌜x⌝ₜ) :
-    HasProgram (fun x => f (i x)) program (fun x => t (i x)) (fun x => p (i x)) := by
+    HasProgramInO (fun x => f (i x)) program (fun x => t (i x)) (fun x => p (i x)) := by
   obtain ⟨b, h, ht, hp⟩ := hf.sound
   exact ⟨_, h.map_input i hi, ht.comp i, hp.comp i⟩
 
-end HasProgram
+end HasProgramInO
 
 end Internal
 
-open Internal (HasProgram)
+open Internal (HasProgramInO)
 
 namespace HasProgramIn
 
@@ -290,13 +291,13 @@ noncomputable def time (h : HasProgramIn f program T P) : α → ℕ := h.choose
 noncomputable def peak (h : HasProgramIn f program T P) : α → ℕ := h.choose.peak
 
 /-- The program with the growths of the chosen budgets, for the translation. -/
-theorem hasProgram (h : HasProgramIn f program T P) : HasProgram f program h.time h.peak :=
+theorem hasProgramInO (h : HasProgramIn f program T P) : HasProgramInO f program h.time h.peak :=
   ⟨h.choose, h.choose_spec.1, .refl _, .refl _⟩
 
 /-- An implementation within `O(time)` and `O(peak)` in the form the translation composes, with
 the same growths. -/
-theorem toHasProgram {t p : α → ℕ} (h : HasProgramIn f program IsO(t) IsO(p)) :
-    HasProgram f program t p :=
+theorem toHasProgramInO {t p : α → ℕ} (h : HasProgramIn f program IsO(t) IsO(p)) :
+    HasProgramInO f program t p :=
   ⟨h⟩
 
 theorem time_spec (h : HasProgramIn f program T P) : T h.time := h.choose_spec.2.1
@@ -326,9 +327,9 @@ theorem mono {T' P' : (α → ℕ) → Prop} (h : HasProgramIn f program T P)
 end HasProgramIn
 
 /-- Growths polynomial in `s` and `s'` make the program polynomial in them. -/
-theorem Internal.HasProgram.hasProgramIn {α : Type*} {β : α → Type*} [UniqueEncoding Tree α]
+theorem Internal.HasProgramInO.hasProgramIn {α : Type*} {β : α → Type*} [UniqueEncoding Tree α]
     [∀ x, UniqueEncoding Tree (β x)] {f : (x : α) → β x} {program : Value → Code Value}
-    {t p s s' : α → ℕ} (hf : HasProgram f program t p) (ht : IsPoly s t) (hp : IsPoly s' p) :
+    {t p s s' : α → ℕ} (hf : HasProgramInO f program t p) (ht : IsPoly s t) (hp : IsPoly s' p) :
     HasProgramIn f program (IsPoly s) (IsPoly s') :=
   let ⟨b, hb, hbt, hbp⟩ := hf
   ⟨b, hb, ht.of_dominated hbt, hp.of_dominated hbp⟩
