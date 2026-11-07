@@ -7,6 +7,7 @@ import Complexity.Tactic.TreeProgram.Library
 import ComplexityTest.TreeRun
 
 open Complexity TreeProgram Complexity.TreeProgram.Source
+open Complexity.TreeProgram.Source.Internal (HasProgram)
 
 namespace ComplexityTest.SourceTranslation.Traversal
 

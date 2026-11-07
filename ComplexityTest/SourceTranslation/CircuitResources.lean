@@ -24,9 +24,9 @@ def collect (input : CNF ℕ ×
   (gateClauses input.2).foldl (fun acc clause => clause :: acc) input.1
 
 open Complexity.TreeProgram.Source in
-@[local source] theorem hasProgram_collect :
-    HasProgram collect programAccumulateGate (fun _ => 1) (fun input => ⌜input⌝ₜ.size) :=
-  hasProgram_accumulateGate.congr (by funext x; rfl)
+@[local program] theorem hasProgramIn_collect :
+    HasProgramIn collect programAccumulateGate IsO(fun _ => 1) IsO(fun input => ⌜input⌝ₜ.size) :=
+  hasProgramIn_accumulateGate.congr (by funext x; rfl)
 
 theorem collect_fdtisp : collect ∈ FDTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
   model_fun_prop
@@ -46,9 +46,11 @@ theorem collect_pair_fdtisp : (fun input => (collect input, input.1)) ∈ FDTISP
 
 -- The selected program is reused as chosen.
 open Complexity.TreeProgram.Source in
+open Complexity.TreeProgram.Source.Internal (HasProgram) in
 example := (by source_fun_prop : HasProgram collect programAccumulateGate _ _)
 
 open Complexity.TreeProgram.Source in
+open Complexity.TreeProgram.Source.Internal (HasProgram) in
 example : True := by
   have := (by source_fun_prop : HasProgram (fun input : Option (CNF ℕ ×
       (Σ k, FirstOrder.Language.booleanAlgebra.Functions k × (Fin k → ℕ) × ℕ)) =>
@@ -58,9 +60,9 @@ example : True := by
 theorem copied_fdtisp : collect ∈ FDTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) :=
   collect_fdtisp
 
-/-- error: `source` expects a function equality or a named implementation -/
+/-- error: `program` expects a function equality or a named implementation -/
 #guard_msgs in
-attribute [local source] copied_fdtisp
+attribute [local program] copied_fdtisp
 
 -- A one-off source choice leaves its ordinary equation and growth comparisons.
 example : collect ∈ FDTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
@@ -75,6 +77,7 @@ example : True := by
 
 -- The peak of prepending is the final list's size, including an empty fold.
 open Complexity.TreeProgram.Source in
+open Complexity.TreeProgram.Source.Internal (HasProgram) in
 example (acc xs : List Bool) :
     foldlPeak (fun acc x => x :: acc) (fun z => ⌜z⌝ₜ.size) acc xs + 1 =
       ⌜xs⌝ₜ.size + ⌜acc⌝ₜ.size := by

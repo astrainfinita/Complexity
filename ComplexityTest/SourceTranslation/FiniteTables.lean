@@ -9,6 +9,7 @@ import Complexity.ModelTheory.Algebra.BooleanAlgebra.TreeEncoding
 import Complexity.Classes.Functions.Basic
 
 open Complexity TreeProgram Complexity.TreeProgram.Source
+open Complexity.TreeProgram.Source.Internal (HasProgram)
 
 namespace ComplexityTest.SourceTranslation.FiniteTables
 
@@ -119,7 +120,7 @@ example := (by source_fun_prop using tabulate : HasProgram identityCircuit _ _ _
 def positions {α : Type*} (xs : List α) : List ℕ := List.ofFn (fun i : Fin xs.length => i.val)
 
 -- Choose enumeration for this function once. Callers, including nested calls, need no permission.
-@[local source using tabulate] theorem positions_source {α : Type*} :
+@[local program using tabulate] theorem positions_source {α : Type*} :
     positions (α := α) = (fun xs => List.ofFn (fun i : Fin xs.length => i.val)) := rfl
 
 noncomputable example := (by source_fun_prop :

@@ -9,12 +9,13 @@ import Complexity.Encoding.Sigma
 import Complexity.Classes.Functions.Encoding
 
 open Complexity TreeProgram TreeProgram.Source
+open TreeProgram.Source.Internal (HasProgram)
 
 namespace ComplexityTest.SourceTranslation.Encoding
 
 -- The input map need not cover all inputs of the original implementation.
-theorem hasProgram_trueOnly : HasProgram (fun b : {b : Bool // b = true} => b.val)
-    (fun v => pure v) (fun _ => 0) (fun _ => 0) :=
+theorem hasProgramIn_trueOnly : HasProgramIn (fun b : {b : Bool // b = true} => b.val)
+    (fun v => pure v) IsO(fun _ => 0) IsO(fun _ => 0) := HasProgram.toHasProgramIn <|
   HasProgram.identity.map_input Subtype.val (fun _ => rfl)
 
 example : ¬Function.Surjective (Subtype.val : {b : Bool // b = true} → Bool) := by
@@ -22,9 +23,9 @@ example : ¬Function.Surjective (Subtype.val : {b : Bool // b = true} → Bool) 
   obtain ⟨b, hb⟩ := h false
   exact Bool.noConfusion (b.property.symm.trans hb)
 
-theorem hasProgram_sigmaIdentity :
-    HasProgram (fun p : Bool × Unit => (⟨p.1, p.2⟩ : Σ _ : Bool, Unit)) (fun v => pure v)
-      (fun _ => 0) (fun _ => 0) :=
+theorem hasProgramIn_sigmaIdentity :
+    HasProgramIn (fun p : Bool × Unit => (⟨p.1, p.2⟩ : Σ _ : Bool, Unit)) (fun v => pure v)
+      IsO(fun _ => 0) IsO(fun _ => 0) := HasProgram.toHasProgramIn <|
   HasProgram.identity.of_encode
     (fun p => @Sigma.encode_mk Bool (fun _ => Unit) _ _ p.1 p.2)
 

@@ -3,20 +3,22 @@ Copyright (c) 2026 Yuyang Zhao. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Yuyang Zhao
 -/
-import Complexity.Tactic.TreeProgram.Translation
+import Complexity.Tactic.TreeProgram.Primitives
 
 open Complexity TreeProgram Complexity.TreeProgram.Source
+open Complexity.TreeProgram.Source.Internal (HasProgram)
 
 namespace ComplexityTest.SourceTranslation.Certified
 
-attribute [local fun_prop] HasProgram.identity HasProgram.comp
-  List.hasProgram_reverse HasProgram.map HasProgram.ite Prod.hasProgram_fst
-  Prod.hasProgram_snd
-  HasProgram.pair List.hasProgram_append
+-- The implementations of `List.reverse`, `List.append` and the projections are selected by the
+-- library with `program`, which registers them for `fun_prop` as well.
+attribute [local fun_prop] HasProgram.identity HasProgram.comp HasProgram.map HasProgram.ite
+  HasProgram.pair
 
-theorem hasProgram_reverse : HasProgram (List.reverse : List Bool → List Bool) hole(⊢ program)
-    (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) := by
+theorem hasProgramIn_reverse : HasProgramIn (List.reverse : List Bool → List Bool) hole(⊢ program)
+    IsO(fun xs => ⌜xs⌝ₜ.size) IsO(fun xs => ⌜xs⌝ₜ.size) := by
   abstract_hole program using programReverse
+  refine HasProgram.toHasProgramIn ?_
   fill_hole program in fun_prop
 
 -- Ordinary `fun_prop` produces the structural growth of each call.
@@ -86,8 +88,8 @@ def negateBool : Bool → Bool
   | true => false
   | false => true
 
-theorem hasProgram_negateBool : HasProgram negateBool hole(⊢ program) (fun _ => 1)
-    (fun x => max ⌜x⌝ₜ.size ⌜negateBool x⌝ₜ.size) := by
+theorem hasProgramIn_negateBool : HasProgramIn negateBool hole(⊢ program) IsO(fun _ => 1)
+    IsO(fun x => max ⌜x⌝ₜ.size ⌜negateBool x⌝ₜ.size) := by
   abstract_hole program using programNegateBool
   fill_hole program in source_fun_prop
 
@@ -135,8 +137,9 @@ def hasProgram_optionalReverse := (by
 
 def singletonIndexed (x : Σ n, List (Fin n)) : Σ n, List (List (Fin n)) := ⟨x.1, [x.2]⟩
 
-theorem hasProgram_singletonIndexed : HasProgram singletonIndexed hole(⊢ program) (fun _ => 1)
-    (fun x => max ⌜x⌝ₜ.size ⌜singletonIndexed x⌝ₜ.size) := by
+theorem hasProgramIn_singletonIndexed :
+    HasProgramIn singletonIndexed hole(⊢ program) IsO(fun _ => 1)
+    IsO(fun x => max ⌜x⌝ₜ.size ⌜singletonIndexed x⌝ₜ.size) := by
   abstract_hole program using programSingletonIndexed
   fill_hole program in source_fun_prop
 
@@ -155,18 +158,19 @@ example {program : Value → Code Value} {t p : List Bool → ℕ}
   (by source_fun_prop : HasProgram mixedCalls _ _ _)
 
 -- Only the selected branch is charged, at its own structural cost.
-theorem hasProgram_conditionalReverse : HasProgram
+theorem hasProgramIn_conditionalReverse : HasProgramIn
     (fun x : Bool × List Bool => if x.1 then x.2.reverse else x.2) hole(⊢ program)
-    (fun x => (1 + if x.1 = true then 1 + ⌜x.2⌝ₜ.size else 1) + 1)
-    (fun x => max ⌜x⌝ₜ.size (max ⌜x⌝ₜ.size
+    IsO(fun x => (1 + if x.1 = true then 1 + ⌜x.2⌝ₜ.size else 1) + 1)
+    IsO(fun x => max ⌜x⌝ₜ.size (max ⌜x⌝ₜ.size
       (if x.1 = true then max ⌜x⌝ₜ.size ⌜x.2⌝ₜ.size else ⌜x⌝ₜ.size))) := by
   abstract_hole program using programConditionalReverse
   fill_hole program in source_fun_prop
 
 def reverseAlias (xs : List Bool) := xs.reverse
 
-theorem hasProgram_reverseAlias : HasProgram reverseAlias List.Code.reverse
-    (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) := by
+theorem hasProgramIn_reverseAlias : HasProgramIn reverseAlias List.Code.reverse
+    IsO(fun xs => ⌜xs⌝ₜ.size) IsO(fun xs => ⌜xs⌝ₜ.size) := by
+  refine HasProgram.toHasProgramIn ?_
   source_fun_prop
 
 def aliasInLet (xs : List Bool) :=
@@ -179,7 +183,7 @@ def aliasInLet (xs : List Bool) :=
 example := (by source_fun_prop : HasProgram aliasInLet _ _ _)
 
 section
-attribute [local source] hasProgram_reverseAlias
+attribute [local program] hasProgramIn_reverseAlias
 
 example := (by source_fun_prop : HasProgram aliasInLet _ _ _)
 end

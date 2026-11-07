@@ -11,7 +11,9 @@ public import Complexity.Tactic.TreeProgram.Library
 
 @[expose] public section
 
-open Complexity TreeProgram Complexity.TreeProgram.Source Filter
+open Complexity TreeProgram Complexity.TreeProgram.Source
+open Complexity.TreeProgram.Source.Internal (HasProgram)
+open Filter
 
 namespace ComplexityTest.SourceTranslation.Asymptotics
 
@@ -115,22 +117,24 @@ example {α : Type*} [UniqueEncoding Tree α] {f : α → α} {pf : Value → Co
 
 def preciseIdentity (xs : List Bool) := xs
 
-@[source] theorem hasProgram_preciseIdentity :
-    HasProgram preciseIdentity hole(⊢ program) (fun _ => 0) (fun _ => 0) := by
+@[program] theorem hasProgramIn_preciseIdentity :
+    HasProgramIn preciseIdentity hole(⊢ program) IsO(fun _ => 0) IsO(fun _ => 0) := by
   abstract_hole program using programPreciseIdentity
+  refine HasProgram.toHasProgramIn ?_
   fill_hole program in
     exact HasProgram.identity
 
 -- A weaker mathematical consequence is legal, but it is not another selected implementation.
-theorem hasProgram_preciseIdentityWeaker : HasProgram preciseIdentity hole(⊢ program)
-    (fun x => ⌜x⌝ₜ.size ^ 2) (fun x => ⌜x⌝ₜ.size ^ 2) := by
+theorem hasProgramIn_preciseIdentityWeaker : HasProgramIn preciseIdentity hole(⊢ program)
+    IsO(fun x => ⌜x⌝ₜ.size ^ 2) IsO(fun x => ⌜x⌝ₜ.size ^ 2) := by
   abstract_hole program using programPreciseIdentityWeaker
+  refine HasProgram.toHasProgramIn ?_
   fill_hole program in
-    exact hasProgram_preciseIdentity.mono Dominated.zero Dominated.zero
+    exact hasProgramIn_preciseIdentity.toHasProgram.mono Dominated.zero Dominated.zero
 
-/-- error: `source` already has a selected implementation of preciseIdentity: hasProgram_preciseIdentity; choose another one at a call with a local hypothesis or `via` -/
+/-- error: `program` already has a selected implementation of preciseIdentity: hasProgramIn_preciseIdentity; choose another one at a call with a local hypothesis or `via` -/
 #guard_msgs in
-attribute [local source] hasProgram_preciseIdentityWeaker
+attribute [local program] hasProgramIn_preciseIdentityWeaker
 
 -- A coarser model exit does not change the selected implementation's growth.
 theorem preciseIdentity_fdtisp :
@@ -176,7 +180,7 @@ theorem finiteIdentity_fdtisp :
 
 -- A program on a finite type has positive cost on every input, even though its size class is zero.
 theorem finiteNot_fdtisp : Bool.not ∈ FDTISP .tree (fun _ => 0) (fun _ => 0) := by
-  apply Bool.hasProgram_not.mem_fdtisp_of_sizeEnvelope
+  apply Bool.hasProgramIn_not.mem_fdtisp_of_sizeEnvelope
   all_goals
     refine ⟨0, eventually_atTop.mpr ⟨4, fun n hn => ?_⟩⟩
     simp only [Nat.zero_mul]

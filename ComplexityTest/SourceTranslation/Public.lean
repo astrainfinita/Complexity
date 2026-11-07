@@ -12,22 +12,24 @@ open Complexity ComplexityTest.SourceTranslation
 
 -- The built-in implementation scope needs no namespace-opening command.
 example := (by source_fun_prop using tabulate :
-  TreeProgram.Source.HasProgram (List.reverse (α := Bool)) _ _ _)
+  TreeProgram.Source.Internal.HasProgram (List.reverse (α := Bool)) _ _ _)
 
 -- Imported source equalities and a saved user choice are reused inside ordinary calls.
-example := (by source_fun_prop : TreeProgram.Source.HasProgram
+example := (by source_fun_prop : TreeProgram.Source.Internal.HasProgram
     (fun xs : List Bool => some (Guidance.userReverse xs)) _ _ _)
 
 example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop :
-  TreeProgram.Source.HasProgram (fun xs : List α => some (Guidance.chosenReverse xs)) _ _ _)
+  TreeProgram.Source.Internal.HasProgram (fun xs : List α => some (Guidance.chosenReverse xs))
+    _ _ _)
 
 -- A scoped interpretation is selectable from the importing module.
 example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop using Guidance.ReverseByCases :
-  TreeProgram.Source.HasProgram (List.reverse (α := α)) _ _ _)
+  TreeProgram.Source.Internal.HasProgram (List.reverse (α := α)) _ _ _)
 
 namespace ComplexityTest.SourceTranslation.Public
 
 open TreeProgram.Source
+open TreeProgram.Source.Internal (HasProgram)
 
 -- The ordinary entry needs no coefficient, internal namespace or implementation tree.
 example : List.reverse (α := Bool) ∈ FDTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by
@@ -41,7 +43,8 @@ example : (fun xs : List Bool => xs.reverse.reverse) ∈ FDTISP .tree
 -- A symbolic positive power uses the saved specification and the standard power exit.
 example (m : ℕ) : List.reverse (α := Bool) ∈ FDTISP .tree
     (fun n => n ^ (m + 1)) (fun n => n ^ 1) := by
-  refine HasProgram.mem_fdtisp_pow (List.hasProgram_reverse.mono ?_ ?_) (by decide)
+  refine HasProgramIn.mem_fdtisp_pow
+    (List.hasProgramIn_reverse.mono (fun _ h => h.trans ?_) (fun _ h => h.trans ?_)) (by decide)
   · exact Dominated.of_le fun xs => Nat.le_self_pow (by omega) _
   · simpa only [pow_one] using Dominated.refl (fun xs : List Bool => ⌜xs⌝ₜ.size)
 

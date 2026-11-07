@@ -6,6 +6,7 @@ Authors: Yuyang Zhao
 import Complexity.Tactic.TreeProgram.Library
 
 open Complexity TreeProgram Complexity.TreeProgram.Source
+open Complexity.TreeProgram.Source.Internal (HasProgram)
 
 namespace ComplexityTest.SourceTranslation.UniformProgram
 
@@ -34,10 +35,10 @@ example {α : Type} {β : α → Type} [UniqueEncoding Tree α] [∀ x, UniqueEn
 -- without context is one program at every type.
 def swapPair {α β : Type*} (x : α × β) : β × α := (x.2, x.1)
 
-@[fun_prop]
-theorem hasProgram_swapPair {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β] :
-    HasProgram (swapPair : α × β → β × α) hole(⊢ program) (fun _ => 1)
-      (fun x => max ⌜x⌝ₜ.size ⌜swapPair x⌝ₜ.size) := by
+@[program]
+theorem hasProgramIn_swapPair {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β] :
+    HasProgramIn (swapPair : α × β → β × α) hole(⊢ program) IsO(fun _ => 1)
+      IsO(fun x => max ⌜x⌝ₜ.size ⌜swapPair x⌝ₜ.size) := by
   abstract_hole program using programSwapPair
   fill_hole program in source_fun_prop
 

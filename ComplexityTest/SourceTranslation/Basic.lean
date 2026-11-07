@@ -3,9 +3,10 @@ Copyright (c) 2026 Yuyang Zhao. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Yuyang Zhao
 -/
-import Complexity.Tactic.TreeProgram.Translation
+import Complexity.Tactic.TreeProgram.Primitives
 
 open Complexity TreeProgram Complexity.TreeProgram.Source
+open Complexity.TreeProgram.Source.Internal (HasProgram)
 
 namespace ComplexityTest.SourceTranslation.Basic
 
@@ -36,17 +37,19 @@ example (hf : HasProgram f pf t p) : HasProgram f pf (fun x => t x + 1) p :=
 end
 
 -- A concrete composition charges each reversal at its own input.
-theorem hasProgram_reverseTwice {α : Type*} [UniqueEncoding Tree α] :
-    HasProgram ((List.reverse : List α → List α) ∘ List.reverse) hole(⊢ program)
-      (fun xs => ⌜xs⌝ₜ.size + ⌜xs.reverse⌝ₜ.size) (fun xs => max ⌜xs⌝ₜ.size ⌜xs.reverse⌝ₜ.size) := by
+theorem hasProgramIn_reverseTwice {α : Type*} [UniqueEncoding Tree α] :
+    HasProgramIn ((List.reverse : List α → List α) ∘ List.reverse) hole(⊢ program)
+      IsO(fun xs => ⌜xs⌝ₜ.size + ⌜xs.reverse⌝ₜ.size)
+      IsO(fun xs => max ⌜xs⌝ₜ.size ⌜xs.reverse⌝ₜ.size) := by
   abstract_hole program using programReverseTwice
+  refine HasProgram.toHasProgramIn ?_
   fill_hole program in
-    exact List.hasProgram_reverse.comp List.hasProgram_reverse
+    exact List.hasProgramIn_reverse.toHasProgram.comp List.hasProgramIn_reverse.toHasProgram
 
 example {α : Type*} [UniqueEncoding Tree α] :
     HasProgram ((List.reverse : List α → List α) ∘ List.reverse) programReverseTwice
       (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) :=
-  hasProgram_reverseTwice.mono (Dominated.of_le_mul 2 fun xs => by simp; omega)
+  hasProgramIn_reverseTwice.toHasProgram.mono (Dominated.of_le_mul 2 fun xs => by simp; omega)
     (Dominated.of_le fun xs => by simp)
 
 section BranchTranslation

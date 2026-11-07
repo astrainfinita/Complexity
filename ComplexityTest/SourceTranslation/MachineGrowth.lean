@@ -10,6 +10,7 @@ public import Complexity.Tactic.TreeProgram.Library
 @[expose] public section
 
 open Complexity TreeProgram Complexity.TreeProgram.Source
+open Complexity.TreeProgram.Source.Internal (HasProgram)
 namespace ComplexityTest.SourceTranslation.MachineGrowth
 
 -- The time budget depends on the value, without imposing a size envelope.
@@ -43,19 +44,21 @@ example : True := by
   trivial
 
 /-- A deliberately slower program for the identity, saved as the selected implementation. -/
-@[source] theorem hasProgram_selected :
-    HasProgram (id : List Bool → List Bool) hole(⊢ program) (fun xs => ⌜xs⌝ₜ.size)
-    (fun xs => ⌜xs⌝ₜ.size) := by
+@[program] theorem hasProgramIn_selected :
+    HasProgramIn (id : List Bool → List Bool) hole(⊢ program) IsO(fun xs => ⌜xs⌝ₜ.size)
+    IsO(fun xs => ⌜xs⌝ₜ.size) := by
   abstract_hole program using programSelected
+  refine HasProgram.toHasProgramIn ?_
   fill_hole program in
-    exact ((List.hasProgram_reverse.comp List.hasProgram_reverse).congr (by funext xs; simp)).mono
+    exact ((List.hasProgramIn_reverse.toHasProgram.comp
+      List.hasProgramIn_reverse.toHasProgram).congr (by funext xs; simp)).mono
       (Dominated.of_le_mul 2 fun _ => by simp; omega) (Dominated.of_le fun _ => by simp)
 
 -- Direct exits keep the stated growth of the selected implementation.
 theorem canonical_machine : TimeSpaceModel.tree.ComputableIn
     (id : List Bool → List Bool) IsO(fun xs => ⌜xs⌝ₜ.size + 4)
       IsO(fun xs => max ⌜xs⌝ₜ.size ⌜xs⌝ₜ.size + 2) :=
-  hasProgram_selected.computableIn
+  hasProgramIn_selected.computableIn
 
 example := (by source_fun_prop : HasProgram (id : List Bool → List Bool) programSelected _ _)
 

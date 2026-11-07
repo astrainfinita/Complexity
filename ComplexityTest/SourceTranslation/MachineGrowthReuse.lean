@@ -10,6 +10,7 @@ public import ComplexityTest.SourceTranslation.MachineGrowth
 @[expose] public section
 
 open Complexity TreeProgram Complexity.TreeProgram.Source
+open Complexity.TreeProgram.Source.Internal (HasProgram)
 namespace ComplexityTest.SourceTranslation.MachineGrowthReuse
 
 -- The imported selection, with its own growth, is reused by ordinary calls.

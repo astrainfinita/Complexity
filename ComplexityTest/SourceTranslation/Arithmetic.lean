@@ -6,6 +6,7 @@ Authors: Yuyang Zhao
 import Complexity.Tactic.TreeProgram.Arithmetic
 
 open Complexity TreeProgram Complexity.TreeProgram.Source
+open Complexity.TreeProgram.Source.Internal (HasProgram)
 
 namespace ComplexityTest.SourceTranslation.Arithmetic
 
@@ -40,7 +41,7 @@ example := (by source_fun_prop : HasProgram (fun x : Bool × Bool × Bool =>
     (x.1 && x.2.1) || (x.2.2 && (x.1 || x.2.1))) _ _ _)
 
 -- Addition of one and the successor share the program of the addition, with the growth stated by
--- `hasProgram_addOne`.
+-- `hasProgramIn_addOne`.
 example := (by source_fun_prop : HasProgram (fun n : ℕ => n + 1) programAddOne
   (fun n => ⌜n⌝ₜ.size) (fun n => ⌜n⌝ₜ.size))
 example := (by source_fun_prop : HasProgram Nat.succ programAddOne

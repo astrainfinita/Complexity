@@ -8,6 +8,7 @@ import Complexity.Tactic.TreeProgram.Library
 noncomputable section
 
 open Complexity TreeProgram Complexity.TreeProgram.Source
+open Complexity.TreeProgram.Source.Internal (HasProgram)
 namespace ComplexityTest.SourceTranslation.Iteration
 
 -- The loop stores executable code and keeps the selected callback.

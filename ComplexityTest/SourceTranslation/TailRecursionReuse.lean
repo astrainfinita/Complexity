@@ -13,6 +13,7 @@ open Complexity
 open ComplexityTest.SourceTranslation.TailRecursion
 
 open TreeProgram.Source
+open TreeProgram.Source.Internal (HasProgram)
 
 -- Importing restores the selected loop program and its growth.
 example := (by source_fun_prop : HasProgram keep programKeep _ _)

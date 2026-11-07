@@ -7,6 +7,7 @@ import Complexity.Resources.Circuit.Unroll
 import Complexity.Resources.Circuit.Composition
 import Complexity.Classes.Functions.Basic
 open Complexity TreeProgram Complexity.TreeProgram.Source
+open Complexity.TreeProgram.Source.Internal (HasProgram)
 
 namespace ComplexityTest.SourceTranslation.CircuitComposition
 
@@ -18,7 +19,7 @@ example : programCompFn =
 example : programRelabelFn = Recursion.code programRelabelTest programRelabelNextFn
     programRelabelFinishFn programRelabelResume := rfl
 example : HasProgram relabelFinishFn programRelabelFinishFn
-    (fun x => ⌜x⌝ₜ.size ^ 3) (fun x => ⌜x⌝ₜ.size ^ 2) := hasProgram_relabelFinishFn
+    (fun x => ⌜x⌝ₜ.size ^ 3) (fun x => ⌜x⌝ₜ.size ^ 2) := hasProgramIn_relabelFinishFn.toHasProgram
 
 def rewire (x : RelabelInput) : Σ n, Σ m, Circuit .booleanAlgebra n m :=
   ⟨x.k, x.m, x.circuit.relabel x.wires⟩
@@ -44,9 +45,10 @@ def rewireStored (x : Σ n, Σ m, Circuit .booleanAlgebra n m × (Fin n → Fin 
 abbrev StoredRelabelInput := Σ n, Σ m, Circuit .booleanAlgebra n m × (Fin n → Fin n)
 
 /-- Compose the selected implementation; only the mathematical size relations remain. -/
-@[source] theorem hasProgram_rewireStored : HasProgram rewireStored hole(⊢ program)
-    (fun x => ⌜x⌝ₜ.size ^ 7) (fun x => ⌜x⌝ₜ.size ^ 4) := by
+@[program] theorem hasProgramIn_rewireStored : HasProgramIn rewireStored hole(⊢ program)
+    IsO(fun x => ⌜x⌝ₜ.size ^ 7) IsO(fun x => ⌜x⌝ₜ.size ^ 4) := by
   abstract_hole program using programRewireStored
+  refine HasProgram.toHasProgramIn ?_
   let u (x : Σ n, Σ m, Circuit .booleanAlgebra n m × (Fin n → Fin n)) : RelabelInput :=
     ⟨x.1, x.2.1, x.1, x.2.2.1, x.2.2.2⟩
   let S (x : Σ n, Σ m, Circuit .booleanAlgebra n m × (Fin n → Fin n)) := ⌜x⌝ₜ.size
@@ -85,16 +87,17 @@ abbrev StoredRelabelInput := Σ n, Σ m, Circuit .booleanAlgebra n m × (Fin n �
 
 theorem rewireStored_fdtisp :
     rewireStored ∈ FDTISP .tree (fun n => n ^ 7) (fun n => n ^ 4) :=
-  hasProgram_rewireStored.mem_fdtisp_pow (by decide)
+  hasProgramIn_rewireStored.mem_fdtisp_pow (by decide)
 
 /-- Unary storage makes the number of generated layers bounded by input size. -/
 def layersStored (x : Σ n, Circuit .booleanAlgebra (n + 1) n × List Unit) :
     Σ n, Σ m, Circuit .booleanAlgebra n m :=
   ⟨x.1 + x.2.2.length, x.1, x.2.1.unroll x.2.2.length⟩
 
-@[source] theorem hasProgram_layersStored : HasProgram layersStored hole(⊢ program)
-    (fun x => ⌜x⌝ₜ.size ^ 18) (fun x => ⌜x⌝ₜ.size ^ 8) := by
+@[program] theorem hasProgramIn_layersStored : HasProgramIn layersStored hole(⊢ program)
+    IsO(fun x => ⌜x⌝ₜ.size ^ 18) IsO(fun x => ⌜x⌝ₜ.size ^ 8) := by
   abstract_hole program using programLayersStored
+  refine HasProgram.toHasProgramIn ?_
   let S (x : Σ n, Circuit .booleanAlgebra (n + 1) n × List Unit) := ⌜x⌝ₜ.size
   let u (x : Σ n, Circuit .booleanAlgebra (n + 1) n × List Unit) : UnrollInput :=
     ⟨x.1, x.2.1, x.2.2.length⟩
@@ -122,13 +125,13 @@ def layersStored (x : Σ n, Circuit .booleanAlgebra (n + 1) n × List Unit) :
   have htime := hR.pow 9
   have hpeak := hR.pow 4
   simp only [← pow_mul, Function.comp_def, u] at htime hpeak
-  have hout := (Dominated.comp hasProgram_unroll.size_encode u).trans
+  have hout := (Dominated.comp hasProgramIn_unroll.toHasProgram.size_encode u).trans
     ((hu.le_pow (by decide : 0 < 8)).max_same hpeak)
   simp only [Function.comp_def, u] at hout
   fill_hole program in source_fun_prop
 
 theorem layersStored_fdtisp :
     layersStored ∈ FDTISP .tree (fun n => n ^ 18) (fun n => n ^ 8) :=
-  hasProgram_layersStored.mem_fdtisp_pow (by decide)
+  hasProgramIn_layersStored.mem_fdtisp_pow (by decide)
 
 end ComplexityTest.SourceTranslation.CircuitComposition

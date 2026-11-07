@@ -6,6 +6,7 @@ Authors: Yuyang Zhao
 import Complexity.Tactic.TreeProgram.Library
 
 open Complexity TreeProgram Complexity.TreeProgram.Source
+open Complexity.TreeProgram.Source.Internal (HasProgram)
 namespace ComplexityTest.SourceTranslation.Dependent
 
 -- A dependent callback borrows a represented table from its full runtime environment.

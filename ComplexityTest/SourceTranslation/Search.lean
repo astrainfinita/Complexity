@@ -8,6 +8,7 @@ import Complexity.Tactic.TreeProgram.Library
 noncomputable section
 
 open Complexity TreeProgram Complexity.TreeProgram.Source
+open Complexity.TreeProgram.Source.Internal (HasProgram)
 namespace ComplexityTest.SourceTranslation.Search
 
 section Composition
@@ -42,7 +43,7 @@ private theorem hasProgram_available :
     HasProgram chosen hole(⊢ program) (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) := by
   abstract_hole program using programAvailable
   fill_hole program in
-    exact List.hasProgram_reverse
+    exact List.hasProgramIn_reverse.toHasProgram
 
 private theorem needsRecursive {program : Value → Code Value}
     (_h : HasProgram unsupported program (fun _ => 1) (fun _ => 1)) :
@@ -62,7 +63,7 @@ private def uncertified : List Bool → List Bool
 
 -- Encoded results report the unsupported source operation, not its encoder.
 /--
-error: source translation: `ComplexityTest.SourceTranslation.Search.uncertified` needs a registered implementation (choose replacement source with `via`, or register a function equality with `[source]`)
+error: source translation: `ComplexityTest.SourceTranslation.Search.uncertified` needs a registered implementation (choose replacement source with `via`, or register a function equality with `[program]`)
 source path: fun xs => ⌜uncertified xs⌝ₜ → fun xs => uncertified xs
 -/
 #guard_msgs in
@@ -90,7 +91,7 @@ private def alternative (xs : List Bool) := xs.reverse
     HasProgram alternative hole(⊢ program) (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) := by
   abstract_hole program using programDefault
   fill_hole program in
-    exact List.hasProgram_reverse.congr rfl
+    exact List.hasProgramIn_reverse.toHasProgram.congr rfl
 
 example {program : Value → Code Value} {t p : List Bool → ℕ}
     (_selected : HasProgram alternative program t p) : HasProgram alternative program t p := by
@@ -113,7 +114,7 @@ private def doubleReverse (xs : List Bool) := xs.reverse.reverse
     (fun xs => ⌜xs⌝ₜ.size + ⌜xs.reverse⌝ₜ.size) (fun xs => max ⌜xs⌝ₜ.size ⌜xs.reverse⌝ₜ.size) := by
   abstract_hole program using programDoubleReverseDefault
   fill_hole program in
-    exact List.hasProgram_reverse.comp List.hasProgram_reverse
+    exact List.hasProgramIn_reverse.toHasProgram.comp List.hasProgramIn_reverse.toHasProgram
 
 -- A semantic equality can expressly select a faster program; growth search never does so.
 example := (by
@@ -169,19 +170,20 @@ private theorem hasProgram_rebuilt : HasProgram stored hole(⊢ program) (fun _ 
     (fun x => max (max ⌜x⌝ₜ.size (max ⌜x⌝ₜ.size ⌜(x.1, x.2)⌝ₜ.size)) ⌜(x.1, x.2)⌝ₜ.size) := by
   abstract_hole program using programRebuilt
   fill_hole program in
-    exact (Prod.hasProgram_fst.pair Prod.hasProgram_snd).comp Prod.hasProgram_fst
+    exact (Prod.hasProgramIn_fst.toHasProgram.pair Prod.hasProgramIn_snd.toHasProgram).comp
+      Prod.hasProgramIn_fst.toHasProgram
 
 private alias hasProgram_preferred := hasProgram_rebuilt
 private theorem hasProgram_secondary :
     HasProgram stored hole(⊢ program) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programSecondary
   fill_hole program in
-    exact Prod.hasProgram_fst
+    exact Prod.hasProgramIn_fst.toHasProgram
 private theorem hasProgram_fallback :
     HasProgram stored hole(⊢ program) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programFallback
   fill_hole program in
-    exact Prod.hasProgram_fst
+    exact Prod.hasProgramIn_fst.toHasProgram
 
 attribute [local source_fallback] hasProgram_fallback
 

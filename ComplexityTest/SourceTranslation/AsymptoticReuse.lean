@@ -11,14 +11,16 @@ public import ComplexityTest.SourceTranslation.AsymptoticTailRecursion
 @[expose] public section
 
 open Complexity TreeProgram Complexity.TreeProgram.Source
+open Complexity.TreeProgram.Source.Internal (HasProgram)
 open ComplexityTest.SourceTranslation.Asymptotics
 
 namespace ComplexityTest.SourceTranslation.AsymptoticReuse
 
 -- Loop callbacks reuse the imported selection without unfolding its evaluator.
-theorem hasProgram_importedLoop :
-    HasProgram preciseIdentity hole(⊢ program) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
+theorem hasProgramIn_importedLoop :
+    HasProgramIn preciseIdentity hole(⊢ program) IsO(fun _ => 1) IsO(fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programImportedLoop
+  refine HasProgram.toHasProgramIn ?_
   fill_hole program in
     source_fun_prop using loop (test := fun _ : List Bool => false)
       (next := preciseIdentity) (finish := preciseIdentity)
@@ -47,12 +49,12 @@ example : HasProgram (fun xs => preciseIdentity (preciseIdentity xs)) hole(⊢ p
 example := (by source_fun_prop : HasProgram aliasedIdentity programPreciseIdentity _ _)
 
 -- A call of the alias needs the alias's own selected implementation.
-theorem hasProgram_aliasedIdentity :
-    HasProgram aliasedIdentity hole(⊢ program) (fun _ => 0) (fun _ => 0) := by
+theorem hasProgramIn_aliasedIdentity :
+    HasProgramIn aliasedIdentity hole(⊢ program) IsO(fun _ => 0) IsO(fun _ => 0) := by
   abstract_hole program using programAliasedIdentity
   fill_hole program in source_fun_prop
 
-attribute [local source] hasProgram_aliasedIdentity in
+attribute [local program] hasProgramIn_aliasedIdentity in
 example : HasProgram (fun xs => aliasedIdentity (aliasedIdentity xs)) hole(⊢ program)
     (fun _ => 0 + 0) (fun _ => max 0 0) := by
   fill_hole program in source_fun_prop

@@ -6,6 +6,7 @@ Authors: Yuyang Zhao
 import ComplexityTest.SourceTranslation.CircuitComposition
 
 open Complexity TreeProgram Complexity.TreeProgram.Source
+open Complexity.TreeProgram.Source.Internal (HasProgram)
 open ComplexityTest.SourceTranslation.CircuitComposition
 
 namespace ComplexityTest.SourceTranslation.CircuitAsymptoticReuse
@@ -16,16 +17,17 @@ example : HasProgram rewireStored programRewireStored (fun x => ⌜x⌝ₜ.size 
   source_fun_prop
 
 example : HasProgram relabelFn programRelabelFn
-    (fun x => relabelScale x ^ 7) (fun x => relabelScale x ^ 4) := hasProgram_relabelFn
+    (fun x => relabelScale x ^ 7) (fun x => relabelScale x ^ 4) :=
+  hasProgramIn_relabelFn.toHasProgram
 example : HasProgram compFn programCompFn
-    (fun x => compScale x ^ 7) (fun x => compScale x ^ 4) := hasProgram_compFn
+    (fun x => compScale x ^ 7) (fun x => compScale x ^ 4) := hasProgramIn_compFn.toHasProgram
 example : HasProgram keepFn programKeepFn
-    (fun x => keepScale x ^ 8) (fun x => keepScale x ^ 4) := hasProgram_keepFn
+    (fun x => keepScale x ^ 8) (fun x => keepScale x ^ 4) := hasProgramIn_keepFn.toHasProgram
 
 -- The ordinary composition adapter consumes the raw selected implementation.
 example {ρ : Type} [UniqueEncoding Tree ρ] {q : Value → Code Value} {t p : ρ → ℕ}
     (h : HasProgram (fun _ : ρ => (⟨0, 0, 0, Circuit.id _ 0, Circuit.id _ 0⟩ : CompInput)) q t p) :=
-  (h.circuitComp : type_of% (h.comp_dependent hasProgram_compFn))
+  (h.circuitComp : type_of% (h.comp_dependent hasProgramIn_compFn.toHasProgram))
 
 example : programKeepFn = Recursion.code programKeepTest programKeepNextFn programKeepFinishFn
     programKeepResume := rfl
@@ -47,7 +49,8 @@ private theorem restrict_fdtisp {α : Type} [UniqueEncoding Tree α] {f : α →
 
 example : (fun x : StoredComp => ⌜compFn x.1⌝ₜ) ∈
     FDTISP .tree (fun n => n ^ 7) (fun n => n ^ 4) := by
-  apply restrict_fdtisp compScale 7 (hasProgram_compFn.of_encode fun _ => Tree.encode_self _)
+  apply restrict_fdtisp compScale 7
+    (hasProgramIn_compFn.toHasProgram.of_encode fun _ => Tree.encode_self _)
   refine Dominated.of_le_mul 8 ?_
   rintro ⟨⟨n, m, k, c, d⟩, hn⟩
   have hm := c.outputs_le_size_encode
@@ -60,7 +63,8 @@ example : (fun x : StoredComp => ⌜compFn x.1⌝ₜ) ∈
 
 example : (fun x : StoredKeep => ⌜keepFn x.1⌝ₜ) ∈
     FDTISP .tree (fun n => n ^ 8) (fun n => n ^ 4) := by
-  apply restrict_fdtisp keepScale 8 (hasProgram_keepFn.of_encode fun _ => Tree.encode_self _)
+  apply restrict_fdtisp keepScale 8
+    (hasProgramIn_keepFn.toHasProgram.of_encode fun _ => Tree.encode_self _)
   refine Dominated.of_le_mul 5 ?_
   rintro ⟨⟨n, m, c⟩, hn⟩
   have hm := c.outputs_le_size_encode

@@ -10,12 +10,13 @@ import Complexity.Models.Circuit.Composition
 /-! # Source translation and complexity-bound regressions -/
 
 open Complexity TreeProgram Complexity.TreeProgram.Source
+open Complexity.TreeProgram.Source.Internal (HasProgram)
 
 open ComplexityTest.SourceTranslation.SpecComparison
 
 namespace ComplexityTest.SourceTranslation.Examples
 
-attribute [local fun_prop] hasProgram_duplicate
+attribute [local program] hasProgramIn_duplicate
 
 private theorem size_encode_map_le {α β : Type*}
     [UniqueEncoding Tree α] [UniqueEncoding Tree β] (f : α → β) (xs : List α)
@@ -149,7 +150,7 @@ def indexedReverse (input : Σ n, Option (Fin n × List Bool)) : ℕ × List Boo
 example := (by source_fun_prop :
     HasProgram indexedReverse _ _ _)
 
-attribute [local source] hasProgram_optionalReverse
+attribute [local program] hasProgram_optionalReverse
 
 example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop :
     HasProgram (fun x : Option (List α) => (optionalReverse x).reverse) _ _ _)
@@ -187,7 +188,7 @@ example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop :
 
 def hasProgram_helper := (by source_fun_prop : HasProgram helper _ _ _)
 
-attribute [local source] hasProgram_helper
+attribute [local program] hasProgram_helper
 
 -- A helper can be called only on a let-bound value, while the continuation retains its input.
 def helperInLet (xs : List Bool) :=
@@ -212,7 +213,7 @@ example : HasProgram (fun xs : List Bool => let _ys := recursive xs; xs) hole(�
     (fun _ => 0) := by
   fill_hole program in source_fun_prop
 
-/-- error: source translation: `ComplexityTest.SourceTranslation.SpecComparison.recursive` needs a registered implementation (choose replacement source with `via`, or register a function equality with `[source]`) -/
+/-- error: source translation: `ComplexityTest.SourceTranslation.SpecComparison.recursive` needs a registered implementation (choose replacement source with `via`, or register a function equality with `[program]`) -/
 #guard_msgs in
 example : HasProgram recursive hole(⊢ program) (fun _ => 1) (fun _ => 1) := by
   fill_hole program in source_fun_prop
@@ -277,7 +278,7 @@ def conditionalReverse {α : Type*} (x : Bool × List α) : List α :=
 
 def hasProgram_branch := (by source_fun_prop : HasProgram branch _ _ _)
 
-attribute [local source] hasProgram_branch
+attribute [local program] hasProgram_branch
 
 example := (by source_fun_prop :
     HasProgram (List.map branch) _ _ _)
@@ -331,8 +332,9 @@ def tailOrEmpty {α : Type*} : List α → List α
   | [] => []
   | _ :: xs => xs
 
-@[local source] theorem hasProgram_tailOrEmpty {α : Type*} [UniqueEncoding Tree α] :
-    HasProgram (tailOrEmpty (α := α)) hole(⊢ program) (fun _ => 1) (fun xs => ⌜xs⌝ₜ.size) := by
+@[local program] theorem hasProgramIn_tailOrEmpty {α : Type*} [UniqueEncoding Tree α] :
+    HasProgramIn (tailOrEmpty (α := α)) hole(⊢ program) IsO(fun _ => 1)
+      IsO(fun xs => ⌜xs⌝ₜ.size) := by
   abstract_hole program using programTailOrEmpty
   fill_hole program in source_fun_prop
 
@@ -397,7 +399,8 @@ example : HasProgram (List.map (List.reverse : List Unit → List Unit)) hole(�
     (fun xss => ⌜xss⌝ₜ.size) (fun xss => max ⌜xss⌝ₜ.size (max (⌜xss.map List.reverse⌝ₜ.size + 1)
       (xss.foldr (fun xs s => max ⌜xs⌝ₜ.size s) 0))) := by
   fill_hole program in
-    exact List.hasProgram_reverse.map.mono (Dominated.of_le fun xss => (size_encode_list xss).ge)
+    exact List.hasProgramIn_reverse.toHasProgram.map.mono
+      (Dominated.of_le fun xss => (size_encode_list xss).ge)
       (Dominated.refl _)
 
 -- Only ordinary size arithmetic remains; no generated code appears in this proof.
@@ -536,6 +539,6 @@ theorem circuitFinish_fdtisp :
 theorem tseitinLoop_fdtisp :
     (fun x : TseitinState => tseitinLoop x.1 x.2) ∈
       FDTISP .tree (fun n => n ^ 2) (fun n => n ^ 2) :=
-  hasProgram_tseitinLoop.mem_fdtisp_pow (by decide)
+  hasProgramIn_tseitinLoop.mem_fdtisp_pow (by decide)
 
 end ComplexityTest.SourceTranslation.Examples

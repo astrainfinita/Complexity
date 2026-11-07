@@ -35,6 +35,7 @@ theorem length_invert (xs : List Bool) : (invert xs).length = xs.length := by
   | cons a xs ih => simpa only [invert, List.length_cons] using congrArg Nat.succ ih
 
 open TreeProgram.Source
+open TreeProgram.Source.Internal (HasProgram)
 
 -- The measured entry exposes source equations, without a guessed exact allowance.
 def hasProgram_invert := (by
@@ -105,14 +106,14 @@ def drainRecursion : TreeProgram.Source.Recursion drain where
   measure := List.length
   decreases := by intro xs h; cases xs <;> simp_all
 
-theorem hasProgram_drainFinish :
-    HasProgram drainRecursion.finish hole(⊢ program) (fun _ => 1) (fun _ => 1) := by
+theorem hasProgramIn_drainFinish :
+    HasProgramIn drainRecursion.finish hole(⊢ program) IsO(fun _ => 1) IsO(fun _ => 1) := by
   abstract_hole program using programDrainFinish
   fill_hole program in source_fun_prop
 
-theorem hasProgram_drainResume : HasProgram
-    (fun x : drainRecursion.Return => drainRecursion.resume x.1 x.2) hole(⊢ program) (fun _ => 1)
-    (fun _ => 1) := by
+theorem hasProgramIn_drainResume : HasProgramIn
+    (fun x : drainRecursion.Return => drainRecursion.resume x.1 x.2) hole(⊢ program) IsO(fun _ => 1)
+    IsO(fun _ => 1) := by
   abstract_hole program using programDrainResume
   fill_hole program in source_fun_prop
 
@@ -143,19 +144,22 @@ private theorem drain_cost_growth :
       (fun _ => Nat.zero_lt_one) (fun _ => Nat.zero_lt_one)
 
 /-- The test of `drain`, translated as `Bool.not` after `List.isEmpty`. -/
-theorem hasProgram_drainTest :
-    HasProgram (fun xs : List Bool => !xs.isEmpty) hole(⊢ program) (fun _ => 1)
-    (fun xs => ⌜xs⌝ₜ.size) := by
+theorem hasProgramIn_drainTest :
+    HasProgramIn (fun xs : List Bool => !xs.isEmpty) hole(⊢ program) IsO(fun _ => 1)
+    IsO(fun xs => ⌜xs⌝ₜ.size) := by
   abstract_hole program using programDrainTest
   fill_hole program in source_fun_prop
 
 -- The terminal allowance appears once; the stack allowance grows with recursion depth.
-theorem hasProgram_drainStructural : HasProgram drain hole(⊢ program)
-    (fun xs => 1 + (xs.length + 1) + 1)
-    (fun xs => (⌜xs⌝ₜ.size + (xs.length + 1) * (⌜xs⌝ₜ.size + 1)) + 1) := by
+theorem hasProgramIn_drainStructural : HasProgramIn drain hole(⊢ program)
+    IsO(fun xs => 1 + (xs.length + 1) + 1)
+    IsO(fun xs => (⌜xs⌝ₜ.size + (xs.length + 1) * (⌜xs⌝ₜ.size + 1)) + 1) := by
   abstract_hole program using programDrainStructural
+  refine HasProgram.toHasProgramIn ?_
   fill_hole program in
-    exact (drainRecursion.hasProgram hasProgram_drainTest List.hasProgram_tail hasProgram_drainFinish hasProgram_drainResume).mono
+    exact (drainRecursion.hasProgram hasProgramIn_drainTest.toHasProgram
+      List.hasProgramIn_tail.toHasProgram hasProgramIn_drainFinish.toHasProgram
+      hasProgramIn_drainResume.toHasProgram).mono
       (((Dominated.refl _).add drain_cost_growth.1).add (Dominated.refl _))
       (drain_cost_growth.2.add (Dominated.refl _))
 
@@ -168,16 +172,17 @@ example := (by
       (decreases := by intro xs h; cases xs <;> simp_all)
     all_goals intros; exact Subsingleton.elim _ _ : HasProgram drain programDrainStructural _ _)
 
-@[source] theorem hasProgram_drain : HasProgram drain hole(⊢ program)
-    (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size ^ 2) := by
+@[program] theorem hasProgramIn_drain : HasProgramIn drain hole(⊢ program)
+    IsO(fun xs => ⌜xs⌝ₜ.size) IsO(fun xs => ⌜xs⌝ₜ.size ^ 2) := by
   abstract_hole program using programDrain
+  refine HasProgram.toHasProgramIn ?_
   have hlen : Dominated (List.length : List Bool → ℕ) (fun xs => ⌜xs⌝ₜ.size) :=
     Dominated.of_le length_le_codeSize
   have hpos (xs : List Bool) : 0 < ⌜xs⌝ₜ.size := Tree.size_pos _
   have hc : Dominated (fun _ : List Bool => 1) (fun xs => ⌜xs⌝ₜ.size) := Dominated.one hpos
   have hs := (hlen.add_same hc).mul ((Dominated.refl _).add_same hc)
   simp only [← pow_two] at hs
-  fill_hole program in apply hasProgram_drainStructural.mono
+  fill_hole program in apply hasProgramIn_drainStructural.toHasProgram.mono
   · simp only [Dominated.add_iff]
     exact ⟨⟨hc, hlen, hc⟩, hc⟩
   · simp only [Dominated.add_iff]
