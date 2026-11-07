@@ -86,11 +86,14 @@ end Complexity.TreeProgram
 
 namespace Complexity.TreeProgram.Source
 
+open Internal (HasProgram)
+
 variable {α : Type*} {β : α → Type*} [UniqueEncoding Tree α] [∀ x, UniqueEncoding Tree (β x)]
 
 /-- A value whose code is assembled from subtrees of the input's code and constant trees, such as
 a constructor of fields of the input, is built in one assignment. -/
-theorem HasProgram.assemble {f : (x : α) → β x} (A : Assembly) (h : ∀ x, A.eval ⌜x⌝ₜ = ⌜f x⌝ₜ) :
+theorem Internal.HasProgram.assemble {f : (x : α) → β x} (A : Assembly)
+    (h : ∀ x, A.eval ⌜x⌝ₜ = ⌜f x⌝ₜ) :
     HasProgram f (fun v => Code.eval (A.expr v.expression)) (fun _ => 1)
       (fun x => max ⌜x⌝ₜ.size ⌜f x⌝ₜ.size) :=
   (HasProgram.of_implements ⟨fun _ => A.steps + 2, fun x => max ⌜x⌝ₜ.size ⌜f x⌝ₜ.size⟩
@@ -105,7 +108,7 @@ theorem HasProgram.assemble {f : (x : α) → β x} (A : Assembly) (h : ∀ x, A
 
 /-- Read the subtree of the input's code at a path, such as a field of a field, whose code is a
 subtree by the structures' `T.encode_field`: one step for every path. -/
-theorem HasProgram.subtree {f : (x : α) → β x} (path : List Bool)
+theorem Internal.HasProgram.subtree {f : (x : α) → β x} (path : List Bool)
     (h : ∀ x, ⌜f x⌝ₜ = ⌜x⌝ₜ.subtree path) :
     HasProgram f (fun v => Code.eval (v.expression.subtree path)) (fun _ => 1)
       (fun x => ⌜x⌝ₜ.size) :=
@@ -113,7 +116,7 @@ theorem HasProgram.subtree {f : (x : α) → β x} (path : List Bool)
     (Dominated.of_le fun x => by simp [h, Tree.size_subtree_le])
 
 /-- A closed value is written as its code in one step. -/
-theorem HasProgram.const {γ : Type*} [UniqueEncoding Tree γ] (c : γ) :
+theorem Internal.HasProgram.const {γ : Type*} [UniqueEncoding Tree γ] (c : γ) :
     HasProgram (fun _ : α => c) (fun _ => Code.eval (.ofTree ⌜c⌝ₜ)) (fun _ => 1) (fun _ => 1) :=
   (HasProgram.of_implements
     ⟨fun _ => (Expr.ofTree ⌜c⌝ₜ : Expr ℕ).assignSteps, fun _ => ⌜c⌝ₜ.size⟩
@@ -130,6 +133,8 @@ end
 public meta section
 
 namespace Complexity.TreeProgram.Source
+
+open Internal (HasProgram)
 
 open Lean Meta in
 /-- The first equation of `thms` rewriting `e` at the root only, to an encoding if `encoding`,

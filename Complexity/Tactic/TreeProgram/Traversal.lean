@@ -19,6 +19,8 @@ intermediate accumulators, and every stored state contributes to the peak.
 open Complexity TreeProgram TreeProgram.Code
 namespace Complexity.TreeProgram.Source
 
+open Internal (HasProgram)
+
 section Cost
 
 variable {α β : Type*} (f : β → α → β)
@@ -404,7 +406,7 @@ theorem Implements.foldl {α β : Type*} [UniqueEncoding Tree α] [UniqueEncodin
         simpa (disch := omega) using hf j (by omega)
 
 /-- Fold a callback; its growth is charged at every actual intermediate accumulator. -/
-theorem HasProgram.foldl {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
+theorem Internal.HasProgram.foldl {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
     {f : β → α → β} {pf : Value → Code Value} {t p : β × α → ℕ}
     (hf : HasProgram (Function.uncurry f) pf t p) :
     HasProgram (fun x : β × List α => x.2.foldl f x.1) (Traversal.foldProgram pf)

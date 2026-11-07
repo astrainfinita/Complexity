@@ -47,6 +47,8 @@ end Complexity.TreeProgram.CaseView
 
 namespace Complexity.TreeProgram.Source
 
+open Internal (HasProgram)
+
 open TreeProgram CaseView
 
 variable {α : Type*} {T : α → Type u} [UniqueEncoding Tree α] [∀ x, UniqueEncoding Tree (T x)]
@@ -67,7 +69,7 @@ variable {β : α → Type*} [∀ x, UniqueEncoding Tree (β x)]
 
 /-- Branch on the constructor of a computed value: the branch of each constructor receives the
 input with the constructor's fields. One decision `D` on codes serves every input. -/
-theorem HasProgram.cases (D : CaseTree k) (hD : ∀ x, dispatch (T x) = D)
+theorem Internal.HasProgram.cases (D : CaseTree k) (hD : ∀ x, dispatch (T x) = D)
     {d : (x : α) → T x} {f : (x : α) → β x} {qd : Value → Code Value} {td pd : α → ℕ}
     (hd : HasProgram d qd td pd) {q : Fin k → Value → Code Value}
     {t p : (i : Fin k) → Branch d i → ℕ}
@@ -129,7 +131,7 @@ theorem HasProgram.cases (D : CaseTree k) (hD : ∀ x, dispatch (T x) = D)
       exact ⟨hr, fun j hj => (hw j (by omega)).trans (by simp [Nat.ne_of_lt hj])⟩
 
 /-- A branch no input reaches, such as a constructor excluded by a subtype, has every program. -/
-theorem HasProgram.of_false {f : (x : α) → β x} (h : α → False) :
+theorem Internal.HasProgram.of_false {f : (x : α) → β x} (h : α → False) :
     HasProgram f (fun _ => pure .nil) (fun _ => 0) (fun _ => 0) :=
   ⟨⟨fun _ => 0, fun _ => 0⟩, ⟨fun _ _ _ => ⟨le_rfl, Nat.zero_le _⟩,
     fun _ _ _ x => (h x).elim⟩, .refl _, .refl _⟩
@@ -141,6 +143,8 @@ end
 public meta section
 
 namespace Complexity.TreeProgram.Source
+
+open Internal (HasProgram)
 
 open Lean Meta in
 /-- Unfold the `match` at the head of a source body and reduce: eliminations of constructors and

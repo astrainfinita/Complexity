@@ -29,7 +29,7 @@ open Lean Meta Mathlib.Meta.FunProp
 
 def recursionMessage (name : Name) : MessageData :=
   m!"source translation: `{privateToUserName name}` needs a registered implementation \
-    (choose replacement source with `via`, or register a function equality with `[source]`)"
+    (choose replacement source with `via`, or register a function equality with `[program]`)"
 
 /-- A rejected candidate retains its source path independently of message formatting. -/
 structure Failure where
@@ -131,14 +131,14 @@ partial def isProjectionOf (x e : Expr) : MetaM Bool := do
 intermediate value is composed from the programs of the two parts with `HasProgram.comp_dependent`,
 proved after this file. -/
 private def dependentComposition (outer inner : Expr) : FunPropM (Option Result) := do
-  let rule := `Complexity.TreeProgram.Source.HasProgram.comp_dependent
+  let rule := `Complexity.TreeProgram.Source.Internal.HasProgram.comp_dependent
   unless (← getEnv).contains rule do return none
   let goalOf (f : Expr) : MetaM Expr := do
     let growth ← mkArrow (← whnf (← inferType f)).bindingDomain! (mkConst ``Nat)
     let value := mkConst `Complexity.TreeProgram.Value
     let program ← mkFreshExprMVar
       (← mkArrow value (mkApp (mkConst `Complexity.TreeProgram.Code) value))
-    mkAppM `Complexity.TreeProgram.Source.HasProgram
+    mkAppM `Complexity.TreeProgram.Source.Internal.HasProgram
       #[f, program, ← mkFreshExprMVar growth, ← mkFreshExprMVar growth]
   let some ho ← search (← goalOf outer) | return none
   let some hi ← search (← goalOf inner) | return none

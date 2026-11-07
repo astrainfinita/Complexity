@@ -25,6 +25,8 @@ open Complexity TreeProgram
 
 namespace Complexity.TreeProgram.Source
 
+open Internal (HasProgram)
+
 @[simp, dominated_simp]
 theorem size_encode_reverse {α : Type*} [UniqueEncoding Tree α] (xs : List α) :
     (encode Tree xs.reverse).size = (encode Tree xs).size := by
@@ -39,9 +41,9 @@ grind_pattern size_encode_reverse => ⌜xs.reverse⌝ₜ.size
   omega
 
 /-- A certified linear-time reversal, without traversing the encoded elements. -/
-theorem _root_.List.hasProgram_reverse {α : Type*} [UniqueEncoding Tree α] :
-    HasProgram (List.reverse : List α → List α) List.Code.reverse (fun xs => ⌜xs⌝ₜ.size)
-      (fun xs => ⌜xs⌝ₜ.size) :=
+theorem _root_.List.hasProgramIn_reverse {α : Type*} [UniqueEncoding Tree α] :
+    HasProgramIn (List.reverse : List α → List α) List.Code.reverse IsO(fun xs => ⌜xs⌝ₜ.size)
+      IsO(fun xs => ⌜xs⌝ₜ.size) := HasProgram.toHasProgramIn <|
   ⟨⟨fun xs => 13 * xs.length + 8, fun xs => ⌜xs⌝ₜ.size + 1⟩,
     ⟨fun v n _ => by
       change n ≤ n + 8 ∧ n + 7 + 1 ≤ n + 8
@@ -108,7 +110,7 @@ theorem Implements.binary {α β γ δ : Type*} [UniqueEncoding Tree α]
     exact ⟨ha, fun j hj => (hw j ((hj.trans_le hn).trans_le hm)).trans
       ((hu j (hj.trans_le hn)).trans (ht j hj))⟩
 /-- Apply a primitive to the results of two programs. -/
-theorem HasProgram.binary {α β γ δ : Type*} [UniqueEncoding Tree α]
+theorem Internal.HasProgram.binary {α β γ δ : Type*} [UniqueEncoding Tree α]
     [UniqueEncoding Tree β] [UniqueEncoding Tree γ] [UniqueEncoding Tree δ]
     {f : α → β} {g : α → γ} {op : β → γ → δ} {d : Bounds (β × γ)} {t p u q : α → ℕ}
     {pf pg : Value → Code Value} {r : Value → Value → Code Value} (hr : BinarySpec r op d)
@@ -166,7 +168,7 @@ variable {α : Type*} {β γ : α → Type*} [UniqueEncoding Tree α] [∀ x, Un
   [∀ x, UniqueEncoding Tree (γ x)] {pf pg : Value → Code Value} {t p u q : α → ℕ}
 
 /-- Compute two values, whose types may depend on the input, and pair their encodings. -/
-theorem HasProgram.pair {f : (x : α) → β x} {g : (x : α) → γ x} (hf : HasProgram f pf t p)
+theorem Internal.HasProgram.pair {f : (x : α) → β x} {g : (x : α) → γ x} (hf : HasProgram f pf t p)
     (hg : HasProgram g pg u q) :
     HasProgram (fun x => (f x, g x)) (fun v => do let w ← pf v; let z ← pg v; Value.pair w z)
       (fun x => t x + (u x + 1)) (fun x => max (p x) (max (q x) ⌜(f x, g x)⌝ₜ.size)) := by
@@ -193,8 +195,9 @@ theorem encode_prod_congr {γ δ γ' δ' : Type*} [UniqueEncoding Tree γ] [Uniq
 /-- A function with one program at every type, applied to a computed value whose type may depend
 on the input: the instance on the value's codes `c` gives the growth, the one at its type the
 result. -/
-theorem HasProgram.comp_codes {A δ : α → Type*} {B γ : Type*} [∀ x, UniqueEncoding Tree (A x)]
-    [∀ x, UniqueEncoding Tree (δ x)] [UniqueEncoding Tree B] [UniqueEncoding Tree γ]
+theorem Internal.HasProgram.comp_codes {A δ : α → Type*} {B γ : Type*}
+    [∀ x, UniqueEncoding Tree (A x)] [∀ x, UniqueEncoding Tree (δ x)] [UniqueEncoding Tree B]
+    [UniqueEncoding Tree γ]
     {F : (x : α) → A x → δ x} {G : B → γ} {f : (x : α) → A x} {program : Value → Code Value}
     {u q : B → ℕ} {u' q' : (x : α) → A x → ℕ} (hf : HasProgram f pf t p)
     (c : (x : α) → A x → B) (hc : ∀ x a, ⌜c x a⌝ₜ = ⌜a⌝ₜ) (hG : HasProgram G program u q)
@@ -312,7 +315,7 @@ theorem Implements.map {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding 
         ((Nat.le_max_right _ _).trans (Nat.le_max_right _ _))
 
 /-- Reuse one callback for every element; time is summed and space is a peak. -/
-theorem HasProgram.map {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
+theorem Internal.HasProgram.map {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
     {f : α → β} {pf : Value → Code Value} {t p : α → ℕ} (hf : HasProgram f pf t p) :
     HasProgram (List.map f) (List.Code.map pf) (fun xs => (xs.map t).sum + xs.length + 1)
       (fun xs => max ⌜xs⌝ₜ.size (max (⌜xs.map f⌝ₜ.size + 1)
@@ -399,7 +402,7 @@ theorem Implements.map_dependent {ρ : Type*} {α β : ρ → Type*}
       simpa (disch := omega) using hframe j (by omega)
 
 /-- The captured environment is kept once; a single callback handles every runtime index. -/
-theorem HasProgram.map_dependent {ρ : Type*} {α β : ρ → Type*}
+theorem Internal.HasProgram.map_dependent {ρ : Type*} {α β : ρ → Type*}
     [UniqueEncoding Tree ρ] [∀ e, UniqueEncoding Tree (α e)] [∀ e, UniqueEncoding Tree (β e)]
     {f : (e : ρ) → α e → β e} {pf : Value → Code Value} {t p : (Σ e, α e) → ℕ}
     (hf : HasProgram (fun x : Σ e, α e => f x.1 x.2) pf t p) :
@@ -532,8 +535,10 @@ theorem Implements.loop_budget_finish {α β : Type*} [UniqueEncoding Tree α] [
     exact run t _ hj
 
 /-- Binary successor on bit lists. -/
-theorem _root_.Complexity.BitList.hasProgram_increment :
-    HasProgram BitList.increment Nat.Code.succ (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) :=
+theorem _root_.Complexity.BitList.hasProgramIn_increment :
+    HasProgramIn BitList.increment Nat.Code.succ IsO(fun xs => ⌜xs⌝ₜ.size)
+      IsO(fun xs => ⌜xs⌝ₜ.size) :=
+  HasProgram.toHasProgramIn <|
   ⟨⟨fun xs => 28 * xs.length + 25, fun xs => ⌜xs⌝ₜ.size + 5⟩,
     ⟨fun v n _ => by
       change n ≤ n + 23 ∧ n + 22 + 1 ≤ n + 23
@@ -548,8 +553,6 @@ theorem _root_.Complexity.BitList.hasProgram_increment :
       dsimp only
       have := Tree.size_pos ⌜xs⌝ₜ
       omega⟩
-
-attribute [scoped fun_prop] BitList.hasProgram_increment
 
 section Constructor
 
@@ -578,12 +581,12 @@ theorem Implements.tagged {pf : Value → Code Value} {f : (x : α) → β x} {b
     · rw [Function.update_of_ne (by omega)]
 
 /-- The last field of a constructor, with its size counted in its peak. -/
-theorem HasProgram.with_size {f : (x : α) → β x} {pf : Value → Code Value}
+theorem Internal.HasProgram.with_size {f : (x : α) → β x} {pf : Value → Code Value}
     (hf : HasProgram f pf t p) : HasProgram f pf t (fun x => max (p x) ⌜f x⌝ₜ.size) :=
   hf.mono (.refl _) (Dominated.of_le fun _ => le_max_left _ _)
 
 /-- Compute a field before the remaining fields of a constructor; the tuple is counted once. -/
-theorem HasProgram.field_cons {f : (x : α) → β x} {g : (x : α) → γ x}
+theorem Internal.HasProgram.field_cons {f : (x : α) → β x} {g : (x : α) → γ x}
     {pf pg : Value → Code Value} (hf : HasProgram f pf t p)
     (hg : HasProgram g pg u (fun x => max (q x) ⌜g x⌝ₜ.size)) :
     HasProgram (fun x => (f x, g x)) (fun v => do let w ← pf v; let z ← pg v; Value.pair w z)
@@ -591,13 +594,14 @@ theorem HasProgram.field_cons {f : (x : α) → β x} {g : (x : α) → γ x}
   (hf.pair hg).mono (.refl _) (Dominated.of_le fun x => by simp only [size_encode_prod]; omega)
 
 /-- A constructor whose code is the tuple of its fields. -/
-theorem HasProgram.of_fields {f : (x : α) → β x} {g : (x : α) → γ x} {pf : Value → Code Value}
+theorem Internal.HasProgram.of_fields {f : (x : α) → β x} {g : (x : α) → γ x}
+    {pf : Value → Code Value}
     (henc : ∀ x, ⌜g x⌝ₜ = ⌜f x⌝ₜ) (hf : HasProgram f pf t (fun x => max (p x) ⌜f x⌝ₜ.size)) :
     HasProgram g pf t (fun x => max (p x) ⌜g x⌝ₜ.size) :=
   (hf.of_encode henc).mono (.refl _) (Dominated.of_le fun x => by rw [henc])
 
 /-- A constructor whose code is a constant tag paired with the tuple of its fields. -/
-theorem HasProgram.of_tagged_fields {f : (x : α) → β x} {g : (x : α) → γ x}
+theorem Internal.HasProgram.of_tagged_fields {f : (x : α) → β x} {g : (x : α) → γ x}
     {pf : Value → Code Value} (T : Tree) (henc : ∀ x, ⌜g x⌝ₜ = .pair T ⌜f x⌝ₜ)
     (hf : HasProgram f pf t (fun x => max (p x) ⌜f x⌝ₜ.size)) :
     HasProgram g (fun v => do let w ← pf v; Code.eval (.pair (.ofTree T) w.expression))
@@ -618,38 +622,40 @@ section Projection
 variable {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
 
 /-- Select the index of an encoded dependent pair. -/
-theorem _root_.Sigma.hasProgram_fst {γ : Type*} {δ : γ → Type*} [UniqueEncoding Tree γ]
+theorem _root_.Sigma.hasProgramIn_fst {γ : Type*} {δ : γ → Type*} [UniqueEncoding Tree γ]
     [∀ a, UniqueEncoding Tree (δ a)] :
-    HasProgram (fun x : Σ a, δ a => x.1) Value.left (fun _ => 1) (fun x => ⌜x⌝ₜ.size) :=
-  .of_implements ⟨fun _ => 1, fun x => ⌜x⌝ₜ.size⟩ ⟨fun v n hv => by
+    HasProgramIn (fun x : Σ a, δ a => x.1) Value.left IsO(fun _ => 1) IsO(fun x => ⌜x⌝ₜ.size) :=
+  HasProgram.toHasProgramIn <| .of_implements ⟨fun _ => 1, fun x => ⌜x⌝ₜ.size⟩ ⟨fun v n hv => by
       change n ≤ n + 1 ∧ n + 1 ≤ n + 1
       omega,
     fun v n s ⟨x, y⟩ hv hx => by simp +contextual (disch := omega) [hx, Sigma.encode_mk]⟩
 
 /-- Select the value of an encoded dependent pair. -/
-theorem _root_.Sigma.hasProgram_snd {γ : Type*} {δ : γ → Type*} [UniqueEncoding Tree γ]
+theorem _root_.Sigma.hasProgramIn_snd {γ : Type*} {δ : γ → Type*} [UniqueEncoding Tree γ]
     [∀ a, UniqueEncoding Tree (δ a)] :
-    HasProgram (fun x : Σ a, δ a => x.2) Value.right (fun _ => 1) (fun x => ⌜x⌝ₜ.size) :=
-  .of_implements ⟨fun _ => 1, fun x => ⌜x⌝ₜ.size⟩ ⟨fun v n hv => by
+    HasProgramIn (fun x : Σ a, δ a => x.2) Value.right IsO(fun _ => 1) IsO(fun x => ⌜x⌝ₜ.size) :=
+  HasProgram.toHasProgramIn <| .of_implements ⟨fun _ => 1, fun x => ⌜x⌝ₜ.size⟩ ⟨fun v n hv => by
       change n ≤ n + 1 ∧ n + 1 ≤ n + 1
       omega,
     fun v n s ⟨x, y⟩ hv hx => by simp +contextual (disch := omega) [hx, Sigma.encode_mk]⟩
 
 /-- Select the first field of an encoded pair, which is encoded as a dependent pair. -/
-theorem _root_.Prod.hasProgram_fst :
-    HasProgram (Prod.fst : α × β → α) Value.left (fun _ => 1) (fun x => ⌜x⌝ₜ.size) :=
-  (Sigma.hasProgram_fst (δ := fun _ => β)).map_input (fun x : α × β => ⟨x.1, x.2⟩)
+theorem _root_.Prod.hasProgramIn_fst :
+    HasProgramIn (Prod.fst : α × β → α) Value.left IsO(fun _ => 1) IsO(fun x => ⌜x⌝ₜ.size) :=
+  HasProgram.toHasProgramIn <|
+    (Sigma.hasProgramIn_fst (δ := fun _ => β)).toHasProgram.map_input (fun x : α × β => ⟨x.1, x.2⟩)
     fun x => @Sigma.encode_mk α (fun _ => β) _ _ x.1 x.2
 
 /-- Select the second field of an encoded pair, which is encoded as a dependent pair. -/
-theorem _root_.Prod.hasProgram_snd :
-    HasProgram (Prod.snd : α × β → β) Value.right (fun _ => 1) (fun x => ⌜x⌝ₜ.size) :=
-  (Sigma.hasProgram_snd (δ := fun _ => β)).map_input (fun x : α × β => ⟨x.1, x.2⟩)
+theorem _root_.Prod.hasProgramIn_snd :
+    HasProgramIn (Prod.snd : α × β → β) Value.right IsO(fun _ => 1) IsO(fun x => ⌜x⌝ₜ.size) :=
+  HasProgram.toHasProgramIn <|
+    (Sigma.hasProgramIn_snd (δ := fun _ => β)).toHasProgram.map_input (fun x : α × β => ⟨x.1, x.2⟩)
     fun x => @Sigma.encode_mk α (fun _ => β) _ _ x.1 x.2
 
 -- The same implementation works for different result types when their encoded outputs coincide.
 /-- Return the empty tree representing unit without allocating a register. -/
-theorem HasProgram.unit :
+theorem Internal.HasProgram.unit :
     HasProgram (fun _ : α => ()) (fun _ => pure .nil) (fun _ => 0) (fun _ => 0) :=
   .of_implements ⟨fun _ => 0, fun _ => 0⟩ ⟨fun v n hv =>
       ⟨le_rfl, Nat.zero_le _⟩,
@@ -658,11 +664,12 @@ theorem HasProgram.unit :
 end Projection
 
 /-- Append two lists, traversing the first. -/
-theorem _root_.List.hasProgram_append {γ : Type*} [UniqueEncoding Tree γ] :
-    HasProgram (fun p : List γ × List γ => p.1 ++ p.2)
+theorem _root_.List.hasProgramIn_append {γ : Type*} [UniqueEncoding Tree γ] :
+    HasProgramIn (fun p : List γ × List γ => p.1 ++ p.2)
       (fun v => do let w ← Value.left v; let z ← Value.right v; List.Code.append w z)
-      (fun p => p.1.length + 1) (fun p => ⌜p⌝ₜ.size) :=
-  (HasProgram.binary append_spec Prod.hasProgram_fst Prod.hasProgram_snd).mono
+      IsO(fun p => p.1.length + 1) IsO(fun p => ⌜p⌝ₜ.size) := HasProgram.toHasProgramIn <|
+  (HasProgram.binary append_spec Prod.hasProgramIn_fst.toHasProgram
+    Prod.hasProgramIn_snd.toHasProgram).mono
     (Dominated.of_le_mul 42 fun p => by dsimp only; omega)
     (Dominated.of_le fun p => by rcases p; dsimp only; simp only [size_encode_prod]; omega)
 
@@ -731,7 +738,7 @@ variable {α : Type*} {β : α → Type*} [UniqueEncoding Tree α] [∀ x, Uniqu
   {f g : (x : α) → β x} {qc qt qf : Value → Code Value} {tc pc tf pf tg pg : α → ℕ}
 
 /-- Evaluate the condition once and only the selected branch; coefficients cover both branches. -/
-theorem HasProgram.ite {c : α → Bool} (hc : HasProgram c qc tc pc)
+theorem Internal.HasProgram.ite {c : α → Bool} (hc : HasProgram c qc tc pc)
     (ht : HasProgram f qt tf pf) (hf : HasProgram g qf tg pg) :
     HasProgram (fun x => if c x then f x else g x)
       (fun v => do let test ← qc v; Bool.Code.matchOn test (qf v) (qt v))
@@ -749,7 +756,7 @@ theorem HasProgram.ite {c : α → Bool} (hc : HasProgram c qc tc pc)
     (Dominated.refl _).max (hcp.max (htp.ite hfp (fun x => c x = true)))⟩
 
 /-- Ordinary decidable conditions share the Boolean branch program. -/
-theorem HasProgram.ite_prop {c : α → Prop} [DecidablePred c]
+theorem Internal.HasProgram.ite_prop {c : α → Prop} [DecidablePred c]
     (hc : HasProgram (fun x => decide (c x)) qc tc pc)
     (ht : HasProgram f qt tf pf) (hf : HasProgram g qf tg pg) :
     HasProgram (fun x => if c x then f x else g x)
@@ -764,7 +771,7 @@ end Branch
 attribute [scoped fun_prop] HasProgram.ite_prop
 
 /-- Captured source values travel with the accumulator in one fixed program. -/
-theorem HasProgram.foldl_with {ρ α β : Type*}
+theorem Internal.HasProgram.foldl_with {ρ α β : Type*}
     [UniqueEncoding Tree ρ] [UniqueEncoding Tree α] [UniqueEncoding Tree β]
     {f : ρ → β → α → β} {a : ρ → β} {xs : ρ → List α} {qi qs : Value → Code Value}
     {ti pi : ρ → ℕ} {ts ps : ρ × β × α → ℕ}
@@ -781,10 +788,11 @@ theorem HasProgram.foldl_with {ρ α β : Type*}
     simp only [size_encode_prod]; omega
   have hout := hs.size_encode.comp (fun z : (ρ × β) × α => (z.1.1, z.1.2, z.2))
   simp only [Function.comp_def, hargs] at hout
-  have getEnv := (Prod.hasProgram_fst (β := α)).comp
-    (Prod.hasProgram_fst (α := ρ) (β := β))
-  have getArgs := getEnv.pair ((Prod.hasProgram_fst.comp Prod.hasProgram_snd).pair
-    Prod.hasProgram_snd)
+  have getEnv := ((Prod.hasProgramIn_fst (β := α)).toHasProgram).comp
+    ((Prod.hasProgramIn_fst (α := ρ) (β := β)).toHasProgram)
+  have getArgs := getEnv.pair ((Prod.hasProgramIn_fst.toHasProgram.comp
+    Prod.hasProgramIn_snd.toHasProgram).pair
+    Prod.hasProgramIn_snd.toHasProgram)
   have step : HasProgram (Function.uncurry (fun (ea : ρ × β) (x : α) => (ea.1, f ea.1 ea.2 x)))
       _ (fun z => ts (z.1.1, z.1.2, z.2) + 1)
       (fun z => max ⌜z⌝ₜ.size (ps (z.1.1, z.1.2, z.2))) :=
@@ -801,7 +809,7 @@ theorem HasProgram.foldl_with {ρ α β : Type*}
               rcases z with ⟨⟨e, a⟩, x⟩; simp only [size_encode_prod]; omega).trans
                 (le_max_left _ _))
   fill_hole program in
-    refine ((hi.comp (step.foldl.comp Prod.hasProgram_snd)).congr ?_).mono ?_ ?_
+    refine ((hi.comp (step.foldl.comp Prod.hasProgramIn_snd.toHasProgram)).congr ?_).mono ?_ ?_
   · funext e
     have hfold : (xs e).foldl (fun (ea : ρ × β) x => (ea.1, f ea.1 ea.2 x)) (e, a e) =
         (e, (xs e).foldl (f e) (a e)) := List.foldl_hom (fun b => (e, b)) (by intros; rfl)
@@ -820,7 +828,7 @@ theorem HasProgram.foldl_with {ρ α β : Type*}
     omega
 
 /-- The input-producing program and uniform callback compose without choosing new code. -/
-theorem HasProgram.map_dependent_with {ρ : Type*} {α β : ρ → Type*}
+theorem Internal.HasProgram.map_dependent_with {ρ : Type*} {α β : ρ → Type*}
     [UniqueEncoding Tree ρ] [∀ e, UniqueEncoding Tree (α e)] [∀ e, UniqueEncoding Tree (β e)]
     {f : (e : ρ) → α e → β e} {xs : (e : ρ) → List (α e)} {qi qf : Value → Code Value}
     {ti pi : ρ → ℕ} {tf pf : (Σ e, α e) → ℕ}
@@ -835,7 +843,7 @@ theorem HasProgram.map_dependent_with {ρ : Type*} {α β : ρ → Type*}
 /-- The constant-family specialization of a captured map. Callbacks that capture an environment of
 a fixed type are stated on `ρ × α`; through `map_dependent_with` alone they would be stated on
 `Σ _ : ρ, α`, and a hypothesis on `ρ × α` is found only after an extra composition. -/
-theorem HasProgram.map_with {ρ α β : Type*}
+theorem Internal.HasProgram.map_with {ρ α β : Type*}
     [UniqueEncoding Tree ρ] [UniqueEncoding Tree α] [UniqueEncoding Tree β]
     {f : ρ → α → β} {xs : ρ → List α} {qi qf : Value → Code Value} {ti pi : ρ → ℕ}
     {tf pf : ρ × α → ℕ} (hi : HasProgram (fun e => (e, xs e)) qi ti pi)
@@ -850,11 +858,8 @@ theorem HasProgram.map_with {ρ α β : Type*}
       (fun p => (@Sigma.encode_mk ρ (fun _ => α) _ _ p.1 p.2).symm))).mono
     (Dominated.refl _) (Dominated.of_le fun e => by simp only [Sigma.encode_mk, le_refl])
 
-attribute [scoped fun_prop] HasProgram.identity HasProgram.comp List.hasProgram_reverse
-  HasProgram.map List.hasProgram_append Prod.hasProgram_fst Prod.hasProgram_snd
-  Sigma.hasProgram_fst Sigma.hasProgram_snd
-  HasProgram.pair HasProgram.unit HasProgram.ite
-  HasProgram.foldl
+attribute [scoped fun_prop] HasProgram.identity HasProgram.comp HasProgram.map HasProgram.pair
+  HasProgram.unit HasProgram.ite HasProgram.foldl
 attribute [scoped fun_prop] HasProgram.foldl_with
   HasProgram.map_dependent_with HasProgram.map_with
 

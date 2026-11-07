@@ -17,6 +17,8 @@ space bounds every reachable state relative to the initial input, without a save
 
 namespace Complexity.TreeProgram.Source
 
+open Internal (HasProgram)
+
 /-- Source equations discharge the loop's functional invariant. Time itself proves termination. -/
 theorem Implements.tail_loop {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
     {pc ps pd : TreeProgram.Value → TreeProgram.Code TreeProgram.Value}
@@ -45,7 +47,7 @@ theorem Implements.tail_loop {α β : Type*} [UniqueEncoding Tree α] [UniqueEnc
     refine ⟨(stop_bounds x y hi.1 hi.2 ht).2, ?_⟩
     simpa only [ht, Bool.false_eq_true, ↓reduceIte] using (equation y).symm.trans hi.2
 
-namespace HasProgram
+namespace Internal.HasProgram
 
 variable {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
   {test : α → Bool} {next : α → α} {finish result : α → β} {tc pc ts ps td pd : α → ℕ}
@@ -198,7 +200,7 @@ theorem tail_loop (hc : HasProgram test qc tc pc) (hs : HasProgram next qs ts ps
       have := decreases z.1.1 z.1.2 z.2.1 z.2.2
       exact Nat.le_mul_of_pos_left _ (by omega))
 
-end HasProgram
+end Internal.HasProgram
 
 end Complexity.TreeProgram.Source
 
@@ -207,6 +209,8 @@ end
 public meta section
 
 namespace Complexity.TreeProgram.Source
+
+open Internal (HasProgram)
 
 /-- A measured loop separates per-round work from its single terminal call. -/
 declare_syntax_cat sourceMeasuredLoop

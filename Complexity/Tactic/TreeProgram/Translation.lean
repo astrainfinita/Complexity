@@ -37,6 +37,8 @@ open Complexity TreeProgram
 
 namespace Complexity.TreeProgram.Source
 
+open Internal (HasProgram)
+
 /-- Compile a fixed source program with budgets indexed by its actual input. -/
 theorem Implements.computableWithin {α β : Type*}
     [UniqueEncoding Tree α] [UniqueEncoding Tree β]
@@ -54,7 +56,7 @@ theorem Implements.computableWithin {α β : Type*}
   exact (hr.compile (Nat.le_max_left _ _)).mono (hb x).1
     (Nat.mul_le_mul_left _ (hb x).2)
 
-namespace HasProgram
+namespace Internal.HasProgram
 
 variable {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β] {f : α → β}
   {program : Value → Code Value} {t p : α → ℕ}
@@ -77,13 +79,13 @@ theorem computableIn_of_dominated {T S : α → ℕ} (hf : HasProgram f program 
     TimeSpaceModel.tree.ComputableIn f IsO(T) IsO(S) :=
   hf.computableIn.mono (fun _ h => h.trans ht) (fun _ h => h.trans hp)
 
-end HasProgram
+end Internal.HasProgram
 
 end Complexity.TreeProgram.Source
 
 namespace Complexity
 
-namespace TreeProgram.Source.HasProgram
+namespace TreeProgram.Source.Internal.HasProgram
 
 variable {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
   {f : α → β} {program : Value → Code Value} {t p : α → ℕ} {T S : ℕ → ℕ}
@@ -155,7 +157,7 @@ theorem mem_fp_sizeCost (hf : HasProgram f program t p) (ht : IsPoly (fun x => �
     (FDTISP.subset_time (TreeMachine.fdtisp_unitTime_subset_sizeCost _ _ h)) 1 (d + (e + 1))
     fun n => by simp [pow_add]
 
-end TreeProgram.Source.HasProgram
+end TreeProgram.Source.Internal.HasProgram
 
 /-- A program with time polynomial in the input code size gives polynomial time. -/
 theorem TreeProgram.Source.HasProgramIn.mem_fp {α β : Type*} [UniqueEncoding Tree α]
@@ -171,6 +173,34 @@ theorem TreeProgram.Source.HasProgramIn.mem_fp_sizeCost {α β : Type*} [UniqueE
     f ∈ FP .sizeCostTree :=
   h.hasProgram.mem_fp_sizeCost h.time_spec h.peak_spec
 
+/-! The exits of an implementation within `O(t)` and `O(p)` are those of the form the translation
+composes, with the same growths. -/
+
+namespace TreeProgram.Source.HasProgramIn
+
+open Internal (HasProgram)
+
+variable {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
+  {f : α → β} {program : Value → Code Value} {t p : α → ℕ} {T S : ℕ → ℕ}
+
+theorem computableIn (h : HasProgramIn f program IsO(t) IsO(p)) :
+    TimeSpaceModel.tree.ComputableIn f IsO(fun x => t x + 4)
+      IsO(fun x => max ⌜x⌝ₜ.size (p x) + 2) :=
+  h.toHasProgram.computableIn
+
+theorem mem_fdtisp_of_sizeEnvelope (h : HasProgramIn f program IsO(t) IsO(p))
+    (ht : DominatedAtTop (sizeEnvelope (fun x => t x + 4)) T)
+    (hp : DominatedAtTop (sizeEnvelope (fun x => max ⌜x⌝ₜ.size (p x) + 2)) S) :
+    f ∈ FDTISP .tree T S :=
+  h.toHasProgram.mem_fdtisp_of_sizeEnvelope ht hp
+
+theorem mem_fdtisp_pow {t s : ℕ}
+    (h : HasProgramIn f program IsO(fun x => ⌜x⌝ₜ.size ^ t) IsO(fun x => ⌜x⌝ₜ.size ^ s))
+    (hs : 0 < s) : f ∈ FDTISP .tree (fun n => n ^ t) (fun n => n ^ s) :=
+  h.toHasProgram.mem_fdtisp_pow hs
+
+end TreeProgram.Source.HasProgramIn
+
 end Complexity
 
 end
@@ -178,6 +208,8 @@ end
 public meta section
 
 namespace Complexity.TreeProgram.Source
+
+open Internal (HasProgram)
 
 /-- Compose source-function implementations and their growth.
 `using ns` activates the namespace's scoped rules for this translation and its callbacks;
@@ -275,6 +307,37 @@ private def sourceQuery (search : Lean.Expr → FunPropM (Option Result))
       transitionTheorems := transitionTheoremsExt.getState env }
   let (result, _) ← (search target context).run state
   return result.map (·.proof)
+
+open Lean Meta in
+/-- The form the translation composes of an implementation `h`: itself, or for `HasProgramIn` the
+same program within `IsO(time)` and `IsO(peak)` with these growths, and under other growth
+properties with the growths of its chosen budgets. -/
+private def composedProgram? (h : Lean.Expr) : MetaM (Option Lean.Expr) := do
+  let type := (← instantiateMVars (← inferType h)).consumeMData
+  if type.isAppOfArity ``HasProgram 8 then return some h
+  unless type.isAppOfArity ``HasProgramIn 8 do return none
+  -- The arguments are read off the statement, so no instance is synthesized again.
+  let levels := type.getAppFn.constLevels!
+  let args := type.getAppArgs
+  let bound? (e : Lean.Expr) : Option Lean.Expr := match e.consumeMData with
+    | .lam _ _ body _ =>
+      if body.isAppOf ``Dominated && body.getAppNumArgs ≥ 2 && body.appFn!.appArg! == .bvar 0 &&
+        !body.appArg!.hasLooseBVars then some body.appArg! else none
+    | _ => none
+  if let (some t, some p) := (bound? args[6]!, bound? args[7]!) then
+    return some (mkAppN (mkConst ``HasProgram.mk levels) (args.extract 0 6 ++ #[t, p, h]))
+  return some (mkAppN (mkConst ``HasProgramIn.hasProgram levels) (args ++ #[h]))
+
+open Lean in
+/-- The rule turning a `HasProgramIn` target into the form the translation composes: within
+`IsO(time)` and `IsO(peak)` with these growths, otherwise for growths polynomial in a measure. -/
+private def programInRule (target : Lean.Expr) : Name :=
+  let isBigO (e : Lean.Expr) : Bool := match e.consumeMData with
+    | .lam _ _ body _ => body.isAppOf ``Dominated
+    | _ => false
+  let args := target.consumeMData.getAppArgs
+  if args.size == 8 && isBigO args[6]! && isBigO args[7]! then ``HasProgram.toHasProgramIn
+  else ``HasProgram.hasProgramIn
 
 open Lean Meta Mathlib.Meta.FunProp in
 private def localSourceCertificate (goal : Lean.Expr) : FunPropM (Option Result) := do
@@ -682,7 +745,7 @@ private partial def sourceSearch (session : Search.Session)
       -- An encoder describes representation; unfolding it does not select an algorithm.
       if d.fn.isConstOf ``UniqueEncoding.encode then
         session.reject ancestors m!"source translation: no implementation for the encoded result; \
-          select a rule scope with `using`, or register a function equality with `[source]`"
+          select a rule scope with `using`, or register a function equality with `[program]`"
         return none
       let decomposition ← d.decomposition
       if let .failed := decomposition then
@@ -712,7 +775,7 @@ private partial def sourceSearch (session : Search.Session)
             return ← sourceSearch session ancestors (target.setArg decl.funArgId f)
           if (← getConstInfo name).isDefinition then
             session.reject ancestors m!"source translation: `{.ofConstName name}` needs a \
-              selected implementation (register one with `[source]`, or choose replacement \
+              selected implementation (register one with `[program]`, or choose replacement \
               source with `via`)"
             return none
       if let .comp outer inner := decomposition then
@@ -762,11 +825,29 @@ open Lean Elab Tactic in
 def elabSourceTerm (stx : Syntax) (type : Lean.Expr) : TacticM Lean.Expr :=
   Term.withoutErrToSorry <| elabTermEnsuringType stx type
 
+open Lean Meta Elab Tactic in
+/-- Translate with each local `HasProgramIn` hypothesis also given in the form the translation
+composes, as by `program`; the copies are cleared from the goals left. -/
+private def withComposedLocals (translate : TacticM (List MVarId)) : TacticM (List MVarId) := do
+  let goal ← getMainGoal
+  let copies ← goal.withContext do
+    (← getLCtx).foldlM (init := #[]) fun copies decl => do
+      if decl.isImplementationDetail then return copies
+      unless (← instantiateMVars decl.type).consumeMData.isAppOfArity ``HasProgramIn 8 do
+        return copies
+      let some value ← composedProgram? decl.toExpr | return copies
+      return copies.push
+        { userName := ← mkFreshUserName decl.userName, type := ← inferType value, value }
+  if copies.isEmpty then return ← translate
+  let (fvars, goal) ← goal.assertHypotheses copies
+  replaceMainGoal [goal]
+  (← translate).mapM fun g => fvars.foldrM (fun f g => g.tryClear f) g
+
 open Lean Meta Elab Tactic Mathlib.Meta.FunProp in
 /-- Translate the main `HasProgram` goal and return the remaining obligations. -/
 private def proveSource (scope : Option Ident := none) (replacement : Option Term := none) :
     TacticM (List MVarId) :=
-    withSourceSpecs scope <| withMainContext do
+    withComposedLocals <| withSourceSpecs scope <| withMainContext do
   let goal ← getMainGoal
   let saved ← saveState
   let session ← Search.Session.create
@@ -813,7 +894,7 @@ syntax "recursion" " (" &"test" " := " term ")" " (" &"next" " := " term ")"
 open Lean Meta Elab Tactic Mathlib.Meta.FunProp in
 private def proveRecursion (method : TSyntax `sourceRecursion) (scope : Option Ident := none) :
     TacticM (List MVarId) :=
-    withSourceSpecs scope <| withMainContext do
+    withComposedLocals <| withSourceSpecs scope <| withMainContext do
   let `(sourceRecursion| recursion (test := $test) (next := $next)
     (finish := $finish) (resume := $resume) (measure := $measure) (decreases := $decreases)) :=
     method | throwUnsupportedSyntax
@@ -922,8 +1003,9 @@ private def modelFunPropCore (disch : Option (TSyntax ``Lean.Parser.Tactic.disch
       pure (do let t ← t; let s ← s; if s > 0 then some (t, s) else none)
     else pure none
   if program then
-    -- Unified with the target first: the output encodings may depend on the input.
-    evalTactic (← `(tactic| apply HasProgram.hasProgramIn))
+    -- Unified with the target first: the output encodings may depend on the input. Growths within
+    -- `IsO(time)` and `IsO(peak)` are those of the translation; others are polynomial ones.
+    evalTactic (← `(tactic| apply $(mkCIdent (programInRule target))))
   else if machine then
     evalTactic (← `(tactic| refine HasProgram.computableIn_of_dominated
       (program := ?program) (hf := ?implementation) (t := ?time_bound) (p := ?peak_bound)
@@ -1006,57 +1088,66 @@ private def withSourceEncodings (parameters : List Lean.Expr) (action : MetaM Un
       else withSourceEncodings rest action
     else withSourceEncodings rest action
 
-open Lean Meta in
-/-- One selected implementation per source function; a second one would make calls ambiguous. -/
-private def checkUniqueSource (name : Name) : MetaM Unit := do
+open Lean Meta Mathlib.Meta.FunProp in
+/-- One selected implementation per source function; a second one would make calls ambiguous.
+The implementations compared are those a call can meet: the selected ones that `fun_prop` indexes
+under the same function. -/
+private def checkUniqueProgram (name : Name) : MetaM Unit := do
+  let .function thm ← getTheoremFromConst name | return
+  let .decl funName := thm.funOrigin | return
+  let saved := sourceSavedImplementationExt.getState (← getEnv)
   let function (name : Name) : MetaM Lean.Expr := do
     let (_, _, type) ← forallMetaTelescopeReducing (← inferType (← mkConstWithFreshMVarLevels name))
     return type.getAppArgs[4]!
-  for other in sourceSavedImplementationExt.getState (← getEnv) do
+  for candidate in ← getTheoremsForFunction funName thm.funPropName do
+    let .decl other := candidate.thmOrigin | continue
+    unless saved.contains other do continue
     if ← withNewMCtxDepth <| withReducible do isDefEq (← function name) (← function other) then
-      throwError "`source` already has a selected implementation of {← function name}: \
-        {.ofConstName other}; choose another one at a call with a local hypothesis or `via`"
+      -- A restated certificate is named after the declaration it was registered for.
+      let shown := if other.hasMacroScopes then other.eraseMacroScopes.getPrefix else other
+      throwError "`program` already has a selected implementation of {← function name}: \
+        {.ofConstName shown}; choose another one at a call with a local hypothesis or `via`"
 
-/-- Save a source implementation for later translations: either a named implementation, or
+/-- Select the program of a function for later translations: either a named implementation, or
 the implementation of an equality's right-hand side for its left-hand side. Local and scoped
 registrations use `fun_prop`; `using ns` selects rules for an equality. -/
-syntax (name := sourceAttribute) "source" (" using " ident)? : attr
+syntax (name := programAttribute) "program" (" using " ident)? : attr
 
 open Lean Meta Elab Tactic Mathlib.Meta.FunProp in
 initialize registerBuiltinAttribute {
-  name := `sourceAttribute
-  descr := "save a source implementation for later translations"
+  name := `programAttribute
+  descr := "select the program of a function for later translations"
   applicationTime := .afterCompilation
   add := fun name stx kind => MetaM.run' do
     let saved ← getEnv
     try
-      let `(attr| source $[using $scope:ident]?) := stx | throwUnsupportedSyntax
+      let `(attr| program $[using $scope:ident]?) := stx | throwUnsupportedSyntax
       let info ← getConstInfo name
-      -- An implementation with growth predicates is used with its chosen growths.
       if ← forallTelescope info.type fun _ type => return type.isAppOf ``HasProgramIn then
         if scope.isSome then
-          throwError "`source using` selects rules for a function equality"
+          throwError "`program using` selects rules for a function equality"
         -- `fun_prop` takes declarations concluding `HasProgram`: an unexported one restates it.
         let certificate ← forallTelescope info.type fun parameters _ => withoutExporting do
-          let result ← mkAppM ``HasProgramIn.hasProgram
-            #[mkAppN (mkConst name (info.levelParams.map mkLevelParam)) parameters]
+          let some result ← composedProgram?
+              (mkAppN (mkConst name (info.levelParams.map mkLevelParam)) parameters) |
+            throwError "`program` expects an implementation"
           let closure ← Closure.mkValueTypeClosure (← mkForallFVars parameters (← inferType result))
             (← mkLambdaFVars parameters result) false
           let certificate ← mkFreshUserName (name ++ `sourceProgram)
           addDecl <| .thmDecl { name := certificate, type := closure.type, value := closure.value
                                 levelParams := closure.levelParams.toList }
           pure certificate
-        checkUniqueSource certificate
+        checkUniqueProgram certificate
         sourceSavedImplementationExt.add certificate kind
-        addTheorem certificate kind 1001
+        addTheorem certificate kind
         return
       if ← forallTelescope info.type fun _ type =>
           return type.isAppOfArity ``HasProgram 8 then
         if scope.isSome then
-          throwError "`source using` selects rules for a function equality"
-        checkUniqueSource name
+          throwError "`program using` selects rules for a function equality"
+        checkUniqueProgram name
         sourceSavedImplementationExt.add name kind
-        addTheorem name kind 1001
+        addTheorem name kind
         return
       let equality := mkConst name (info.levelParams.map mkLevelParam)
       forallTelescope info.type fun parameters type =>
@@ -1064,12 +1155,12 @@ initialize registerBuiltinAttribute {
           for parameter in parameters do
             let parameterDecl ← parameter.fvarId!.getDecl
             if !parameterDecl.binderInfo.isInstImplicit && (← isProp parameterDecl.type) then
-              throwError "`source` needs an unconditional function equality; \
+              throwError "`program` needs an unconditional function equality; \
                 use a local `via` proof for a replacement depending on a hypothesis"
           let some (_, _, g) := type.eq? |
-            throwError "`source` expects a function equality or a named implementation"
+            throwError "`program` expects a function equality or a named implementation"
           unless (← whnf (← inferType g)).isForall do
-            throwError "`source` expects a function equality; use `funext` for pointwise equations"
+            throwError "`program` expects a function equality; use `funext` for pointwise equations"
           let goal ← mkFreshExprSyntheticOpaqueMVar (← programGoal g)
           let action : TermElabM Unit := do
             discard <| Tactic.run goal.mvarId! do
@@ -1077,7 +1168,7 @@ initialize registerBuiltinAttribute {
           discard <| action.run {} {}
           let proof ← instantiateMVars goal
           if proof.hasExprMVar || proof.hasSorry then
-            throwError "the selected source implementation has unfinished obligations"
+            throwError "the selected implementation has unfinished obligations"
           let result ← mkAppM ``HasProgram.congr
             #[proof, ← mkEqSymm (mkAppN equality parameters)]
           let certificate ← withoutExporting do
@@ -1086,9 +1177,9 @@ initialize registerBuiltinAttribute {
             addDecl <| .thmDecl { name := certificate, type := closure.type, value := closure.value
                                   levelParams := closure.levelParams.toList }
             pure certificate
-          checkUniqueSource certificate
+          checkUniqueProgram certificate
           sourceSavedImplementationExt.add certificate kind
-          addTheorem certificate kind 1001
+          addTheorem certificate kind
     catch ex =>
       setEnv saved
       throw ex

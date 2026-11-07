@@ -17,6 +17,8 @@ reachable inputs; the compiled program stores source arguments on a stack and er
 
 namespace Complexity.TreeProgram.Source
 
+open Internal (HasProgram)
+
 /-- Sequential time and the maximum size of an intermediate tree. -/
 @[ext] structure Cost where
   /-- Time spent by an evaluation. -/
@@ -481,6 +483,8 @@ end Recursion
 end Complexity.TreeProgram.Source
 
 namespace Complexity.TreeProgram.Source.Recursion
+
+open Internal (HasProgram)
 
 variable {α ρ : Type*} {β : α → Type*} [UniqueEncoding Tree α]
   {f : (x : α) → β x} (r : Recursion f)

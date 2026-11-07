@@ -16,6 +16,8 @@ open Complexity TreeProgram
 
 namespace Complexity.TreeProgram.Source
 
+open Internal (HasProgram)
+
 /-- The Tseitin clauses of a gate, its input wires and its output wire. -/
 def gateClauses {α : Type*}
     (x : Σ k, FirstOrder.Language.booleanAlgebra.Functions k × (Fin k → α) × α) : CNF α :=
@@ -27,8 +29,9 @@ theorem gateClauses_size_le {α : Type*} [UniqueEncoding Tree α]
   rcases x with ⟨k, op, args, out⟩
   exact CNF.size_encode_ofGate_le op args out
 
-@[source] theorem hasProgram_gateClauses {α : Type*} [UniqueEncoding Tree α] :
-    HasProgram (gateClauses (α := α)) hole(⊢ program) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
+@[program] theorem hasProgramIn_gateClauses {α : Type*} [UniqueEncoding Tree α] :
+    HasProgramIn (gateClauses (α := α)) hole(⊢ program) IsO(fun _ => 1)
+      IsO(fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programGateClauses
   fill_hole program in source_fun_prop
 
@@ -42,9 +45,10 @@ def accumulateGate
 abbrev AccumulateInput := CNF ℕ ×
   (Σ k, FirstOrder.Language.booleanAlgebra.Functions k × (Fin k → ℕ) × ℕ)
 
-@[source] theorem hasProgram_accumulateGate :
-    HasProgram accumulateGate hole(⊢ program) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
+@[program] theorem hasProgramIn_accumulateGate :
+    HasProgramIn accumulateGate hole(⊢ program) IsO(fun _ => 1) IsO(fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programAccumulateGate
+  refine HasProgram.toHasProgramIn ?_
   have : Dominated (fun x : AccumulateInput => (gateClauses x.2).length) (fun _ => 1) :=
     Dominated.of_le_mul 3 (fun x => by
       simpa only [gateClauses, Nat.mul_one] using
@@ -78,9 +82,10 @@ theorem size_encode_val_comp {n k : ℕ} (args : Fin k → Fin n) :
     ⌜Fin.val ∘ args⌝ₜ.size = ⌜args⌝ₜ.size := by
   simpa only [encode_fin_function] using congrArg Tree.size (encode_fin_values args)
 
-@[source] theorem hasProgram_circuitStep :
-    HasProgram circuitStep hole(⊢ program) (fun x => ⌜x.1⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
+@[program] theorem hasProgramIn_circuitStep :
+    HasProgramIn circuitStep hole(⊢ program) IsO(fun x => ⌜x.1⌝ₜ.size) IsO(fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programCircuitStep
+  refine HasProgram.toHasProgramIn ?_
   fill_hole program in
     source_fun_prop (disch := dominated [accumulateGate_size, gateClauses_size_le,
       size_encode_val_comp, size_encode_nat_succ_le])
@@ -137,13 +142,13 @@ theorem tseitinLoop_state_size (x y : TseitinState)
   change ⌜((m, d), bs)⌝ₜ.size ≤ 10 * ⌜((n, c), acc)⌝ₜ.size ^ 2
   omega
 
-@[source] theorem hasProgram_circuitContinues :
-    HasProgram circuitContinues hole(⊢ program) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
+@[program] theorem hasProgramIn_circuitContinues :
+    HasProgramIn circuitContinues hole(⊢ program) IsO(fun _ => 1) IsO(fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programCircuitContinues
   fill_hole program in source_fun_prop
 
-@[source] theorem hasProgram_circuitFinish :
-    HasProgram circuitFinish hole(⊢ program) (fun x => ⌜x⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
+@[program] theorem hasProgramIn_circuitFinish :
+    HasProgramIn circuitFinish hole(⊢ program) IsO(fun x => ⌜x⌝ₜ.size) IsO(fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programCircuitFinish
   fill_hole program in source_fun_prop
 
@@ -159,10 +164,11 @@ theorem circuitStep_circuit_size_lt
       Circuit.encode_gate, size_encode_unit]
     omega
 
-theorem hasProgram_tseitinLoop :
-    HasProgram (fun x : TseitinState => tseitinLoop x.1 x.2) hole(⊢ program)
-      (fun x => ⌜x⌝ₜ.size ^ 2) (fun x => ⌜x⌝ₜ.size ^ 2) := by
+theorem hasProgramIn_tseitinLoop :
+    HasProgramIn (fun x : TseitinState => tseitinLoop x.1 x.2) hole(⊢ program)
+      IsO(fun x => ⌜x⌝ₜ.size ^ 2) IsO(fun x => ⌜x⌝ₜ.size ^ 2) := by
   abstract_hole program using programTseitinLoop
+  refine HasProgram.toHasProgramIn ?_
   fill_hole program in
     source_fun_prop using loop
       (test := circuitContinues) (next := circuitStep) (finish := circuitFinish)
@@ -181,9 +187,9 @@ theorem hasProgram_tseitinLoop :
   case stop_pos => exact fun _ => Nat.pow_pos (Tree.size_pos _)
   all_goals exact Dominated.of_le_mul _ (fun z => tseitinLoop_state_size z.1.1 z.1.2 z.2)
 
-attribute [source] hasProgram_tseitinLoop
+attribute [program] hasProgramIn_tseitinLoop
 
-@[local source] theorem tseitin_source :
+@[local program] theorem tseitin_source :
     (fun input : Σ n, Circuit .booleanAlgebra n 1 => input.2.tseitin) =
       (fun input => tseitinLoop input []) := (funext tseitinLoop_nil).symm
 
