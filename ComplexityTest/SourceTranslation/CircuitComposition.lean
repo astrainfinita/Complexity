@@ -7,7 +7,7 @@ import Complexity.Resources.Circuit.Unroll
 import Complexity.Resources.Circuit.Composition
 import Complexity.Classes.Functions.Basic
 open Complexity TreeProgram Complexity.TreeProgram.Source
-open Complexity.TreeProgram.Source.Internal (HasProgram)
+open Complexity.TreeProgram.Source.Internal (HasProgramInO)
 
 namespace ComplexityTest.SourceTranslation.CircuitComposition
 
@@ -18,25 +18,26 @@ example : programCompFn =
 -- Recursive certification keeps the explicitly selected terminal callback.
 example : programRelabelFn = Recursion.code programRelabelTest programRelabelNextFn
     programRelabelFinishFn programRelabelResume := rfl
-example : HasProgram relabelFinishFn programRelabelFinishFn
-    (fun x => ⌜x⌝ₜ.size ^ 3) (fun x => ⌜x⌝ₜ.size ^ 2) := hasProgramIn_relabelFinishFn.toHasProgram
+example : HasProgramInO relabelFinishFn programRelabelFinishFn
+    (fun x => ⌜x⌝ₜ.size ^ 3) (fun x => ⌜x⌝ₜ.size ^ 2) :=
+      hasProgramIn_relabelFinishFn.toHasProgramInO
 
 def rewire (x : RelabelInput) : Σ n, Σ m, Circuit .booleanAlgebra n m :=
   ⟨x.k, x.m, x.circuit.relabel x.wires⟩
-example := (by source_fun_prop : HasProgram rewire _ _ _)
+example := (by source_fun_prop : HasProgramInO rewire _ _ _)
 
 def pipeline (x : CompInput) : Σ n, Σ m, Circuit .booleanAlgebra n m :=
   ⟨x.n, x.k, x.first.comp x.second⟩
-example := (by source_fun_prop : HasProgram pipeline _ _ _)
+example := (by source_fun_prop : HasProgramInO pipeline _ _ _)
 
 def preserve (x : Σ n, Σ m, Circuit .booleanAlgebra n m) :
     Σ n, Σ m, Circuit .booleanAlgebra n m := ⟨x.1, x.1 + x.2.1, x.2.2.keepInputs⟩
-example := (by source_fun_prop : HasProgram preserve _ _ _)
+example := (by source_fun_prop : HasProgramInO preserve _ _ _)
 
 def layers (x : Σ n, Circuit .booleanAlgebra (n + 1) n × ℕ) :
     Σ n, Σ m, Circuit .booleanAlgebra n m :=
   ⟨x.1 + x.2.2, x.1, x.2.1.unroll x.2.2⟩
-example := (by source_fun_prop : HasProgram layers _ _ _)
+example := (by source_fun_prop : HasProgramInO layers _ _ _)
 
 /-- Rewiring an already represented set of inputs, retaining the same input count. -/
 def rewireStored (x : Σ n, Σ m, Circuit .booleanAlgebra n m × (Fin n → Fin n)) :
@@ -48,7 +49,7 @@ abbrev StoredRelabelInput := Σ n, Σ m, Circuit .booleanAlgebra n m × (Fin n �
 @[program] theorem hasProgramIn_rewireStored : HasProgramIn rewireStored hole(⊢ program)
     IsO(fun x => ⌜x⌝ₜ.size ^ 7) IsO(fun x => ⌜x⌝ₜ.size ^ 4) := by
   abstract_hole program using programRewireStored
-  refine HasProgram.toHasProgramIn ?_
+  refine HasProgramInO.toHasProgramIn ?_
   let u (x : Σ n, Σ m, Circuit .booleanAlgebra n m × (Fin n → Fin n)) : RelabelInput :=
     ⟨x.1, x.2.1, x.1, x.2.2.1, x.2.2.2⟩
   let S (x : Σ n, Σ m, Circuit .booleanAlgebra n m × (Fin n → Fin n)) := ⌜x⌝ₜ.size
@@ -97,7 +98,7 @@ def layersStored (x : Σ n, Circuit .booleanAlgebra (n + 1) n × List Unit) :
 @[program] theorem hasProgramIn_layersStored : HasProgramIn layersStored hole(⊢ program)
     IsO(fun x => ⌜x⌝ₜ.size ^ 18) IsO(fun x => ⌜x⌝ₜ.size ^ 8) := by
   abstract_hole program using programLayersStored
-  refine HasProgram.toHasProgramIn ?_
+  refine HasProgramInO.toHasProgramIn ?_
   let S (x : Σ n, Circuit .booleanAlgebra (n + 1) n × List Unit) := ⌜x⌝ₜ.size
   let u (x : Σ n, Circuit .booleanAlgebra (n + 1) n × List Unit) : UnrollInput :=
     ⟨x.1, x.2.1, x.2.2.length⟩
@@ -125,7 +126,7 @@ def layersStored (x : Σ n, Circuit .booleanAlgebra (n + 1) n × List Unit) :
   have htime := hR.pow 9
   have hpeak := hR.pow 4
   simp only [← pow_mul, Function.comp_def, u] at htime hpeak
-  have hout := (Dominated.comp hasProgramIn_unroll.toHasProgram.size_encode u).trans
+  have hout := (Dominated.comp hasProgramIn_unroll.toHasProgramInO.size_encode u).trans
     ((hu.le_pow (by decide : 0 < 8)).max_same hpeak)
   simp only [Function.comp_def, u] at hout
   fill_hole program in source_fun_prop

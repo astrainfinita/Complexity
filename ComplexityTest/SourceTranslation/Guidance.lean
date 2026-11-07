@@ -8,7 +8,7 @@ import Complexity.Tactic.TreeProgram.Primitives
 noncomputable section
 
 open Complexity TreeProgram.Source
-open TreeProgram.Source.Internal (HasProgram)
+open TreeProgram.Source.Internal (HasProgramInO)
 
 namespace ComplexityTest.SourceTranslation.Guidance
 
@@ -26,15 +26,15 @@ private def reverseByCases (xs : List Bool) := match xs with
   | [] => []
   | x :: xs => (x :: xs).reverse
 
-example := (by source_fun_prop : HasProgram reverseByCases _ _ _)
+example := (by source_fun_prop : HasProgramInO reverseByCases _ _ _)
 
 -- The source equation stays an ordinary mathematical goal.
-example : HasProgram (List.reverse (α := Bool)) hole(⊢ program) (fun xs => ⌜xs⌝ₜ.size)
+example : HasProgramInO (List.reverse (α := Bool)) hole(⊢ program) (fun xs => ⌜xs⌝ₜ.size)
     (fun xs => ⌜xs⌝ₜ.size) := by
   fill_hole program in source_fun_prop via reverseByCases
   case source_eq => funext xs; cases xs <;> simp [reverseByCases]
 
-example : HasProgram (userReverse (α := Bool)) hole(⊢ program) (fun xs => ⌜xs⌝ₜ.size)
+example : HasProgramInO (userReverse (α := Bool)) hole(⊢ program) (fun xs => ⌜xs⌝ₜ.size)
     (fun xs => ⌜xs⌝ₜ.size) := by
   fill_hole program in source_fun_prop via List.reverse
   case source_eq => exact userReverse_eq
@@ -42,7 +42,7 @@ example : HasProgram (userReverse (α := Bool)) hole(⊢ program) (fun xs => ⌜
 section
 attribute [local program] userReverse_eq
 
-example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop : HasProgram
+example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop : HasProgramInO
     (fun x : List α × Option (List α) =>
       match x.2 with | none => x.1 | some xs => userReverse xs) _ _ _)
 end
@@ -50,7 +50,7 @@ end
 -- A local choice does not leak outside its section.
 example : True := by
   fail_if_success
-    have := (by source_fun_prop : HasProgram (userReverse (α := Bool)) _ _ _)
+    have := (by source_fun_prop : HasProgramInO (userReverse (α := Bool)) _ _ _)
   trivial
 
 def retain (xs : List Bool) := xs
@@ -59,7 +59,7 @@ theorem hasProgramIn_retainSlow :
     HasProgramIn retain hole(⊢ program) IsO(fun xs => ⌜xs⌝ₜ.size + ⌜xs.reverse⌝ₜ.size)
     IsO(fun xs => max ⌜xs⌝ₜ.size ⌜xs.reverse⌝ₜ.size) := by
   abstract_hole program using programRetainSlow
-  refine HasProgram.toHasProgramIn ?_
+  refine HasProgramInO.toHasProgramIn ?_
   fill_hole program in source_fun_prop via (fun xs : List Bool => xs.reverse.reverse)
   case source_eq => funext xs; simp [retain]
 
@@ -70,13 +70,13 @@ section
 @[local program] theorem retain_eq : retain = (fun xs : List Bool => xs.reverse.reverse) := by
   funext xs; simp [retain]
 
-example := (by source_fun_prop : HasProgram retain programRetainSlow _ _)
+example := (by source_fun_prop : HasProgramInO retain programRetainSlow _ _)
 end
 
-example := (by source_fun_prop : HasProgram retain (fun v => pure v) _ _)
+example := (by source_fun_prop : HasProgramInO retain (fun v => pure v) _ _)
 
 -- Source automation leaves unrelated proof goals alone.
-example : HasProgram (userReverse (α := Bool)) hole(⊢ program) (fun xs => ⌜xs⌝ₜ.size)
+example : HasProgramInO (userReverse (α := Bool)) hole(⊢ program) (fun xs => ⌜xs⌝ₜ.size)
     (fun xs => ⌜xs⌝ₜ.size) ∧ True := by
   constructor
   · fill_hole program in source_fun_prop via List.reverse
@@ -116,11 +116,11 @@ theorem hasProgramIn_customReverse {α : Type*} [UniqueEncoding Tree α] :
 example {α : Type*} [UniqueEncoding Tree α]
     (_h : HasProgramIn (List.reverse (α := α)) programCustomReverse IsO(fun xs => ⌜xs⌝ₜ.size)
       IsO(fun xs => ⌜xs⌝ₜ.size)) :=
-  (by source_fun_prop : HasProgram (List.reverse (α := α)) programCustomReverse _ _)
+  (by source_fun_prop : HasProgramInO (List.reverse (α := α)) programCustomReverse _ _)
 
-example := (by source_fun_prop : HasProgram (List.reverse (α := Bool)) List.Code.reverse _ _)
+example := (by source_fun_prop : HasProgramInO (List.reverse (α := Bool)) List.Code.reverse _ _)
 
--- A local function implemented by a `HasProgramIn` hypothesis is composed as with a `HasProgram`
+-- A local function implemented by a `HasProgramIn` hypothesis is composed as with a `HasProgramInO`
 -- one: within `IsO` with the stated growths.
 example {h : List Bool → List Bool}
     {program : TreeProgram.Value → TreeProgram.Code TreeProgram.Value}
@@ -162,7 +162,7 @@ def chosenReverse {α : Type*} : List α → List α := List.reverse
     chosenReverse (α := α) = ReverseByCases.userReverse := by
   rw [← ReverseByCases.reverse_eq]; rfl
 
-example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop : HasProgram
+example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop : HasProgramInO
     (fun x : List α × Option (List α) =>
       match x.2 with | none => x.1 | some xs => chosenReverse xs) _ _ _)
 
@@ -176,23 +176,23 @@ def custom (xs : List Bool) := xs
 
 end Scoped
 
-example := (by source_fun_prop : HasProgram Scoped.custom (fun v => pure v) _ _)
+example := (by source_fun_prop : HasProgramInO Scoped.custom (fun v => pure v) _ _)
 
 open scoped Scoped in
-example := (by source_fun_prop : HasProgram Scoped.custom programRetainSlow _ _)
+example := (by source_fun_prop : HasProgramInO Scoped.custom programRetainSlow _ _)
 
 section
 @[local program] theorem identity_eq :
     (id : List Bool → List Bool) = (fun xs => xs.reverse.reverse) := by funext xs; simp
 
-example := (by source_fun_prop : HasProgram (id : List Bool → List Bool) programRetainSlow _ _)
+example := (by source_fun_prop : HasProgramInO (id : List Bool → List Bool) programRetainSlow _ _)
 end
 
 -- An unsupported replacement does not fall back to the supported original source.
 example : True := by
   fail_if_success
     have := (by source_fun_prop via (fun xs : List Nat => xs.map Nat.factorial) :
-      HasProgram (List.reverse (α := Nat)) _ (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size))
+      HasProgramInO (List.reverse (α := Nat)) _ (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size))
   trivial
 
 theorem conditionalChoice (h : False) : (id : List Bool → List Bool) = List.reverse :=

@@ -10,7 +10,7 @@ public import Complexity.Tactic.TreeProgram.Library
 @[expose] public section
 
 open Complexity TreeProgram Complexity.TreeProgram.Source
-open Complexity.TreeProgram.Source.Internal (HasProgram)
+open Complexity.TreeProgram.Source.Internal (HasProgramInO)
 
 namespace ComplexityTest.SourceTranslation.AsymptoticTailRecursion
 
@@ -20,7 +20,7 @@ def drain (_ : List Bool) : List Bool := []
 @[program] theorem hasProgramIn_drain : HasProgramIn drain hole(⊢ program)
     IsO(fun xs => ⌜xs⌝ₜ.size) IsO(fun xs => ⌜xs⌝ₜ.size) := by
   abstract_hole program using programDrain
-  refine HasProgram.toHasProgramIn ?_
+  refine HasProgramInO.toHasProgramIn ?_
   fill_hole program in
     source_fun_prop using loop (test := fun xs : List Bool => !xs.isEmpty)
       (next := List.tail) (finish := id)
@@ -41,7 +41,7 @@ theorem drain_fdtisp : drain ∈ FDTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) 
 
 -- The program is determined by the callbacks; tail-loop space has no stack multiplier.
 example : ∃ test t p, programDrain = loopCode test List.programTail (fun v => pure v) ∧
-    HasProgram (fun xs : List Bool => !xs.isEmpty) test t p := by
+    HasProgramInO (fun xs : List Bool => !xs.isEmpty) test t p := by
   -- The callback's program is read off the loop first, then translated.
   refine ⟨_, ?t, ?p, rfl, ?callback⟩
   case callback => source_fun_prop

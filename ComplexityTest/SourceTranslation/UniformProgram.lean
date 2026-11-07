@@ -6,28 +6,29 @@ Authors: Yuyang Zhao
 import Complexity.Tactic.TreeProgram.Library
 
 open Complexity TreeProgram Complexity.TreeProgram.Source
-open Complexity.TreeProgram.Source.Internal (HasProgram)
+open Complexity.TreeProgram.Source.Internal (HasProgramInO)
 
 namespace ComplexityTest.SourceTranslation.UniformProgram
 
 -- Library functions with one program at every type are used at types depending on the input.
-example : HasProgram (fun x : Σ n, List (Fin n) => x.2.reverse) hole(⊢ program)
+example : HasProgramInO (fun x : Σ n, List (Fin n) => x.2.reverse) hole(⊢ program)
     (fun x => 1 + ⌜x.2⌝ₜ.size) (fun x => max ⌜x⌝ₜ.size ⌜x.2⌝ₜ.size) := by
   fill_hole program in source_fun_prop
 
-example := (by source_fun_prop : HasProgram (fun x : Σ n, List (Fin n) => x.2.tail.length) _ _ _)
+example := (by source_fun_prop : HasProgramInO (fun x : Σ n, List (Fin n) => x.2.tail.length) _ _ _)
 
 -- Functions of several arguments are applied to the tuple of their arguments.
 example := (by source_fun_prop :
-  HasProgram (fun x : Σ n, List (Fin n) × List (Fin n) => x.2.1 ++ x.2.2) _ _ _)
+  HasProgramInO (fun x : Σ n, List (Fin n) × List (Fin n) => x.2.1 ++ x.2.2) _ _ _)
 
-example := (by source_fun_prop : HasProgram (fun x : Σ n, List (Fin n) × ℕ => x.2.1[x.2.2]?) _ _ _)
+example :=
+    (by source_fun_prop : HasProgramInO (fun x : Σ n, List (Fin n) × ℕ => x.2.1[x.2.2]?) _ _ _)
 
 -- The composition for a family of arguments follows from the fact at every type.
 example {α : Type} {β : α → Type} [UniqueEncoding Tree α] [∀ x, UniqueEncoding Tree (β x)]
     {f g : (x : α) → List (β x)} {pf pg : Value → Code Value} {t p u q : α → ℕ}
-    (hf : HasProgram f pf t p) (hg : HasProgram g pg u q) :=
-  (by source_fun_prop : HasProgram (fun x => f x ++ g x)
+    (hf : HasProgramInO f pf t p) (hg : HasProgramInO g pg u q) :=
+  (by source_fun_prop : HasProgramInO (fun x => f x ++ g x)
     (fun v => (do let w ← pf v; let z ← pg v; Value.pair w z) >>=
       fun v => do let w ← Value.left v; let z ← Value.right v; List.Code.append w z) _ _)
 
@@ -44,21 +45,21 @@ theorem hasProgramIn_swapPair {α β : Type*} [UniqueEncoding Tree α] [UniqueEn
 
 -- Its uses at types depending on the input need no rule for it.
 example := (by source_fun_prop :
-  HasProgram (fun x : Σ n, Fin n × List (Fin n) => (swapPair x.2).1.reverse) _ _ _)
+  HasProgramInO (fun x : Σ n, Fin n × List (Fin n) => (swapPair x.2).1.reverse) _ _ _)
 
 -- A program that depends on a parameter is not one program at every value of it.
 /--
 error: Type mismatch
   h
 has type
-  HasProgram List.reverse program t p
+  HasProgramInO List.reverse program t p
 but is expected to have type
-  HasProgram List.reverse hole(⊢ uniform) t p
+  HasProgramInO List.reverse hole(⊢ uniform) t p
 -/
 #guard_msgs in
-theorem hasProgram_reverseOf {α : Type*} [UniqueEncoding Tree α] {program : Value → Code Value}
-    {t p : List α → ℕ} (h : HasProgram (List.reverse : List α → List α) program t p) :
-    HasProgram (List.reverse : List α → List α) hole(⊢ uniform) t p := by
+theorem hasProgramInO_reverseOf {α : Type*} [UniqueEncoding Tree α] {program : Value → Code Value}
+    {t p : List α → ℕ} (h : HasProgramInO (List.reverse : List α → List α) program t p) :
+    HasProgramInO (List.reverse : List α → List α) hole(⊢ uniform) t p := by
   fill_hole uniform in exact h
 
 end ComplexityTest.SourceTranslation.UniformProgram

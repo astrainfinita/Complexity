@@ -11,7 +11,7 @@ public import ComplexityTest.SourceTranslation.AsymptoticTailRecursion
 @[expose] public section
 
 open Complexity TreeProgram Complexity.TreeProgram.Source
-open Complexity.TreeProgram.Source.Internal (HasProgram)
+open Complexity.TreeProgram.Source.Internal (HasProgramInO)
 open ComplexityTest.SourceTranslation.Asymptotics
 
 namespace ComplexityTest.SourceTranslation.AsymptoticReuse
@@ -20,7 +20,7 @@ namespace ComplexityTest.SourceTranslation.AsymptoticReuse
 theorem hasProgramIn_importedLoop :
     HasProgramIn preciseIdentity hole(⊢ program) IsO(fun _ => 1) IsO(fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programImportedLoop
-  refine HasProgram.toHasProgramIn ?_
+  refine HasProgramInO.toHasProgramIn ?_
   fill_hole program in
     source_fun_prop using loop (test := fun _ : List Bool => false)
       (next := preciseIdentity) (finish := preciseIdentity)
@@ -35,18 +35,18 @@ theorem hasProgramIn_importedLoop :
 
 example : ∃ test t p,
     programImportedLoop = loopCode test programPreciseIdentity programPreciseIdentity ∧
-      HasProgram (fun _ : List Bool => false) test t p := by
+      HasProgramInO (fun _ : List Bool => false) test t p := by
   -- The callback's program is read off the loop first, then translated.
   refine ⟨_, ?t, ?p, rfl, ?callback⟩
   case callback => source_fun_prop
 
 -- Repeated calls reuse the imported growth, at every input.
-example : HasProgram (fun xs => preciseIdentity (preciseIdentity xs)) hole(⊢ program)
+example : HasProgramInO (fun xs => preciseIdentity (preciseIdentity xs)) hole(⊢ program)
     (fun _ => 0 + 0) (fun _ => max 0 0) := by
   fill_hole program in source_fun_prop
 
 -- An imported alias also retains the selected program and its zero growth.
-example := (by source_fun_prop : HasProgram aliasedIdentity programPreciseIdentity _ _)
+example := (by source_fun_prop : HasProgramInO aliasedIdentity programPreciseIdentity _ _)
 
 -- A call of the alias needs the alias's own selected implementation.
 theorem hasProgramIn_aliasedIdentity :
@@ -55,7 +55,7 @@ theorem hasProgramIn_aliasedIdentity :
   fill_hole program in source_fun_prop
 
 attribute [local program] hasProgramIn_aliasedIdentity in
-example : HasProgram (fun xs => aliasedIdentity (aliasedIdentity xs)) hole(⊢ program)
+example : HasProgramInO (fun xs => aliasedIdentity (aliasedIdentity xs)) hole(⊢ program)
     (fun _ => 0 + 0) (fun _ => max 0 0) := by
   fill_hole program in source_fun_prop
 
@@ -70,7 +70,7 @@ theorem drainTwice_fdtisp :
   model_fun_prop (disch := dominated [drain])
 
 -- A composition on a finite type keeps the constant growths stated by the selected implementation.
-example : HasProgram (fun b => !!b) hole(⊢ program) (fun _ => 1 + 1) (fun _ => max 1 1) := by
+example : HasProgramInO (fun b => !!b) hole(⊢ program) (fun _ => 1 + 1) (fun _ => max 1 1) := by
   fill_hole program in source_fun_prop
 
 end ComplexityTest.SourceTranslation.AsymptoticReuse

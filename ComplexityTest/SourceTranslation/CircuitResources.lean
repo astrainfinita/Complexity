@@ -46,13 +46,13 @@ theorem collect_pair_fdtisp : (fun input => (collect input, input.1)) ∈ FDTISP
 
 -- The selected program is reused as chosen.
 open Complexity.TreeProgram.Source in
-open Complexity.TreeProgram.Source.Internal (HasProgram) in
-example := (by source_fun_prop : HasProgram collect programAccumulateGate _ _)
+open Complexity.TreeProgram.Source.Internal (HasProgramInO) in
+example := (by source_fun_prop : HasProgramInO collect programAccumulateGate _ _)
 
 open Complexity.TreeProgram.Source in
-open Complexity.TreeProgram.Source.Internal (HasProgram) in
+open Complexity.TreeProgram.Source.Internal (HasProgramInO) in
 example : True := by
-  have := (by source_fun_prop : HasProgram (fun input : Option (CNF ℕ ×
+  have := (by source_fun_prop : HasProgramInO (fun input : Option (CNF ℕ ×
       (Σ k, FirstOrder.Language.booleanAlgebra.Functions k × (Fin k → ℕ) × ℕ)) =>
       match input with | none => [] | some x => collect x) _ _ _)
   trivial
@@ -77,7 +77,7 @@ example : True := by
 
 -- The peak of prepending is the final list's size, including an empty fold.
 open Complexity.TreeProgram.Source in
-open Complexity.TreeProgram.Source.Internal (HasProgram) in
+open Complexity.TreeProgram.Source.Internal (HasProgramInO) in
 example (acc xs : List Bool) :
     foldlPeak (fun acc x => x :: acc) (fun z => ⌜z⌝ₜ.size) acc xs + 1 =
       ⌜xs⌝ₜ.size + ⌜acc⌝ₜ.size := by

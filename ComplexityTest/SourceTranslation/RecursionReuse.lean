@@ -2,12 +2,13 @@
 import ComplexityTest.SourceTranslation.Recursion
 
 open Complexity TreeProgram.Source
-open TreeProgram.Source.Internal (HasProgram)
+open TreeProgram.Source.Internal (HasProgramInO)
 open ComplexityTest.SourceTranslation.Recursion
 
-example := (by source_fun_prop : HasProgram drain programDrain _ _)
+example := (by source_fun_prop : HasProgramInO drain programDrain _ _)
 
-example : HasProgram drain hole(⊢ program) (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size ^ 2) := by
+example : HasProgramInO drain hole(⊢ program) (fun xs => ⌜xs⌝ₜ.size)
+    (fun xs => ⌜xs⌝ₜ.size ^ 2) := by
   fill_hole program in source_fun_prop
 
 example : (fun xs : List Bool => (drain xs, xs)) ∈

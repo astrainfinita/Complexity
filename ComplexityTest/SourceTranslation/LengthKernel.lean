@@ -1,13 +1,13 @@
 import Complexity.Tactic.TreeProgram.Library
 
 open Complexity TreeProgram Complexity.TreeProgram.Source
-open Complexity.TreeProgram.Source.Internal (HasProgram)
+open Complexity.TreeProgram.Source.Internal (HasProgramInO)
 
 namespace ComplexityTest.SourceTranslation.LengthKernel
 
 -- Exercise the current translator, including length, composition, and pairing.
 theorem certificate :
-    HasProgram (fun x : List Unit × Bool => (x.1.length, x.2)) hole(⊢ program)
+    HasProgramInO (fun x : List Unit × Bool => (x.1.length, x.2)) hole(⊢ program)
       (fun x => ⌜x.1⌝ₜ.size ^ 2 + 1) (fun x => ⌜x⌝ₜ.size + ⌜(x.1.length, x.2)⌝ₜ.size) := by
   fill_hole program in source_fun_prop
 

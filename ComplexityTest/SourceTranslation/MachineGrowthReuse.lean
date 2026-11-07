@@ -10,12 +10,12 @@ public import ComplexityTest.SourceTranslation.MachineGrowth
 @[expose] public section
 
 open Complexity TreeProgram Complexity.TreeProgram.Source
-open Complexity.TreeProgram.Source.Internal (HasProgram)
+open Complexity.TreeProgram.Source.Internal (HasProgramInO)
 namespace ComplexityTest.SourceTranslation.MachineGrowthReuse
 
 -- The imported selection, with its own growth, is reused by ordinary calls.
 example := (by source_fun_prop :
-  HasProgram (id : List Bool → List Bool) MachineGrowth.programSelected _ _)
+  HasProgramInO (id : List Bool → List Bool) MachineGrowth.programSelected _ _)
 
 def nested (xs : List Bool) := id (id xs)
 

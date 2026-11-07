@@ -6,33 +6,31 @@ Authors: Yuyang Zhao
 import Complexity.Tactic.TreeProgram.Primitives
 
 open Complexity TreeProgram Complexity.TreeProgram.Source
-open Complexity.TreeProgram.Source.Internal (HasProgram)
+open Complexity.TreeProgram.Source.Internal (HasProgramInO)
 
 namespace ComplexityTest.SourceTranslation.Certified
 
--- The implementations of `List.reverse`, `List.append` and the projections are selected by the
--- library with `program`, which registers them for `fun_prop` as well.
-attribute [local fun_prop] HasProgram.identity HasProgram.comp HasProgram.map HasProgram.ite
-  HasProgram.pair
+-- The rules and the implementations the library selects with `program` (`List.reverse`,
+-- `List.append`, the projections) are registered for `fun_prop` in the scope opened above.
 
 theorem hasProgramIn_reverse : HasProgramIn (List.reverse : List Bool → List Bool) hole(⊢ program)
     IsO(fun xs => ⌜xs⌝ₜ.size) IsO(fun xs => ⌜xs⌝ₜ.size) := by
   abstract_hole program using programReverse
-  refine HasProgram.toHasProgramIn ?_
+  refine HasProgramInO.toHasProgramIn ?_
   fill_hole program in fun_prop
 
 -- Ordinary `fun_prop` produces the structural growth of each call.
-def hasProgram_twice := (by
+def hasProgramInO_twice := (by
   abstract_hole program using programTwice
   fill_hole program in fun_prop :
-    HasProgram (fun xs : List Bool => xs.reverse.reverse) hole(⊢ program) _ _)
+    HasProgramInO (fun xs : List Bool => xs.reverse.reverse) hole(⊢ program) _ _)
 
-example : HasProgram (fun xs : List Bool => xs.reverse.reverse) programTwice
+example : HasProgramInO (fun xs : List Bool => xs.reverse.reverse) programTwice
     (fun xs => ⌜xs⌝ₜ.size + ⌜xs.reverse⌝ₜ.size) (fun xs => max ⌜xs⌝ₜ.size ⌜xs.reverse⌝ₜ.size) :=
-  hasProgram_twice
+  hasProgramInO_twice
 
 example := (by fun_prop :
-  HasProgram (List.map (List.reverse : List Bool → List Bool)) (List.Code.map List.Code.reverse) _ _)
+  HasProgramInO (List.map (List.reverse : List Bool → List Bool)) (List.Code.map List.Code.reverse) _ _)
 
 example : programReverse = List.Code.reverse := rfl
 
@@ -59,29 +57,30 @@ variable {α : Type u} {β : Type v} {γ : Type w}
   [UniqueEncoding Tree α] [UniqueEncoding Tree β] [UniqueEncoding Tree γ]
   {f : α → β} {g : β → γ} {pf pg : Value → Code Value} {t p : α → ℕ} {u q : β → ℕ}
 
-example (hf : HasProgram f pf t p) (hg : HasProgram g pg u q) :
-    HasProgram (fun x => g (f x)) (fun v => pf v >>= pg) (fun x => t x + u (f x))
+example (hf : HasProgramInO f pf t p) (hg : HasProgramInO g pg u q) :
+    HasProgramInO (fun x => g (f x)) (fun v => pf v >>= pg) (fun x => t x + u (f x))
       (fun x => max (p x) (q (f x))) := by
   fun_prop
 
-example (hf : HasProgram f pf t p) := (by fun_prop : HasProgram (List.map f) (List.Code.map pf) _ _)
+example (hf : HasProgramInO f pf t p) :=
+    (by fun_prop : HasProgramInO (List.map f) (List.Code.map pf) _ _)
 
 end
 
 -- Repeated calls exercise reuse of a result in the search cache.
-example := (by fun_prop : HasProgram (fun xs : List Bool => xs.reverse.reverse.reverse)
+example := (by fun_prop : HasProgramInO (fun xs : List Bool => xs.reverse.reverse.reverse)
   (fun v => List.Code.reverse v >>= List.Code.reverse >>= List.Code.reverse) _ _)
 
 -- The machine-level proposition is an immediate consequence of the certificate.
 example : ∃ b : Bounds (List Bool),
     Implements programTwice (fun xs : List Bool => xs.reverse.reverse) b :=
-  let ⟨b, h, _⟩ := hasProgram_twice.sound; ⟨b, h⟩
+  let ⟨b, h, _⟩ := hasProgramInO_twice.sound; ⟨b, h⟩
 
 -- One program for each runtime index does not provide one program for the whole input.
 example (f : ℕ → Bool → Bool) (program : ℕ → Value → Code Value)
-    (_h : ∀ n, HasProgram (f n) (program n) (fun _ => 1) (fun _ => 1)) : True := by
+    (_h : ∀ n, HasProgramInO (f n) (program n) (fun _ => 1) (fun _ => 1)) : True := by
   fail_if_success
-    have := (by fun_prop : HasProgram (fun x : ℕ × Bool => f x.1 x.2) _ _ _)
+    have := (by fun_prop : HasProgramInO (fun x : ℕ × Bool => f x.1 x.2) _ _ _)
   trivial
 
 def negateBool : Bool → Bool
@@ -101,7 +100,7 @@ private def unequalBranches (x : Bool × List Bool) : List Bool :=
   if x.1 then x.2 else true :: x.2
 
 -- Each case table entry is charged once; the unused branch is not added to the growth.
-example : HasProgram unequalBranches hole(⊢ program) (fun _ => 1)
+example : HasProgramInO unequalBranches hole(⊢ program) (fun _ => 1)
     (fun x => max ⌜x⌝ₜ.size ⌜unequalBranches x⌝ₜ.size) := by
   fill_hole program in source_fun_prop
 
@@ -110,7 +109,7 @@ private def selectConstant : Bool → ℕ
   | true => 5
 
 -- Closed values become constant trees of the case table.
-example : HasProgram selectConstant hole(⊢ program) (fun _ => 1)
+example : HasProgramInO selectConstant hole(⊢ program) (fun _ => 1)
     (fun x => max ⌜x⌝ₜ.size ⌜selectConstant x⌝ₜ.size) := by
   fill_hole program in source_fun_prop
 
@@ -120,16 +119,16 @@ private def nonemptyTailReverse (x : {xs : List Bool // xs ≠ []}) : List Bool 
   | _ :: tail => tail.reverse
 
 -- Impossible branches are replayed, and proof fields are erased from runtime environments.
-example := (by source_fun_prop : HasProgram nonemptyTailReverse _ _ _)
+example := (by source_fun_prop : HasProgramInO nonemptyTailReverse _ _ _)
 
 def optionalReverse : Option (List Bool) → List Bool
   | none => []
   | some xs => xs.reverse
 
 -- The growth is the produced one.
-def hasProgram_optionalReverse := (by
+def hasProgramInO_optionalReverse := (by
   abstract_hole program using programOptionalReverse
-  fill_hole program in source_fun_prop : HasProgram optionalReverse hole(⊢ program) _ _)
+  fill_hole program in source_fun_prop : HasProgramInO optionalReverse hole(⊢ program) _ _)
 
 /-- info: 13 -/
 #guard_msgs in
@@ -154,8 +153,8 @@ def mixedCalls (x : Bool × List Bool) : List Bool :=
 
 -- An opaque call is supplied by one explicit implementation for every input.
 example {program : Value → Code Value} {t p : List Bool → ℕ}
-    (legacyImplementation : HasProgram legacy program t p) :=
-  (by source_fun_prop : HasProgram mixedCalls _ _ _)
+    (legacyImplementation : HasProgramInO legacy program t p) :=
+  (by source_fun_prop : HasProgramInO mixedCalls _ _ _)
 
 -- Only the selected branch is charged, at its own structural cost.
 theorem hasProgramIn_conditionalReverse : HasProgramIn
@@ -170,7 +169,7 @@ def reverseAlias (xs : List Bool) := xs.reverse
 
 theorem hasProgramIn_reverseAlias : HasProgramIn reverseAlias List.Code.reverse
     IsO(fun xs => ⌜xs⌝ₜ.size) IsO(fun xs => ⌜xs⌝ₜ.size) := by
-  refine HasProgram.toHasProgramIn ?_
+  refine HasProgramInO.toHasProgramIn ?_
   source_fun_prop
 
 def aliasInLet (xs : List Bool) :=
@@ -180,16 +179,16 @@ def aliasInLet (xs : List Bool) :=
 -- Only the translated definition is unfolded; a called alias needs its own implementation.
 /-- error: source translation: `reverseAlias` needs a selected implementation -/
 #guard_msgs (substring := true) in
-example := (by source_fun_prop : HasProgram aliasInLet _ _ _)
+example := (by source_fun_prop : HasProgramInO aliasInLet _ _ _)
 
 section
 attribute [local program] hasProgramIn_reverseAlias
 
-example := (by source_fun_prop : HasProgram aliasInLet _ _ _)
+example := (by source_fun_prop : HasProgramInO aliasInLet _ _ _)
 end
 
 -- Encoding proofs retain their source type even when both encodings reduce to `Tree.nil`.
-example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop : HasProgram
+example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop : HasProgramInO
   (fun x : Option (List α) => match x with | none => [] | some xs => xs.reverse) _ _ _)
 
 end ComplexityTest.SourceTranslation.Certified

@@ -12,7 +12,7 @@ public import Complexity.Tactic.TreeProgram.Library
 @[expose] public section
 
 open Complexity TreeProgram Complexity.TreeProgram.Source
-open Complexity.TreeProgram.Source.Internal (HasProgram)
+open Complexity.TreeProgram.Source.Internal (HasProgramInO)
 open Filter
 
 namespace ComplexityTest.SourceTranslation.Asymptotics
@@ -106,12 +106,13 @@ example : ¬ Dominated (fun _ : ℕ => 1) id := by
 
 -- A chosen arbitrary implementation is reused with its own growth.
 example {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β] {f : α → β}
-    {pf : Value → Code Value} {t p : α → ℕ} (hf : HasProgram f pf t p) : HasProgram f pf t p := by
+    {pf : Value → Code Value} {t p : α → ℕ}
+    (hf : HasProgramInO f pf t p) : HasProgramInO f pf t p := by
   source_fun_prop
 
 example {α : Type*} [UniqueEncoding Tree α] {f : α → α} {pf : Value → Code Value} {t p : α → ℕ}
-    (_hf : HasProgram f pf t p) :
-    HasProgram (fun x => f (f x)) hole(pf ⊢ program) (fun x => t x + t (f x))
+    (_hf : HasProgramInO f pf t p) :
+    HasProgramInO (fun x => f (f x)) hole(pf ⊢ program) (fun x => t x + t (f x))
       (fun x => max (p x) (p (f x))) := by
   fill_hole program in source_fun_prop
 
@@ -120,17 +121,17 @@ def preciseIdentity (xs : List Bool) := xs
 @[program] theorem hasProgramIn_preciseIdentity :
     HasProgramIn preciseIdentity hole(⊢ program) IsO(fun _ => 0) IsO(fun _ => 0) := by
   abstract_hole program using programPreciseIdentity
-  refine HasProgram.toHasProgramIn ?_
+  refine HasProgramInO.toHasProgramIn ?_
   fill_hole program in
-    exact HasProgram.identity
+    exact HasProgramInO.identity
 
 -- A weaker mathematical consequence is legal, but it is not another selected implementation.
 theorem hasProgramIn_preciseIdentityWeaker : HasProgramIn preciseIdentity hole(⊢ program)
     IsO(fun x => ⌜x⌝ₜ.size ^ 2) IsO(fun x => ⌜x⌝ₜ.size ^ 2) := by
   abstract_hole program using programPreciseIdentityWeaker
-  refine HasProgram.toHasProgramIn ?_
+  refine HasProgramInO.toHasProgramIn ?_
   fill_hole program in
-    exact hasProgramIn_preciseIdentity.toHasProgram.mono Dominated.zero Dominated.zero
+    exact hasProgramIn_preciseIdentity.toHasProgramInO.mono Dominated.zero Dominated.zero
 
 /-- error: `program` already has a selected implementation of preciseIdentity: hasProgramIn_preciseIdentity; choose another one at a call with a local hypothesis or `via` -/
 #guard_msgs in
@@ -144,9 +145,9 @@ theorem preciseIdentity_fdtisp :
 -- An alias of a selected implementation keeps its program and growth.
 def aliasedIdentity (xs : List Bool) := preciseIdentity xs
 
-example := (by source_fun_prop : HasProgram aliasedIdentity programPreciseIdentity _ _)
+example := (by source_fun_prop : HasProgramInO aliasedIdentity programPreciseIdentity _ _)
 
-example : HasProgram aliasedIdentity hole(⊢ program) (fun _ => 0) (fun _ => 0) := by
+example : HasProgramInO aliasedIdentity hole(⊢ program) (fun _ => 0) (fun _ => 0) := by
   fill_hole program in source_fun_prop
 
 theorem identity_fdtisp : (id : List Bool → List Bool) ∈ FDTISP .tree (fun _ => 1) id := by
@@ -162,14 +163,14 @@ theorem via_fdtisp : viaIdentity ∈ FDTISP .tree (fun _ => 1) id := by
 -- The canonical general exit is also accepted directly, without a tactic wrapper.
 theorem identity_direct_fdtisp :
     (id : List Bool → List Bool) ∈ FDTISP .tree (fun _ => 1) id :=
-  (HasProgram.identity.mono Dominated.zero Dominated.zero).mem_fdtisp
+  (HasProgramInO.identity.mono Dominated.zero Dominated.zero).mem_fdtisp
       (Dominated.refl _) (Dominated.const 4)
       (Dominated.const_of_pos 2 fun _ => Tree.size_pos _)
 
 -- The boundary keeps the actual small-input machine cost, while empty large-size fibers vanish.
 theorem finiteIdentity_fdtisp :
     (id : Unit → Unit) ∈ FDTISP .tree (fun _ => 0) (fun _ => 0) := by
-  apply HasProgram.identity.mem_fdtisp_of_sizeEnvelope
+  apply HasProgramInO.identity.mem_fdtisp_of_sizeEnvelope
   all_goals
     refine ⟨0, eventually_atTop.mpr ⟨2, fun n hn => ?_⟩⟩
     simp only [Nat.zero_mul]

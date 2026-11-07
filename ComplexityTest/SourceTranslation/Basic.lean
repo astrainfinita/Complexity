@@ -6,7 +6,7 @@ Authors: Yuyang Zhao
 import Complexity.Tactic.TreeProgram.Primitives
 
 open Complexity TreeProgram Complexity.TreeProgram.Source
-open Complexity.TreeProgram.Source.Internal (HasProgram)
+open Complexity.TreeProgram.Source.Internal (HasProgramInO)
 
 namespace ComplexityTest.SourceTranslation.Basic
 
@@ -19,19 +19,19 @@ variable {α : Type u} {β : Type v} {γ : Type w}
   {f : α → β} {g : β → γ} {pf pg : Value → Code Value} {t p : α → ℕ} {u q : β → ℕ}
 
 -- Composition states its program and growth across unrelated source universes.
-example (hf : HasProgram f pf t p) (hg : HasProgram g pg u q) :
-    HasProgram (g ∘ f) (fun v => pf v >>= pg) (fun x => t x + u (f x))
+example (hf : HasProgramInO f pf t p) (hg : HasProgramInO g pg u q) :
+    HasProgramInO (g ∘ f) (fun v => pf v >>= pg) (fun x => t x + u (f x))
       (fun x => max (p x) (q (f x))) :=
   hf.comp hg
 
 -- Input and output identities add no cost.
-example (hf : HasProgram f pf t p) :
-    HasProgram (id ∘ (f ∘ id)) hole(pf ⊢ program) (fun x => 0 + (t x + 0))
+example (hf : HasProgramInO f pf t p) :
+    HasProgramInO (id ∘ (f ∘ id)) hole(pf ⊢ program) (fun x => 0 + (t x + 0))
       (fun x => max 0 (max (p x) 0)) := by
-  fill_hole program in exact HasProgram.identity.comp (hf.comp HasProgram.identity)
+  fill_hole program in exact HasProgramInO.identity.comp (hf.comp HasProgramInO.identity)
 
 -- The same program may be given a weaker growth.
-example (hf : HasProgram f pf t p) : HasProgram f pf (fun x => t x + 1) p :=
+example (hf : HasProgramInO f pf t p) : HasProgramInO f pf (fun x => t x + 1) p :=
   hf.mono (Dominated.of_le fun _ => Nat.le_succ _) (Dominated.refl p)
 
 end
@@ -42,23 +42,23 @@ theorem hasProgramIn_reverseTwice {α : Type*} [UniqueEncoding Tree α] :
       IsO(fun xs => ⌜xs⌝ₜ.size + ⌜xs.reverse⌝ₜ.size)
       IsO(fun xs => max ⌜xs⌝ₜ.size ⌜xs.reverse⌝ₜ.size) := by
   abstract_hole program using programReverseTwice
-  refine HasProgram.toHasProgramIn ?_
+  refine HasProgramInO.toHasProgramIn ?_
   fill_hole program in
-    exact List.hasProgramIn_reverse.toHasProgram.comp List.hasProgramIn_reverse.toHasProgram
+    exact List.hasProgramIn_reverse.toHasProgramInO.comp List.hasProgramIn_reverse.toHasProgramInO
 
 example {α : Type*} [UniqueEncoding Tree α] :
-    HasProgram ((List.reverse : List α → List α) ∘ List.reverse) programReverseTwice
+    HasProgramInO ((List.reverse : List α → List α) ∘ List.reverse) programReverseTwice
       (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) :=
-  hasProgramIn_reverseTwice.toHasProgram.mono (Dominated.of_le_mul 2 fun xs => by simp; omega)
+  hasProgramIn_reverseTwice.toHasProgramInO.mono (Dominated.of_le_mul 2 fun xs => by simp; omega)
     (Dominated.of_le fun xs => by simp)
 
 section BranchTranslation
 
 -- Equal field paths must not identify different callback implementations or growths.
 example {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
-    {f g : α → β} {pf pg : Value → Code Value} {t p u q : α → ℕ} (hf : HasProgram f pf t p)
-    (hg : HasProgram g pg u q) :
-    HasProgram (fun x : Bool × α => match x.1 with | false => f x.2 | true => g x.2)
+    {f g : α → β} {pf pg : Value → Code Value} {t p u q : α → ℕ} (hf : HasProgramInO f pf t p)
+    (hg : HasProgramInO g pg u q) :
+    HasProgramInO (fun x : Bool × α => match x.1 with | false => f x.2 | true => g x.2)
       hole(pf, pg ⊢ program) (fun x => if x.1 then u x.2 + 1 else t x.2 + 1)
       (fun x => max ⌜x⌝ₜ.size (if x.1 then q x.2 else p x.2)) := by
   fill_hole program in source_fun_prop
@@ -66,8 +66,9 @@ example {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
 -- Nested branches retain their own closed environments and selected callback growths.
 example {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
     {f g h : α → β} {qf qg qh : Value → Code Value} {tf pf tg pg th ph : α → ℕ}
-    (hf : HasProgram f qf tf pf) (hg : HasProgram g qg tg pg) (hh : HasProgram h qh th ph) :
-    HasProgram (fun x : Bool × Bool × α =>
+    (hf : HasProgramInO f qf tf pf) (hg : HasProgramInO g qg tg pg)
+    (hh : HasProgramInO h qh th ph) :
+    HasProgramInO (fun x : Bool × Bool × α =>
       match x.1 with
       | false => f x.2.2
       | true => match x.2.1 with | false => g x.2.2 | true => h x.2.2) hole(qf, qg, qh ⊢ program)
@@ -78,8 +79,9 @@ example {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
 
 -- Runtime dependent indices are packed; a static parameter need not itself be encodable.
 example {α : Type*} (tag : α) {f g : α → (Σ n, Fin n) → Bool} {pf pg : Value → Code Value}
-    {t p u q : (Σ n, Fin n) → ℕ} (hf : HasProgram (f tag) pf t p) (hg : HasProgram (g tag) pg u q) :
-    HasProgram (fun x : Σ n, Bool × Fin n =>
+    {t p u q : (Σ n, Fin n) → ℕ} (hf : HasProgramInO (f tag) pf t p)
+      (hg : HasProgramInO (g tag) pg u q) :
+    HasProgramInO (fun x : Σ n, Bool × Fin n =>
       match x.2.1 with
       | false => f tag ⟨x.1, x.2.2⟩
       | true => g tag ⟨x.1, x.2.2⟩) hole(pf, pg ⊢ program)
@@ -89,10 +91,10 @@ example {α : Type*} (tag : α) {f g : α → (Σ n, Fin n) → Bool} {pf pg : V
 
 -- Case splitting must not turn pointwise implementations into one uniform program.
 example (f : ℕ → Bool → Bool) (q : ℕ → Value → Code Value) (t p : ℕ → Bool → ℕ)
-    (_hf : ∀ n, HasProgram (f n) (q n) (t n) (p n)) :
+    (_hf : ∀ n, HasProgramInO (f n) (q n) (t n) (p n)) :
     True := by
   fail_if_success
-    have := (by source_fun_prop : HasProgram (fun x : Bool × ℕ × Bool =>
+    have := (by source_fun_prop : HasProgramInO (fun x : Bool × ℕ × Bool =>
       match x.1 with | false => x.2.2 | true => f x.2.1 x.2.2) _ (fun _ => 1) (fun _ => 1))
   trivial
 

@@ -11,7 +11,7 @@ import Std.Tactic.Do
 
 set_option experimental.vcgen true
 open Complexity TreeProgram Complexity.TreeProgram.Source
-open Complexity.TreeProgram.Source.Internal (HasProgram)
+open Complexity.TreeProgram.Source.Internal (HasProgramInO)
 open Std.WP Lean.Order
 
 namespace ComplexityTest.SourceTranslation.SpecComparison
@@ -22,10 +22,10 @@ theorem hasProgramIn_duplicate {α : Type*} [UniqueEncoding Tree α] :
     HasProgramIn (duplicate : List α → List α) hole(⊢ program) IsO(fun xs => xs.length + 1)
       IsO(fun xs => ⌜xs⌝ₜ.size + ⌜xs⌝ₜ.size) := by
   abstract_hole program using programDuplicate
-  refine HasProgram.toHasProgramIn ?_
+  refine HasProgramInO.toHasProgramIn ?_
   fill_hole program in
-    refine ((HasProgram.identity.pair HasProgram.identity).comp
-      List.hasProgramIn_append.toHasProgram).mono
+    refine ((HasProgramInO.identity.pair HasProgramInO.identity).comp
+      List.hasProgramIn_append.toHasProgramInO).mono
       ?_ ?_ <;> dominated
 
 section SpecComparison
@@ -39,19 +39,19 @@ def source (f : List Bool → List Bool) : Source := ⟨f⟩
 abbrev Growth := (List Bool → ℕ) × (List Bool → ℕ)
 
 instance sourceWP : WP Source Growth Prop Unit where
-  wpTrans f := ⟨fun Q _ => ∃ b : Growth, (∃ program, HasProgram f.fn program b.1 b.2) ∧ Q b⟩
+  wpTrans f := ⟨fun Q _ => ∃ b : Growth, (∃ program, HasProgramInO f.fn program b.1 b.2) ∧ Q b⟩
   wp_trans_monotone _ := by
     intro Q R _ _ _ h ⟨b, hf, hQ⟩
     exact ⟨b, hf, h _ hQ⟩
 
 @[spec] theorem spec_reverse (Q : Growth → Prop) :
     Triple (source List.reverse) (Q (fun xs => ⌜xs⌝ₜ.size, fun xs => ⌜xs⌝ₜ.size)) Q () :=
-  ⟨fun h => ⟨(_, _), ⟨_, List.hasProgramIn_reverse.toHasProgram⟩, h⟩⟩
+  ⟨fun h => ⟨(_, _), ⟨_, List.hasProgramIn_reverse.toHasProgramInO⟩, h⟩⟩
 
 @[spec] theorem spec_duplicate (Q : Growth → Prop) :
     Triple (source duplicate) (Q (fun xs => xs.length + 1, fun xs => ⌜xs⌝ₜ.size + ⌜xs⌝ₜ.size))
       Q () :=
-  ⟨fun h => ⟨(_, _), ⟨_, hasProgramIn_duplicate.toHasProgram⟩, h⟩⟩
+  ⟨fun h => ⟨(_, _), ⟨_, hasProgramIn_duplicate.toHasProgramInO⟩, h⟩⟩
 
 @[spec 1100] theorem spec_duplicate_lambda (Q : Growth → Prop) :
     Triple (source (fun xs : List Bool => xs ++ xs))
@@ -63,10 +63,10 @@ instance sourceWP : WP Source Growth Prop Unit where
       (wp (source f) (fun b => wp (source g) (fun c =>
         Q (fun x => b.1 x + c.1 (f x), fun x => max (b.2 x) (c.2 (f x)))) ()) ()) Q () := by
   constructor
-  change (∃ b : Growth, (∃ program, HasProgram f program b.1 b.2) ∧
-    ∃ c : Growth, (∃ program, HasProgram g program c.1 c.2) ∧
+  change (∃ b : Growth, (∃ program, HasProgramInO f program b.1 b.2) ∧
+    ∃ c : Growth, (∃ program, HasProgramInO g program c.1 c.2) ∧
       Q (fun x => b.1 x + c.1 (f x), fun x => max (b.2 x) (c.2 (f x)))) →
-      ∃ d : Growth, (∃ program, HasProgram (g ∘ f) program d.1 d.2) ∧ Q d
+      ∃ d : Growth, (∃ program, HasProgramInO (g ∘ f) program d.1 d.2) ∧ Q d
   rintro ⟨b, ⟨_, hf⟩, c, ⟨_, hg⟩, hQ⟩
   exact ⟨(_, _), ⟨_, hf.comp hg⟩, hQ⟩
 
@@ -112,7 +112,8 @@ local instance : WP (List Bool → List Bool) Growth Prop Unit where
       (Q (fun xs => ⌜xs⌝ₜ.size + ⌜xs.reverse⌝ₜ.size,
         fun xs => max ⌜xs⌝ₜ.size ⌜xs.reverse⌝ₜ.size)) Q () :=
   ⟨fun h => ⟨(_, _),
-    ⟨_, List.hasProgramIn_reverse.toHasProgram.comp List.hasProgramIn_reverse.toHasProgram⟩, h⟩⟩
+    ⟨_, List.hasProgramIn_reverse.toHasProgramInO.comp
+      List.hasProgramIn_reverse.toHasProgramInO⟩, h⟩⟩
 
 /-- error: No spec found for program fun xs => xs.reverse.reverse. -/
 #guard_msgs in

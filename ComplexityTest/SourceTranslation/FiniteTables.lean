@@ -9,54 +9,54 @@ import Complexity.ModelTheory.Algebra.BooleanAlgebra.TreeEncoding
 import Complexity.Classes.Functions.Basic
 
 open Complexity TreeProgram Complexity.TreeProgram.Source
-open Complexity.TreeProgram.Source.Internal (HasProgram)
+open Complexity.TreeProgram.Source.Internal (HasProgramInO)
 
 namespace ComplexityTest.SourceTranslation.FiniteTables
 
 example := (by source_fun_prop using tabulate :
-  HasProgram (fun n : ℕ => List.ofFn (fun i : Fin n => i.val + 1)) _ _ _)
+  HasProgramInO (fun n : ℕ => List.ofFn (fun i : Fin n => i.val + 1)) _ _ _)
 
 -- Ordinary rule matching handles index aliases, including inside an ofFn callback.
 private abbrev Index (n : ℕ) := Fin n
 
 example := (by source_fun_prop using tabulate :
-  HasProgram (fun n : ℕ => List.ofFn (fun i : Index n => i.val + 1)) _ _ _)
+  HasProgramInO (fun n : ℕ => List.ofFn (fun i : Index n => i.val + 1)) _ _ _)
 
 example : True := by
   fail_if_success
     have := (by source_fun_prop :
-      HasProgram (fun n : ℕ => List.ofFn (fun i : Fin n => i.val + 1)) _ _ _)
+      HasProgramInO (fun n : ℕ => List.ofFn (fun i : Fin n => i.val + 1)) _ _ _)
   trivial
 
 -- Reading a stored tuple stays automatic; the selected scope does not rebuild stored fields.
 example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop :
-  HasProgram (fun x : Σ n, Fin n → α => List.ofFn x.2) _ (fun _ => 1) _)
+  HasProgramInO (fun x : Σ n, Fin n → α => List.ofFn x.2) _ (fun _ => 1) _)
 
 example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop using tabulate :
-  HasProgram (fun x : Σ n, Fin n → α => List.ofFn x.2) _ (fun _ => 1) _)
+  HasProgramInO (fun x : Σ n, Fin n → α => List.ofFn x.2) _ (fun _ => 1) _)
 
 def identityWires (n : ℕ) : Σ n, Fin n → Fin n := ⟨n, id⟩
 
-example := (by source_fun_prop using tabulate : HasProgram identityWires _ _ _)
+example := (by source_fun_prop using tabulate : HasProgramInO identityWires _ _ _)
 
 def appendEntry (x : Σ n, (Fin n → ℕ) × ℕ) : Σ n, Fin n → ℕ :=
   ⟨x.1 + 1, Fin.snoc x.2.1 x.2.2⟩
 
-example := (by source_fun_prop : HasProgram appendEntry _ _ _)
+example := (by source_fun_prop : HasProgramInO appendEntry _ _ _)
 
 def appendWire (x : Σ n, Σ m, (Fin n → Fin m) × Fin m) : Σ n, Σ m, Fin n → Fin m :=
   ⟨x.1 + 1, x.2.1, Fin.snoc x.2.2.1 x.2.2.2⟩
 
-example := (by source_fun_prop : HasProgram appendWire _ _ _)
+example := (by source_fun_prop : HasProgramInO appendWire _ _ _)
 
 def appendTables (x : Σ n, Σ m, (Fin n → ℕ) × (Fin m → ℕ)) : Σ n, Fin n → ℕ :=
   ⟨x.1 + x.2.1, Fin.append x.2.2.1 x.2.2.2⟩
 
-example := (by source_fun_prop : HasProgram appendTables _ _ _)
+example := (by source_fun_prop : HasProgramInO appendTables _ _ _)
 
 def shiftWire (x : ℕ × (Σ n, Fin n)) := (Fin.natAdd x.1 x.2.2).val
 
-example := (by source_fun_prop : HasProgram shiftWire _ _ _)
+example := (by source_fun_prop : HasProgramInO shiftWire _ _ _)
 
 section FinAppendImplementation
 
@@ -64,12 +64,12 @@ variable {ρ : Type*} {α : ρ → Type*}
   [UniqueEncoding Tree ρ] [∀ e, UniqueEncoding Tree (α e)]
   {n m : ρ → ℕ} {f : (e : ρ) → Fin (n e) → α e} {g : (e : ρ) → Fin (m e) → α e}
   {qf qg : Value → Code Value} {tf pf tg pg : ρ → ℕ}
-  (hf : HasProgram f qf tf pf) (hg : HasProgram g qg tg pg)
+  (hf : HasProgramInO f qf tf pf) (hg : HasProgramInO g qg tg pg)
 include hf hg
 
 -- Appending tables appends their lists: the supplied growths, a pair and a traversal of the
 -- first table only.
-example : ∃ q p, HasProgram (fun e => Fin.append (f e) (g e)) q
+example : ∃ q p, HasProgramInO (fun e => Fin.append (f e) (g e)) q
     (fun e => tf e + tg e + n e + 2) p := by
   refine ⟨?q, ?p, ?h⟩
   case h =>
@@ -78,7 +78,7 @@ example : ∃ q p, HasProgram (fun e => Fin.append (f e) (g e)) q
 end FinAppendImplementation
 
 -- Only the first table is traversed; a stored second table is not regenerated.
-example {α : Type*} [UniqueEncoding Tree α] : ∃ q p, HasProgram
+example {α : Type*} [UniqueEncoding Tree α] : ∃ q p, HasProgramInO
     (fun x : Σ n, Σ m, (Fin n → α) × (Fin m → α) => ⌜Fin.append x.2.2.1 x.2.2.2⌝ₜ) q
     (fun x => x.1 + 4) p := by
   refine ⟨?q, ?p, ?h⟩
@@ -86,20 +86,20 @@ example {α : Type*} [UniqueEncoding Tree α] : ∃ q p, HasProgram
     source_fun_prop
 
 -- Selecting the enumeration scope must preserve the polymorphic append implementation.
-example {α : Type*} [UniqueEncoding Tree α] : ∃ q p, HasProgram
+example {α : Type*} [UniqueEncoding Tree α] : ∃ q p, HasProgramInO
     (fun x : Σ n, Σ m, (Fin n → α) × (Fin m → α) => ⌜Fin.append x.2.2.1 x.2.2.2⌝ₜ) q
     (fun x => x.1 + 4) p := by
   refine ⟨?q, ?p, ?h⟩
   case h =>
     source_fun_prop using tabulate
 
-example {α : Type*} [UniqueEncoding Tree α] : ∃ q p, HasProgram
+example {α : Type*} [UniqueEncoding Tree α] : ∃ q p, HasProgramInO
     (fun x : Σ n, (Fin n → α) × α => ⌜Fin.snoc x.2.1 x.2.2⌝ₜ) q (fun x => x.1 + 4) p := by
   refine ⟨?q, ?p, ?h⟩
   case h =>
     source_fun_prop
 
-example {α : Type*} [UniqueEncoding Tree α] : ∃ q p, HasProgram
+example {α : Type*} [UniqueEncoding Tree α] : ∃ q p, HasProgramInO
     (fun x : Σ n, (Fin n → α) × α => ⌜Fin.snoc x.2.1 x.2.2⌝ₜ) q (fun x => x.1 + 4) p := by
   refine ⟨?q, ?p, ?h⟩
   case h =>
@@ -107,15 +107,15 @@ example {α : Type*} [UniqueEncoding Tree α] : ∃ q p, HasProgram
 
 def successorWires (n : ℕ) : Σ n, Fin n → Fin (n + 1) := ⟨n, Fin.castSucc⟩
 
-example := (by source_fun_prop using tabulate : HasProgram successorWires _ _ _)
+example := (by source_fun_prop using tabulate : HasProgramInO successorWires _ _ _)
 
 -- A change of index bound keeps the stored table; it is not pointwise table generation.
 example := (by source_fun_prop :
-  HasProgram (fun x : Σ n, Σ k, Fin n → Fin k => ⌜Fin.castSucc ∘ x.2.2⌝ₜ) _ (fun _ => 1) _)
+  HasProgramInO (fun x : Σ n, Σ k, Fin n → Fin k => ⌜Fin.castSucc ∘ x.2.2⌝ₜ) _ (fun _ => 1) _)
 
 def identityCircuit (n : ℕ) : Σ n, Circuit .booleanAlgebra n n := ⟨n, .id _ n⟩
 
-example := (by source_fun_prop using tabulate : HasProgram identityCircuit _ _ _)
+example := (by source_fun_prop using tabulate : HasProgramInO identityCircuit _ _ _)
 
 def positions {α : Type*} (xs : List α) : List ℕ := List.ofFn (fun i : Fin xs.length => i.val)
 
@@ -124,7 +124,7 @@ def positions {α : Type*} (xs : List α) : List ℕ := List.ofFn (fun i : Fin x
     positions (α := α) = (fun xs => List.ofFn (fun i : Fin xs.length => i.val)) := rfl
 
 noncomputable example := (by source_fun_prop :
-  HasProgram (fun xs : List Bool => (positions xs).reverse) _ _ _)
+  HasProgramInO (fun xs : List Bool => (positions xs).reverse) _ _ _)
 
 -- Ordinary constructors retain runtime dimensions and wire types.
 def complementLayer (xs : List Unit) : List (Σ n, Circuit .booleanAlgebra n 1) :=
@@ -132,18 +132,18 @@ def complementLayer (xs : List Unit) : List (Σ n, Circuit .booleanAlgebra n 1) 
   List.ofFn (fun i : Fin n =>
     ⟨n, .ofGate FirstOrder.BooleanAlgebra.complFunc (fun _ => i)⟩)
 
-noncomputable example := (by source_fun_prop using tabulate : HasProgram complementLayer _ _ _)
+noncomputable example := (by source_fun_prop using tabulate : HasProgramInO complementLayer _ _ _)
 
 noncomputable example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop :
-  HasProgram (positions (α := α)) _ _ _)
+  HasProgramInO (positions (α := α)) _ _ _)
 
 -- Two dependent table lookups compose inside a newly generated table.
 def composeWires (x : Σ n, Σ k, Σ m, (Fin n → Fin k) × (Fin k → Fin m)) :
     Σ n, Σ m, Fin n → Fin m := ⟨x.1, x.2.2.1, x.2.2.2.2 ∘ x.2.2.2.1⟩
 
-example := (by source_fun_prop using tabulate : HasProgram composeWires _ _ _)
+example := (by source_fun_prop using tabulate : HasProgramInO composeWires _ _ _)
 
-attribute [local fun_prop] HasProgram.fin_comp in
+attribute [local fun_prop] HasProgramInO.fin_comp in
 theorem composeWires_fdtisp :
     composeWires ∈ FDTISP .tree (fun n => n ^ 3) (fun n => n ^ 2) := by
   model_fun_prop
@@ -151,20 +151,20 @@ theorem composeWires_fdtisp :
 -- A represented table and a single callback implement one algorithm for every runtime index.
 -- Pointwise existence must not be mistaken for such a callback.
 example (f : ℕ → ℕ → Bool) (program : ℕ → Value → Code Value)
-    (_hf : ∀ n, HasProgram (f n) (program n) (fun _ => 1) (fun _ => 1)) : True := by
+    (_hf : ∀ n, HasProgramInO (f n) (program n) (fun _ => 1) (fun _ => 1)) : True := by
   fail_if_success
     have := (by source_fun_prop using tabulate :
-      HasProgram (fun n => List.ofFn (fun i : Fin n => f n i.val)) _ _ _)
+      HasProgramInO (fun n => List.ofFn (fun i : Fin n => f n i.val)) _ _ _)
   trivial
 
 -- Neither a class method at an index nor a local function without a code is a table read; the
 -- missing implementation is reported.
 /-- error: source translation: `Fin.add` needs a selected implementation -/
 #guard_msgs (substring := true) in
-example := (by source_fun_prop : HasProgram (fun x : Fin 3 × Fin 3 => x.1 + x.2) _ _ _)
+example := (by source_fun_prop : HasProgramInO (fun x : Fin 3 × Fin 3 => x.1 + x.2) _ _ _)
 
 /-- error: source translation: `f` needs an implementation -/
 #guard_msgs (substring := true) in
-example (f : ℕ → ℕ) := (by source_fun_prop : HasProgram (fun n : ℕ => f n) _ _ _)
+example (f : ℕ → ℕ) := (by source_fun_prop : HasProgramInO (fun n : ℕ => f n) _ _ _)
 
 end ComplexityTest.SourceTranslation.FiniteTables

@@ -35,10 +35,10 @@ theorem length_invert (xs : List Bool) : (invert xs).length = xs.length := by
   | cons a xs ih => simpa only [invert, List.length_cons] using congrArg Nat.succ ih
 
 open TreeProgram.Source
-open TreeProgram.Source.Internal (HasProgram)
+open TreeProgram.Source.Internal (HasProgramInO)
 
 -- The measured entry exposes source equations, without a guessed exact allowance.
-def hasProgram_invert := (by
+def hasProgramInO_invert := (by
   source_fun_prop using recursion
     (test := fun xs : List Bool => !xs.isEmpty) (next := List.tail)
     (finish := fun _ => []) (resume := invertResume)
@@ -54,7 +54,7 @@ def hasProgram_invert := (by
     rintro ⟨xs, h⟩
     cases xs with
     | nil => cases h
-    | cons => rfl : HasProgram invert _ _ _)
+    | cons => rfl : HasProgramInO invert _ _ _)
 
 def endPosition (xs : List Bool) : Fin (xs.length + 1) := Fin.last xs.length
 
@@ -64,7 +64,7 @@ def positionResume : (x : {xs : List Bool // (!xs.isEmpty) = true}) →
   | ⟨_ :: _, _⟩, result => result.succ
 
 -- A dependent result is implemented at its own type; callbacks return ordinary Fin values.
-def hasProgram_endPosition := (by
+def hasProgramInO_endPosition := (by
   source_fun_prop using recursion
     (test := fun xs : List Bool => !xs.isEmpty) (next := List.tail)
     (finish := fun _ => 0) (resume := positionResume)
@@ -80,10 +80,10 @@ def hasProgram_endPosition := (by
     rintro ⟨xs, h⟩
     cases xs with
     | nil => cases h
-    | cons => rfl : HasProgram endPosition _ _ _)
+    | cons => rfl : HasProgramInO endPosition _ _ _)
 
 -- An unsupported callback fails before changing the selected source goal.
-example : HasProgram (id : List Bool → List Bool) hole(⊢ program) (fun _ => 0) (fun _ => 0) := by
+example : HasProgramInO (id : List Bool → List Bool) hole(⊢ program) (fun _ => 0) (fun _ => 0) := by
   fail_if_success
     source_fun_prop using recursion
       (test := fun xs => !xs.isEmpty) (next := fun xs => invert xs.tail)
@@ -155,11 +155,11 @@ theorem hasProgramIn_drainStructural : HasProgramIn drain hole(⊢ program)
     IsO(fun xs => 1 + (xs.length + 1) + 1)
     IsO(fun xs => (⌜xs⌝ₜ.size + (xs.length + 1) * (⌜xs⌝ₜ.size + 1)) + 1) := by
   abstract_hole program using programDrainStructural
-  refine HasProgram.toHasProgramIn ?_
+  refine HasProgramInO.toHasProgramIn ?_
   fill_hole program in
-    exact (drainRecursion.hasProgram hasProgramIn_drainTest.toHasProgram
-      List.hasProgramIn_tail.toHasProgram hasProgramIn_drainFinish.toHasProgram
-      hasProgramIn_drainResume.toHasProgram).mono
+    exact (drainRecursion.hasProgramInO hasProgramIn_drainTest.toHasProgramInO
+      List.hasProgramIn_tail.toHasProgramInO hasProgramIn_drainFinish.toHasProgramInO
+      hasProgramIn_drainResume.toHasProgramInO).mono
       (((Dominated.refl _).add drain_cost_growth.1).add (Dominated.refl _))
       (drain_cost_growth.2.add (Dominated.refl _))
 
@@ -170,19 +170,19 @@ example := (by
       (finish := fun _ => ()) (resume := fun _ _ => ())
       (measure := List.length)
       (decreases := by intro xs h; cases xs <;> simp_all)
-    all_goals intros; exact Subsingleton.elim _ _ : HasProgram drain programDrainStructural _ _)
+    all_goals intros; exact Subsingleton.elim _ _ : HasProgramInO drain programDrainStructural _ _)
 
 @[program] theorem hasProgramIn_drain : HasProgramIn drain hole(⊢ program)
     IsO(fun xs => ⌜xs⌝ₜ.size) IsO(fun xs => ⌜xs⌝ₜ.size ^ 2) := by
   abstract_hole program using programDrain
-  refine HasProgram.toHasProgramIn ?_
+  refine HasProgramInO.toHasProgramIn ?_
   have hlen : Dominated (List.length : List Bool → ℕ) (fun xs => ⌜xs⌝ₜ.size) :=
     Dominated.of_le length_le_codeSize
   have hpos (xs : List Bool) : 0 < ⌜xs⌝ₜ.size := Tree.size_pos _
   have hc : Dominated (fun _ : List Bool => 1) (fun xs => ⌜xs⌝ₜ.size) := Dominated.one hpos
   have hs := (hlen.add_same hc).mul ((Dominated.refl _).add_same hc)
   simp only [← pow_two] at hs
-  fill_hole program in apply hasProgramIn_drainStructural.toHasProgram.mono
+  fill_hole program in apply hasProgramIn_drainStructural.toHasProgramInO.mono
   · simp only [Dominated.add_iff]
     exact ⟨⟨hc, hlen, hc⟩, hc⟩
   · simp only [Dominated.add_iff]

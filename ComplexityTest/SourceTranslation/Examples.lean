@@ -10,7 +10,7 @@ import Complexity.Models.Circuit.Composition
 /-! # Source translation and complexity-bound regressions -/
 
 open Complexity TreeProgram Complexity.TreeProgram.Source
-open Complexity.TreeProgram.Source.Internal (HasProgram)
+open Complexity.TreeProgram.Source.Internal (HasProgramInO)
 
 open ComplexityTest.SourceTranslation.SpecComparison
 
@@ -31,13 +31,13 @@ private theorem size_encode_map_le {α β : Type*}
     nlinarith [h.1]
 
 -- A shared let computes the reversal once; the unshared source reverses twice.
-example : HasProgram sharePlain hole(⊢ program)
+example : HasProgramInO sharePlain hole(⊢ program)
     (fun xs => ⌜xs⌝ₜ.size + (0 + (0 + 1) + (xs.reverse.length + 1)))
     (fun xs => max ⌜xs⌝ₜ.size (max (max ⌜xs.reverse⌝ₜ.size ⌜(xs.reverse, xs.reverse)⌝ₜ.size)
       ⌜(xs.reverse, xs.reverse)⌝ₜ.size)) := by
   fill_hole program in source_fun_prop
 
-example : HasProgram unshared hole(⊢ program)
+example : HasProgramInO unshared hole(⊢ program)
     (fun xs => ⌜xs⌝ₜ.size + (⌜xs⌝ₜ.size + 1) + (xs.reverse.length + 1))
     (fun xs => max (max ⌜xs⌝ₜ.size (max ⌜xs⌝ₜ.size ⌜(xs.reverse, xs.reverse)⌝ₜ.size))
       ⌜(xs.reverse, xs.reverse)⌝ₜ.size) := by
@@ -45,44 +45,45 @@ example : HasProgram unshared hole(⊢ program)
 
 -- Local implementations also work, without exposing or naming the model implementation.
 example {f : List Bool → List Bool} {pf : Value → Code Value} {t p : List Bool → ℕ}
-    (_hf : HasProgram f pf t p) :
-    HasProgram (fun xs => (f xs).reverse) (fun v => pf v >>= List.Code.reverse)
+    (_hf : HasProgramInO f pf t p) :
+    HasProgramInO (fun xs => (f xs).reverse) (fun v => pf v >>= List.Code.reverse)
       (fun xs => t xs + ⌜f xs⌝ₜ.size) (fun xs => max (p xs) ⌜f xs⌝ₜ.size) := by
   source_fun_prop
 
 -- Eliminating an unused let is an allowed optimization: certify the identity implementation.
-example : HasProgram (fun xs : List Bool => let _ys := xs.reverse; xs) hole(⊢ program) (fun _ => 0)
+example : HasProgramInO (fun xs : List Bool => let _ys := xs.reverse; xs) hole(⊢ program)
+    (fun _ => 0)
     (fun _ => 0) := by
   fill_hole program in source_fun_prop
 
 -- Match existing operations instead of generating arbitrary new append expressions.
 example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop :
-    HasProgram (fun x : Σ n, (Fin n → α) × Fin n => x.2.1 x.2.2) _ _ _)
+    HasProgramInO (fun x : Σ n, (Fin n → α) × Fin n => x.2.1 x.2.2) _ _ _)
 
 example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop :
-    HasProgram (fun x : List α × ℕ => x.1[x.2]?) _ _ _)
+    HasProgramInO (fun x : List α × ℕ => x.1[x.2]?) _ _ _)
 
 example := (by source_fun_prop :
-    HasProgram (fun x : Σ n, (Fin n → List Bool) × Fin n => (x.2.1 x.2.2).reverse) _ _ _)
+    HasProgramInO (fun x : Σ n, (Fin n → List Bool) × Fin n => (x.2.1 x.2.2).reverse) _ _ _)
 
 example {α : Type*} [UniqueEncoding Tree α] (n : ℕ) := (by source_fun_prop :
-    HasProgram (fun x : (Fin n → α) × Fin n => x.1 x.2) _ _ _)
+    HasProgramInO (fun x : (Fin n → α) × Fin n => x.1 x.2) _ _ _)
 
 example := (by source_fun_prop :
-    HasProgram (fun x : Σ n, Σ k, (Fin n → Fin k) × Fin n => (x.2.2.1 x.2.2.2).val) _ _ _)
+    HasProgramInO (fun x : Σ n, Σ k, (Fin n → Fin k) × Fin n => (x.2.2.1 x.2.2.2).val) _ _ _)
 
 -- A compound Fin.val specification also composes with ordinary arithmetic.
 example := (by source_fun_prop :
-    HasProgram (fun x : Σ n, Σ k, (Fin n → Fin k) × Fin n => (x.2.2.1 x.2.2.2).val + 1) _ _ _)
+    HasProgramInO (fun x : Σ n, Σ k, (Fin n → Fin k) × Fin n => (x.2.2.1 x.2.2.2).val + 1) _ _ _)
 
 -- Indices and subtypes are stored as their values; fields and constructors are those values.
 example := (by source_fun_prop :
-    HasProgram (fun z : {n : ℕ // n < 5} => z.1) (fun v => pure v) (fun _ => 0) (fun _ => 0))
+    HasProgramInO (fun z : {n : ℕ // n < 5} => z.1) (fun v => pure v) (fun _ => 0) (fun _ => 0))
 
-example := (by source_fun_prop : HasProgram (fun z : {n : ℕ // 0 < n} => z.1 + 1) _ _ _)
+example := (by source_fun_prop : HasProgramInO (fun z : {n : ℕ // 0 < n} => z.1 + 1) _ _ _)
 
 example := (by source_fun_prop :
-    HasProgram (fun n : ℕ => (⟨n, n.lt_succ_self⟩ : Fin (n + 1))) (fun v => pure v)
+    HasProgramInO (fun n : ℕ => (⟨n, n.lt_succ_self⟩ : Fin (n + 1))) (fun v => pure v)
       (fun _ => 0) (fun _ => 0))
 
 def liftWires (x : Σ n, Σ k, Fin n → Fin k) : Σ n, Σ k, Fin n → Fin k :=
@@ -98,37 +99,50 @@ private theorem encode_liftWires (x : Σ n, Σ k, Fin n → Fin k) :
     simp [Function.comp_def]
   simp only [liftWires, Sigma.encode_mk, encode_prod, he]
 
-def hasProgram_liftWires := HasProgram.of_encode encode_liftWires (by source_fun_prop :
-  HasProgram (fun x : Σ n, Σ k, Fin n → Fin k =>
-    (x.1 + 1, x.2.1 + 1, List.ofFn (Fin.val ∘ x.2.2) ++ [x.2.1])) _ _ _)
+-- An implementation obtained through an encoding equation is selected like any other one. The
+-- two size facts erase the bounds of wire indices, which `dominated` does not know by itself.
+theorem hasProgramIn_liftWires : HasProgramIn liftWires hole(⊢ program)
+    IsO(fun x => ⌜x⌝ₜ.size) IsO(fun x => ⌜x⌝ₜ.size) := by
+  abstract_hole program using programLiftWires
+  have hlist {n k : ℕ} (f : Fin n → Fin k) : ⌜List.ofFn (Fin.val ∘ f)⌝ₜ.size = ⌜f⌝ₜ.size := by
+    rw [encode_fin_values, encode_fin_function]
+  have hfun {n k : ℕ} (f : Fin n → Fin k) : ⌜Fin.val ∘ f⌝ₜ.size = ⌜f⌝ₜ.size := by
+    rw [encode_fin_function, hlist]
+  refine HasProgramInO.toHasProgramIn ?_
+  fill_hole program in
+    refine (HasProgramInO.of_encode encode_liftWires (by source_fun_prop :
+      HasProgramInO (fun x : Σ n, Σ k, Fin n → Fin k =>
+        (x.1 + 1, x.2.1 + 1, List.ofFn (Fin.val ∘ x.2.2) ++ [x.2.1])) _ _ _)).mono ?_ ?_
+  all_goals dominated [hlist, hfun]
 
-attribute [local fun_prop] hasProgram_liftWires
-
-example := (by source_fun_prop : type_of% hasProgram_liftWires)
+-- `Circuit.liftInputs` has no implementation, so this succeeds only through the selection.
+attribute [local program] hasProgramIn_liftWires in
+example := (by source_fun_prop :
+    HasProgramIn liftWires programLiftWires IsO(fun x => ⌜x⌝ₜ.size) IsO(fun x => ⌜x⌝ₜ.size))
 
 example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop :
-    HasProgram (fun x : Σ n, Fin n → α => List.ofFn x.2) _ _ _)
+    HasProgramInO (fun x : Σ n, Fin n → α => List.ofFn x.2) _ _ _)
 
 example (_f : ℕ → Bool) : True := by
   fail_if_success have := (by source_fun_prop :
-    HasProgram (fun n : ℕ => List.ofFn (fun i : Fin n => _f i.val)) _ _ _)
+    HasProgramInO (fun n : ℕ => List.ofFn (fun i : Fin n => _f i.val)) _ _ _)
   trivial
 
 example {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
     {n : α → ℕ} {f : (x : α) → Fin (n x) → β}
-    {q : Value → Code Value} {t p : α → ℕ} (hf : HasProgram f q t p) := (by source_fun_prop :
-    HasProgram (fun x => List.ofFn (f x)) _ _ _)
+    {q : Value → Code Value} {t p : α → ℕ} (hf : HasProgramInO f q t p) := (by source_fun_prop :
+    HasProgramInO (fun x => List.ofFn (f x)) _ _ _)
 
 -- The output index is computed at runtime; the continuation remains typed in the source.
 example := (by source_fun_prop :
-    HasProgram (fun input : Σ n, Circuit .booleanAlgebra (n + 1) 1 => (⟨input.1 + 1, input.2⟩ : Σ n, Circuit .booleanAlgebra n 1)) _ _ _)
+    HasProgramInO (fun input : Σ n, Circuit .booleanAlgebra (n + 1) 1 => (⟨input.1 + 1, input.2⟩ : Σ n, Circuit .booleanAlgebra n 1)) _ _ _)
 
 def optionalReverse {α : Type*} : Option (List α) → List α
   | none => []
   | some xs => xs.reverse
 
-def hasProgram_optionalReverse {α : Type*} [UniqueEncoding Tree α] :=
-  (by source_fun_prop : HasProgram (optionalReverse (α := α)) _ _ _)
+def hasProgramInO_optionalReverse {α : Type*} [UniqueEncoding Tree α] :=
+  (by source_fun_prop : HasProgramInO (optionalReverse (α := α)) _ _ _)
 
 theorem optionalReverse_fdtisp {α : Type*} [UniqueEncoding Tree α] :
     optionalReverse (α := α) ∈ FDTISP .tree (fun n => n) (fun n => n) := by
@@ -140,7 +154,7 @@ def reverseWithPrefix {α : Type*} (input : List α × Option (List α)) : List 
   | some xs => xs.reverse ++ input.1
 
 example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop :
-    HasProgram (reverseWithPrefix (α := α)) _ _ _)
+    HasProgramInO (reverseWithPrefix (α := α)) _ _ _)
 
 def indexedReverse (input : Σ n, Option (Fin n × List Bool)) : ℕ × List Bool :=
   match input with
@@ -148,24 +162,24 @@ def indexedReverse (input : Σ n, Option (Fin n × List Bool)) : ℕ × List Boo
   | ⟨_, some (i, xs)⟩ => (i.val + 1, xs.reverse)
 
 example := (by source_fun_prop :
-    HasProgram indexedReverse _ _ _)
+    HasProgramInO indexedReverse _ _ _)
 
-attribute [local program] hasProgram_optionalReverse
+attribute [local program] hasProgramInO_optionalReverse
 
 example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop :
-    HasProgram (fun x : Option (List α) => (optionalReverse x).reverse) _ _ _)
+    HasProgramInO (fun x : Option (List α) => (optionalReverse x).reverse) _ _ _)
 
 example {α : Type*} [UniqueEncoding Tree α]
-    {f : List α → List α} {q : Value → Code Value} {t p : List α → ℕ} (hf : HasProgram f q t p) := (by source_fun_prop :
-    HasProgram (fun input : Option (List α) => match input with | none => [] | some xs => f xs) _ _ _)
+    {f : List α → List α} {q : Value → Code Value} {t p : List α → ℕ} (hf : HasProgramInO f q t p) := (by source_fun_prop :
+    HasProgramInO (fun input : Option (List α) => match input with | none => [] | some xs => f xs) _ _ _)
 
 example (_f : List Bool → List Bool) : True := by
   fail_if_success have := (by source_fun_prop :
-    HasProgram (fun input : Option (List Bool) => match input with | none => [] | some xs => _f xs) _ _ _)
+    HasProgramInO (fun input : Option (List Bool) => match input with | none => [] | some xs => _f xs) _ _ _)
   trivial
 
 -- The retained input and the reversal are both stored; both resources stay linear.
-example : HasProgram retainsInput hole(⊢ program) (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) := by
+example : HasProgramInO retainsInput hole(⊢ program) (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) := by
   fill_hole program in source_fun_prop
 
 def nested (xs : List Bool) :=
@@ -173,22 +187,22 @@ def nested (xs : List Bool) :=
   let zs := ys ++ xs
   zs.reverse ++ ys
 
-example : HasProgram nested hole(⊢ program) (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) := by
+example : HasProgramInO nested hole(⊢ program) (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) := by
   fill_hole program in source_fun_prop
 
 -- Source and output types can differ without another representation class.
 example {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β] := (by source_fun_prop :
-    HasProgram (Prod.fst : α × β → α) _ _ _)
+    HasProgramInO (Prod.fst : α × β → α) _ _ _)
 
 example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop :
-    HasProgram (fun x : α => (x, x)) _ _ _)
+    HasProgramInO (fun x : α => (x, x)) _ _ _)
 
 example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop :
-    HasProgram (fun xs : List α => let ys := xs.reverse; (ys, xs)) _ _ _)
+    HasProgramInO (fun xs : List α => let ys := xs.reverse; (ys, xs)) _ _ _)
 
-def hasProgram_helper := (by source_fun_prop : HasProgram helper _ _ _)
+def hasProgramInO_helper := (by source_fun_prop : HasProgramInO helper _ _ _)
 
-attribute [local program] hasProgram_helper
+attribute [local program] hasProgramInO_helper
 
 -- A helper can be called only on a let-bound value, while the continuation retains its input.
 def helperInLet (xs : List Bool) :=
@@ -196,26 +210,26 @@ def helperInLet (xs : List Bool) :=
   helper ys ++ xs
 
 example := (by source_fun_prop :
-    HasProgram helperInLet _ _ _)
+    HasProgramInO helperInLet _ _ _)
 
 example := (by source_fun_prop :
-    HasProgram (fun xs : List Bool => let f := helper; f (f xs)) _ _ _)
+    HasProgramInO (fun xs : List Bool => let f := helper; f (f xs)) _ _ _)
 
 -- A local implementation explicitly selects the callback.
 
-example {q : Value → Code Value} {t p : List Bool → ℕ} (_hf : HasProgram helper q t p) :
-    HasProgram (fun xs => (helper xs).reverse) (fun v => q v >>= List.Code.reverse)
+example {q : Value → Code Value} {t p : List Bool → ℕ} (_hf : HasProgramInO helper q t p) :
+    HasProgramInO (fun xs => (helper xs).reverse) (fun v => q v >>= List.Code.reverse)
       (fun xs => t xs + ⌜helper xs⌝ₜ.size) (fun xs => max (p xs) ⌜helper xs⌝ₜ.size) := by
   source_fun_prop
 
 -- Unused lets need no implementation, including when their value is a new recursive function.
-example : HasProgram (fun xs : List Bool => let _ys := recursive xs; xs) hole(⊢ program) (fun _ => 0)
+example : HasProgramInO (fun xs : List Bool => let _ys := recursive xs; xs) hole(⊢ program) (fun _ => 0)
     (fun _ => 0) := by
   fill_hole program in source_fun_prop
 
 /-- error: source translation: `ComplexityTest.SourceTranslation.SpecComparison.recursive` needs a registered implementation (choose replacement source with `via`, or register a function equality with `[program]`) -/
 #guard_msgs in
-example : HasProgram recursive hole(⊢ program) (fun _ => 1) (fun _ => 1) := by
+example : HasProgramInO recursive hole(⊢ program) (fun _ => 1) (fun _ => 1) := by
   fill_hole program in source_fun_prop
 
 @[tree_encoding]
@@ -232,15 +246,15 @@ inductive Tagged (α : Type*) where
 def packedReverse {α : Type*} (xs : List α) : Packed α := ⟨xs.reverse, xs⟩
 
 example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop :
-    HasProgram (packedReverse : List α → Packed α) _ _ _)
+    HasProgramInO (packedReverse : List α → Packed α) _ _ _)
 
 example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop :
-    HasProgram (fun xs : List α => some xs.reverse) _ _ _)
+    HasProgramInO (fun xs : List α => some xs.reverse) _ _ _)
 
 
 -- The layout equations suffice even for nested constructors: no type-specific resource rule.
 example {α : Type*} [UniqueEncoding Tree α] :
-    HasProgram (fun x : α => [Tagged.one x, Tagged.both x x]) hole(⊢ program) (fun _ => 1)
+    HasProgramInO (fun x : α => [Tagged.one x, Tagged.both x x]) hole(⊢ program) (fun _ => 1)
       (fun x => ⌜x⌝ₜ.size) := by
   fill_hole program in source_fun_prop
 
@@ -249,14 +263,14 @@ opaque hidden (xs : List Bool) : List Bool := xs.reverse
 
 example : True := by
   fail_if_success have := (by source_fun_prop :
-    HasProgram hidden _ _ _)
+    HasProgramInO hidden _ _ _)
   trivial
 
 -- A uniform local certificate can supply even a recursive implementation.
 example :
     let f := recursive
-    ∀ {q : Value → Code Value} {t p : List Bool → ℕ} (_hf : HasProgram f q t p),
-      HasProgram (fun xs => (f xs).reverse) (fun v => q v >>= List.Code.reverse)
+    ∀ {q : Value → Code Value} {t p : List Bool → ℕ} (_hf : HasProgramInO f q t p),
+      HasProgramInO (fun xs => (f xs).reverse) (fun v => q v >>= List.Code.reverse)
         (fun xs => t xs + ⌜f xs⌝ₜ.size) (fun xs => max (p xs) ⌜f xs⌝ₜ.size) := by
   intro f q t p hf
   source_fun_prop
@@ -267,8 +281,9 @@ theorem branch_fdtisp : branch ∈ FDTISP .tree (fun n => n) (fun n => n) := by
 -- The condition is charged, and only the selected branch contributes its running time.
 example {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
     {c : α → Bool} {f g : α → β} {qc qf qg : Value → Code Value} {tc pc tf pf tg pg : α → ℕ}
-    (_hc : HasProgram c qc tc pc) (_ht : HasProgram f qf tf pf) (_hf : HasProgram g qg tg pg) :
-    HasProgram (fun x => if c x then f x else g x) hole(qc, qf, qg ⊢ program)
+    (_hc : HasProgramInO c qc tc pc) (_ht : HasProgramInO f qf tf pf)
+      (_hf : HasProgramInO g qg tg pg) :
+    HasProgramInO (fun x => if c x then f x else g x) hole(qc, qf, qg ⊢ program)
       (fun x => (tc x + if c x then tf x else tg x) + 1)
       (fun x => max ⌜x⌝ₜ.size (max (pc x) (if c x then pf x else pg x))) := by
   fill_hole program in source_fun_prop
@@ -276,27 +291,27 @@ example {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
 def conditionalReverse {α : Type*} (x : Bool × List α) : List α :=
   if x.1 then x.2.reverse else x.2 ++ x.2
 
-def hasProgram_branch := (by source_fun_prop : HasProgram branch _ _ _)
+def hasProgramInO_branch := (by source_fun_prop : HasProgramInO branch _ _ _)
 
-attribute [local program] hasProgram_branch
-
-example := (by source_fun_prop :
-    HasProgram (List.map branch) _ _ _)
+attribute [local program] hasProgramInO_branch
 
 example := (by source_fun_prop :
-    HasProgram (fun xs : List Bool => if xs.isEmpty then xs else if xs.reverse.isEmpty then xs else xs.reverse) _ _ _)
+    HasProgramInO (List.map branch) _ _ _)
 
 example := (by source_fun_prop :
-    HasProgram (fun xs : List Bool => let ys := xs.reverse; if xs.isEmpty then ys else ys ++ xs) _ _ _)
+    HasProgramInO (fun xs : List Bool => if xs.isEmpty then xs else if xs.reverse.isEmpty then xs else xs.reverse) _ _ _)
+
+example := (by source_fun_prop :
+    HasProgramInO (fun xs : List Bool => let ys := xs.reverse; if xs.isEmpty then ys else ys ++ xs) _ _ _)
 
 -- A missing branch implementation is rejected even when the other branch is registered.
 example (_f : List Bool → List Bool) : True := by
   fail_if_success have := (by source_fun_prop :
-    HasProgram (fun xs => if xs.isEmpty then _f xs else xs.reverse) _ _ _)
+    HasProgramInO (fun xs => if xs.isEmpty then _f xs else xs.reverse) _ _ _)
   trivial
 
 example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop :
-    HasProgram (fun x => (gateClauses (α := α) x).reverse) _ _ _)
+    HasProgramInO (fun x => (gateClauses (α := α) x).reverse) _ _ _)
 
 -- Field access inside a registered call uses an automatically generated local certificate.
 def emitGate
@@ -305,7 +320,7 @@ def emitGate
   (x.2.2.2 + 1, gateClauses x)
 
 example := (by source_fun_prop :
-    HasProgram emitGate _ _ _)
+    HasProgramInO emitGate _ _ _)
 
 theorem emitGate_fdtisp : emitGate ∈ FDTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by
   let S (x : Σ k, FirstOrder.Language.booleanAlgebra.Functions k × (Fin k → ℕ) × ℕ) := ⌜x⌝ₜ.size
@@ -339,19 +354,19 @@ def tailOrEmpty {α : Type*} : List α → List α
   fill_hole program in source_fun_prop
 
 example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop :
-    HasProgram (fun xs : List α => (tailOrEmpty xs).reverse) _ _ _)
+    HasProgramInO (fun xs : List α => (tailOrEmpty xs).reverse) _ _ _)
 
 example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop :
-    HasProgram (List.map (fun xs : List α => (tailOrEmpty xs).reverse)) _ _ _)
+    HasProgramInO (List.map (fun xs : List α => (tailOrEmpty xs).reverse)) _ _ _)
 
 example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop :
-    HasProgram (fun xs : List α => let ys := tailOrEmpty xs; (ys.reverse, xs)) _ _ _)
+    HasProgramInO (fun xs : List α => let ys := tailOrEmpty xs; (ys.reverse, xs)) _ _ _)
 
 -- Separate implementations for each runtime index do not supply one uniform implementation.
 example (f : ℕ → Bool → Bool) (program : ℕ → Value → Code Value)
-    (_h : ∀ n, HasProgram (f n) (program n) (fun _ => 1) (fun _ => 1)) : True := by
+    (_h : ∀ n, HasProgramInO (f n) (program n) (fun _ => 1) (fun _ => 1)) : True := by
   fail_if_success have := (by source_fun_prop :
-    HasProgram (fun x : ℕ × Bool => f x.1 x.2) _ _ _)
+    HasProgramInO (fun x : ℕ × Bool => f x.1 x.2) _ _ _)
   trivial
 
 def optionPair {α : Type*} : Option α → Option (α × α)
@@ -370,36 +385,36 @@ def taggedReverse : Tagged (List Bool) → List Bool
   | .both _ ys => ys.reverse
 
 example := (by source_fun_prop :
-    HasProgram taggedReverse _ _ _)
+    HasProgramInO taggedReverse _ _ _)
 
 def swapIf {α : Type*} (x : Bool × α × α) : α × α :=
   if x.1 then (x.2.2, x.2.1) else x.2
 
 example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop :
-    HasProgram (optionPair (α := α)) _ _ _)
+    HasProgramInO (optionPair (α := α)) _ _ _)
 
 example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop :
-    HasProgram (taggedSwap (α := α)) _ _ _)
+    HasProgramInO (taggedSwap (α := α)) _ _ _)
 
 example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop :
-    HasProgram (swapIf (α := α)) _ _ _)
+    HasProgramInO (swapIf (α := α)) _ _ _)
 
 -- The same callback is compiled once and used for every element.
 example := (by source_fun_prop :
-    HasProgram (List.map (fun x : Bool => (x, x))) _ _ _)
+    HasProgramInO (List.map (fun x : Bool => (x, x))) _ _ _)
 
 example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop :
-    HasProgram (List.map (gateClauses (α := α))) _ _ _)
+    HasProgramInO (List.map (gateClauses (α := α))) _ _ _)
 
 example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop :
-    HasProgram (List.map (List.reverse : List α → List α)) _ _ _)
+    HasProgramInO (List.map (List.reverse : List α → List α)) _ _ _)
 
 -- Each callback pays its own cost, even when the nested lengths are very uneven.
-example : HasProgram (List.map (List.reverse : List Unit → List Unit)) hole(⊢ program)
+example : HasProgramInO (List.map (List.reverse : List Unit → List Unit)) hole(⊢ program)
     (fun xss => ⌜xss⌝ₜ.size) (fun xss => max ⌜xss⌝ₜ.size (max (⌜xss.map List.reverse⌝ₜ.size + 1)
       (xss.foldr (fun xs s => max ⌜xs⌝ₜ.size s) 0))) := by
   fill_hole program in
-    exact List.hasProgramIn_reverse.toHasProgram.map.mono
+    exact List.hasProgramIn_reverse.toHasProgramInO.map.mono
       (Dominated.of_le fun xss => (size_encode_list xss).ge)
       (Dominated.refl _)
 
@@ -415,23 +430,23 @@ theorem mapGateClauses_fdtisp {α : Type*} [UniqueEncoding Tree α] :
   model_fun_prop
 
 example {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
-    {f : α → β} {q : Value → Code Value} {t p : α → ℕ} (hf : HasProgram f q t p) := (by source_fun_prop :
-    HasProgram (List.map f) _ _ _)
+    {f : α → β} {q : Value → Code Value} {t p : α → ℕ} (hf : HasProgramInO f q t p) := (by source_fun_prop :
+    HasProgramInO (List.map f) _ _ _)
 
 example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop :
-    HasProgram (List.map (List.map (List.reverse : List α → List α))) _ _ _)
+    HasProgramInO (List.map (List.map (List.reverse : List α → List α))) _ _ _)
 
 -- An unregistered callback cannot be treated as a free host-language operation.
 example (_f : Bool → Bool) : True := by
   fail_if_success have := (by source_fun_prop :
-    HasProgram (List.map _f) _ _ _)
+    HasProgramInO (List.map _f) _ _ _)
   trivial
 
 def foldReverse {α : Type*} (xs : List α) : List α :=
   xs.foldl (fun acc x => x :: acc) []
 
 example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop :
-    HasProgram (foldReverse (α := α)) _ _ _)
+    HasProgramInO (foldReverse (α := α)) _ _ _)
 
 theorem foldReverse_fdtisp {α : Type*} [UniqueEncoding Tree α] :
     foldReverse (α := α) ∈ FDTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by
@@ -440,54 +455,55 @@ theorem foldReverse_fdtisp {α : Type*} [UniqueEncoding Tree α] :
 def collectStep {α : Type*} (acc : List α) (x : α) := x :: acc
 
 example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop :
-    HasProgram (fun xs : List α => xs.foldl collectStep []) _ _ _)
+    HasProgramInO (fun xs : List α => xs.foldl collectStep []) _ _ _)
 
 -- Both a registered traversal and a callback returning nil compose through the fold rule.
 example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop :
-    HasProgram (fun xss : List (List α) => xss.foldl (fun acc xs => acc ++ xs) []) _ _ _)
+    HasProgramInO (fun xss : List (List α) => xss.foldl (fun acc xs => acc ++ xs) []) _ _ _)
 
 example := (by source_fun_prop :
-    HasProgram (fun xs : List Bool => xs.foldl (fun acc x => if x then x :: acc else []) []) _ _ _)
+    HasProgramInO (fun xs : List Bool => xs.foldl (fun acc x => if x then x :: acc else []) [])
+      _ _ _)
 
 example {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
     (f : β → α → β) {q : Value → Code Value} {t p : β × α → ℕ}
-    (hf : HasProgram (Function.uncurry f) q t p) := (by source_fun_prop :
-    HasProgram (fun x : β × List α => x.2.foldl f x.1) _ _ _)
+    (hf : HasProgramInO (Function.uncurry f) q t p) := (by source_fun_prop :
+    HasProgramInO (fun x : β × List α => x.2.foldl f x.1) _ _ _)
 
 example (_f : Bool → Bool → Bool) : True := by
   fail_if_success have := (by source_fun_prop :
-    HasProgram (fun xs : List Bool => xs.foldl _f false) _ _ _)
+    HasProgramInO (fun xs : List Bool => xs.foldl _f false) _ _ _)
   trivial
 
 example {ρ α β : Type*}
     [UniqueEncoding Tree ρ] [UniqueEncoding Tree α] [UniqueEncoding Tree β]
     {f : ρ → α → β}
-    {q : Value → Code Value} {t p : ρ × α → ℕ} (hf : HasProgram (fun x : ρ × α => f x.1 x.2) q t p) :=
+    {q : Value → Code Value} {t p : ρ × α → ℕ} (hf : HasProgramInO (fun x : ρ × α => f x.1 x.2) q t p) :=
     (by source_fun_prop :
-    HasProgram (fun x : ρ × List α => x.2.map (f x.1)) _ _ _)
+    HasProgramInO (fun x : ρ × List α => x.2.map (f x.1)) _ _ _)
 
 example {ρ α β : Type*}
     [UniqueEncoding Tree ρ] [UniqueEncoding Tree α] [UniqueEncoding Tree β]
     {f : ρ → β → α → β}
-    {q : Value → Code Value} {t p : ρ × β × α → ℕ} (hf : HasProgram (fun x : ρ × β × α => f x.1 x.2.1 x.2.2) q t p) :=
+    {q : Value → Code Value} {t p : ρ × β × α → ℕ} (hf : HasProgramInO (fun x : ρ × β × α => f x.1 x.2.1 x.2.2) q t p) :=
     (by source_fun_prop :
-    HasProgram (fun x : ρ × β × List α => x.2.2.foldl (f x.1) x.2.1) _ _ _)
+    HasProgramInO (fun x : ρ × β × List α => x.2.2.foldl (f x.1) x.2.1) _ _ _)
 
 example := (by source_fun_prop :
-    HasProgram (fun x : List Bool × List (List Bool) => x.2.map (fun ys => x.1 ++ ys)) _ _ _)
+    HasProgramInO (fun x : List Bool × List (List Bool) => x.2.map (fun ys => x.1 ++ ys)) _ _ _)
 
 example := (by source_fun_prop :
-    HasProgram (fun x : Bool × List (List Bool) => x.2.map (fun ys => ys.map (fun y => if x.1 then y else x.1))) _ _ _)
+    HasProgramInO (fun x : Bool × List (List Bool) => x.2.map (fun ys => ys.map (fun y => if x.1 then y else x.1))) _ _ _)
 
 -- Pointwise certificates need not give one implementation for all runtime naturals.
 example {f : ℕ → Bool → Bool} {program : ℕ → Value → Code Value}
-    (_hf : ∀ e, HasProgram (f e) (program e) (fun _ => 1) (fun _ => 1)) : True := by
+    (_hf : ∀ e, HasProgramInO (f e) (program e) (fun _ => 1) (fun _ => 1)) : True := by
   fail_if_success have := (by source_fun_prop :
-    HasProgram (fun x : ℕ × List Bool => x.2.map (f x.1)) _ _ _)
+    HasProgramInO (fun x : ℕ × List Bool => x.2.map (f x.1)) _ _ _)
   trivial
 
 example := (by source_fun_prop :
-    HasProgram (fun x : Σ n, Fin n × List Bool => x.2.2.map (fun _ => x.2.1.val + 1)) _ _ _)
+    HasProgramInO (fun x : Σ n, Fin n × List Bool => x.2.2.map (fun _ => x.2.1.val + 1)) _ _ _)
 
 def repeatFlag (x : Bool × List Unit) : List Bool := x.2.map (fun _ => x.1)
 

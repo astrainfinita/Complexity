@@ -9,14 +9,14 @@ import Complexity.Encoding.Sigma
 import Complexity.Classes.Functions.Encoding
 
 open Complexity TreeProgram TreeProgram.Source
-open TreeProgram.Source.Internal (HasProgram)
+open TreeProgram.Source.Internal (HasProgramInO)
 
 namespace ComplexityTest.SourceTranslation.Encoding
 
 -- The input map need not cover all inputs of the original implementation.
 theorem hasProgramIn_trueOnly : HasProgramIn (fun b : {b : Bool // b = true} => b.val)
-    (fun v => pure v) IsO(fun _ => 0) IsO(fun _ => 0) := HasProgram.toHasProgramIn <|
-  HasProgram.identity.map_input Subtype.val (fun _ => rfl)
+    (fun v => pure v) IsO(fun _ => 0) IsO(fun _ => 0) := HasProgramInO.toHasProgramIn <|
+  HasProgramInO.identity.map_input Subtype.val (fun _ => rfl)
 
 example : ¬Function.Surjective (Subtype.val : {b : Bool // b = true} → Bool) := by
   rintro h
@@ -25,8 +25,8 @@ example : ¬Function.Surjective (Subtype.val : {b : Bool // b = true} → Bool) 
 
 theorem hasProgramIn_sigmaIdentity :
     HasProgramIn (fun p : Bool × Unit => (⟨p.1, p.2⟩ : Σ _ : Bool, Unit)) (fun v => pure v)
-      IsO(fun _ => 0) IsO(fun _ => 0) := HasProgram.toHasProgramIn <|
-  HasProgram.identity.of_encode
+      IsO(fun _ => 0) IsO(fun _ => 0) := HasProgramInO.toHasProgramIn <|
+  HasProgramInO.identity.of_encode
     (fun p => @Sigma.encode_mk Bool (fun _ => Unit) _ _ p.1 p.2)
 
 -- Independent universes and arbitrary encoding instances remain supported.
@@ -34,8 +34,8 @@ universe u v w
 
 example {α : Type u} {β : Type v} {γ : Type w}
     [UniqueEncoding Tree α] [UniqueEncoding Tree β] [UniqueEncoding Tree γ]
-    {f : α → β} {pf : Value → Code Value} {t p : α → ℕ} (hf : HasProgram f pf t p) (o : β → γ)
-    (ho : ∀ y, ⌜o y⌝ₜ = ⌜y⌝ₜ) : HasProgram (o ∘ f) pf t p :=
+    {f : α → β} {pf : Value → Code Value} {t p : α → ℕ} (hf : HasProgramInO f pf t p) (o : β → γ)
+    (ho : ∀ y, ⌜o y⌝ₜ = ⌜y⌝ₜ) : HasProgramInO (o ∘ f) pf t p :=
   hf.of_encode (fun x => ho (f x))
 
 -- Adding a logical output certificate preserves the behavior and both exact budgets.

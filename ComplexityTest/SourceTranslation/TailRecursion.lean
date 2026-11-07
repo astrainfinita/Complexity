@@ -10,7 +10,7 @@ public import Complexity.Tactic.TreeProgram.TailRecursion
 @[expose] public section
 
 open Complexity TreeProgram TreeProgram.Source
-open TreeProgram.Source.Internal (HasProgram)
+open TreeProgram.Source.Internal (HasProgramInO)
 namespace ComplexityTest.SourceTranslation.TailRecursion
 
 open Lean Meta Elab Tactic in
@@ -49,7 +49,7 @@ def chunkWork (x : GatherInput) : ℕ :=
 theorem hasProgramIn_advance :
     HasProgramIn advance hole(⊢ program) IsO(chunkWork) IsO(fun x => ⌜x⌝ₜ.size + 10) := by
   abstract_hole program using programAdvance
-  refine HasProgram.toHasProgramIn ?_
+  refine HasProgramInO.toHasProgramIn ?_
   fill_hole program in source_fun_prop
   all_goals
     apply Dominated.of_le_mul 20
@@ -99,11 +99,12 @@ theorem gather_input_size : Dominated
 theorem hasProgramIn_gatherLoop : HasProgramIn gather hole(⊢ program)
     IsO(fun x => 1 + (⌜x.2.1⌝ₜ.size + 1) + 1) IsO(fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programGatherLoop
-  refine HasProgram.toHasProgramIn ?_
+  refine HasProgramInO.toHasProgramIn ?_
   fill_hole program in
-    refine HasProgram.tail_loop_potential hasProgramIn_gatherCheck.toHasProgram
-      hasProgramIn_advance.toHasProgram
-      hasProgramIn_gatherFinish.toHasProgram gatherInvariant (fun _ x => ⌜x.2.1⌝ₜ.size) (fun _ => 1)
+    refine HasProgramInO.tail_loop_potential hasProgramIn_gatherCheck.toHasProgramInO
+      hasProgramIn_advance.toHasProgramInO
+      hasProgramIn_gatherFinish.toHasProgramInO gatherInvariant (fun _ x => ⌜x.2.1⌝ₜ.size)
+        (fun _ => 1)
       (fun x => ⌜x⌝ₜ.size) ?_ (fun _ => le_rfl) ?_ gather_input_size gather_input_size ?_ ?_
       (Dominated.const 2) ?_
   · rintro ⟨tag, xs, acc⟩
@@ -142,9 +143,10 @@ theorem hasProgramIn_gatherLoop : HasProgramIn gather hole(⊢ program)
 @[program] theorem hasProgramIn_gather : HasProgramIn gather hole(⊢ program)
     IsO(fun x => ⌜x⌝ₜ.size) IsO(fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programGather
-  refine HasProgram.toHasProgramIn ?_
+  refine HasProgramInO.toHasProgramIn ?_
   fill_hole program in
-    exact hasProgramIn_gatherLoop.toHasProgram.mono (Dominated.of_le_mul 4 fun ⟨tag, xs, acc⟩ => by
+    exact hasProgramIn_gatherLoop.toHasProgramInO.mono
+      (Dominated.of_le_mul 4 fun ⟨tag, xs, acc⟩ => by
       have := Tree.size_pos ⌜(tag, xs, acc)⌝ₜ
       simp only [size_encode_prod] at *
       omega) (Dominated.refl _)
@@ -166,7 +168,7 @@ def keep (xs : List Bool) := xs
 @[program] theorem hasProgramIn_keep :
     HasProgramIn keep hole(⊢ program) IsO(fun _ => 1) IsO(fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programKeep
-  refine HasProgram.toHasProgramIn ?_
+  refine HasProgramInO.toHasProgramIn ?_
   fill_hole program in
     source_fun_prop using loop
       (test := fun _ => false) (next := id) (finish := id)
@@ -187,7 +189,7 @@ theorem keep_loop_model : keep ∈ FDTISP .tree (fun n => n ^ 0) (fun n => n ^ 1
 -- A zero allowance cannot replace the selected loop by the ordinary identity program.
 example : True := by
   fail_if_success
-    have : HasProgram keep hole(⊢ program) (fun _ => 0) (fun _ => 0) := by
+    have : HasProgramInO keep hole(⊢ program) (fun _ => 0) (fun _ => 0) := by
       fill_hole program in source_fun_prop
       all_goals exact Dominated.zero
   trivial

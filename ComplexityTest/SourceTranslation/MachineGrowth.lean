@@ -10,7 +10,7 @@ public import Complexity.Tactic.TreeProgram.Library
 @[expose] public section
 
 open Complexity TreeProgram Complexity.TreeProgram.Source
-open Complexity.TreeProgram.Source.Internal (HasProgram)
+open Complexity.TreeProgram.Source.Internal (HasProgramInO)
 namespace ComplexityTest.SourceTranslation.MachineGrowth
 
 -- The time budget depends on the value, without imposing a size envelope.
@@ -20,7 +20,7 @@ theorem identity_machine : TimeSpaceModel.tree.ComputableIn
 
 -- A local implementation is used by the machine exit.
 example {program : Value → Code Value}
-    (_hf : HasProgram (id : List Bool → List Bool) program (fun _ => 0) (fun _ => 0)) :
+    (_hf : HasProgramInO (id : List Bool → List Bool) program (fun _ => 0) (fun _ => 0)) :
     TimeSpaceModel.tree.ComputableIn (id : List Bool → List Bool)
       IsO(fun _ => 1) IsO(fun xs => ⌜xs⌝ₜ.size) := by
   model_fun_prop
@@ -48,10 +48,10 @@ example : True := by
     HasProgramIn (id : List Bool → List Bool) hole(⊢ program) IsO(fun xs => ⌜xs⌝ₜ.size)
     IsO(fun xs => ⌜xs⌝ₜ.size) := by
   abstract_hole program using programSelected
-  refine HasProgram.toHasProgramIn ?_
+  refine HasProgramInO.toHasProgramIn ?_
   fill_hole program in
-    exact ((List.hasProgramIn_reverse.toHasProgram.comp
-      List.hasProgramIn_reverse.toHasProgram).congr (by funext xs; simp)).mono
+    exact ((List.hasProgramIn_reverse.toHasProgramInO.comp
+      List.hasProgramIn_reverse.toHasProgramInO).congr (by funext xs; simp)).mono
       (Dominated.of_le_mul 2 fun _ => by simp; omega) (Dominated.of_le fun _ => by simp)
 
 -- Direct exits keep the stated growth of the selected implementation.
@@ -60,7 +60,7 @@ theorem canonical_machine : TimeSpaceModel.tree.ComputableIn
       IsO(fun xs => max ⌜xs⌝ₜ.size ⌜xs⌝ₜ.size + 2) :=
   hasProgramIn_selected.computableIn
 
-example := (by source_fun_prop : HasProgram (id : List Bool → List Bool) programSelected _ _)
+example := (by source_fun_prop : HasProgramInO (id : List Bool → List Bool) programSelected _ _)
 
 -- Guards the polynomial exit: `model_fun_prop` proves the time growth polynomial in the input
 -- code size by `dominated`, and no degree is written.
