@@ -324,6 +324,11 @@ theorem mono {T' P' : (α → ℕ) → Prop} (h : HasProgramIn f program T P)
   let ⟨b, hb, hT, hP⟩ := h
   ⟨b, hb, ht _ hT, hp _ hP⟩
 
+/-- An implementation within `O(t)` and `O(p)` is polynomial in `t` and in `p`. -/
+theorem isPoly {t p : α → ℕ} (h : HasProgramIn f program IsO(t) IsO(p)) :
+    HasProgramIn f program (IsPoly t) (IsPoly p) :=
+  h.mono (fun _ ht => IsPoly.refl.of_dominated ht) (fun _ hp => IsPoly.refl.of_dominated hp)
+
 end HasProgramIn
 
 /-- Growths polynomial in `s` and `s'` make the program polynomial in them. -/

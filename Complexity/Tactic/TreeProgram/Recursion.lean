@@ -681,6 +681,38 @@ theorem dominated_cost_of_scale (bc bs : Bounds α) (bd : Bounds {x // r.test x 
     (dominated_pow_comp (fun z : Step => ⟨z.1.1.2, z.2⟩) hr.1 fun z => z.1.2 :)
     (fun x => Nat.pow_pos (hS x)) (fun x => Nat.pow_pos (hS x))
 
+/-- A scale that does not grow along the recursion, and in which the measure, the stored inputs and
+every callback are polynomial, makes the recursion cost polynomial in it. -/
+theorem isPoly_cost {tc pc ts ps : α → ℕ} {td pd : {x // r.test x = false} → ℕ}
+    {tr pr : r.Return → ℕ} (S : α → ℕ) (hnext : ∀ x, r.test x = true → S (r.next x) ≤ S x)
+    (hmeasure : IsPoly S r.measure) (hsize : IsPoly S fun x => ⌜x⌝ₜ.size)
+    (htc : IsPoly S tc) (hpc : IsPoly S pc) (hts : IsPoly S ts) (hps : IsPoly S ps)
+    (htd : IsPoly (fun x => S x.1) td) (hpd : IsPoly (fun x => S x.1) pd)
+    (htr : IsPoly (fun x : {x // r.test x = true} => S x.1) fun x => tr ⟨x, f (r.next x.1)⟩)
+    (hpr : IsPoly (fun x : {x // r.test x = true} => S x.1) fun x => pr ⟨x, f (r.next x.1)⟩) :
+    IsPoly S (fun x => (r.cost ⟨tc, pc⟩ ⟨ts, ps⟩ ⟨td, pd⟩ ⟨tr, pr⟩ x).time) ∧
+      IsPoly S (fun x => (r.cost ⟨tc, pc⟩ ⟨ts, ps⟩ ⟨td, pd⟩ ⟨tr, pr⟩ x).peak) := by
+  obtain ⟨d₁, h₁⟩ := hsize
+  obtain ⟨d₂, h₂⟩ := htc
+  obtain ⟨d₃, h₃⟩ := hpc
+  obtain ⟨d₄, h₄⟩ := hts
+  obtain ⟨d₅, h₅⟩ := hps
+  obtain ⟨d₆, h₆⟩ := htd
+  obtain ⟨d₇, h₇⟩ := hpd
+  obtain ⟨d₈, h₈⟩ := htr
+  obtain ⟨d₉, h₉⟩ := hpr
+  let D := d₁ + d₂ + d₃ + d₄ + d₅ + d₆ + d₇ + d₈ + d₉
+  have lift {γ : Type _} {s t : γ → ℕ} {d : ℕ} (h : Dominated t fun x => (s x + 1) ^ d)
+      (hd : d ≤ D) : Dominated t fun x => (s x + 1) ^ D :=
+    h.mono_pow hd fun _ => Nat.succ_pos _
+  have h := r.dominated_cost_of_scale ⟨tc, pc⟩ ⟨ts, ps⟩ ⟨td, pd⟩ ⟨tr, pr⟩ (fun x => S x + 1)
+    (fun _ => Nat.succ_pos _) (fun x hx => Nat.succ_le_succ (hnext x hx)) (lift h₁ (by omega))
+    ⟨lift h₂ (by omega), lift h₃ (by omega)⟩ ⟨lift h₄ (by omega), lift h₅ (by omega)⟩
+    ⟨lift h₆ (by omega), lift h₇ (by omega)⟩ ⟨lift h₈ (by omega), lift h₉ (by omega)⟩
+  have hD : IsPoly S fun x => (S x + 1) ^ D := (IsPoly.refl.add (.const 1)).pow D
+  exact ⟨((hmeasure.mul hD).add hD).of_dominated h.1,
+    (hD.add ((hmeasure.add (.const 1)).mul (hD.add (.const 1)))).of_dominated h.2⟩
+
 variable [instβ : ∀ x, UniqueEncoding Tree (β x)]
   {tc pc ts ps : α → ℕ} {td pd : {x // r.test x = false} → ℕ} {tr pr : r.Return → ℕ}
 
@@ -732,5 +764,44 @@ theorem dominated_size_return (S : α → ℕ) (hS : ∀ x, 0 < S x)
   have heq (x : {x // r.test x = true}) : ⌜(⟨x, f (r.next x.1)⟩ : r.Return)⌝ₜ.size =
       1 + ⌜x.1⌝ₜ.size + ⌜f (r.next x.1)⌝ₜ.size := rfl
   simpa only [pow_mul, heq] using h.pow d
+
+/-- The stored input of a resumption is polynomial in the scale of its source state. -/
+theorem isPoly_size_return (S : α → ℕ) (hnext : ∀ x, r.test x = true → S (r.next x) ≤ S x)
+    (hsize : IsPoly S fun x => ⌜x⌝ₜ.size) (hout : IsPoly S fun x => ⌜f x⌝ₜ.size) :
+    IsPoly (fun x : {x // r.test x = true} => S x.1)
+      fun x => ⌜(⟨x, f (r.next x.1)⟩ : r.Return)⌝ₜ.size := by
+  have hn : IsPoly (fun x : {x // r.test x = true} => S x.1) fun x => S (r.next x.1) :=
+    IsPoly.refl.of_dominated (Dominated.of_le fun x => hnext x.1 x.2)
+  exact ((IsPoly.const 1).add (hsize.comp IsPoly.refl)).add (hout.comp hn)
+
+/-- The recursive program, polynomial in a scale `S` that does not grow along the recursion, in
+which the measure and the codes of the input and the output are polynomial. Each callback is
+polynomial in a time measure and a peak measure: those of the test, the step and the finish are
+polynomial in `S`, and those of the resumption in the code size of its input, which holds the
+recursive result. -/
+theorem hasProgramIn_isPoly
+    {instD : ∀ x : {x // r.test x = false}, UniqueEncoding Tree (β x.1)}
+    {instR : ∀ x : r.Return, UniqueEncoding Tree (β x.1.1)} {qc qs qd qr : Value → Code Value}
+    (S : α → ℕ) (hnext : ∀ x, r.test x = true → S (r.next x) ≤ S x)
+    (hmeasure : IsPoly S r.measure) (hsize : IsPoly S fun x => ⌜x⌝ₜ.size)
+    (hout : IsPoly S fun x => ⌜f x⌝ₜ.size) {Tc Pc Ts Ps : α → ℕ}
+    {Td Pd : {x // r.test x = false} → ℕ} {Tr Pr : r.Return → ℕ}
+    (hc : HasProgramIn r.test qc (IsPoly Tc) (IsPoly Pc)) (hTc : IsPoly S Tc) (hPc : IsPoly S Pc)
+    (hs : HasProgramIn r.next qs (IsPoly Ts) (IsPoly Ps)) (hTs : IsPoly S Ts) (hPs : IsPoly S Ps)
+    (hd : HasProgramIn r.finish qd (IsPoly Td) (IsPoly Pd)) (hTd : IsPoly (fun x => S x.1) Td)
+    (hPd : IsPoly (fun x => S x.1) Pd)
+    (hr : HasProgramIn (fun x : r.Return => r.resume x.1 x.2) qr (IsPoly Tr) (IsPoly Pr))
+    (hTr : IsPoly (fun x => ⌜x⌝ₜ.size) Tr) (hPr : IsPoly (fun x => ⌜x⌝ₜ.size) Pr)
+    (hD : ∀ x, instD x = instβ x.1 := by intros; rfl)
+    (hR : ∀ x, instR x = instβ x.1.1 := by intros; rfl) :
+    HasProgramIn f (code qc qs qd qr) (IsPoly S) (IsPoly S) := by
+  have hreturn := r.isPoly_size_return S hnext hsize hout
+  have htc := hc.isPoly_time.comp hTc
+  have h := r.isPoly_cost (tr := hr.time) (pr := hr.peak) S hnext hmeasure hsize htc
+    (hc.isPoly_peak.comp hPc) (hs.isPoly_time.comp hTs) (hs.isPoly_peak.comp hPs)
+    (hd.isPoly_time.comp hTd) (hd.isPoly_peak.comp hPd)
+    ((hr.isPoly_time.comp hTr).comp hreturn) ((hr.isPoly_peak.comp hPr).comp hreturn)
+  exact (r.hasProgramInO hc.hasProgramInO hs.hasProgramInO hd.hasProgramInO hr.hasProgramInO hD
+    hR).hasProgramIn ((htc.add h.1).add (.const 1)) (h.2.add (.const 1))
 
 end Complexity.TreeProgram.Source.Recursion

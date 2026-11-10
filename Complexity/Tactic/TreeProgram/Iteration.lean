@@ -177,6 +177,39 @@ theorem Dominated.iterate_of_invariant {ρ : Type*} {t p : α → ℕ}
   simpa only [Function.comp_def, active, Nat.add_mul, Nat.one_mul,
     Nat.add_sub_cancel_left] using hround
 
+/-- A count polynomial in a scale of the initial input, and stored states and callbacks polynomial
+in it over the invariant family, make the iteration polynomial in that scale. -/
+theorem IsPoly.iterate_of_invariant {ρ : Type*} {t p : α → ℕ}
+    (I : ρ → ℕ → α → Prop) (count : ρ → ℕ) (initial : ρ → α) (S : ρ → ℕ)
+    (start : ∀ x, I x (count x) (initial x))
+    (next : ∀ x n a, I x (n + 1) a → I x n (f a))
+    (hcount : IsPoly S count)
+    (hsize : IsPoly (fun z : {z : ρ × ℕ × α // I z.1 z.2.1 z.2.2} => S z.1.1)
+      fun z => ⌜z.1.2⌝ₜ.size)
+    (ht : IsPoly (fun z : {z : ρ × ℕ × α // I z.1 (z.2.1 + 1) z.2.2} => S z.1.1)
+      fun z => t z.1.2.2)
+    (hp : IsPoly (fun z : {z : ρ × ℕ × α // I z.1 (z.2.1 + 1) z.2.2} => S z.1.1)
+      fun z => p z.1.2.2) :
+    IsPoly S (fun x => iterateTime f t (count x) (initial x)) ∧
+    IsPoly S (fun x => iteratePeak f p (count x) (initial x)) := by
+  obtain ⟨d₁, h₁⟩ := hsize
+  obtain ⟨d₂, h₂⟩ := ht
+  obtain ⟨d₃, h₃⟩ := hp
+  let D := d₁ + d₂ + d₃
+  have lift {γ : Type _} {s t : γ → ℕ} {d : ℕ} (h : Dominated t fun x => (s x + 1) ^ d)
+      (hd : d ≤ D) : Dominated t fun x => (s x + 1) ^ D :=
+    h.mono_pow hd fun _ => Nat.succ_pos _
+  have hcounter : Dominated (fun z : {z : ρ × ℕ × α // I z.1 z.2.1 z.2.2} => ⌜z.1.2.1⌝ₜ.size)
+      (fun z => ⌜z.1.2⌝ₜ.size) := Dominated.of_le fun z => by
+    simp only [Prod.size_encode_eq]
+    omega
+  have h := Dominated.iterate_of_invariant (f := f) (t := t) (p := p) I count initial
+    (fun x => (S x + 1) ^ D) (fun x => (S x + 1) ^ D) start next
+    (hcounter.trans (lift h₁ (by omega))) (lift h₁ (by omega)) (lift h₂ (by omega))
+    (lift h₃ (by omega))
+  have hD : IsPoly S fun x => (S x + 1) ^ D := (IsPoly.refl.add (.const 1)).pow D
+  exact ⟨(hcount.mul hD).of_dominated h.1, hD.of_dominated h.2⟩
+
 end Cost
 
 section Lift

@@ -159,19 +159,24 @@ theorem mem_fp_sizeCost (hf : HasProgramInO f program t p) (ht : IsPoly (fun x =
 
 end TreeProgram.Source.Internal.HasProgramInO
 
-/-- A program with time polynomial in the input code size gives polynomial time. -/
+/-- A program with time polynomial in a measure polynomial in the input code size gives
+polynomial time. The condition on the measure is closed by `dominated` unless given. -/
 theorem TreeProgram.Source.HasProgramIn.mem_fp {α β : Type*} [UniqueEncoding Tree α]
-    [UniqueEncoding Tree β] {f : α → β} {program : Value → Code Value} {P : (α → ℕ) → Prop}
-    (h : HasProgramIn f program (IsPoly fun x => ⌜x⌝ₜ.size) P) : f ∈ FP .tree :=
-  h.hasProgramInO.mem_fp h.time_spec
+    [UniqueEncoding Tree β] {f : α → β} {program : Value → Code Value} {s : α → ℕ}
+    {P : (α → ℕ) → Prop} (h : HasProgramIn f program (IsPoly s) P)
+    (hs : IsPoly (fun x => ⌜x⌝ₜ.size) s := by dominated) : f ∈ FP .tree :=
+  h.hasProgramInO.mem_fp (IsPoly.comp (h := id) h.time_spec hs)
 
-/-- A program with time and peak polynomial in the input code size gives polynomial time in the
-size-cost model. -/
+/-- A program with time and peak polynomial in measures polynomial in the input code size gives
+polynomial time in the size-cost model. The conditions on the measures are closed by `dominated`
+unless given. -/
 theorem TreeProgram.Source.HasProgramIn.mem_fp_sizeCost {α β : Type*} [UniqueEncoding Tree α]
-    [UniqueEncoding Tree β] {f : α → β} {program : Value → Code Value}
-    (h : HasProgramIn f program (IsPoly fun x => ⌜x⌝ₜ.size) (IsPoly fun x => ⌜x⌝ₜ.size)) :
-    f ∈ FP .sizeCostTree :=
-  h.hasProgramInO.mem_fp_sizeCost h.time_spec h.peak_spec
+    [UniqueEncoding Tree β] {f : α → β} {program : Value → Code Value} {s s' : α → ℕ}
+    (h : HasProgramIn f program (IsPoly s) (IsPoly s'))
+    (hs : IsPoly (fun x => ⌜x⌝ₜ.size) s := by dominated)
+    (hs' : IsPoly (fun x => ⌜x⌝ₜ.size) s' := by dominated) : f ∈ FP .sizeCostTree :=
+  h.hasProgramInO.mem_fp_sizeCost (IsPoly.comp (h := id) h.time_spec hs)
+    (IsPoly.comp (h := id) h.peak_spec hs')
 
 /-! The exits of an implementation within `O(t)` and `O(p)` are those of the form the translation
 composes, with the same growths. -/
