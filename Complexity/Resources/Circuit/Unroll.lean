@@ -74,7 +74,7 @@ def unrollStepScale (x : UnrollState) :=
   2 * x.1 + x.2.1 + x.2.2.1.size + x.2.2.2.size + 2
 
 theorem hasProgramIn_unrollStep : HasProgramIn unrollStep hole(⊢ program)
-    IsO(fun x => unrollStepScale x ^ 8) IsO(fun x => unrollStepScale x ^ 4) := by
+    IsO(fun x => unrollStepScale x ^ 7) IsO(fun x => unrollStepScale x ^ 4) := by
   abstract_hole program using programUnrollStep
   refine HasProgramInO.toHasProgramIn ?_
   -- `dominated` looks at three rounds of terms; the gate count of a layer takes a fourth.
@@ -114,7 +114,7 @@ theorem hasProgramIn_unrollResult : HasProgramIn (fun x : UnrollState => x.2.2.2
 /-- The loop sums one step allowance per layer and retains a maximum space allowance. -/
 theorem hasProgramIn_unroll :
     HasProgramIn (fun x : UnrollInput => x.2.1.unroll x.2.2) hole(⊢ program)
-      IsO(fun x => unrollScale x ^ 9) IsO(fun x => unrollScale x ^ 4) := by
+      IsO(fun x => unrollScale x ^ 8) IsO(fun x => unrollScale x ^ 4) := by
   abstract_hole program using programUnroll
   refine HasProgramInO.toHasProgramIn ?_
   have hR x : 0 < unrollScale x := by dsimp [unrollScale]; omega
@@ -152,12 +152,12 @@ theorem hasProgramIn_unroll :
   let active (z : {z : UnrollInput × ℕ × UnrollState // I z.1 (z.2.1 + 1) z.2.2}) : Z :=
     ⟨(z.1.1, z.1.2.1 + 1, z.1.2.2), z.2⟩
   have hiter := Dominated.iterate_of_invariant (f := unrollStep)
-    (t := fun y => unrollStepScale y ^ 8) (p := fun y => unrollStepScale y ^ 4) I
+    (t := fun y => unrollStepScale y ^ 7) (p := fun y => unrollStepScale y ^ 4) I
     (fun x => (unrollInitial x).1) (fun x => (unrollInitial x).2)
-    (fun x => unrollScale x ^ 8) (fun x => unrollScale x ^ 4)
+    (fun x => unrollScale x ^ 7) (fun x => unrollScale x ^ 4)
     (fun _ => ⟨0, by simp only [unrollInitial, Nat.zero_add], rfl⟩)
     (by rintro x r y ⟨i, hi, rfl⟩; exact ⟨i + 1, by omega, rfl⟩)
-    (hcounter.le_pow (by decide)) hsize ((hscale.comp active).pow 8)
+    (hcounter.le_pow (by decide)) hsize ((hscale.comp active).pow 7)
     ((hscale.comp active).pow 4)
   have hresult : Dominated (fun x : UnrollInput =>
       ⌜unrollStep^[(unrollInitial x).1] (unrollInitial x).2⌝ₜ.size) (fun x => unrollScale x ^ 2) :=
@@ -182,7 +182,7 @@ theorem Internal.HasProgramInO.unroll {ρ : Type} [UniqueEncoding Tree ρ]
     {r : Value → Code Value} {u q : ρ → ℕ}
     (h : HasProgramInO (fun x => (⟨n x, step x, t x⟩ : UnrollInput)) r u q) :
     HasProgramInO (fun x => (step x).unroll (t x)) (fun v => r v >>= programUnroll)
-      (fun x => u x + unrollScale ⟨n x, step x, t x⟩ ^ 9)
+      (fun x => u x + unrollScale ⟨n x, step x, t x⟩ ^ 8)
       (fun x => max (q x) (unrollScale ⟨n x, step x, t x⟩ ^ 4)) :=
   h.comp_dependent hasProgramIn_unroll.toHasProgramInO
 

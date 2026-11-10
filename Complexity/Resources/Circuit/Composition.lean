@@ -308,121 +308,6 @@ theorem Internal.HasProgramInO.circuitComp {ρ : Type} [UniqueEncoding Tree ρ]
 
 attribute [scoped fun_prop] HasProgramInO.circuitComp
 
-/-- The argument of `Circuit.keepInputs`. -/
-@[tree_encoding]
-structure KeepInput where
-  /-- Inputs of the circuit. -/
-  n : ℕ
-  /-- Outputs of the circuit. -/
-  m : ℕ
-  /-- The circuit whose inputs are kept. -/
-  circuit : Circuit .booleanAlgebra n m
-
-def keepFn (x : KeepInput) := x.circuit.keepInputs
-
-def keepTest (x : KeepInput) :=
-  match x.circuit with | .outputs _ => false | .gate _ _ _ => true
-
-def keepNextFn (x : KeepInput) : KeepInput :=
-  match x.circuit with
-  | .outputs _ => x
-  | .gate _ _ next => ⟨x.n + 1, x.m, next⟩
-
-/-- The output table of a terminal state. -/
-@[tree_encoding]
-structure KeepOutputsInput where
-  /-- Inputs of the circuit. -/
-  n : ℕ
-  /-- Outputs of the circuit. -/
-  m : ℕ
-  /-- The selected outputs. -/
-  select : Fin m → Fin n
-
-/-- An outputs circuit gains its identity outputs without changing existing wires. -/
-def keepOutputsFn (x : KeepOutputsInput) : Circuit .booleanAlgebra x.n (x.n + x.m) :=
-  .outputs (Fin.append id x.select)
-
-def keepFinishFn : (x : {x // keepTest x = false}) → Circuit .booleanAlgebra x.1.n (x.1.n + x.1.m)
-  | ⟨⟨n, m, .outputs select⟩, _⟩ => keepOutputsFn ⟨n, m, select⟩
-  | ⟨⟨_, _, .gate _ _ _⟩, h⟩ => False.elim (by cases h)
-
-def keepResumeFn : (x : {x // keepTest x = true}) →
-    Circuit .booleanAlgebra (keepNextFn x.1).n ((keepNextFn x.1).n + (keepNextFn x.1).m) →
-    Circuit .booleanAlgebra x.1.n (x.1.n + x.1.m)
-  | ⟨⟨_, _, .outputs _⟩, h⟩, _ => False.elim (by cases h)
-  | ⟨⟨n, m, .gate op args _⟩, _⟩, result =>
-      .gate op args (result.mapOutputs
-        (Fin.append (fun i : Fin n => Fin.castAdd m i.castSucc) (Fin.natAdd (n + 1))))
-
-def keepRecursion : Recursion keepFn where
-  test := keepTest
-  next := keepNextFn
-  finish := keepFinishFn
-  resume := keepResumeFn
-  finish_eq := by
-    rintro ⟨⟨n, m, c⟩, h⟩
-    cases c <;> dsimp [keepTest] at h ⊢ <;> first | contradiction | rfl
-  resume_eq := by
-    rintro ⟨⟨n, m, c⟩, h⟩
-    cases c <;> dsimp [keepTest] at h ⊢ <;> first | contradiction | rfl
-  measure x := x.circuit.size
-  decreases := by
-    rintro ⟨n, m, c⟩ h
-    cases c <;> simp_all [keepTest, keepNextFn]
-
-def keepScale (x : KeepInput) : ℕ := x.n + x.m + 2 * x.circuit.size + 1
-
-theorem keepScale_pos (x : KeepInput) : 0 < keepScale x := Nat.succ_pos _
-
-theorem keepScale_next_le (x : KeepInput) : keepScale (keepNextFn x) ≤ keepScale x := by
-  rcases x with ⟨n, m, c⟩
-  cases c <;> simp -implicitDefEqProofs only [keepNextFn, keepScale, Circuit.size_gate] <;> omega
-
-theorem hasProgramIn_keepTest :
-    HasProgramIn keepTest hole(⊢ program) IsO(fun _ => 1) IsO(fun x => ⌜x⌝ₜ.size) := by
-  abstract_hole program using programKeepTest
-  fill_hole program in source_fun_prop
-
-theorem hasProgramIn_keepNextFn :
-    HasProgramIn keepNextFn hole(⊢ program) IsO(fun x => ⌜x⌝ₜ.size) IsO(fun x => ⌜x⌝ₜ.size) := by
-  abstract_hole program using programKeepNextFn
-  fill_hole program in source_fun_prop
-
-theorem hasProgramIn_keepOutputsFn : HasProgramIn keepOutputsFn hole(⊢ program)
-    IsO(fun x => (x.n + x.m + 1) ^ 2) IsO(fun x => (x.n + x.m + 1) ^ 2) := by
-  abstract_hole program using programKeepOutputsFn
-  fill_hole program in source_fun_prop using tabulate
-
-/-- The output table of a terminal state. -/
-def keepFinishInput : {x // keepTest x = false} → KeepOutputsInput
-  | ⟨⟨_, _, .gate _ _ _⟩, h⟩ => False.elim (by cases h)
-  | ⟨⟨n, m, .outputs w⟩, _⟩ => ⟨n, m, w⟩
-
-theorem hasProgramIn_keepFinishInput :
-    HasProgramIn keepFinishInput hole(⊢ program) IsO(fun _ => 1) IsO(fun x => ⌜x⌝ₜ.size) := by
-  abstract_hole program using programKeepFinishInput
-  fill_hole program in source_fun_prop
-
-theorem hasProgramIn_keepFinishFn : HasProgramIn keepFinishFn hole(⊢ program)
-    IsO(fun x => keepScale x.1 ^ 2) IsO(fun x => keepScale x.1 ^ 2) := by
-  abstract_hole program using programKeepFinishFn
-  refine HasProgramInO.toHasProgramIn ?_
-  have : Dominated (fun x => ((keepFinishInput x).n + (keepFinishInput x).m + 1) ^ 2)
-      (fun x => keepScale x.1 ^ 2) := Dominated.of_le fun x => by
-    rcases x with ⟨⟨n, m, c⟩, h⟩
-    cases c with
-    | outputs _ => simp [keepFinishInput, keepScale]
-    | gate _ _ _ => cases h
-  fill_hole program in
-    refine ((hasProgramIn_keepFinishInput.toHasProgramInO.comp_dependent
-      hasProgramIn_keepOutputsFn.toHasProgramInO).of_encode ?_).mono
-      ?_ ?_
-  · rintro ⟨⟨n, m, c⟩, h⟩
-    cases c with
-    | outputs _ => rfl
-    | gate _ _ _ => cases h
-  all_goals dominated [keepScale]
-
 /-- Selecting the outputs of a circuit computed by a selected implementation. -/
 theorem Internal.HasProgramInO.mapOutputs {ρ : Type} [UniqueEncoding Tree ρ] {n m k : ρ → ℕ}
     {c : (x : ρ) → Circuit .booleanAlgebra (n x) (m x)} {f : (x : ρ) → Fin (k x) → Fin (m x)}
@@ -436,110 +321,152 @@ theorem Internal.HasProgramInO.mapOutputs {ρ : Type} [UniqueEncoding Tree ρ] {
 
 attribute [scoped fun_prop] HasProgramInO.mapOutputs
 
-/-- The live return value and gate fields needed by the return callback. -/
-abbrev KeepGateInput := Σ n, Σ m, Σ k, FirstOrder.Language.booleanAlgebra.Functions k ×
-  (Fin k → Fin n) × Circuit .booleanAlgebra (n + 1) (n + 1 + m)
+/-- The arguments of `Circuit.keepWires`. -/
+@[tree_encoding]
+structure KeepWiresInput where
+  /-- Kept wires. -/
+  p : ℕ
+  /-- Available wires of the circuit. -/
+  n : ℕ
+  /-- Outputs of the circuit. -/
+  m : ℕ
+  /-- The circuit whose wires are kept. -/
+  circuit : Circuit .booleanAlgebra n m
+  /-- The kept wires. -/
+  keep : Fin p → Fin n
 
-def keepGateFn (x : KeepGateInput) : Circuit .booleanAlgebra x.1 (x.1 + x.2.1) :=
-  .gate x.2.2.2.1 x.2.2.2.2.1
-    (x.2.2.2.2.2.mapOutputs
-      (Fin.append (fun i : Fin x.1 => Fin.castAdd x.2.1 i.castSucc)
-        (Fin.natAdd (x.1 + 1))))
+/-- `Circuit.keepWires` on its packed arguments. -/
+def keepWiresFn (x : KeepWiresInput) := x.circuit.keepWires x.keep
 
-def keepGateScale (x : KeepGateInput) := x.1 + x.2.1 + x.2.2.2.2.2.size + 1
+/-- Whether the circuit still has a gate to pass. -/
+def keepWiresTest (x : KeepWiresInput) :=
+  match x.circuit with | .outputs _ => false | .gate _ _ _ => true
 
-theorem hasProgramIn_keepGateFn : HasProgramIn keepGateFn hole(⊢ program)
-    IsO(fun x => keepGateScale x ^ 7) IsO(fun x => keepGateScale x ^ 4) := by
-  abstract_hole program using programKeepGateFn
-  refine HasProgramInO.toHasProgramIn ?_
-  have hk : Dominated (fun x : KeepGateInput => x.2.2.1) keepGateScale :=
-    (Dominated.const_of_pos 2 fun _ => Nat.succ_pos _).mono_left fun x => by
-      rcases x with ⟨n, m, k, op, args, result⟩
-      cases op <;> dsimp <;> decide
-  have : Dominated (fun x : KeepGateInput => ⌜x.2.2.2.1⌝ₜ.size) keepGateScale :=
-    (Dominated.const_of_pos 11 fun _ => Nat.succ_pos _).mono_left fun x => by
-      rcases x with ⟨n, m, k, op, args, result⟩
-      cases op <;> simp [encode_unit]
-  have := Dominated.size_encode_fin_function (fun x : KeepGateInput => x.2.2.2.2.1) hk
-    (.of_le fun x => by dsimp [keepGateScale]; omega) fun _ => Nat.succ_pos _
-  have := hk.size_encode_nat fun _ => Nat.succ_pos _
-  fill_hole program in
-    source_fun_prop (disch := (try simp only [Sigma.size_encode_eq, Prod.size_encode_eq]); dominated
-      [keepGateScale, compScale, Circuit.size_mapOutputs, Circuit.size_outputs]) using tabulate
+/-- Pass the first gate, carrying the kept wires to the indices of its continuation. -/
+def keepWiresNextFn (x : KeepWiresInput) : KeepWiresInput :=
+  match x.circuit with
+  | .outputs _ => x
+  | .gate _ _ next => ⟨x.p, x.n + 1, x.m, next, Fin.castSucc ∘ x.keep⟩
 
-def keepResumeInput : keepRecursion.Return → KeepGateInput
-  | ⟨⟨⟨_, _, .outputs _⟩, h⟩, _⟩ => False.elim (by cases h)
-  | ⟨⟨⟨n, m, .gate (k := k) op args _⟩, _⟩, result⟩ => ⟨n, m, k, op, args, result⟩
+/-- An outputs circuit returns the kept wires followed by its outputs. -/
+def keepWiresFinishFn : (x : {x // keepWiresTest x = false}) →
+    Circuit .booleanAlgebra x.1.n (x.1.p + x.1.m)
+  | ⟨⟨_, _, _, .outputs select, keep⟩, _⟩ => .outputs (Fin.append keep select)
+  | ⟨⟨_, _, _, .gate _ _ _, _⟩, h⟩ => False.elim (by cases h)
 
-theorem hasProgramIn_keepResumeInput :
-    HasProgramIn keepResumeInput hole(⊢ program) IsO(fun _ => 1) IsO(fun x => ⌜x⌝ₜ.size) := by
-  abstract_hole program using programKeepResumeInput
+/-- Put the passed gate in front of the result for its continuation. -/
+def keepWiresResumeFn : (x : {x // keepWiresTest x = true}) →
+    Circuit .booleanAlgebra (keepWiresNextFn x.1).n
+      ((keepWiresNextFn x.1).p + (keepWiresNextFn x.1).m) →
+    Circuit .booleanAlgebra x.1.n (x.1.p + x.1.m)
+  | ⟨⟨_, _, _, .outputs _, _⟩, h⟩, _ => False.elim (by cases h)
+  | ⟨⟨_, _, _, .gate op args _, _⟩, _⟩, result => .gate op args result
+
+/-- The structural recursion of `keepWires` over the gates. -/
+def keepWiresRecursion : Recursion keepWiresFn where
+  test := keepWiresTest
+  next := keepWiresNextFn
+  finish := keepWiresFinishFn
+  resume := keepWiresResumeFn
+  finish_eq := by
+    rintro ⟨⟨p, n, m, c, keep⟩, h⟩
+    cases c <;> dsimp [keepWiresTest] at h ⊢ <;> first | contradiction | rfl
+  resume_eq := by
+    rintro ⟨⟨p, n, m, c, keep⟩, h⟩
+    cases c <;> dsimp [keepWiresTest] at h ⊢ <;> first | contradiction | rfl
+  measure x := x.circuit.size
+  decreases := by
+    rintro ⟨p, n, m, c, keep⟩ h
+    cases c <;> simp_all [keepWiresTest, keepWiresNextFn]
+
+/-- The numeric scale of the growth of `keepWires`: the dimensions and twice the gate count. -/
+def keepWiresScale (x : KeepWiresInput) : ℕ := x.p + x.n + x.m + 2 * x.circuit.size + 1
+
+theorem keepWiresScale_pos (x : KeepWiresInput) : 0 < keepWiresScale x := Nat.succ_pos _
+
+theorem keepWiresScale_next_le (x : KeepWiresInput) :
+    keepWiresScale (keepWiresNextFn x) ≤ keepWiresScale x := by
+  rcases x with ⟨p, n, m, c, keep⟩
+  cases c <;>
+    simp -implicitDefEqProofs only [keepWiresNextFn, keepWiresScale, Circuit.size_gate] <;> omega
+
+theorem hasProgramIn_keepWiresTest : HasProgramIn keepWiresTest hole(⊢ program)
+    IsO(fun x => ⌜x⌝ₜ.size ^ 3) IsO(fun x => ⌜x⌝ₜ.size ^ 2) := by
+  abstract_hole program using programKeepWiresTest
   fill_hole program in source_fun_prop
 
-def keepReturnScale (x : keepRecursion.Return) : ℕ := x.1.1.n + x.1.1.m + x.2.size + 1
+theorem hasProgramIn_keepWiresNextFn : HasProgramIn keepWiresNextFn hole(⊢ program)
+    IsO(fun x => ⌜x⌝ₜ.size ^ 3) IsO(fun x => ⌜x⌝ₜ.size ^ 2) := by
+  abstract_hole program using programKeepWiresNextFn
+  fill_hole program in source_fun_prop
 
-theorem hasProgramIn_keepResume :
-    HasProgramIn (fun x : keepRecursion.Return => keepResumeFn x.1 x.2) hole(⊢ program)
-      IsO(fun x => keepReturnScale x ^ 7) IsO(fun x => ⌜x⌝ₜ.size + keepReturnScale x ^ 4) := by
-  abstract_hole program using programKeepResume
+theorem hasProgramIn_keepWiresFinishFn : HasProgramIn keepWiresFinishFn hole(⊢ program)
+    IsO(fun x => ⌜x⌝ₜ.size ^ 3) IsO(fun x => ⌜x⌝ₜ.size ^ 2) := by
+  abstract_hole program using programKeepWiresFinishFn
+  fill_hole program in source_fun_prop
+
+theorem hasProgramIn_keepWiresResume :
+    HasProgramIn (fun x : keepWiresRecursion.Return => keepWiresResumeFn x.1 x.2) hole(⊢ program)
+      IsO(fun x => ⌜x⌝ₜ.size ^ 3) IsO(fun x => ⌜x⌝ₜ.size ^ 2) := by
+  abstract_hole program using programKeepWiresResume
+  fill_hole program in source_fun_prop
+
+/-- The recursive program, with the structural cost of its callbacks bounded by its scale. -/
+theorem hasProgramIn_keepWiresFn : HasProgramIn keepWiresFn hole(⊢ program)
+    IsO(fun x => keepWiresScale x ^ 7) IsO(fun x => keepWiresScale x ^ 4) := by
+  abstract_hole program using programKeepWiresFn
   refine HasProgramInO.toHasProgramIn ?_
-  have hscale (x : keepRecursion.Return) :
-      keepGateScale (keepResumeInput x) = keepReturnScale x := by
-    rcases x with ⟨⟨⟨n, m, c⟩, h⟩, result⟩
-    cases c with
-    | outputs _ => cases h
-    | gate _ _ _ => rfl
+  have hsize : Dominated (fun x : KeepWiresInput => ⌜x⌝ₜ.size)
+      (fun x => keepWiresScale x ^ 2) := by
+    dominated [keepWiresScale]
+  have hpow (d : ℕ) : Dominated (fun x : KeepWiresInput => ⌜x⌝ₜ.size ^ d)
+      (fun x => keepWiresScale x ^ (2 * d)) := by simpa only [pow_mul] using hsize.pow d
+  have hstop (d : ℕ) := (hpow d).comp (Subtype.val (p := fun x => keepWiresTest x = false))
+  have hreturn := keepWiresRecursion.dominated_size_return keepWiresScale keepWiresScale_pos
+    (fun x _ => keepWiresScale_next_le x) hsize
+    (by dominated [keepWiresScale, keepWiresFn, Circuit.size_keepWires])
   fill_hole program in
-    refine ((hasProgramIn_keepResumeInput.toHasProgramInO.comp_dependent
-      hasProgramIn_keepGateFn.toHasProgramInO).of_encode ?_).mono
-      ?_ ?_
-  · rintro ⟨⟨⟨n, m, c⟩, h⟩, result⟩
-    cases c with
-    | outputs _ => cases h
-    | gate _ _ _ => rfl
-  · simp only [hscale]
-    exact (Dominated.const_of_pos 1 (fun _ => Nat.pow_pos (Nat.succ_pos _))).add_same
-      (Dominated.refl _)
-  · simp only [hscale]
-    exact Dominated.of_le fun _ => max_le (Nat.le_add_right ..) (Nat.le_add_left ..)
+    exact (keepWiresRecursion.hasProgramInO_of_scale hasProgramIn_keepWiresTest.toHasProgramInO
+      hasProgramIn_keepWiresNextFn.toHasProgramInO hasProgramIn_keepWiresFinishFn.toHasProgramInO
+      hasProgramIn_keepWiresResume.toHasProgramInO
+      keepWiresScale keepWiresScale_pos (fun x _ => keepWiresScale_next_le x) hsize (hpow 3)
+      (hpow 2) (hpow 3) (hpow 2) (hstop 3) (hstop 2) (hreturn 3) (hreturn 2)).mono
+      (by dominated [keepWiresScale, keepWiresRecursion])
+      (by dominated [keepWiresScale, keepWiresRecursion])
 
-/-- The selected recursive program for `keepInputs`, with its polynomial growth. -/
+/-- Keep selected wires of a circuit computed by a selected implementation. -/
+theorem Internal.HasProgramInO.keepWires {ρ : Type} [UniqueEncoding Tree ρ]
+    {p n m : ρ → ℕ} {c : (x : ρ) → Circuit .booleanAlgebra (n x) (m x)}
+    {w : (x : ρ) → Fin (p x) → Fin (n x)} {t s : ρ → ℕ}
+    {q : Value → Code Value}
+    (h : HasProgramInO (fun x => (⟨p x, n x, m x, c x, w x⟩ : KeepWiresInput)) q t s) :
+    HasProgramInO (fun x => (c x).keepWires (w x)) (fun v => q v >>= programKeepWiresFn)
+      (fun x => t x + keepWiresScale ⟨p x, n x, m x, c x, w x⟩ ^ 7)
+      (fun x => max (s x) (keepWiresScale ⟨p x, n x, m x, c x, w x⟩ ^ 4)) :=
+  h.comp_dependent hasProgramIn_keepWiresFn.toHasProgramInO
+
+attribute [scoped fun_prop] HasProgramInO.keepWires
+
+/-- The argument of `Circuit.keepInputs`. -/
+@[tree_encoding]
+structure KeepInput where
+  /-- Inputs of the circuit. -/
+  n : ℕ
+  /-- Outputs of the circuit. -/
+  m : ℕ
+  /-- The circuit whose inputs are kept. -/
+  circuit : Circuit .booleanAlgebra n m
+
+def keepFn (x : KeepInput) := x.circuit.keepInputs
+
+def keepScale (x : KeepInput) : ℕ := x.n + x.m + 2 * x.circuit.size + 1
+
+/-- The program for `keepWires` on the identity table, with its polynomial growth. -/
 theorem hasProgramIn_keepFn : HasProgramIn keepFn hole(⊢ program)
-    IsO(fun x => keepScale x ^ 8) IsO(fun x => keepScale x ^ 4) := by
+    IsO(fun x => keepScale x ^ 7) IsO(fun x => keepScale x ^ 4) := by
   abstract_hole program using programKeepFn
-  refine HasProgramInO.toHasProgramIn ?_
-  have hsize : Dominated (fun x : KeepInput => ⌜x⌝ₜ.size) (fun x => keepScale x ^ 2) := by
-    dominated [keepScale]
-  have hpos x := Nat.pow_pos (n := 2) (keepScale_pos x)
-  have hreturn : Dominated (fun x : {x // keepRecursion.test x = true} =>
-      ⌜(⟨x, keepFn (keepRecursion.next x.1)⟩ : keepRecursion.Return)⌝ₜ.size)
-      (fun x => keepScale x.1 ^ 4) := by
-    simpa only [pow_one] using (keepRecursion.dominated_size_return keepScale keepScale_pos
-      (fun x _ => keepScale_next_le x) hsize
-        (by dominated [keepScale, keepFn, Circuit.size_keepInputs])
-      1).mono_pow (by decide : 2 * 1 ≤ 4) fun x => keepScale_pos x.1
-  have hscale : Dominated (fun x : {x // keepRecursion.test x = true} =>
-      keepReturnScale ⟨x, keepFn (keepRecursion.next x.1)⟩) (fun x => keepScale x.1) :=
-    Dominated.of_le fun x => by
-      rcases x with ⟨⟨n, m, c⟩, h⟩
-      cases c with
-      | outputs _ => cases h
-      | gate op args next =>
-        change n + m + next.keepInputs.size + 1 ≤ _
-        simp only [Circuit.size_keepInputs, keepScale, Circuit.size_gate]
-        omega
   fill_hole program in
-    exact (keepRecursion.hasProgramInO_of_scale hasProgramIn_keepTest.toHasProgramInO
-      hasProgramIn_keepNextFn.toHasProgramInO hasProgramIn_keepFinishFn.toHasProgramInO
-      hasProgramIn_keepResume.toHasProgramInO keepScale
-      keepScale_pos (fun x _ => keepScale_next_le x) hsize (Dominated.one fun x =>
-        Nat.pow_pos (keepScale_pos x))
-      (hsize.mono_pow (by decide : 2 ≤ 4) keepScale_pos)
-      (hsize.mono_pow (by decide : 2 ≤ 7) keepScale_pos)
-      (hsize.mono_pow (by decide : 2 ≤ 4) keepScale_pos) (Dominated.refl _)
-      ((Dominated.refl _).mono_pow (by decide : 2 ≤ 4) fun x => keepScale_pos x.1) (hscale.pow 7)
-      (hreturn.add_same (hscale.pow 4))).mono
-      (by dominated [keepScale, keepRecursion]) (by dominated [keepScale, keepRecursion])
+    source_fun_prop (disch := dominated [keepScale, keepWiresScale]) using tabulate
 
 /-- Keep the inputs of a circuit computed by a selected implementation. -/
 theorem Internal.HasProgramInO.keepInputs {ρ : Type} [UniqueEncoding Tree ρ]
@@ -547,7 +474,7 @@ theorem Internal.HasProgramInO.keepInputs {ρ : Type} [UniqueEncoding Tree ρ]
     {q : Value → Code Value}
     (h : HasProgramInO (fun x => (⟨n x, m x, c x⟩ : KeepInput)) q t p) :
     HasProgramInO (fun x => (c x).keepInputs) (fun v => q v >>= programKeepFn)
-      (fun x => t x + keepScale ⟨n x, m x, c x⟩ ^ 8)
+      (fun x => t x + keepScale ⟨n x, m x, c x⟩ ^ 7)
       (fun x => max (p x) (keepScale ⟨n x, m x, c x⟩ ^ 4)) :=
   h.comp_dependent hasProgramIn_keepFn.toHasProgramInO
 

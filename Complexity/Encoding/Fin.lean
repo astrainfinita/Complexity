@@ -88,6 +88,12 @@ theorem encode_vector_ofFn {R α : Type*} [UniqueEncoding R (List α)] {n : ℕ}
   rw [encode_fin_function, List.ofFn_succ']
   simp
 
+/-- Concatenated tuples store the entries of both, as the concatenated lists do. -/
+@[dominated] theorem size_encode_fin_append {α : Type*} [UniqueEncoding Tree α] {n m : ℕ}
+    (f : Fin n → α) (g : Fin m → α) : ⌜Fin.append f g⌝ₜ.size + 1 = ⌜f⌝ₜ.size + ⌜g⌝ₜ.size := by
+  simpa only [encode_fin_function, List.ofFn_fin_append] using
+    size_encode_list_append (List.ofFn f) (List.ofFn g)
+
 /-- Erasing bounds from a tuple of wire indices does not change its representation. -/
 @[simp high] theorem encode_fin_values [UniqueEncoding Tree ℕ] {n k : ℕ}
     (f : Fin k → Fin n) : ⌜List.ofFn (Fin.val ∘ f)⌝ₜ = ⌜List.ofFn f⌝ₜ := by

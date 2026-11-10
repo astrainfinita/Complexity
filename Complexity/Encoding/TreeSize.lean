@@ -73,22 +73,6 @@ theorem size_encode_fin_table_le {n k : ℕ} (w : Fin n → Fin k) :
   have : n * (4 * k + 1 + 1) = 4 * (n * k) + 2 * n := by ring
   omega
 
-/-- A finite table has one uniform encoding estimate for all its environments and entries. -/
-theorem Dominated.size_encode_fin_function {α : Type*} {n m R : α → ℕ}
-    (w : (x : α) → Fin (n x) → Fin (m x))
-    (hn : Dominated n R) (hm : Dominated m R) (hR : ∀ x, 0 < R x) :
-    Dominated (fun x => ⌜w x⌝ₜ.size) (fun x => R x ^ 2) := by
-  have h := hn.mul ((hm.const_mul_left 4).add_same (Dominated.const_of_pos 2 hR))
-  rw [show (fun x => R x * R x) = (fun x => R x ^ 2) from funext fun _ => (pow_two _).symm]
-    at h
-  apply (h.add_same (Dominated.const_of_pos 1 fun x => Nat.pow_pos (hR x))).mono_left
-  intro x
-  have hw := size_encode_fin_function_le (w x) (4 * m x + 1) (fun i => by
-    have hi := (w x i).isLt
-    simpa only [encode_fin] using (size_encode_nat_le (w x i).val).trans
-      (by omega : 4 * (w x i).val + 1 ≤ 4 * m x + 1))
-  simpa only [Nat.add_assoc] using hw
-
 /-- Passing to exact-size fibers is needed only at a complexity-class boundary. -/
 theorem dominated_sizeEnvelope {α : Type*} [UniqueEncoding Tree α]
     {b : α → ℕ} {T : ℕ → ℕ} (h : Dominated b (fun x => T (encode Tree x).size)) :

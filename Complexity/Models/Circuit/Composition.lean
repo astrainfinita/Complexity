@@ -150,30 +150,45 @@ theorem Computes.comp [L.Structure M] {c : Circuit L n m} {d : Circuit L m k}
   intro x
   simp [hc x, hd (f x)]
 
-/-- Return the original inputs followed by the outputs, without adding gates. -/
-def keepInputs : {n m : ℕ} → Circuit L n m → Circuit L n (n + m)
-  | _, _, .outputs select => .outputs (Fin.append _root_.id select)
-  | n, m, .gate op args next =>
-      .gate op args (next.keepInputs.mapOutputs
-        (Fin.append (fun i : Fin n => Fin.castAdd m i.castSucc) (Fin.natAdd (n + 1))))
+/-- Return the selected wires followed by the outputs, without adding gates. The selection is
+carried past each gate and written once with the outputs. -/
+def keepWires : {n m : ℕ} → Circuit L n m → (Fin p → Fin n) → Circuit L n (p + m)
+  | _, _, .outputs select, keep => .outputs (Fin.append keep select)
+  | _, _, .gate op args next, keep => .gate op args (next.keepWires (Fin.castSucc ∘ keep))
 
-@[simp] theorem size_keepInputs (c : Circuit L n m) : c.keepInputs.size = c.size := by
+@[simp] theorem size_keepWires (c : Circuit L n m) (keep : Fin p → Fin n) :
+    (c.keepWires keep).size = c.size := by
   induction c with
   | outputs _ => rfl
-  | gate _ _ _ ih => simp [keepInputs, ih]
+  | gate _ _ _ ih => simp [keepWires, ih]
 
-@[simp] theorem evalWith_keepInputs (c : Circuit L n m)
+@[simp] theorem evalWith_keepWires (c : Circuit L n m) (keep : Fin p → Fin n)
     (ops : ∀ {r}, L.Functions r → (Fin r → M) → M) (x : Fin n → M) :
-    c.keepInputs.evalWith ops x = Fin.append x (c.evalWith ops x) := by
+    (c.keepWires keep).evalWith ops x = Fin.append (x ∘ keep) (c.evalWith ops x) := by
   induction c with
   | outputs select =>
       funext i
-      refine Fin.addCases (fun j => ?_) (fun j => ?_) i <;>
-        simp [keepInputs, Function.comp_def]
+      refine Fin.addCases (fun j => ?_) (fun j => ?_) i <;> simp [keepWires, Function.comp_def]
   | gate op args next ih =>
-      simp only [keepInputs, evalWith_gate, evalWith_mapOutputs, ih]
-      funext i
-      refine Fin.addCases (fun j => ?_) (fun j => ?_) i <;> simp
+      simp only [keepWires, evalWith_gate, ih]
+      congr 1
+      funext j
+      simp
+
+@[simp] theorem eval_keepWires [L.Structure M] (c : Circuit L n m) (keep : Fin p → Fin n)
+    (x : Fin n → M) : (c.keepWires keep).eval x = Fin.append (x ∘ keep) (c.eval x) :=
+  evalWith_keepWires _ _ _ _
+
+/-- Return the original inputs followed by the outputs, without adding gates. -/
+def keepInputs (c : Circuit L n m) : Circuit L n (n + m) := c.keepWires _root_.id
+
+@[simp] theorem size_keepInputs (c : Circuit L n m) : c.keepInputs.size = c.size :=
+  size_keepWires _ _
+
+@[simp] theorem evalWith_keepInputs (c : Circuit L n m)
+    (ops : ∀ {r}, L.Functions r → (Fin r → M) → M) (x : Fin n → M) :
+    c.keepInputs.evalWith ops x = Fin.append x (c.evalWith ops x) :=
+  evalWith_keepWires _ _ _ _
 
 @[simp] theorem eval_keepInputs [L.Structure M] (c : Circuit L n m) (x : Fin n → M) :
     c.keepInputs.eval x = Fin.append x (c.eval x) := evalWith_keepInputs _ _ _
