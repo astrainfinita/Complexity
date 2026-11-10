@@ -12,23 +12,23 @@ open ComplexityTest.SourceTranslation.CircuitComposition
 namespace ComplexityTest.SourceTranslation.CircuitAsymptoticReuse
 
 -- Importing the selected implementation restores exactly the same program and growth.
-example : HasProgramInO rewireStored programRewireStored (fun x => ⌜x⌝ₜ.size ^ 7)
-    (fun x => ⌜x⌝ₜ.size ^ 4) := by
+example : HasProgramInO rewireStored programRewireStored hasProgramIn_rewireStored.time
+    hasProgramIn_rewireStored.peak := by
   source_fun_prop
 
-example : HasProgramInO relabelFn programRelabelFn
-    (fun x => relabelScale x ^ 7) (fun x => relabelScale x ^ 4) :=
-  hasProgramIn_relabelFn.toHasProgramInO
-example : HasProgramInO compFn programCompFn
-    (fun x => compScale x ^ 7) (fun x => compScale x ^ 4) := hasProgramIn_compFn.toHasProgramInO
-example : HasProgramInO keepFn programKeepFn
-    (fun x => keepScale x ^ 7) (fun x => keepScale x ^ 4) := hasProgramIn_keepFn.toHasProgramInO
+-- The generators state the kind of their growths, polynomial in their scales.
+example : HasProgramIn relabelFn programRelabelFn (IsPoly relabelScale) (IsPoly relabelScale) :=
+  hasProgramIn_relabelFn
+example : HasProgramIn compFn programCompFn (IsPoly compScale) (IsPoly compScale) :=
+  hasProgramIn_compFn
+example : HasProgramIn keepFn programKeepFn (IsPoly keepScale) (IsPoly keepScale) :=
+  hasProgramIn_keepFn
 
 -- The ordinary composition adapter consumes the raw selected implementation.
 example {ρ : Type} [UniqueEncoding Tree ρ] {q : Value → Code Value} {t p : ρ → ℕ}
     (h : HasProgramInO (fun _ : ρ => (⟨0, 0, 0, Circuit.id _ 0, Circuit.id _ 0⟩ : CompInput))
       q t p) :=
-  (h.circuitComp : type_of% (h.comp_dependent hasProgramIn_compFn.toHasProgramInO))
+  (h.circuitComp : type_of% (h.comp_dependent hasProgramIn_compFn.hasProgramInO))
 
 example : programKeepWiresFn = Recursion.code programKeepWiresTest programKeepWiresNextFn
     programKeepWiresFinishFn programKeepWiresResume := rfl
@@ -39,44 +39,22 @@ example : programKeepWiresFn = Recursion.code programKeepWiresTest programKeepWi
 abbrev StoredComp := {x : CompInput // x.n ≤ ⌜x⌝ₜ.size}
 abbrev StoredKeep := {x : KeepInput // x.n ≤ ⌜x⌝ₜ.size}
 
-private theorem restrict_fdtisp {α : Type} [UniqueEncoding Tree α] {f : α → Tree}
-    {program : Value → Code Value} (scale : α → ℕ) (d : ℕ)
-    (hf : HasProgramInO f program (fun x => scale x ^ d) (fun x => scale x ^ 4))
-    (P : α → Prop)
-    (size : Dominated (fun x : {x // P x} => scale x.1) (fun x => ⌜x⌝ₜ.size)) :
-    (fun x : {x // P x} => f x.1) ∈ FDTISP .tree (fun n => n ^ d) (fun n => n ^ 4) :=
-  ((hf.map_input Subtype.val (fun x => (UniqueEncoding.encode_subtype x).symm)).mono
-    (size.pow d) (size.pow 4)).mem_fdtisp_pow (by decide)
+example : (fun x : StoredComp => ⌜compFn x.1⌝ₜ) ∈ FP .tree :=
+  ((hasProgramIn_compFn.hasProgramInO.of_encode fun _ => Tree.encode_self _).map_input Subtype.val
+    fun x => (UniqueEncoding.encode_subtype x).symm).mem_fp (by
+      dominated [compScale, Circuit.outputs_le_size_encode,
+        Circuit.size_le_size_encode])
 
-example : (fun x : StoredComp => ⌜compFn x.1⌝ₜ) ∈
-    FDTISP .tree (fun n => n ^ 7) (fun n => n ^ 4) := by
-  apply restrict_fdtisp compScale 7
-    (hasProgramIn_compFn.toHasProgramInO.of_encode fun _ => Tree.encode_self _)
-  refine Dominated.of_le_mul 8 ?_
-  rintro ⟨⟨n, m, k, c, d⟩, hn⟩
-  have hm := c.outputs_le_size_encode
-  have hk := d.outputs_le_size_encode
-  have hc := c.size_le_size_encode
-  have hd := d.size_le_size_encode
-  have hp := Tree.size_pos ⌜c⌝ₜ
-  simp only [compScale, UniqueEncoding.encode_subtype, CompInput.encode_mk, size_encode_prod] at hn ⊢
-  omega
-
-example : (fun x : StoredKeep => ⌜keepFn x.1⌝ₜ) ∈
-    FDTISP .tree (fun n => n ^ 7) (fun n => n ^ 4) := by
-  apply restrict_fdtisp keepScale 7
-    (hasProgramIn_keepFn.toHasProgramInO.of_encode fun _ => Tree.encode_self _)
-  refine Dominated.of_le_mul 5 ?_
-  rintro ⟨⟨n, m, c⟩, hn⟩
-  have hm := c.outputs_le_size_encode
-  have hc := c.size_le_size_encode
-  have hp := Tree.size_pos ⌜c⌝ₜ
-  simp only [keepScale, UniqueEncoding.encode_subtype, KeepInput.encode_mk, size_encode_prod] at hn ⊢
-  omega
+example : (fun x : StoredKeep => ⌜keepFn x.1⌝ₜ) ∈ FP .tree :=
+  ((hasProgramIn_keepFn.hasProgramInO.of_encode fun _ => Tree.encode_self _).map_input Subtype.val
+    fun x => (UniqueEncoding.encode_subtype x).symm).mem_fp (by
+      dominated [keepScale, Circuit.outputs_le_size_encode,
+        Circuit.size_le_size_encode])
 
 -- Ordinary nested source calls use the selected keep implementation, retaining structural costs.
-example : HasProgramInO preserve hole(⊢ program) (fun x => ⌜x⌝ₜ.size + keepScale ⟨x.1, x.2.1, x.2.2⟩ ^ 7)
-    (fun x => ⌜preserve x⌝ₜ.size + ⌜x⌝ₜ.size + keepScale ⟨x.1, x.2.1, x.2.2⟩ ^ 4) := by
+example : HasProgramInO preserve hole(⊢ program)
+    (fun x => ⌜x⌝ₜ.size + hasProgramIn_keepFn.time ⟨x.1, x.2.1, x.2.2⟩)
+    (fun x => ⌜preserve x⌝ₜ.size + ⌜x⌝ₜ.size + hasProgramIn_keepFn.peak ⟨x.1, x.2.1, x.2.2⟩) := by
   fill_hole program in source_fun_prop (disch := dominated [preserve])
 
 end ComplexityTest.SourceTranslation.CircuitAsymptoticReuse

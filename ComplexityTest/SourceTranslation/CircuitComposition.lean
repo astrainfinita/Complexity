@@ -45,95 +45,26 @@ def rewireStored (x : Σ n, Σ m, Circuit .booleanAlgebra n m × (Fin n → Fin 
 
 abbrev StoredRelabelInput := Σ n, Σ m, Circuit .booleanAlgebra n m × (Fin n → Fin n)
 
-/-- Compose the selected implementation; only the mathematical size relations remain. -/
+-- The stored table bounds the wire count by code size, so the relabelling scale is linear in it
+-- and the growths polynomial; only the size relations of the circuit are named.
+/-- Compose the selected implementation; the translated growths are polynomial in code size. -/
 @[program] theorem hasProgramIn_rewireStored : HasProgramIn rewireStored hole(⊢ program)
-    IsO(fun x => ⌜x⌝ₜ.size ^ 7) IsO(fun x => ⌜x⌝ₜ.size ^ 4) := by
+    (IsPoly fun x => ⌜x⌝ₜ.size) (IsPoly fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programRewireStored
-  refine HasProgramInO.toHasProgramIn ?_
-  let u (x : Σ n, Σ m, Circuit .booleanAlgebra n m × (Fin n → Fin n)) : RelabelInput :=
-    ⟨x.1, x.2.1, x.1, x.2.2.1, x.2.2.2⟩
-  let S (x : Σ n, Σ m, Circuit .booleanAlgebra n m × (Fin n → Fin n)) := ⌜x⌝ₜ.size
-  let o x := ⌜relabelFn (u x)⌝ₜ.size
-  have hpos x : 0 < S x := Tree.size_pos _
-  have hR : Dominated (relabelScale ∘ u) S := Dominated.of_le_mul 6 fun x => by
-    rcases x with ⟨n, m, c, w⟩
-    have hc : ⌜c⌝ₜ.size ≤ S ⟨n, m, c, w⟩ := by
-      simp only [S, Sigma.encode_mk, size_encode_prod]
-      omega
-    have hw : ⌜w⌝ₜ.size ≤ S ⟨n, m, c, w⟩ := by
-      simp only [S, Sigma.encode_mk, size_encode_prod]
-      omega
-    have hn := (card_le_size_encode_fin_function w).trans hw
-    have hm := c.outputs_le_size_encode.trans hc
-    have hg := c.size_le_size_encode.trans hc
-    have hp := hpos ⟨n, m, c, w⟩
-    dsimp [Function.comp_def, u, relabelScale]
-    omega
-  have hout : Dominated (fun x => ⌜relabelFn x⌝ₜ.size) (fun x => relabelScale x ^ 2) := by
-    dominated [relabelScale, relabelFn, Circuit.size_relabel]
-  have ho : Dominated o (fun x => S x ^ 2) := (hout.comp u).trans (hR.pow 2)
-  have hS : Dominated S (fun x => S x ^ 4) :=
-    Dominated.of_le fun x => Nat.le_self_pow (by decide) _
-  have ho4 := ho.trans (Dominated.of_le fun x => Nat.pow_le_pow_right (hpos x) (by decide : 2 ≤ 4))
-  fill_hole program in source_fun_prop
-  · have hp : Dominated (fun x => 2 * S x + o x + 2 + relabelScale (u x) ^ 4)
-        (fun x => S x ^ 4) := by
-      simp only [Dominated.add_iff]
-      exact ⟨⟨⟨hS.const_mul_left 2, ho4⟩,
-        Dominated.const_of_pos 2 fun x => Nat.pow_pos (hpos x)⟩, hR.pow 4⟩
-    apply hp.mono_left
-    rintro ⟨n, m, c, w⟩
-    dsimp only [S, o, u, Function.comp_apply, relabelFn]
-    simp only [Sigma.encode_mk, RelabelInput.encode_mk, size_encode_prod]
-    omega
+  fill_hole program in source_fun_prop (disch := dominated [relabelScale, Circuit.size_relabel,
+    Circuit.outputs_le_size_encode, Circuit.size_le_size_encode])
 
-theorem rewireStored_fdtisp :
-    rewireStored ∈ FDTISP .tree (fun n => n ^ 7) (fun n => n ^ 4) :=
-  hasProgramIn_rewireStored.mem_fdtisp_pow (by decide)
+theorem rewireStored_fp : rewireStored ∈ FP .tree := hasProgramIn_rewireStored.mem_fp
 
 /-- Unary storage makes the number of generated layers bounded by input size. -/
 def layersStored (x : Σ n, Circuit .booleanAlgebra (n + 1) n × List Unit) :
     Σ n, Σ m, Circuit .booleanAlgebra n m :=
   ⟨x.1 + x.2.2.length, x.1, x.2.1.unroll x.2.2.length⟩
 
-@[program] theorem hasProgramIn_layersStored : HasProgramIn layersStored hole(⊢ program)
-    IsO(fun x => ⌜x⌝ₜ.size ^ 16) IsO(fun x => ⌜x⌝ₜ.size ^ 8) := by
-  abstract_hole program using programLayersStored
-  refine HasProgramInO.toHasProgramIn ?_
-  let S (x : Σ n, Circuit .booleanAlgebra (n + 1) n × List Unit) := ⌜x⌝ₜ.size
-  let u (x : Σ n, Circuit .booleanAlgebra (n + 1) n × List Unit) : UnrollInput :=
-    ⟨x.1, x.2.1, x.2.2.length⟩
-  have hS x : 0 < S x := Tree.size_pos _
-  have hc : Dominated (fun x => ⌜x.2.1⌝ₜ.size) S := Dominated.of_le fun x => by
-    rcases x with ⟨n, c, xs⟩; simp only [S, Sigma.encode_mk, size_encode_prod]; omega
-  have hxs : Dominated (fun x => ⌜x.2.2⌝ₜ.size) S := Dominated.of_le fun x => by
-    rcases x with ⟨n, c, xs⟩; simp only [S, Sigma.encode_mk, size_encode_prod]; omega
-  have hn : Dominated (fun x => x.1) S := hc.mono_left fun x => x.2.1.outputs_le_size_encode
-  have hg : Dominated (fun x => x.2.1.size) S := hc.mono_left fun x => x.2.1.size_le_size_encode
-  have ht : Dominated (fun x => x.2.2.length) S := hxs.mono_left fun x => length_le_codeSize _
-  have hcn := Dominated.size_encode_nat hn hS
-  have hct := Dominated.size_encode_nat ht hS
-  have hcnt := Dominated.size_encode_nat (hn.add_same ht) hS
-  have hR : Dominated (unrollScale ∘ u) (fun x => S x ^ 2) := by
-    have hm := (ht.add_same (Dominated.one hS)).mul hg
-    simp only [← pow_two] at hm
-    simp only [Function.comp_def, u, unrollScale, Dominated.add_iff]
-    exact ⟨⟨⟨Dominated.le_pow (hn.const_mul_left 2) (by decide), ht.le_pow (by decide)⟩, hm⟩,
-      Dominated.const_of_pos 2 (fun x => Nat.pow_pos (hS x))⟩
-  have hu : Dominated (fun x => ⌜u x⌝ₜ.size) S := by
-    simp only [u, Sigma.encode_mk, size_encode_prod, Dominated.add_iff]
-    exact ⟨⟨Dominated.const_of_pos 1 hS, hcn⟩,
-      ⟨⟨Dominated.const_of_pos 1 hS, hc⟩, hct⟩⟩
-  have htime := hR.pow 8
-  have hpeak := hR.pow 4
-  simp only [← pow_mul, Function.comp_def, u] at htime hpeak
-  have hout := (Dominated.comp hasProgramIn_unroll.toHasProgramInO.size_encode u).trans
-    ((hu.le_pow (by decide : 0 < 8)).max_same hpeak)
-  simp only [Function.comp_def, u] at hout
-  fill_hole program in source_fun_prop
-
-theorem layersStored_fdtisp :
-    layersStored ∈ FDTISP .tree (fun n => n ^ 16) (fun n => n ^ 8) :=
-  hasProgramIn_layersStored.mem_fdtisp_pow (by decide)
+-- The layer count is the length of a stored list; the unrolling scale is then polynomial in code
+-- size, with the step's gate count times the layer count.
+theorem layersStored_fp : layersStored ∈ FP .tree := by
+  model_fun_prop (disch := dominated [unrollScale, Circuit.outputs_le_size_encode,
+    Circuit.size_le_size_encode, length_le_codeSize])
 
 end ComplexityTest.SourceTranslation.CircuitComposition

@@ -67,6 +67,21 @@ example := (by source_fun_prop : HasProgramInO (id : List Bool → List Bool) pr
 theorem reverse_fp : (List.reverse : List Bool → List Bool) ∈ FP .tree := by
   model_fun_prop
 
+-- Guards `HasProgramIn.isPoly`: an implementation within `O(t)` and `O(p)` is polynomial in `t`
+-- and in `p`, with no condition.
+example : HasProgramIn (List.reverse : List Bool → List Bool) List.Code.reverse
+    (IsPoly fun xs => ⌜xs⌝ₜ.size) (IsPoly fun xs => ⌜xs⌝ₜ.size) :=
+  List.hasProgramIn_reverse.isPoly
+
+-- Guards the default conditions of the polynomial exits: an implementation polynomial in a measure
+-- other than the code size reaches `FP .sizeCostTree`, the measure compared with the code size by
+-- `dominated`.
+example {program : Value → Code Value}
+    (h : HasProgramIn (List.reverse : List Bool → List Bool) program
+      (IsPoly fun xs => xs.length) (IsPoly fun xs => xs.length)) :
+    (List.reverse : List Bool → List Bool) ∈ FP .sizeCostTree :=
+  h.mem_fp_sizeCost
+
 -- Guards `dominated` on `IsPoly` goals: sums, products, powers and constants by their closure
 -- rules, the other parts compared linearly with the input code size.
 example : IsPoly (fun x : List Bool × List Bool => ⌜x⌝ₜ.size)
