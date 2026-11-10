@@ -59,10 +59,7 @@ theorem size_unrollState_le (n : ℕ) (step : Circuit .booleanAlgebra (n + 1) n)
   omega
 
 def unrollStep (x : UnrollState) : UnrollState :=
-  ⟨x.1, x.2.1 + 1, x.2.2.1,
-    (x.2.2.2.relabel Fin.castSucc).keepInputs.comp
-      (x.2.2.1.relabel (Fin.snoc (Fin.natAdd (x.1 + (x.2.1 + 1)))
-        (Fin.castAdd x.1 (Fin.last (x.1 + x.2.1)))))⟩
+  ⟨x.1, x.2.1 + 1, x.2.2.1, x.2.2.1.unrollLayer x.2.2.2⟩
 
 theorem iterate_unrollStep (n : ℕ) (step : Circuit .booleanAlgebra (n + 1) n) (t : ℕ) :
     unrollStep^[t] ⟨n, 0, step, Circuit.id _ n⟩ = ⟨n, t, step, step.unroll t⟩ := by
@@ -82,7 +79,9 @@ theorem hasProgramIn_unrollStep : HasProgramIn unrollStep hole(⊢ program)
       (c : Circuit .booleanAlgebra (n + t) n) (f : Fin (n + 1) → Fin (n + t + 1 + n)) :
       ((c.relabel Fin.castSucc).keepInputs.comp (step.relabel f)).size = c.size + step.size := by
     simp
+  -- A layer is computed by the programs of the operations it composes.
   fill_hole program in
+    unfold unrollStep Circuit.unrollLayer
     source_fun_prop (disch := dominated
       [unrollStepScale, relabelScale, keepScale, compScale, Circuit.size_relabel,
         Circuit.size_keepInputs, Circuit.size_comp, hsize]) using tabulate

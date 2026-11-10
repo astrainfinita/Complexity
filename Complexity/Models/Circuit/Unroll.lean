@@ -24,13 +24,30 @@ universe u v w
 
 variable {L : Language.{u, v}} {M : Type w} {n : ℕ}
 
+/-- One more layer after `c`: the step reads the state computed by `c` and a new last input. -/
+def unrollLayer {t : ℕ} (step : Circuit L (n + 1) n) (c : Circuit L (n + t) n) :
+    Circuit L (n + (t + 1)) n :=
+  (c.relabel Fin.castSucc).keepInputs.comp
+    (step.relabel (Fin.snoc (Fin.natAdd (n + (t + 1))) (Fin.castAdd n (Fin.last (n + t)))))
+
+@[simp] theorem size_unrollLayer {t : ℕ} (step : Circuit L (n + 1) n)
+    (c : Circuit L (n + t) n) : (step.unrollLayer c).size = c.size + step.size := by
+  simp [unrollLayer]
+
+@[simp] theorem evalWith_unrollLayer {t : ℕ} (step : Circuit L (n + 1) n)
+    (c : Circuit L (n + t) n) (ops : ∀ {k}, L.Functions k → (Fin k → M) → M)
+    (x : Fin (n + (t + 1)) → M) :
+    (step.unrollLayer c).evalWith ops x =
+      step.evalWith ops (Fin.snoc (c.evalWith ops (x ∘ Fin.castSucc)) (x (Fin.last (n + t)))) := by
+  simp only [unrollLayer, evalWith_comp, evalWith_keepInputs, evalWith_relabel]
+  congr 1
+  funext i
+  refine Fin.lastCases ?_ (fun j => ?_) i <;> simp [Function.comp_def]
+
 /-- Repeat a state transition, using a different input wire for each step's choice. -/
 def unroll (step : Circuit L (n + 1) n) : (t : ℕ) → Circuit L (n + t) n
   | 0 => id L n
-  | t + 1 =>
-      ((step.unroll t).relabel Fin.castSucc).keepInputs.comp
-        (step.relabel (Fin.snoc (Fin.natAdd (n + (t + 1)))
-          (Fin.castAdd n (Fin.last (n + t)))))
+  | t + 1 => step.unrollLayer (step.unroll t)
 
 @[simp] theorem size_unroll (step : Circuit L (n + 1) n) (t : ℕ) :
     (step.unroll t).size = t * step.size := by
@@ -43,11 +60,8 @@ def unroll (step : Circuit L (n + 1) n) : (t : ℕ) → Circuit L (n + t) n
     (ops : ∀ {k}, L.Functions k → (Fin k → M) → M) (x : Fin (n + (t + 1)) → M) :
     (step.unroll (t + 1)).evalWith ops x =
       step.evalWith ops (Fin.snoc ((step.unroll t).evalWith ops (x ∘ Fin.castSucc))
-        (x (Fin.last (n + t)))) := by
-  simp only [unroll, evalWith_comp, evalWith_keepInputs, evalWith_relabel]
-  congr 1
-  funext i
-  refine Fin.lastCases ?_ (fun j => ?_) i <;> simp [Function.comp_def]
+        (x (Fin.last (n + t)))) :=
+  evalWith_unrollLayer _ _ _ _
 
 /-- Unfolding agrees with sequentially applying the step to the supplied choice sequence. -/
 theorem evalWith_unroll (step : Circuit L (n + 1) n) (t : ℕ)
