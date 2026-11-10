@@ -65,7 +65,6 @@ theorem borrowInvariant_size : Dominated
 theorem hasProgramIn_borrow :
     HasProgramIn borrow hole(⊢ program) IsO(fun x => ⌜x⌝ₜ.size) IsO(fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programBorrow
-  refine HasProgramInO.toHasProgramIn ?_
   fill_hole program in
     source_fun_prop using loop (test := borrowContinues) (next := borrowStep)
       (finish := borrowFinish) (invariant := borrowInvariant) (measure := fun x => x.1.length)
@@ -96,8 +95,7 @@ theorem _root_.Complexity.BitList.hasProgramIn_decrement :
     HasProgramIn BitList.decrement hole(⊢ program) IsO(fun xs => ⌜xs⌝ₜ.size)
       IsO(fun xs => ⌜xs⌝ₜ.size) := by
   abstract_hole program using programDecrement
-  refine HasProgramInO.toHasProgramIn ?_
-  have hb := hasProgramIn_borrow.toHasProgramInO
+  have hb := hasProgramIn_borrow
   fill_hole program in source_fun_prop via (fun xs => borrow (xs, []))
   case source_eq => funext xs; simp [borrow]
 
@@ -146,7 +144,6 @@ def addResult (x : Bool × List Bool × List Bool × List Bool) :=
 theorem hasProgramIn_addContinues :
     HasProgramIn addContinues hole(⊢ program) IsO(fun _ => 1) IsO(fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programAddContinues
-  refine HasProgramInO.toHasProgramIn ?_
   have hb (f : Bool × List Bool × List Bool × List Bool → Bool) :
       Dominated (fun x => ⌜f x⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) :=
     (Dominated.const_of_pos 3 fun _ => Tree.size_pos _).mono_left fun x => size_encode_bool_le _
@@ -168,7 +165,6 @@ attribute [local program] hasProgramIn_addStep
 theorem hasProgramIn_addFinish :
     HasProgramIn addFinish hole(⊢ program) IsO(fun x => ⌜x⌝ₜ.size) IsO(fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programAddFinish
-  refine HasProgramInO.toHasProgramIn ?_
   have hcarryInput : Dominated
       (fun x : Bool × List Bool × List Bool × List Bool =>
         ⌜(x.1, if x.2.1.isEmpty then x.2.2.1 else x.2.1)⌝ₜ.size)
@@ -199,7 +195,6 @@ theorem addCount_size_growth : Dominated
 theorem hasProgramIn_addResult :
     HasProgramIn addResult hole(⊢ program) IsO(fun x => ⌜x⌝ₜ.size) IsO(fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programAddResult
-  refine HasProgramInO.toHasProgramIn ?_
   fill_hole program in
     source_fun_prop using loop (test := addContinues) (next := addStep) (finish := addFinish)
       (invariant := fun x y => addCount y ≤ addCount x) (measure := fun x => x.2.1.length)
@@ -250,7 +245,6 @@ def leResult (x : Bool × List Bool × List Bool) := BitList.leAux x.1 x.2.1 x.2
 theorem hasProgramIn_leContinues :
     HasProgramIn leContinues hole(⊢ program) IsO(fun _ => 1) IsO(fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programLeContinues
-  refine HasProgramInO.toHasProgramIn ?_
   have hb (f : Bool × List Bool × List Bool → Bool) :
       Dominated (fun x => ⌜f x⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) :=
     (Dominated.const_of_pos 3 fun _ => Tree.size_pos _).mono_left fun x => size_encode_bool_le _
@@ -280,7 +274,6 @@ theorem compareCount_size_growth : Dominated
 theorem hasProgramIn_leResult :
     HasProgramIn leResult hole(⊢ program) IsO(fun x => ⌜x⌝ₜ.size) IsO(fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programLeResult
-  refine HasProgramInO.toHasProgramIn ?_
   fill_hole program in
     source_fun_prop using loop (test := leContinues) (next := leStep) (finish := Prod.fst)
       (invariant := fun x y => compareCount y ≤ compareCount x) (measure := compareCount)
@@ -352,7 +345,6 @@ theorem hasProgramIn_natBeq :
     HasProgramIn (fun x : ℕ × ℕ => Nat.beq x.1 x.2) hole(⊢ program) IsO(fun x => ⌜x⌝ₜ.size)
       IsO(fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programNatBeq
-  refine HasProgramInO.toHasProgramIn ?_
   fill_hole program in source_fun_prop via (fun x : ℕ × ℕ => Nat.ble x.1 x.2 && Nat.ble x.2 x.1)
   case source_eq =>
     funext ⟨m, n⟩

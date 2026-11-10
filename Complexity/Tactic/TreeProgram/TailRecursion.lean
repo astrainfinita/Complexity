@@ -228,7 +228,7 @@ syntax "source_fun_prop" (Lean.Parser.Tactic.discharger)? " using " sourceMeasur
 
 open Lean Meta Elab Tactic in
 private def proveMeasuredLoop (method : TSyntax `sourceMeasuredLoop) (scope : Option Ident) :
-    TacticM (List MVarId) := withSourceSpecs scope <| withMainContext do
+    TacticM (List MVarId) := withComposedLocals <| withSourceSpecs scope <| withMainContext do
   let `(sourceMeasuredLoop| loop (test := $test) (next := $next) (finish := $finish)
     (invariant := $inv) (measure := $measure) (step := $step) (stop := $stop) (space := $peak)) :=
     method | throwUnsupportedSyntax
@@ -280,6 +280,8 @@ open Lean Elab Tactic in
 elab_rules : tactic
   | `(tactic| source_fun_prop $[$disch]? using $method:sourceMeasuredLoop
       $[using $scope:ident]?) => do
+    if (← instantiateMVars (← getMainTarget)).consumeMData.isAppOf ``HasProgramIn then
+      return ← modelFunProp disch (proveMeasuredLoop method scope)
     let obligations ← dischargeGrowth disch (← proveMeasuredLoop method scope)
     setGoals (obligations ++ (← getGoals))
   | `(tactic| model_fun_prop $[$disch]? using $method:sourceMeasuredLoop $[using $scope:ident]?) =>

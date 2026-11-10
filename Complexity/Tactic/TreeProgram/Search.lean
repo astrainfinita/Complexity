@@ -40,7 +40,7 @@ structure Failure where
 structure Session where
   /-- Attempts are charged even when their metavariable state is rolled back. -/
   steps : IO.Ref Nat
-  /-- The most informative unsuccessful subgoal and its source path. -/
+  /-- The first unsuccessful subgoal recorded, with its source path. -/
   failure : IO.Ref (Option Failure)
   /-- The limit is read once at the outer entry. -/
   maxSteps : Nat

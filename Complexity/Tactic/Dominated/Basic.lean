@@ -1066,9 +1066,12 @@ def mkContext (target : Target) (unfolds : Array Name) (lemmas growths : Array L
 elab_rules : tactic
   | `(tactic| dominated $[[$args,*]]?) => withMainContext do
     let goal ← getMainGoal
-    let type := (← instantiateMVars (← goal.getType)).consumeMData
+    -- A property `IsO(T)` applied to a budget, left by unfolding `HasProgramIn`, is a beta redex.
+    let type := (← instantiateMVars (← goal.getType)).consumeMData.headBeta
     let some (f, target) := Target.of? type
       | throwError "dominated: expected a `Dominated` or `IsPoly` goal"
+    -- Metadata on the left side would hide its sums and its degree.
+    let f := eraseMData f
     let (unfolds, lemmas, growths) ← listItems "dominated" (args.map (·.getElems) |>.getD #[])
     let ctx ← mkContext target unfolds lemmas growths
     let (proof, state) ← (split f target ctx.sizes proveOrLeave |>.run ctx).run {}

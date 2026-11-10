@@ -828,7 +828,7 @@ def elabSourceTerm (stx : Syntax) (type : Lean.Expr) : TacticM Lean.Expr :=
 open Lean Meta Elab Tactic in
 /-- Translate with each local `HasProgramIn` hypothesis also given in the form the translation
 composes, as by `program`; the copies are cleared from the goals left. -/
-private def withComposedLocals (translate : TacticM (List MVarId)) : TacticM (List MVarId) := do
+def withComposedLocals (translate : TacticM (List MVarId)) : TacticM (List MVarId) := do
   let goal ← getMainGoal
   let copies ← goal.withContext do
     (← getLCtx).foldlM (init := #[]) fun copies decl => do

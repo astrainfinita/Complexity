@@ -41,7 +41,6 @@ theorem hasProgramIn_lookupStep {α : Type*} [UniqueEncoding Tree α] :
     HasProgramIn (lookupStep (α := α)) hole(⊢ program)
       IsO(fun x => ⌜x.1⌝ₜ.size) IsO(fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programLookupStep
-  refine HasProgramInO.toHasProgramIn ?_
   have := Nat.hasProgramIn_pred.toHasProgramInO.size_encode.comp (fun x : ℕ × List α => x.1)
   fill_hole program in source_fun_prop
 
@@ -193,7 +192,6 @@ theorem hasProgramIn_rangeContinues :
 theorem hasProgramIn_rangeStep :
     HasProgramIn rangeStep hole(⊢ program) IsO(fun x => ⌜x.1⌝ₜ.size) IsO(fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programRangeStep
-  refine HasProgramInO.toHasProgramIn ?_
   have := Nat.hasProgramIn_pred.toHasProgramInO.size_encode.comp (fun x : ℕ × List ℕ => x.1)
   fill_hole program in source_fun_prop
 
@@ -268,8 +266,7 @@ theorem _root_.List.hasProgramIn_range :
     HasProgramIn List.range hole(⊢ program) IsO(fun n => (n + 1) ^ 2)
       IsO(fun n => (n + 1) ^ 2) := by
   abstract_hole program using programRange
-  refine HasProgramInO.toHasProgramIn ?_
-  let hr := hasProgramIn_rangeLoop.toHasProgramInO
+  let hr := hasProgramIn_rangeLoop
   fill_hole program in source_fun_prop via (fun n => rangeLoop (n, []))
   case source_eq => funext n; simp [rangeLoop]
 

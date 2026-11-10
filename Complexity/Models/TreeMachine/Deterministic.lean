@@ -46,7 +46,7 @@ section Canonical
 
 variable [NeZero k]
 
-theorem HaltsAt.le_actionSum {M : TreeMachine Id k Q} {a : Tree} {t : ℕ}
+theorem le_actionSum_of_haltsAt {M : TreeMachine Id k Q} {a : Tree} {t : ℕ}
     (h : M.HaltsAt a t) :
     t ≤ (M.runHistory a t).snd.actionSum Action.sizeCost :=
   (M.length_runHistoryFrom_eq _ _ h.2).symm.trans_le
@@ -119,7 +119,7 @@ theorem ComputesWithin.exists_haltsAt {M : TreeMachine Id k Q} {a : Tree}
   rw [hasOutput_isOutput] at ha
   obtain ⟨n, hn, hh⟩ := M.exists_haltsAt_le a hu
   have hc := (M.actionSum_runHistory_mono a _ hn).trans ht
-  refine ⟨n, (HaltsAt.le_actionSum hh).trans hc, hh, ?_, hc,
+  refine ⟨n, (le_actionSum_of_haltsAt hh).trans hc, hh, ?_, hc,
     (M.configSup_runHistory_mono a _ hn).trans hs⟩
   rwa [M.run_eq_of_halted a hh.1 hn] at ha
 
