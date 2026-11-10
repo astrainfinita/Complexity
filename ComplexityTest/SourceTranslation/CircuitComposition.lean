@@ -69,8 +69,9 @@ abbrev StoredRelabelInput := Σ n, Σ m, Circuit .booleanAlgebra n m × (Fin n �
     have hp := hpos ⟨n, m, c, w⟩
     dsimp [Function.comp_def, u, relabelScale]
     omega
-  have ho : Dominated o (fun x => S x ^ 2) :=
-    (Dominated.comp (Dominated.of_le_mul 100 size_encode_relabelFn_le) u).trans (hR.pow 2)
+  have hout : Dominated (fun x => ⌜relabelFn x⌝ₜ.size) (fun x => relabelScale x ^ 2) := by
+    dominated [relabelScale, relabelFn, Circuit.size_relabel]
+  have ho : Dominated o (fun x => S x ^ 2) := (hout.comp u).trans (hR.pow 2)
   have hS : Dominated S (fun x => S x ^ 4) :=
     Dominated.of_le fun x => Nat.le_self_pow (by decide) _
   have ho4 := ho.trans (Dominated.of_le fun x => Nat.pow_le_pow_right (hpos x) (by decide : 2 ≤ 4))
