@@ -20,7 +20,6 @@ namespace ComplexityTest.SourceTranslation.AsymptoticReuse
 theorem hasProgramIn_importedLoop :
     HasProgramIn preciseIdentity hole(⊢ program) IsO(fun _ => 1) IsO(fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programImportedLoop
-  refine HasProgramInO.toHasProgramIn ?_
   fill_hole program in
     source_fun_prop using loop (test := fun _ : List Bool => false)
       (next := preciseIdentity) (finish := preciseIdentity)

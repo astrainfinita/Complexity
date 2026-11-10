@@ -49,7 +49,6 @@ def chunkWork (x : GatherInput) : ℕ :=
 theorem hasProgramIn_advance :
     HasProgramIn advance hole(⊢ program) IsO(chunkWork) IsO(fun x => ⌜x⌝ₜ.size + 10) := by
   abstract_hole program using programAdvance
-  refine HasProgramInO.toHasProgramIn ?_
   fill_hole program in source_fun_prop
   all_goals
     apply Dominated.of_le_mul 20
@@ -165,10 +164,10 @@ example : programGather = loopCode programGatherCheck programAdvance programGath
 
 def keep (xs : List Bool) := xs
 
+-- Also guards `source_fun_prop using loop` on a `HasProgramIn` goal, with no internal form written.
 @[program] theorem hasProgramIn_keep :
     HasProgramIn keep hole(⊢ program) IsO(fun _ => 1) IsO(fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programKeep
-  refine HasProgramInO.toHasProgramIn ?_
   fill_hole program in
     source_fun_prop using loop
       (test := fun _ => false) (next := id) (finish := id)
@@ -185,6 +184,24 @@ def keep (xs : List Bool) := xs
 
 theorem keep_loop_model : keep ∈ FDTISP .tree (fun n => n ^ 0) (fun n => n ^ 1) := by
   model_fun_prop
+
+-- Guards a loop callback implemented only by a local `HasProgramIn` hypothesis.
+example {g : List Bool → List Bool} {pg : Value → Code Value}
+    (_hg : HasProgramIn g pg IsO(fun _ => 1) IsO(fun x => ⌜x⌝ₜ.size)) :
+    HasProgramIn keep hole(pg ⊢ program) IsO(fun _ => 1) IsO(fun x => ⌜x⌝ₜ.size) := by
+  fill_hole program in
+    source_fun_prop using loop
+      (test := fun _ => false) (next := g) (finish := id)
+      (invariant := fun x y => y = x)
+      (measure := fun _ => 0) (step := fun _ => 1) (stop := fun _ => 1)
+      (space := fun x => ⌜x⌝ₜ.size)
+  guard_tail_goals
+  case equation => intro; rfl
+  case initial => intro; rfl
+  case next_state => simp
+  case decreases => simp
+  case input_size | step_peak => exact Dominated.of_le (fun z => by rw [z.2])
+  all_goals intro; decide
 
 -- A zero allowance cannot replace the selected loop by the ordinary identity program.
 example : True := by

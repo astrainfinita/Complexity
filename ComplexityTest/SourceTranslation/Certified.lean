@@ -169,7 +169,6 @@ def reverseAlias (xs : List Bool) := xs.reverse
 
 theorem hasProgramIn_reverseAlias : HasProgramIn reverseAlias List.Code.reverse
     IsO(fun xs => ⌜xs⌝ₜ.size) IsO(fun xs => ⌜xs⌝ₜ.size) := by
-  refine HasProgramInO.toHasProgramIn ?_
   source_fun_prop
 
 def aliasInLet (xs : List Bool) :=

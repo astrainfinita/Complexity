@@ -306,4 +306,19 @@ example : Dominated (fun n : ℕ => ((List.finRange n).map fun i : Fin n => ⌜(
     (fun n => (n + 1) ^ 2) := by
   dominated
 
+-- Guards the goals left when a `HasProgramIn` is proved from its definition: its properties
+-- applied to the budgets, beta redexes of `Dominated`.
+example {f : ℕ → ℕ} {p : Value → Code Value} {b : Bounds ℕ} (hb : Implements p f b)
+    (ht : ∀ x, b.time x ≤ x) (hp : ∀ x, b.peak x ≤ x) :
+    HasProgramIn f p IsO(fun x => x + 1) IsO(fun x => x + 1) := by
+  refine ⟨b, hb, ?_, ?_⟩
+  · dominated [ht]
+  · dominated [hp]
+
+-- Guards metadata on the left side: the sum under `no_index` is still split, and its product
+-- compared by degree.
+example : Dominated (fun x : ℕ × ℕ => no_index (x.1 * x.1 + x.2))
+    (fun x => (x.1 + 1) ^ 2 + x.2) := by
+  dominated
+
 end ComplexityTest.SourceTranslation.GrowthTactic

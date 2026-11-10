@@ -59,7 +59,6 @@ theorem hasProgramIn_retainSlow :
     HasProgramIn retain hole(⊢ program) IsO(fun xs => ⌜xs⌝ₜ.size + ⌜xs.reverse⌝ₜ.size)
     IsO(fun xs => max ⌜xs⌝ₜ.size ⌜xs.reverse⌝ₜ.size) := by
   abstract_hole program using programRetainSlow
-  refine HasProgramInO.toHasProgramIn ?_
   fill_hole program in source_fun_prop via (fun xs : List Bool => xs.reverse.reverse)
   case source_eq => funext xs; simp [retain]
 

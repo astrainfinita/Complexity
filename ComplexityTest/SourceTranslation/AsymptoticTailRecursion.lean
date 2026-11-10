@@ -20,7 +20,6 @@ def drain (_ : List Bool) : List Bool := []
 @[program] theorem hasProgramIn_drain : HasProgramIn drain hole(⊢ program)
     IsO(fun xs => ⌜xs⌝ₜ.size) IsO(fun xs => ⌜xs⌝ₜ.size) := by
   abstract_hole program using programDrain
-  refine HasProgramInO.toHasProgramIn ?_
   fill_hole program in
     source_fun_prop using loop (test := fun xs : List Bool => !xs.isEmpty)
       (next := List.tail) (finish := id)
