@@ -62,14 +62,6 @@ namespace Complexity.TreeProgram.Source
 
 open Internal (HasProgramInO)
 
-theorem dominated_one_pow {α : Type*} (R : α → ℕ) (hR : ∀ x, 0 < R x) (d : ℕ) :
-    Dominated (fun _ => 1) (fun x => R x ^ d) :=
-  Dominated.one fun x => Nat.pow_pos (hR x)
-
-theorem dominated_pow_pow_of_le {α : Type*} (R : α → ℕ) (hR : ∀ x, 0 < R x)
-    {d e : ℕ} (h : d ≤ e) : Dominated (fun x => R x ^ d) (fun x => R x ^ e) :=
-  Dominated.of_le fun x => Nat.pow_le_pow_right (hR x) h
-
 /-- The arguments of `Circuit.relabel`. -/
 @[tree_encoding]
 structure RelabelInput where
@@ -122,24 +114,27 @@ def relabelRecursion : Recursion relabelFn where
 
 def relabelScale (x : RelabelInput) : ℕ := x.n + x.m + x.k + 2 * x.circuit.size + 1
 
-theorem relabelScale_pos (x : RelabelInput) : 0 < relabelScale x := Nat.succ_pos _
-
 theorem relabelScale_next_le (x : RelabelInput) :
     relabelScale (relabelNextFn x) ≤ relabelScale x := by
   rcases x with ⟨n, m, k, c, w⟩
   cases c <;>
     simp -implicitDefEqProofs only [relabelNextFn, relabelScale, Circuit.size_gate] <;> omega
 
+-- The test and step callbacks are stated with their natural growths, constant or linear in code
+-- size; `hasProgramIn_relabelFn` takes them polynomial in these by `HasProgramIn.isPoly` and
+-- compares the growths with the scale.
 theorem hasProgramIn_relabelTest : HasProgramIn relabelTest hole(⊢ program)
-    IsO(fun x => ⌜x⌝ₜ.size ^ 3) IsO(fun x => ⌜x⌝ₜ.size ^ 2) := by
+    IsO(fun _ => 1) IsO(fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programRelabelTest
   fill_hole program in source_fun_prop
 
 theorem hasProgramIn_relabelNextFn : HasProgramIn relabelNextFn hole(⊢ program)
-    IsO(fun x => ⌜x⌝ₜ.size ^ 3) IsO(fun x => ⌜x⌝ₜ.size ^ 2) := by
+    IsO(fun x => ⌜x⌝ₜ.size) IsO(fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programRelabelNextFn
   fill_hole program in source_fun_prop
 
+-- For now the finish and resume callbacks keep their degrees: their costs are inside a `match` on
+-- the circuit, which `dominated` compares pointwise only on `IsPoly` goals (plan W2).
 attribute [local fun_prop] HasProgramInO.fin_comp in
 theorem hasProgramIn_relabelFinishFn : HasProgramIn relabelFinishFn hole(⊢ program)
     IsO(fun x => ⌜x⌝ₜ.size ^ 3) IsO(fun x => ⌜x⌝ₜ.size ^ 2) := by
@@ -153,27 +148,19 @@ theorem hasProgramIn_relabelResume :
   abstract_hole program using programRelabelResume
   fill_hole program in source_fun_prop
 
-/-- The recursive program, with the structural cost of its callbacks bounded by its scale. -/
-@[program] theorem hasProgramIn_relabelFn : HasProgramIn relabelFn hole(⊢ program)
-    IsO(fun x => relabelScale x ^ 7) IsO(fun x => relabelScale x ^ 4) := by
+/-- The recursive program, polynomial in `relabelScale`: the recursion cost of its callbacks. -/
+@[program] theorem hasProgramIn_relabelFn :
+    HasProgramIn relabelFn hole(⊢ program) (IsPoly relabelScale) (IsPoly relabelScale) := by
   abstract_hole program using programRelabelFn
-  refine HasProgramInO.toHasProgramIn ?_
-  have hsize : Dominated (fun x : RelabelInput => ⌜x⌝ₜ.size) (fun x => relabelScale x ^ 2) := by
-    dominated [relabelScale]
-  have hpow (d : ℕ) : Dominated (fun x : RelabelInput => ⌜x⌝ₜ.size ^ d)
-      (fun x => relabelScale x ^ (2 * d)) := by simpa only [pow_mul] using hsize.pow d
-  have hstop (d : ℕ) := (hpow d).comp (Subtype.val (p := fun x => relabelTest x = false))
-  have hreturn := relabelRecursion.dominated_size_return relabelScale relabelScale_pos
-    (fun x _ => relabelScale_next_le x) hsize
-    (by dominated [relabelScale, relabelFn, Circuit.size_relabel])
+  have hsize : IsPoly relabelScale fun x => ⌜x⌝ₜ.size := by dominated [relabelScale]
   fill_hole program in
-    exact (relabelRecursion.hasProgramInO_of_scale hasProgramIn_relabelTest.toHasProgramInO
-      hasProgramIn_relabelNextFn.toHasProgramInO hasProgramIn_relabelFinishFn.toHasProgramInO
-      hasProgramIn_relabelResume.toHasProgramInO
-      relabelScale relabelScale_pos (fun x _ => relabelScale_next_le x) hsize (hpow 3) (hpow 2)
-      (hpow 3) (hpow 2) (hstop 3) (hstop 2) (hreturn 3) (hreturn 2)).mono
-      (by dominated [relabelScale, relabelRecursion])
-      (by dominated [relabelScale, relabelRecursion])
+    exact relabelRecursion.hasProgramIn_isPoly relabelScale (fun x _ => relabelScale_next_le x)
+      (by dominated [relabelScale, relabelRecursion]) hsize
+      (by dominated [relabelScale, relabelFn, Circuit.size_relabel])
+      hasProgramIn_relabelTest.isPoly (.const 1) hsize
+      hasProgramIn_relabelNextFn.isPoly hsize hsize
+      hasProgramIn_relabelFinishFn.isPoly ((hsize.comp .refl).pow 3) ((hsize.comp .refl).pow 2)
+      hasProgramIn_relabelResume.isPoly (IsPoly.refl.pow 3) (IsPoly.refl.pow 2)
 
 /-- Relabel a circuit computed by a selected implementation. -/
 theorem Internal.HasProgramInO.relabel {ρ : Type} [UniqueEncoding Tree ρ]
@@ -183,9 +170,9 @@ theorem Internal.HasProgramInO.relabel {ρ : Type} [UniqueEncoding Tree ρ]
     {q : Value → Code Value}
     (h : HasProgramInO (fun x => (⟨n x, m x, k x, c x, w x⟩ : RelabelInput)) q t p) :
     HasProgramInO (fun x => (c x).relabel (w x)) (fun v => q v >>= programRelabelFn)
-      (fun x => t x + relabelScale ⟨n x, m x, k x, c x, w x⟩ ^ 7)
-      (fun x => max (p x) (relabelScale ⟨n x, m x, k x, c x, w x⟩ ^ 4)) :=
-  h.comp_dependent hasProgramIn_relabelFn.toHasProgramInO
+      (fun x => t x + hasProgramIn_relabelFn.time ⟨n x, m x, k x, c x, w x⟩)
+      (fun x => max (p x) (hasProgramIn_relabelFn.peak ⟨n x, m x, k x, c x, w x⟩)) :=
+  h.comp_dependent hasProgramIn_relabelFn.hasProgramInO
 
 attribute [scoped fun_prop] HasProgramInO.relabel
 
@@ -213,9 +200,16 @@ def compNextFn (x : CompInput) : CompInput :=
   | .outputs _ => x
   | .gate _ _ next => ⟨x.n + 1, x.m, x.k, next, x.second⟩
 
-def compFinishFn : (x : {x // compTest x = false}) → Circuit .booleanAlgebra x.1.n x.1.k
-  | ⟨⟨n, m, k, .outputs select, d⟩, _⟩ => relabelFn ⟨m, k, n, d, select⟩
+/-- The output table of the first circuit once it has no gate. For now the finish is split into
+this table and a call of `relabelFn`, since on `IsPoly` goals `dominated` compares the cost inside a
+`match` only pointwise (plan W2). -/
+def compOutputs : (x : {x // compTest x = false}) → Fin x.1.m → Fin x.1.n
+  | ⟨⟨_, _, _, .outputs select, _⟩, _⟩ => select
   | ⟨⟨_, _, _, .gate _ _ _, _⟩, h⟩ => False.elim (by cases h)
+
+/-- With no gate left, the second circuit reads the outputs of the first. -/
+def compFinishFn (x : {x // compTest x = false}) : Circuit .booleanAlgebra x.1.n x.1.k :=
+  relabelFn ⟨x.1.m, x.1.k, x.1.n, x.1.second, compOutputs x⟩
 
 def compResumeFn : (x : {x // compTest x = true}) →
     Circuit .booleanAlgebra (compNextFn x.1).n (compNextFn x.1).k →
@@ -242,12 +236,13 @@ def compRecursion : Recursion compFn where
 def compScale (x : CompInput) : ℕ :=
   x.n + x.m + x.k + 2 * (x.first.size + x.second.size) + 1
 
-theorem compScale_pos (x : CompInput) : 0 < compScale x := Nat.succ_pos _
-
 theorem compScale_next_le (x : CompInput) : compScale (compNextFn x) ≤ compScale x := by
   rcases x with ⟨n, m, k, c, d⟩
   cases c <;> simp -implicitDefEqProofs only [compNextFn, compScale, Circuit.size_gate] <;> omega
 
+-- The test, step, outputs and resume callbacks are stated with their natural growths, constant or
+-- linear in code size; `hasProgramIn_compFn` takes them polynomial in these by
+-- `HasProgramIn.isPoly` and compares the growths with the scale.
 theorem hasProgramIn_compTest :
     HasProgramIn compTest hole(⊢ program) IsO(fun _ => 1) IsO(fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programCompTest
@@ -258,10 +253,16 @@ theorem hasProgramIn_compNextFn :
   abstract_hole program using programCompNextFn
   fill_hole program in source_fun_prop
 
+@[program] theorem hasProgramIn_compOutputs :
+    HasProgramIn compOutputs hole(⊢ program) IsO(fun _ => 1) IsO(fun x => ⌜x⌝ₜ.size) := by
+  abstract_hole program using programCompOutputs
+  fill_hole program in source_fun_prop
+
+/-- The terminal relabelling, polynomial in the scale of its composition. -/
 theorem hasProgramIn_compFinishFn : HasProgramIn compFinishFn hole(⊢ program)
-    IsO(fun x => compScale x.1 ^ 7) IsO(fun x => ⌜x⌝ₜ.size + compScale x.1 ^ 4) := by
+    (IsPoly fun x => compScale x.1) (IsPoly fun x => compScale x.1) := by
   abstract_hole program using programCompFinishFn
-  fill_hole program in source_fun_prop (disch := dominated [relabelScale, compScale])
+  fill_hole program in source_fun_prop (disch := dominated [compScale, relabelScale])
 
 theorem hasProgramIn_compResume :
     HasProgramIn (fun x : compRecursion.Return => compResumeFn x.1 x.2) hole(⊢ program)
@@ -269,30 +270,20 @@ theorem hasProgramIn_compResume :
   abstract_hole program using programCompResume
   fill_hole program in source_fun_prop
 
-/-- The terminal relabel call is paid once, so the time expression has degree seven, not eight. -/
-theorem hasProgramIn_compFn : HasProgramIn compFn hole(⊢ program)
-    IsO(fun x => compScale x ^ 7) IsO(fun x => compScale x ^ 4) := by
+/-- The recursive program, polynomial in `compScale`: the recursion cost of its callbacks, with the
+terminal relabelling paid once. -/
+theorem hasProgramIn_compFn :
+    HasProgramIn compFn hole(⊢ program) (IsPoly compScale) (IsPoly compScale) := by
   abstract_hole program using programCompFn
-  refine HasProgramInO.toHasProgramIn ?_
-  have hsize : Dominated (fun x : CompInput => ⌜x⌝ₜ.size) (fun x => compScale x ^ 2) := by
-    dominated [compScale]
-  have hpos x := Nat.pow_pos (n := 2) (compScale_pos x)
-  have hreturn := compRecursion.dominated_size_return compScale compScale_pos
-    (fun x _ => compScale_next_le x) hsize
-    (by dominated [compScale, compFn, Circuit.size_comp]) 1
+  have hsize : IsPoly compScale fun x => ⌜x⌝ₜ.size := by dominated [compScale]
   fill_hole program in
-    exact (compRecursion.hasProgramInO_of_scale hasProgramIn_compTest.toHasProgramInO
-      hasProgramIn_compNextFn.toHasProgramInO hasProgramIn_compFinishFn.toHasProgramInO
-      hasProgramIn_compResume.toHasProgramInO compScale
-      compScale_pos (fun x _ => compScale_next_le x) hsize (Dominated.one hpos)
-      (hsize.mono_pow (by decide : 2 ≤ 4) compScale_pos) hsize
-      (hsize.mono_pow (by decide : 2 ≤ 4) compScale_pos) (Dominated.refl _)
-      (((hsize.mono_pow (by decide : 2 ≤ 4) compScale_pos).comp Subtype.val).add_same
-        (Dominated.refl _))
-      (Dominated.one fun x => hpos x.1)
-      (by simpa only [pow_one] using
-        hreturn.mono_pow (by decide : 2 * 1 ≤ 4) fun x => compScale_pos x.1)).mono
-      (by dominated [compScale, compRecursion]) (by dominated [compScale, compRecursion])
+    exact compRecursion.hasProgramIn_isPoly compScale (fun x _ => compScale_next_le x)
+      (by dominated [compScale, compRecursion]) hsize
+      (by dominated [compScale, compFn, Circuit.size_comp])
+      hasProgramIn_compTest.isPoly (.const 1) hsize
+      hasProgramIn_compNextFn.isPoly hsize hsize
+      hasProgramIn_compFinishFn .refl .refl
+      hasProgramIn_compResume.isPoly (.const 1) .refl
 
 /-- Compose circuits computed by a selected implementation. -/
 theorem Internal.HasProgramInO.circuitComp {ρ : Type} [UniqueEncoding Tree ρ]
@@ -302,9 +293,9 @@ theorem Internal.HasProgramInO.circuitComp {ρ : Type} [UniqueEncoding Tree ρ]
     {q : Value → Code Value}
     (h : HasProgramInO (fun x => (⟨n x, m x, k x, c x, d x⟩ : CompInput)) q t p) :
     HasProgramInO (fun x => (c x).comp (d x)) (fun v => q v >>= programCompFn)
-      (fun x => t x + compScale ⟨n x, m x, k x, c x, d x⟩ ^ 7)
-      (fun x => max (p x) (compScale ⟨n x, m x, k x, c x, d x⟩ ^ 4)) :=
-  h.comp_dependent hasProgramIn_compFn.toHasProgramInO
+      (fun x => t x + hasProgramIn_compFn.time ⟨n x, m x, k x, c x, d x⟩)
+      (fun x => max (p x) (hasProgramIn_compFn.peak ⟨n x, m x, k x, c x, d x⟩)) :=
+  h.comp_dependent hasProgramIn_compFn.hasProgramInO
 
 attribute [scoped fun_prop] HasProgramInO.circuitComp
 
@@ -315,9 +306,9 @@ theorem Internal.HasProgramInO.mapOutputs {ρ : Type} [UniqueEncoding Tree ρ] {
     {q : Value → Code Value}
     (h : HasProgramInO (fun x => (⟨n x, m x, k x, c x, .outputs (f x)⟩ : CompInput)) q t p) :
     HasProgramInO (fun x => (c x).mapOutputs (f x)) (fun v => q v >>= programCompFn)
-      (fun x => t x + compScale ⟨n x, m x, k x, c x, .outputs (f x)⟩ ^ 7)
-      (fun x => max (p x) (compScale ⟨n x, m x, k x, c x, .outputs (f x)⟩ ^ 4)) :=
-  h.comp_dependent hasProgramIn_compFn.toHasProgramInO
+      (fun x => t x + hasProgramIn_compFn.time ⟨n x, m x, k x, c x, .outputs (f x)⟩)
+      (fun x => max (p x) (hasProgramIn_compFn.peak ⟨n x, m x, k x, c x, .outputs (f x)⟩)) :=
+  h.comp_dependent hasProgramIn_compFn.hasProgramInO
 
 attribute [scoped fun_prop] HasProgramInO.mapOutputs
 
@@ -382,57 +373,49 @@ def keepWiresRecursion : Recursion keepWiresFn where
 /-- The numeric scale of the growth of `keepWires`: the dimensions and twice the gate count. -/
 def keepWiresScale (x : KeepWiresInput) : ℕ := x.p + x.n + x.m + 2 * x.circuit.size + 1
 
-theorem keepWiresScale_pos (x : KeepWiresInput) : 0 < keepWiresScale x := Nat.succ_pos _
-
 theorem keepWiresScale_next_le (x : KeepWiresInput) :
     keepWiresScale (keepWiresNextFn x) ≤ keepWiresScale x := by
   rcases x with ⟨p, n, m, c, keep⟩
   cases c <;>
     simp -implicitDefEqProofs only [keepWiresNextFn, keepWiresScale, Circuit.size_gate] <;> omega
 
+-- The callbacks are stated with their natural growths, constant or linear in code size;
+-- `hasProgramIn_keepWiresFn` takes them polynomial in these by `HasProgramIn.isPoly` and compares
+-- the growths with the scale.
 theorem hasProgramIn_keepWiresTest : HasProgramIn keepWiresTest hole(⊢ program)
-    IsO(fun x => ⌜x⌝ₜ.size ^ 3) IsO(fun x => ⌜x⌝ₜ.size ^ 2) := by
+    IsO(fun _ => 1) IsO(fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programKeepWiresTest
   fill_hole program in source_fun_prop
 
 theorem hasProgramIn_keepWiresNextFn : HasProgramIn keepWiresNextFn hole(⊢ program)
-    IsO(fun x => ⌜x⌝ₜ.size ^ 3) IsO(fun x => ⌜x⌝ₜ.size ^ 2) := by
+    IsO(fun x => ⌜x⌝ₜ.size) IsO(fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programKeepWiresNextFn
   fill_hole program in source_fun_prop
 
 theorem hasProgramIn_keepWiresFinishFn : HasProgramIn keepWiresFinishFn hole(⊢ program)
-    IsO(fun x => ⌜x⌝ₜ.size ^ 3) IsO(fun x => ⌜x⌝ₜ.size ^ 2) := by
+    IsO(fun x => ⌜x⌝ₜ.size) IsO(fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programKeepWiresFinishFn
   fill_hole program in source_fun_prop
 
 theorem hasProgramIn_keepWiresResume :
     HasProgramIn (fun x : keepWiresRecursion.Return => keepWiresResumeFn x.1 x.2) hole(⊢ program)
-      IsO(fun x => ⌜x⌝ₜ.size ^ 3) IsO(fun x => ⌜x⌝ₜ.size ^ 2) := by
+      IsO(fun _ => 1) IsO(fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programKeepWiresResume
   fill_hole program in source_fun_prop
 
-/-- The recursive program, with the structural cost of its callbacks bounded by its scale. -/
+/-- The recursive program, polynomial in `keepWiresScale`: the recursion cost of its callbacks. -/
 theorem hasProgramIn_keepWiresFn : HasProgramIn keepWiresFn hole(⊢ program)
-    IsO(fun x => keepWiresScale x ^ 7) IsO(fun x => keepWiresScale x ^ 4) := by
+    (IsPoly keepWiresScale) (IsPoly keepWiresScale) := by
   abstract_hole program using programKeepWiresFn
-  refine HasProgramInO.toHasProgramIn ?_
-  have hsize : Dominated (fun x : KeepWiresInput => ⌜x⌝ₜ.size)
-      (fun x => keepWiresScale x ^ 2) := by
-    dominated [keepWiresScale]
-  have hpow (d : ℕ) : Dominated (fun x : KeepWiresInput => ⌜x⌝ₜ.size ^ d)
-      (fun x => keepWiresScale x ^ (2 * d)) := by simpa only [pow_mul] using hsize.pow d
-  have hstop (d : ℕ) := (hpow d).comp (Subtype.val (p := fun x => keepWiresTest x = false))
-  have hreturn := keepWiresRecursion.dominated_size_return keepWiresScale keepWiresScale_pos
-    (fun x _ => keepWiresScale_next_le x) hsize
-    (by dominated [keepWiresScale, keepWiresFn, Circuit.size_keepWires])
+  have hsize : IsPoly keepWiresScale fun x => ⌜x⌝ₜ.size := by dominated [keepWiresScale]
   fill_hole program in
-    exact (keepWiresRecursion.hasProgramInO_of_scale hasProgramIn_keepWiresTest.toHasProgramInO
-      hasProgramIn_keepWiresNextFn.toHasProgramInO hasProgramIn_keepWiresFinishFn.toHasProgramInO
-      hasProgramIn_keepWiresResume.toHasProgramInO
-      keepWiresScale keepWiresScale_pos (fun x _ => keepWiresScale_next_le x) hsize (hpow 3)
-      (hpow 2) (hpow 3) (hpow 2) (hstop 3) (hstop 2) (hreturn 3) (hreturn 2)).mono
-      (by dominated [keepWiresScale, keepWiresRecursion])
-      (by dominated [keepWiresScale, keepWiresRecursion])
+    exact keepWiresRecursion.hasProgramIn_isPoly keepWiresScale
+      (fun x _ => keepWiresScale_next_le x) (by dominated [keepWiresScale, keepWiresRecursion])
+      hsize (by dominated [keepWiresScale, keepWiresFn, Circuit.size_keepWires])
+      hasProgramIn_keepWiresTest.isPoly (.const 1) hsize
+      hasProgramIn_keepWiresNextFn.isPoly hsize hsize
+      hasProgramIn_keepWiresFinishFn.isPoly (hsize.comp .refl) (hsize.comp .refl)
+      hasProgramIn_keepWiresResume.isPoly (.const 1) .refl
 
 /-- Keep selected wires of a circuit computed by a selected implementation. -/
 theorem Internal.HasProgramInO.keepWires {ρ : Type} [UniqueEncoding Tree ρ]
@@ -441,9 +424,9 @@ theorem Internal.HasProgramInO.keepWires {ρ : Type} [UniqueEncoding Tree ρ]
     {q : Value → Code Value}
     (h : HasProgramInO (fun x => (⟨p x, n x, m x, c x, w x⟩ : KeepWiresInput)) q t s) :
     HasProgramInO (fun x => (c x).keepWires (w x)) (fun v => q v >>= programKeepWiresFn)
-      (fun x => t x + keepWiresScale ⟨p x, n x, m x, c x, w x⟩ ^ 7)
-      (fun x => max (s x) (keepWiresScale ⟨p x, n x, m x, c x, w x⟩ ^ 4)) :=
-  h.comp_dependent hasProgramIn_keepWiresFn.toHasProgramInO
+      (fun x => t x + hasProgramIn_keepWiresFn.time ⟨p x, n x, m x, c x, w x⟩)
+      (fun x => max (s x) (hasProgramIn_keepWiresFn.peak ⟨p x, n x, m x, c x, w x⟩)) :=
+  h.comp_dependent hasProgramIn_keepWiresFn.hasProgramInO
 
 attribute [scoped fun_prop] HasProgramInO.keepWires
 
@@ -461,9 +444,9 @@ def keepFn (x : KeepInput) := x.circuit.keepInputs
 
 def keepScale (x : KeepInput) : ℕ := x.n + x.m + 2 * x.circuit.size + 1
 
-/-- The program for `keepWires` on the identity table, with its polynomial growth. -/
-theorem hasProgramIn_keepFn : HasProgramIn keepFn hole(⊢ program)
-    IsO(fun x => keepScale x ^ 7) IsO(fun x => keepScale x ^ 4) := by
+/-- The program for `keepWires` on the identity table, polynomial in `keepScale`. -/
+theorem hasProgramIn_keepFn :
+    HasProgramIn keepFn hole(⊢ program) (IsPoly keepScale) (IsPoly keepScale) := by
   abstract_hole program using programKeepFn
   fill_hole program in
     source_fun_prop (disch := dominated [keepScale, keepWiresScale]) using tabulate
@@ -474,9 +457,9 @@ theorem Internal.HasProgramInO.keepInputs {ρ : Type} [UniqueEncoding Tree ρ]
     {q : Value → Code Value}
     (h : HasProgramInO (fun x => (⟨n x, m x, c x⟩ : KeepInput)) q t p) :
     HasProgramInO (fun x => (c x).keepInputs) (fun v => q v >>= programKeepFn)
-      (fun x => t x + keepScale ⟨n x, m x, c x⟩ ^ 7)
-      (fun x => max (p x) (keepScale ⟨n x, m x, c x⟩ ^ 4)) :=
-  h.comp_dependent hasProgramIn_keepFn.toHasProgramInO
+      (fun x => t x + hasProgramIn_keepFn.time ⟨n x, m x, c x⟩)
+      (fun x => max (p x) (hasProgramIn_keepFn.peak ⟨n x, m x, c x⟩)) :=
+  h.comp_dependent hasProgramIn_keepFn.hasProgramInO
 
 attribute [scoped fun_prop] HasProgramInO.keepInputs
 

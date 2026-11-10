@@ -714,56 +714,6 @@ theorem isPoly_cost {tc pc ts ps : α → ℕ} {td pd : {x // r.test x = false} 
     (hD.add ((hmeasure.add (.const 1)).mul (hD.add (.const 1)))).of_dominated h.2⟩
 
 variable [instβ : ∀ x, UniqueEncoding Tree (β x)]
-  {tc pc ts ps : α → ℕ} {td pd : {x // r.test x = false} → ℕ} {tr pr : r.Return → ℕ}
-
-/-- The recursive program, with the growth of `dominated_cost_of_scale`. -/
-theorem hasProgramInO_of_scale
-    {instD : ∀ x : {x // r.test x = false}, UniqueEncoding Tree (β x.1)}
-    {instR : ∀ x : r.Return, UniqueEncoding Tree (β x.1.1)} {qc qs qd qr : Value → Code Value}
-    (hc : HasProgramInO r.test qc tc pc) (hs : HasProgramInO r.next qs ts ps)
-    (hd : HasProgramInO r.finish qd td pd)
-    (hr : HasProgramInO (fun x : r.Return => r.resume x.1 x.2) qr tr pr)
-    (S : α → ℕ) (hS : ∀ x, 0 < S x)
-    (hnext : ∀ x, r.test x = true → S (r.next x) ≤ S x) {e a b c : ℕ}
-    (hsize : Dominated (fun x => ⌜x⌝ₜ.size) (fun x => S x ^ e))
-    (htc : Dominated tc (fun x => S x ^ a)) (hpc : Dominated pc (fun x => S x ^ b))
-    (hts : Dominated ts (fun x => S x ^ a)) (hps : Dominated ps (fun x => S x ^ b))
-    (htd : Dominated td (fun x => S x.1 ^ c)) (hpd : Dominated pd (fun x => S x.1 ^ b))
-    (htr : Dominated (fun x : {x // r.test x = true} => tr ⟨x, f (r.next x.1)⟩)
-      (fun x => S x.1 ^ a))
-    (hpr : Dominated (fun x : {x // r.test x = true} => pr ⟨x, f (r.next x.1)⟩)
-      (fun x => S x.1 ^ b))
-    (hD : ∀ x, instD x = instβ x.1 := by intros; rfl)
-    (hR : ∀ x, instR x = instβ x.1.1 := by intros; rfl) :
-    HasProgramInO f (code qc qs qd qr) (fun x => (r.measure x + 1) * S x ^ a + S x ^ c)
-      (fun x => S x ^ b + (r.measure x + 1) * (S x ^ e + 1)) :=
-  have h := r.dominated_cost_of_scale ⟨tc, pc⟩ ⟨ts, ps⟩ ⟨td, pd⟩ ⟨tr, pr⟩ S hS hnext hsize
-    ⟨htc, hpc⟩ ⟨hts, hps⟩ ⟨htd, hpd⟩ ⟨htr, hpr⟩
-  have hpos x : 0 < (r.measure x + 1) * S x ^ a + S x ^ c :=
-    Nat.add_pos_right _ (Nat.pow_pos (hS x))
-  (r.hasProgramInO hc hs hd hr hD hR).mono
-    (((htc.trans (Dominated.of_le fun _ => (Nat.le_mul_of_pos_left _ (Nat.succ_pos _)).trans
-        (Nat.le_add_right _ _))).add_same (h.1.trans (Dominated.of_le fun _ =>
-          Nat.add_le_add_right (Nat.mul_le_mul_right _ (Nat.le_succ _)) _))).add_same
-      (Dominated.one hpos))
-    (h.2.add_same (Dominated.one fun x => Nat.add_pos_left (Nat.pow_pos (hS x)) _))
-
-/-- Bounds of a recursive result by the scale of its source state, for callbacks whose
-allowances are powers of their input sizes. -/
-theorem dominated_size_return (S : α → ℕ) (hS : ∀ x, 0 < S x)
-    (hnext : ∀ x, r.test x = true → S (r.next x) ≤ S x) {e : ℕ}
-    (hsize : Dominated (fun x => ⌜x⌝ₜ.size) (fun x => S x ^ e))
-    (hout : Dominated (fun x => ⌜f x⌝ₜ.size) (fun x => S x ^ e)) (d : ℕ) :
-    Dominated (fun x : {x // r.test x = true} => ⌜(⟨x, f (r.next x.1)⟩ : r.Return)⌝ₜ.size ^ d)
-      (fun x => S x.1 ^ (e * d)) := by
-  have h : Dominated (fun x : {x // r.test x = true} =>
-      1 + ⌜x.1⌝ₜ.size + ⌜f (r.next x.1)⌝ₜ.size) (fun x => S x.1 ^ e) :=
-    ((Dominated.one fun x => Nat.pow_pos (hS x.1)).add_same (hsize.comp Subtype.val)).add_same
-      (dominated_pow_comp (fun x : {x // r.test x = true} => r.next x.1) hout
-        fun x => hnext x.1 x.2)
-  have heq (x : {x // r.test x = true}) : ⌜(⟨x, f (r.next x.1)⟩ : r.Return)⌝ₜ.size =
-      1 + ⌜x.1⌝ₜ.size + ⌜f (r.next x.1)⌝ₜ.size := rfl
-  simpa only [pow_mul, heq] using h.pow d
 
 /-- The stored input of a resumption is polynomial in the scale of its source state. -/
 theorem isPoly_size_return (S : α → ℕ) (hnext : ∀ x, r.test x = true → S (r.next x) ≤ S x)
