@@ -22,7 +22,7 @@ example : HasProgramInO relabelFn programRelabelFn
 example : HasProgramInO compFn programCompFn
     (fun x => compScale x ^ 7) (fun x => compScale x ^ 4) := hasProgramIn_compFn.toHasProgramInO
 example : HasProgramInO keepFn programKeepFn
-    (fun x => keepScale x ^ 8) (fun x => keepScale x ^ 4) := hasProgramIn_keepFn.toHasProgramInO
+    (fun x => keepScale x ^ 7) (fun x => keepScale x ^ 4) := hasProgramIn_keepFn.toHasProgramInO
 
 -- The ordinary composition adapter consumes the raw selected implementation.
 example {ρ : Type} [UniqueEncoding Tree ρ] {q : Value → Code Value} {t p : ρ → ℕ}
@@ -30,8 +30,8 @@ example {ρ : Type} [UniqueEncoding Tree ρ] {q : Value → Code Value} {t p : �
       q t p) :=
   (h.circuitComp : type_of% (h.comp_dependent hasProgramIn_compFn.toHasProgramInO))
 
-example : programKeepFn = Recursion.code programKeepTest programKeepNextFn programKeepFinishFn
-    programKeepResume := rfl
+example : programKeepWiresFn = Recursion.code programKeepWiresTest programKeepWiresNextFn
+    programKeepWiresFinishFn programKeepWiresResume := rfl
 
 -- Binary dimensions are not bounded by code size without a hypothesis. Restrict only the
 -- external source type; map_input reuses the same program and its all-input certificate. The
@@ -63,8 +63,8 @@ example : (fun x : StoredComp => ⌜compFn x.1⌝ₜ) ∈
   omega
 
 example : (fun x : StoredKeep => ⌜keepFn x.1⌝ₜ) ∈
-    FDTISP .tree (fun n => n ^ 8) (fun n => n ^ 4) := by
-  apply restrict_fdtisp keepScale 8
+    FDTISP .tree (fun n => n ^ 7) (fun n => n ^ 4) := by
+  apply restrict_fdtisp keepScale 7
     (hasProgramIn_keepFn.toHasProgramInO.of_encode fun _ => Tree.encode_self _)
   refine Dominated.of_le_mul 5 ?_
   rintro ⟨⟨n, m, c⟩, hn⟩
@@ -75,7 +75,7 @@ example : (fun x : StoredKeep => ⌜keepFn x.1⌝ₜ) ∈
   omega
 
 -- Ordinary nested source calls use the selected keep implementation, retaining structural costs.
-example : HasProgramInO preserve hole(⊢ program) (fun x => ⌜x⌝ₜ.size + keepScale ⟨x.1, x.2.1, x.2.2⟩ ^ 8)
+example : HasProgramInO preserve hole(⊢ program) (fun x => ⌜x⌝ₜ.size + keepScale ⟨x.1, x.2.1, x.2.2⟩ ^ 7)
     (fun x => ⌜preserve x⌝ₜ.size + ⌜x⌝ₜ.size + keepScale ⟨x.1, x.2.1, x.2.2⟩ ^ 4) := by
   fill_hole program in source_fun_prop (disch := dominated [preserve])
 

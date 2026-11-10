@@ -97,7 +97,7 @@ def layersStored (x : Σ n, Circuit .booleanAlgebra (n + 1) n × List Unit) :
   ⟨x.1 + x.2.2.length, x.1, x.2.1.unroll x.2.2.length⟩
 
 @[program] theorem hasProgramIn_layersStored : HasProgramIn layersStored hole(⊢ program)
-    IsO(fun x => ⌜x⌝ₜ.size ^ 18) IsO(fun x => ⌜x⌝ₜ.size ^ 8) := by
+    IsO(fun x => ⌜x⌝ₜ.size ^ 16) IsO(fun x => ⌜x⌝ₜ.size ^ 8) := by
   abstract_hole program using programLayersStored
   refine HasProgramInO.toHasProgramIn ?_
   let S (x : Σ n, Circuit .booleanAlgebra (n + 1) n × List Unit) := ⌜x⌝ₜ.size
@@ -124,7 +124,7 @@ def layersStored (x : Σ n, Circuit .booleanAlgebra (n + 1) n × List Unit) :
     simp only [u, Sigma.encode_mk, size_encode_prod, Dominated.add_iff]
     exact ⟨⟨Dominated.const_of_pos 1 hS, hcn⟩,
       ⟨⟨Dominated.const_of_pos 1 hS, hc⟩, hct⟩⟩
-  have htime := hR.pow 9
+  have htime := hR.pow 8
   have hpeak := hR.pow 4
   simp only [← pow_mul, Function.comp_def, u] at htime hpeak
   have hout := (Dominated.comp hasProgramIn_unroll.toHasProgramInO.size_encode u).trans
@@ -133,7 +133,7 @@ def layersStored (x : Σ n, Circuit .booleanAlgebra (n + 1) n × List Unit) :
   fill_hole program in source_fun_prop
 
 theorem layersStored_fdtisp :
-    layersStored ∈ FDTISP .tree (fun n => n ^ 18) (fun n => n ^ 8) :=
+    layersStored ∈ FDTISP .tree (fun n => n ^ 16) (fun n => n ^ 8) :=
   hasProgramIn_layersStored.mem_fdtisp_pow (by decide)
 
 end ComplexityTest.SourceTranslation.CircuitComposition
