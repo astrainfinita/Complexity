@@ -50,9 +50,12 @@ theorem size_encode_tseitin_le {n : ℕ} (c : Circuit .booleanAlgebra n 1) :
         simp only [encode_gate, size_encode_prod, size_encode_unit]
         omega
       have hg : ⌜CNF.ofGate op (Fin.val ∘ args) n⌝ₜ.size ≤
-          8 * ⌜(n, gate op args next)⌝ₜ.size := by
-        simp only [encode_gate, size_encode_prod]
-        cases op <;> simp [CNF.ofGate, List.ofFn_succ] <;> omega
+          4 * ⌜(n, gate op args next)⌝ₜ.size := by
+        have h := CNF.size_encode_ofGate_le op (Fin.val ∘ args) n
+        have hv : ⌜Fin.val ∘ args⌝ₜ.size = ⌜args⌝ₜ.size :=
+          congrArg Tree.size (encode_fin_values args)
+        simp only [Sigma.encode_mk, encode_gate, size_encode_prod, size_encode_unit, hv] at h ⊢
+        omega
       have hi := next.size_encode_tseitin_le
       have ha := size_encode_list_append (CNF.ofGate op (Fin.val ∘ args) n) next.tseitin
       simp only [tseitin]

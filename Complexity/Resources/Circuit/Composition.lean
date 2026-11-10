@@ -23,24 +23,19 @@ open Complexity TreeProgram
 
 namespace Complexity.Circuit
 
-/-- A numeric bound on Boolean-circuit encoding size, including every stored wire. -/
-theorem size_encode_numeric_le {n m : ℕ} (c : Circuit .booleanAlgebra n m) :
-    ⌜c⌝ₜ.size ≤ 100 * (c.size + m + 1) * (n + c.size + 1) := by
+/-- A numeric bound on Boolean-circuit encoding size, including every stored wire. Its two factors
+form one product, which `dominated` compares with the square of a scale bounding each factor. -/
+@[dominated] theorem size_encode_le {n m : ℕ} (c : Circuit .booleanAlgebra n m) :
+    ⌜c⌝ₜ.size ≤ 100 * ((c.size + m + 1) * (n + c.size + 1)) := by
   induction c with
   | @outputs n m select =>
-    have hs := size_encode_fin_function_le select (4 * n + 1) (fun i => by
-      have := size_encode_nat_le (select i).val
-      have := (select i).isLt
-      simpa only [encode_fin] using (by omega : ⌜(select i).val⌝ₜ.size ≤ 4 * n + 1))
+    have hs := size_encode_fin_table_le select
     simp only [encode_outputs, size_encode_prod, size_encode_unit, size_outputs] at *
     nlinarith
   | @gate n m k op args next ih =>
     have hk : k ≤ 2 := by cases op <;> decide
     have ho : ⌜op⌝ₜ.size ≤ 11 := by cases op <;> simp [encode_unit]
-    have ha := size_encode_fin_function_le args (4 * n + 1) (fun i => by
-      have := size_encode_nat_le (args i).val
-      have := (args i).isLt
-      simpa only [encode_fin] using (by omega : ⌜(args i).val⌝ₜ.size ≤ 4 * n + 1))
+    have ha := size_encode_fin_table_le args
     have hargs : ⌜args⌝ₜ.size ≤ 8 * n + 5 := by nlinarith
     have hk' := size_encode_nat_le k
     simp only [encode_gate, size_encode_prod, size_encode_unit, size_gate]
@@ -62,20 +57,6 @@ the lifted table as this vector. -/
     ⌜List.ofFn (Fin.castSucc ∘ wires) ++ [Fin.last k]⌝ₜ.size = ⌜wires⌝ₜ.size + ⌜k⌝ₜ.size + 1)
 
 end Complexity.Circuit
-
-namespace Complexity
-
-theorem Dominated.size_encode_circuit {α : Type*} {n m R : α → ℕ}
-    (c : (x : α) → Circuit .booleanAlgebra (n x) (m x))
-    (hn : Dominated n R) (hm : Dominated m R)
-    (hc : Dominated (fun x => (c x).size) R) (hR : ∀ x, 0 < R x) :
-    Dominated (fun x => ⌜c x⌝ₜ.size) (fun x => R x ^ 2) := by
-  have h := ((hc.add_same hm).add_same (Dominated.one hR)).mul
-    ((hn.add_same hc).add_same (Dominated.one hR))
-  simpa only [pow_two, Nat.mul_assoc] using (h.const_mul_left 100).mono_left
-    (fun x => by simpa only [Nat.mul_assoc] using (c x).size_encode_numeric_le)
-
-end Complexity
 
 namespace Complexity.TreeProgram.Source
 
@@ -149,38 +130,6 @@ theorem relabelScale_next_le (x : RelabelInput) :
   cases c <;>
     simp -implicitDefEqProofs only [relabelNextFn, relabelScale, Circuit.size_gate] <;> omega
 
-theorem size_encode_relabelInput_le (x : RelabelInput) :
-    ⌜x⌝ₜ.size ≤ 128 * relabelScale x ^ 2 := by
-  rcases x with ⟨n, m, k, c, w⟩
-  obtain ⟨S, hS⟩ : ∃ S, relabelScale ⟨n, m, k, c, w⟩ = S := ⟨_, rfl⟩
-  have hS' : S = n + m + k + 2 * c.size + 1 := hS.symm
-  rw [hS]
-  have hc := c.size_encode_numeric_le
-  have hcp : (c.size + m + 1) * (n + c.size + 1) ≤ S ^ 2 := by
-    simpa only [pow_two] using Nat.mul_le_mul (by omega : c.size + m + 1 ≤ S)
-      (by omega : n + c.size + 1 ≤ S)
-  have hw := size_encode_fin_function_le w (4 * k + 1) (fun i => by
-    have := size_encode_nat_le (w i).val
-    have := (w i).isLt
-    simpa only [encode_fin] using (by omega : ⌜(w i).val⌝ₜ.size ≤ 4 * k + 1))
-  have hwp := Nat.mul_le_mul (by omega : n ≤ S) (by omega : 4 * k + 1 + 1 ≤ 6 * S)
-  have hn := size_encode_nat_le n
-  have hm := size_encode_nat_le m
-  have hk := size_encode_nat_le k
-  simp only [RelabelInput.encode_mk, size_encode_prod]
-  nlinarith
-
-theorem size_encode_relabelFn_le (x : RelabelInput) :
-    ⌜relabelFn x⌝ₜ.size ≤ 100 * relabelScale x ^ 2 := by
-  rcases x with ⟨n, m, k, c, w⟩
-  have h := (c.relabel w).size_encode_numeric_le
-  simp -implicitDefEqProofs only [Circuit.size_relabel] at h
-  apply h.trans
-  simpa -implicitDefEqProofs only [pow_two, Nat.mul_assoc] using Nat.mul_le_mul
-    (Nat.mul_le_mul_left 100
-      (by dsimp [relabelScale]; omega : c.size + m + 1 ≤ relabelScale ⟨n, m, k, c, w⟩))
-    (by dsimp [relabelScale]; omega : k + c.size + 1 ≤ relabelScale ⟨n, m, k, c, w⟩)
-
 theorem hasProgramIn_relabelTest : HasProgramIn relabelTest hole(⊢ program)
     IsO(fun x => ⌜x⌝ₜ.size ^ 3) IsO(fun x => ⌜x⌝ₜ.size ^ 2) := by
   abstract_hole program using programRelabelTest
@@ -209,12 +158,14 @@ theorem hasProgramIn_relabelResume :
     IsO(fun x => relabelScale x ^ 7) IsO(fun x => relabelScale x ^ 4) := by
   abstract_hole program using programRelabelFn
   refine HasProgramInO.toHasProgramIn ?_
-  have hsize := Dominated.of_le_mul 128 size_encode_relabelInput_le
+  have hsize : Dominated (fun x : RelabelInput => ⌜x⌝ₜ.size) (fun x => relabelScale x ^ 2) := by
+    dominated [relabelScale]
   have hpow (d : ℕ) : Dominated (fun x : RelabelInput => ⌜x⌝ₜ.size ^ d)
       (fun x => relabelScale x ^ (2 * d)) := by simpa only [pow_mul] using hsize.pow d
   have hstop (d : ℕ) := (hpow d).comp (Subtype.val (p := fun x => relabelTest x = false))
   have hreturn := relabelRecursion.dominated_size_return relabelScale relabelScale_pos
-    (fun x _ => relabelScale_next_le x) hsize (Dominated.of_le_mul 100 size_encode_relabelFn_le)
+    (fun x _ => relabelScale_next_le x) hsize
+    (by dominated [relabelScale, relabelFn, Circuit.size_relabel])
   fill_hole program in
     exact (relabelRecursion.hasProgramInO_of_scale hasProgramIn_relabelTest.toHasProgramInO
       hasProgramIn_relabelNextFn.toHasProgramInO hasProgramIn_relabelFinishFn.toHasProgramInO
@@ -297,35 +248,6 @@ theorem compScale_next_le (x : CompInput) : compScale (compNextFn x) ≤ compSca
   rcases x with ⟨n, m, k, c, d⟩
   cases c <;> simp -implicitDefEqProofs only [compNextFn, compScale, Circuit.size_gate] <;> omega
 
-theorem size_encode_compInput_le (x : CompInput) : ⌜x⌝ₜ.size ≤ 256 * compScale x ^ 2 := by
-  rcases x with ⟨n, m, k, c, d⟩
-  obtain ⟨S, hS⟩ : ∃ S, compScale ⟨n, m, k, c, d⟩ = S := ⟨_, rfl⟩
-  have hS' : S = n + m + k + 2 * (c.size + d.size) + 1 := hS.symm
-  rw [hS]
-  have hc := c.size_encode_numeric_le
-  have hd := d.size_encode_numeric_le
-  have hcp : (c.size + m + 1) * (n + c.size + 1) ≤ S ^ 2 := by
-    simpa only [pow_two] using Nat.mul_le_mul (by omega : c.size + m + 1 ≤ S)
-      (by omega : n + c.size + 1 ≤ S)
-  have hdp : (d.size + k + 1) * (m + d.size + 1) ≤ S ^ 2 := by
-    simpa only [pow_two] using Nat.mul_le_mul (by omega : d.size + k + 1 ≤ S)
-      (by omega : m + d.size + 1 ≤ S)
-  have hn := size_encode_nat_le n
-  have hm := size_encode_nat_le m
-  have hk := size_encode_nat_le k
-  simp only [CompInput.encode_mk, size_encode_prod]
-  nlinarith
-
-theorem size_encode_compFn_le (x : CompInput) : ⌜compFn x⌝ₜ.size ≤ 100 * compScale x ^ 2 := by
-  rcases x with ⟨n, m, k, c, d⟩
-  have h := (c.comp d).size_encode_numeric_le
-  simp -implicitDefEqProofs only [Circuit.size_comp] at h
-  apply h.trans
-  simpa -implicitDefEqProofs only [pow_two, Nat.mul_assoc] using Nat.mul_le_mul
-    (Nat.mul_le_mul_left 100 (by dsimp [compScale]; omega :
-      c.size + d.size + k + 1 ≤ compScale ⟨n, m, k, c, d⟩))
-    (by dsimp [compScale]; omega : n + (c.size + d.size) + 1 ≤ compScale ⟨n, m, k, c, d⟩)
-
 theorem hasProgramIn_compTest :
     HasProgramIn compTest hole(⊢ program) IsO(fun _ => 1) IsO(fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programCompTest
@@ -352,10 +274,12 @@ theorem hasProgramIn_compFn : HasProgramIn compFn hole(⊢ program)
     IsO(fun x => compScale x ^ 7) IsO(fun x => compScale x ^ 4) := by
   abstract_hole program using programCompFn
   refine HasProgramInO.toHasProgramIn ?_
-  have hsize := Dominated.of_le_mul 256 size_encode_compInput_le
+  have hsize : Dominated (fun x : CompInput => ⌜x⌝ₜ.size) (fun x => compScale x ^ 2) := by
+    dominated [compScale]
   have hpos x := Nat.pow_pos (n := 2) (compScale_pos x)
   have hreturn := compRecursion.dominated_size_return compScale compScale_pos
-    (fun x _ => compScale_next_le x) hsize (Dominated.of_le_mul 100 size_encode_compFn_le) 1
+    (fun x _ => compScale_next_le x) hsize
+    (by dominated [compScale, compFn, Circuit.size_comp]) 1
   fill_hole program in
     exact (compRecursion.hasProgramInO_of_scale hasProgramIn_compTest.toHasProgramInO
       hasProgramIn_compNextFn.toHasProgramInO hasProgramIn_compFinishFn.toHasProgramInO
@@ -454,30 +378,6 @@ theorem keepScale_next_le (x : KeepInput) : keepScale (keepNextFn x) ≤ keepSca
   rcases x with ⟨n, m, c⟩
   cases c <;> simp -implicitDefEqProofs only [keepNextFn, keepScale, Circuit.size_gate] <;> omega
 
-theorem size_encode_keepInput_le (x : KeepInput) : ⌜x⌝ₜ.size ≤ 128 * keepScale x ^ 2 := by
-  rcases x with ⟨n, m, c⟩
-  obtain ⟨S, hS⟩ : ∃ S, keepScale ⟨n, m, c⟩ = S := ⟨_, rfl⟩
-  have hS' : S = n + m + 2 * c.size + 1 := hS.symm
-  rw [hS]
-  have hc := c.size_encode_numeric_le
-  have hcp : (c.size + m + 1) * (n + c.size + 1) ≤ S ^ 2 := by
-    simpa only [pow_two] using Nat.mul_le_mul (by omega : c.size + m + 1 ≤ S)
-      (by omega : n + c.size + 1 ≤ S)
-  have hn := size_encode_nat_le n
-  have hm := size_encode_nat_le m
-  simp only [KeepInput.encode_mk, size_encode_prod]
-  nlinarith
-
-theorem size_encode_keepFn_le (x : KeepInput) : ⌜keepFn x⌝ₜ.size ≤ 100 * keepScale x ^ 2 := by
-  rcases x with ⟨n, m, c⟩
-  have h := c.keepInputs.size_encode_numeric_le
-  simp -implicitDefEqProofs only [Circuit.size_keepInputs] at h
-  apply h.trans
-  simpa -implicitDefEqProofs only [pow_two, Nat.mul_assoc] using Nat.mul_le_mul
-    (Nat.mul_le_mul_left 100 (by dsimp [keepScale]; omega :
-      c.size + (n + m) + 1 ≤ keepScale ⟨n, m, c⟩))
-    (by dsimp [keepScale]; omega : n + c.size + 1 ≤ keepScale ⟨n, m, c⟩)
-
 theorem hasProgramIn_keepTest :
     HasProgramIn keepTest hole(⊢ program) IsO(fun _ => 1) IsO(fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programKeepTest
@@ -507,6 +407,12 @@ theorem hasProgramIn_keepFinishFn : HasProgramIn keepFinishFn hole(⊢ program)
     IsO(fun x => keepScale x.1 ^ 2) IsO(fun x => keepScale x.1 ^ 2) := by
   abstract_hole program using programKeepFinishFn
   refine HasProgramInO.toHasProgramIn ?_
+  have : Dominated (fun x => ((keepFinishInput x).n + (keepFinishInput x).m + 1) ^ 2)
+      (fun x => keepScale x.1 ^ 2) := Dominated.of_le fun x => by
+    rcases x with ⟨⟨n, m, c⟩, h⟩
+    cases c with
+    | outputs _ => simp [keepFinishInput, keepScale]
+    | gate _ _ _ => cases h
   fill_hole program in
     refine ((hasProgramIn_keepFinishInput.toHasProgramInO.comp_dependent
       hasProgramIn_keepOutputsFn.toHasProgramInO).of_encode ?_).mono
@@ -515,17 +421,7 @@ theorem hasProgramIn_keepFinishFn : HasProgramIn keepFinishFn hole(⊢ program)
     cases c with
     | outputs _ => rfl
     | gate _ _ _ => cases h
-  all_goals
-    apply Dominated.of_le_mul 129
-    rintro ⟨⟨n, m, c⟩, h⟩
-    cases c with
-    | outputs w =>
-      have hs := size_encode_keepInput_le ⟨n, m, .outputs w⟩
-      have hp : 0 < (n + m + 1) ^ 2 := Nat.pow_pos (Nat.succ_pos _)
-      simp only [keepFinishInput, keepScale, Circuit.size_outputs, UniqueEncoding.encode_subtype,
-        max_le_iff, Nat.mul_zero, Nat.add_zero] at hs ⊢
-      omega
-    | gate _ _ _ => cases h
+  all_goals dominated [keepScale]
 
 /-- Selecting the outputs of a circuit computed by a selected implementation. -/
 theorem Internal.HasProgramInO.mapOutputs {ρ : Type} [UniqueEncoding Tree ρ] {n m k : ρ → ℕ}
@@ -566,18 +462,7 @@ theorem hasProgramIn_keepGateFn : HasProgramIn keepGateFn hole(⊢ program)
       cases op <;> simp [encode_unit]
   have := Dominated.size_encode_fin_function (fun x : KeepGateInput => x.2.2.2.2.1) hk
     (.of_le fun x => by dsimp [keepGateScale]; omega) fun _ => Nat.succ_pos _
-  have := Dominated.size_encode_circuit (fun x : KeepGateInput => x.2.2.2.2.2)
-    (R := keepGateScale) (.of_le_mul 2 fun x => by dsimp [keepGateScale]; omega)
-    (.of_le_mul 2 fun x => by dsimp [keepGateScale]; omega)
-    (.of_le fun x => by dsimp [keepGateScale]; omega) fun _ => Nat.succ_pos _
   have := hk.size_encode_nat fun _ => Nat.succ_pos _
-  have := Dominated.size_encode_circuit (R := keepGateScale) (fun x : KeepGateInput =>
-      x.2.2.2.2.2.mapOutputs
-        (Fin.append (fun i : Fin x.1 => Fin.castAdd x.2.1 i.castSucc) (Fin.natAdd (x.1 + 1))))
-    (.of_le_mul 2 fun x => by dsimp [keepGateScale]; omega)
-    (.of_le fun x => by dsimp [keepGateScale]; omega)
-    (.of_le fun x => by simp only [Circuit.size_mapOutputs]; dsimp [keepGateScale]; omega)
-    fun _ => Nat.succ_pos _
   fill_hole program in
     source_fun_prop (disch := (try simp only [Sigma.size_encode_eq, Prod.size_encode_eq]); dominated
       [keepGateScale, compScale, Circuit.size_mapOutputs, Circuit.size_outputs]) using tabulate
@@ -623,13 +508,15 @@ theorem hasProgramIn_keepFn : HasProgramIn keepFn hole(⊢ program)
     IsO(fun x => keepScale x ^ 8) IsO(fun x => keepScale x ^ 4) := by
   abstract_hole program using programKeepFn
   refine HasProgramInO.toHasProgramIn ?_
-  have hsize := Dominated.of_le_mul 128 size_encode_keepInput_le
+  have hsize : Dominated (fun x : KeepInput => ⌜x⌝ₜ.size) (fun x => keepScale x ^ 2) := by
+    dominated [keepScale]
   have hpos x := Nat.pow_pos (n := 2) (keepScale_pos x)
   have hreturn : Dominated (fun x : {x // keepRecursion.test x = true} =>
       ⌜(⟨x, keepFn (keepRecursion.next x.1)⟩ : keepRecursion.Return)⌝ₜ.size)
       (fun x => keepScale x.1 ^ 4) := by
     simpa only [pow_one] using (keepRecursion.dominated_size_return keepScale keepScale_pos
-      (fun x _ => keepScale_next_le x) hsize (Dominated.of_le_mul 100 size_encode_keepFn_le)
+      (fun x _ => keepScale_next_le x) hsize
+        (by dominated [keepScale, keepFn, Circuit.size_keepInputs])
       1).mono_pow (by decide : 2 * 1 ≤ 4) fun x => keepScale_pos x.1
   have hscale : Dominated (fun x : {x // keepRecursion.test x = true} =>
       keepReturnScale ⟨x, keepFn (keepRecursion.next x.1)⟩) (fun x => keepScale x.1) :=

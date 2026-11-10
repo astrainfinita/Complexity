@@ -25,7 +25,7 @@ theorem size_encode_unroll_numeric_le {n : ℕ}
     (step : Circuit .booleanAlgebra (n + 1) n) (t : ℕ) :
     ⌜step.unroll t⌝ₜ.size ≤
       100 * (t * step.size + n + 1) * (n + t + t * step.size + 1) := by
-  simpa only [size_unroll] using (step.unroll t).size_encode_numeric_le
+  simpa only [size_unroll, Nat.mul_assoc] using (step.unroll t).size_encode_le
 
 end Complexity.Circuit
 
@@ -43,17 +43,13 @@ theorem size_unrollState_le (n : ℕ) (step : Circuit .booleanAlgebra (n + 1) n)
       256 * (2 * n + t + (t + 1) * step.size + 2) ^ 2 := by
   let N := 2 * n + t + (t + 1) * step.size + 2
   have him := Nat.mul_le_mul_right step.size hi
-  have hs := step.size_encode_numeric_le
-  have hu := (step.unroll i).size_encode_numeric_le
+  have hs := step.size_encode_le
+  have hu := (step.unroll i).size_encode_le
   simp only [Circuit.size_unroll] at hu
-  have hstep : ⌜step⌝ₜ.size ≤ 100 * N ^ 2 := hs.trans (by
-    simpa only [pow_two, Nat.mul_assoc] using Nat.mul_le_mul
-      (Nat.mul_le_mul_left 100 (by dsimp [N]; nlinarith : step.size + n + 1 ≤ N))
-      (by dsimp [N]; nlinarith : n + 1 + step.size + 1 ≤ N))
-  have hcurrent : ⌜step.unroll i⌝ₜ.size ≤ 100 * N ^ 2 := hu.trans (by
-    simpa only [pow_two, Nat.mul_assoc] using Nat.mul_le_mul
-      (Nat.mul_le_mul_left 100 (by dsimp [N]; nlinarith : i * step.size + n + 1 ≤ N))
-      (by dsimp [N]; nlinarith : n + i + i * step.size + 1 ≤ N))
+  have hstep : ⌜step⌝ₜ.size ≤ 100 * N ^ 2 := hs.trans <| Nat.mul_le_mul_left 100 <| by
+    rw [pow_two]; exact Nat.mul_le_mul (by dsimp [N]; nlinarith) (by dsimp [N]; nlinarith)
+  have hcurrent : ⌜step.unroll i⌝ₜ.size ≤ 100 * N ^ 2 := hu.trans <| Nat.mul_le_mul_left 100 <| by
+    rw [pow_two]; exact Nat.mul_le_mul (by dsimp [N]; nlinarith) (by dsimp [N]; nlinarith)
   have hn := size_encode_nat_le n
   have hi' := size_encode_nat_le i
   have hN := Nat.le_self_pow (by decide : 2 ≠ 0) N
@@ -81,31 +77,15 @@ theorem hasProgramIn_unrollStep : HasProgramIn unrollStep hole(⊢ program)
     IsO(fun x => unrollStepScale x ^ 8) IsO(fun x => unrollStepScale x ^ 4) := by
   abstract_hole program using programUnrollStep
   refine HasProgramInO.toHasProgramIn ?_
-  -- Every circuit of a step has quadratic encoded size in the scale.
-  have circuit {n m : UnrollState → ℕ}
-      (c : (x : UnrollState) → Circuit .booleanAlgebra (n x) (m x))
-      (hn : ∀ x, n x ≤ 4 * unrollStepScale x := by intro x; dsimp [unrollStepScale]; omega)
-      (hm : ∀ x, m x ≤ 4 * unrollStepScale x := by intro x; dsimp [unrollStepScale]; omega)
-      (hc : ∀ x, (c x).size ≤ 4 * unrollStepScale x := by
-        intro x
-        try simp only [Circuit.size_relabel, Circuit.size_keepInputs, Circuit.size_comp]
-        dsimp [unrollStepScale]; omega) :
-      Dominated (fun x => ⌜c x⌝ₜ.size) (fun x => unrollStepScale x ^ 2) :=
-    Dominated.size_encode_circuit c (.of_le_mul 4 hn) (.of_le_mul 4 hm) (.of_le_mul 4 hc)
-      fun x => by dsimp [unrollStepScale]; omega
-  have := circuit fun x : UnrollState => x.2.2.1
-  have := circuit fun x : UnrollState => x.2.2.2
-  have := circuit fun x : UnrollState => x.2.2.2.relabel Fin.castSucc
-  have := circuit fun x : UnrollState => (x.2.2.2.relabel Fin.castSucc).keepInputs
-  have := circuit fun x : UnrollState => x.2.2.1.relabel
-    (Fin.snoc (Fin.natAdd (x.1 + (x.2.1 + 1))) (Fin.castAdd x.1 (Fin.last (x.1 + x.2.1))))
-  have := circuit fun x : UnrollState => (x.2.2.2.relabel Fin.castSucc).keepInputs.comp
-    (x.2.2.1.relabel
-      (Fin.snoc (Fin.natAdd (x.1 + (x.2.1 + 1))) (Fin.castAdd x.1 (Fin.last (x.1 + x.2.1)))))
+  -- `dominated` looks at three rounds of terms; the gate count of a layer takes a fourth.
+  have hsize {n t : ℕ} (step : Circuit .booleanAlgebra (n + 1) n)
+      (c : Circuit .booleanAlgebra (n + t) n) (f : Fin (n + 1) → Fin (n + t + 1 + n)) :
+      ((c.relabel Fin.castSucc).keepInputs.comp (step.relabel f)).size = c.size + step.size := by
+    simp
   fill_hole program in
     source_fun_prop (disch := dominated
       [unrollStepScale, relabelScale, keepScale, compScale, Circuit.size_relabel,
-        Circuit.size_keepInputs, Circuit.size_comp]) using tabulate
+        Circuit.size_keepInputs, Circuit.size_comp, hsize]) using tabulate
 
 abbrev UnrollInput := Σ n, Circuit .booleanAlgebra (n + 1) n × ℕ
 
@@ -119,10 +99,8 @@ theorem hasProgramIn_unrollInitial : HasProgramIn unrollInitial hole(⊢ program
     IsO(fun x => unrollScale x ^ 2) IsO(fun x => unrollScale x ^ 2) := by
   abstract_hole program using programUnrollInitial
   refine HasProgramInO.toHasProgramIn ?_
-  have := Dominated.size_encode_circuit (fun x : UnrollInput => x.2.1)
-    (R := unrollScale) (.of_le fun x => by dsimp [unrollScale]; omega)
-    (.of_le fun x => by dsimp [unrollScale]; omega)
-    (.of_le fun x => by dsimp [unrollScale]; nlinarith) fun x => by dsimp [unrollScale]; omega
+  have : Dominated (fun x : UnrollInput => ⌜x.2.1⌝ₜ.size) (fun x => unrollScale x ^ 2) := by
+    dominated [unrollScale, Nat.add_one_mul]
   fill_hole program in
     source_fun_prop (disch := dominated
       [unrollScale, Circuit.id]) using tabulate
