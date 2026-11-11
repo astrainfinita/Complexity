@@ -41,16 +41,11 @@ def unrollStepScale (x : UnrollState) :=
 theorem hasProgramIn_unrollStep : HasProgramIn unrollStep hole(⊢ program)
     (IsPoly unrollStepScale) (IsPoly unrollStepScale) := by
   abstract_hole program using programUnrollStep
-  -- `dominated` looks at three rounds of terms; the gate count of a layer takes a fourth.
-  have hsize {n t : ℕ} (step : Circuit .booleanAlgebra (n + 1) n)
-      (c : Circuit .booleanAlgebra (n + t) n) (f : Fin (n + 1) → Fin (n + t + 1 + n)) :
-      ((c.relabel Fin.castSucc).keepInputs.comp (step.relabel f)).size = c.size + step.size := by
-    simp
   -- A layer is computed by the programs of the operations it composes.
   fill_hole program in
     unfold unrollStep Circuit.unrollLayer
     source_fun_prop (disch := dominated [unrollStepScale, relabelScale, keepScale, compScale,
-      Circuit.size_relabel, Circuit.size_keepInputs, Circuit.size_comp, hsize]) using tabulate
+      Circuit.size_relabel, Circuit.size_keepInputs, Circuit.size_comp]) using tabulate
 
 abbrev UnrollInput := Σ n, Circuit .booleanAlgebra (n + 1) n × ℕ
 
