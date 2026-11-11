@@ -47,6 +47,12 @@ example (i j : Fin 2) :
   simp [PMF.bind_apply, PMF.map_apply, PMF.uniformOfFintype_apply,
     Prod.mk.injEq, ite_and, mul_ite]
 
+-- Guards that lawful lifts declared one step at a time extend along chains of lifts, including
+-- monad transformers, to the class requested by the simulation lemmas.
+example : LawfulFunctorLiftT BinaryChoice Multiset := inferInstance
+example : LawfulFunctorLiftT BinaryChoice (StateT ℕ Multiset) := inferInstance
+example : LawfulFunctorLiftT Id Id := inferInstance
+
 -- Multiset interpretations may have more than two alternatives, with coincident endpoints.
 private def threeChoices : Controller Multiset Unit Unit ℕ where
   q₀ := 0

@@ -6,7 +6,10 @@ Authors: Yuyang Zhao
 module
 
 import Complexity.Models.StackMachine.FromTuringMachine
+import Complexity.Models.StackMachine.TuringMachine
+import Complexity.Models.TuringMachine.Nondeterministic.Basic
 meta import Complexity.Models.StackMachine.FromTuringMachine
+meta import Complexity.Models.StackMachine.TuringMachine
 meta import Complexity.Models.StackMachine.Basic
 meta import Complexity.Models.StackMachine.Configuration
 meta import Complexity.Models.StackMachine.Deterministic
@@ -77,5 +80,58 @@ private def halted := { excursion with q₀ := 12 }
 #guard (target halted [false] 3).2.output = #[]
 #guard (target halted [false] 3).2.inputPos.val = 1
 #guard (target halted [false] 3).2.mass = 0
+
+-- Guess a bit twice; the second guess changes only the tape, so its branches coincide in output.
+private def guess : NTM Unit (Option Bool) (Fin 3) where
+  q₀ := 0
+  halt q := q == 2
+  transition q _ i := (q + 1,
+    { inputMove := 0
+      work := fun _ ↦ (some (some (i == 1)), 1)
+      output := some (if q == 0 then some (i == 1) else none) })
+
+private def branchOutputs (n : ℕ) : Multiset (List Bool) :=
+  (guess.runWith Multiset [some true] n).map (·.2.output.toList.filterMap id)
+
+private def stackBranchOutputs (n : ℕ) : Multiset (List Bool) :=
+  (guess.toStack.runWith Multiset [true] n).map (·.2.output.toList)
+
+-- Every branch is simulated once, so coincident branches keep their multiplicities.
+#guard (List.range 5).all fun n ↦ stackBranchOutputs n = branchOutputs n
+#guard stackBranchOutputs 3 = {[false], [false], [true], [true]}
+
+-- Guards that one simulation lemma gives both the deterministic and the branching statement.
+example (M : TM Id Unit (Option Bool) (Fin 13)) (xs : List Bool) (n : ℕ) :
+    TM.Stack.Rep (M.runHistory (xs.map some) n).snd.visited (M.runHistory (xs.map some) n).last
+      (M.toStack.run xs n) :=
+  (TM.liftRel_runHistoryWith_toStack Id M xs n).run
+
+example (M : NTM Unit (Option Bool) (Fin 3)) (xs : List Bool) (n : ℕ) :
+    Multiset.Rel (fun h d ↦ TM.Stack.Rep h.snd.visited h.last d)
+      (M.runHistoryWith Multiset (xs.map some) n) (M.toStack.runWith Multiset xs n) :=
+  (TM.liftRel_runHistoryWith_toStack Multiset M xs n).multisetRel
+
+-- Guess a bit and push it, guess and push again, then pop. The target keeps a pushed top in
+-- control and writes it to the tape at the next push; the output records the observed tops, so
+-- the third guess only doubles the branches.
+private def stackGuess : StackMachine BinaryChoice Unit Bool (Fin 4) where
+  q₀ := 0
+  halt q := q == 3
+  transition q v i := (q + 1,
+    { inputMove := 0
+      work := fun _ ↦ if q == 2 then .pop else .push (i == 1)
+      output := if q == 0 then none else v.2 () })
+
+private def stackGuessOutputs (n : ℕ) : Multiset (List Bool) :=
+  (stackGuess.runWith Multiset [true] n).map (·.2.output.toList)
+
+private def tmGuessOutputs (n : ℕ) : Multiset (List Bool) :=
+  (stackGuess.toTM.runWith Multiset [some true] n).map (·.2.output.toList.filterMap id)
+
+-- Every stack branch is simulated by exactly one tape branch, keeping multiplicities.
+#guard (List.range 5).all fun n ↦ tmGuessOutputs n = stackGuessOutputs n
+#guard tmGuessOutputs 3 =
+  {[false, false], [false, false], [false, true], [false, true],
+    [true, false], [true, false], [true, true], [true, true]}
 
 end Complexity.StackSimulationTest
