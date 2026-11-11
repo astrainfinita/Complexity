@@ -7,12 +7,15 @@ module
 
 public import Mathlib.Control.Monad.Basic
 public import Mathlib.Data.Multiset.Functor
+public import Complexity.Control.LawfulFunctorLift
 
 /-!
 # Binary choices and their multiset interpretation
 -/
 
 @[expose] public section
+
+universe u
 
 namespace Complexity
 
@@ -21,12 +24,21 @@ abbrev BinaryChoice (α : Type*) := Fin 2 → α
 
 namespace BinaryChoice
 
+/-- Apply a function to both alternatives, keeping their labels. -/
+instance : Functor BinaryChoice where
+  map f x := f ∘ x
+
+@[simp] theorem map_apply {α β : Type u} (f : α → β) (x : BinaryChoice α) (i : Fin 2) :
+    (f <$> x) i = f (x i) := rfl
+
 /-- Enumerate both alternatives without ordering them, retaining their multiplicities. -/
 instance : MonadLift BinaryChoice Multiset where
   monadLift f := ↑[f 0, f 1]
 
 @[simp] theorem monadLift_multiset {α : Type*} (f : BinaryChoice α) :
     (monadLift f : Multiset α) = ↑[f 0, f 1] := rfl
+
+instance : LawfulFunctorLift BinaryChoice Multiset := ⟨fun _ _ ↦ rfl⟩
 
 end BinaryChoice
 end Complexity

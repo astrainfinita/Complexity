@@ -8,14 +8,15 @@ module
 public import Complexity.Models.StackMachine.Deterministic
 public import Complexity.Models.TuringMachine.Deterministic
 public import Complexity.Data.IntMemory.List
-public import Complexity.Control.Transition.Simulation
+public import Complexity.Control.Controller.Simulation
 
 /-!
 # Simulating stacks by work tapes
 
 Each stack occupies the positive addresses of one tape. A newly pushed top stays in finite
 control until the next action; the remaining symbols are already on tape. This representation
-is preserved by one target transition, with each head always at its source stack height.
+is preserved by one target transition, with each head always at its source stack height. The
+step correspondence holds for every choice shape and every interpretation of the choices.
 -/
 
 @[expose] public section
@@ -115,14 +116,16 @@ def Action.toTM (a : Action κ Γ) (pending top : κ → Option Γ) : TM.Action 
       | some _ => (some none, -1)
   output := a.output.map some
 
-/-- Simulate stack transitions with cached tops in finite control. -/
+/-- Simulate stack transitions with cached tops in finite control. Every choice is translated
+separately, so the choice shape `F` is unchanged. -/
 @[simps]
-def toTM (M : StackMachine Id κ Γ Q) : TM Id κ (Option Γ) (ControlState κ Γ Q) where
+def toTM {F : Type → Type*} [Functor F] (M : StackMachine F κ Γ Q) :
+    TM F κ (Option Γ) (ControlState κ Γ Q) where
   q₀ := (M.q₀, fun _ ↦ none)
   halt q := M.halt q.1
-  transition q v := pure <|
-    let a := (M.transition q.1 (q.observe v)).run
-    ((a.1, fun i ↦ (a.2.work i).pending), a.2.toTM q.2 (q.observe v).2)
+  transition q v :=
+    (fun a ↦ ((a.1, fun i ↦ (a.2.work i).pending), a.2.toTM q.2 (q.observe v).2)) <$>
+      M.transition q.1 (q.observe v)
 
 /-- One target action preserves the encoding, caching precisely the newly pushed tops. -/
 theorem Action.apply_toTM (a : Action κ Γ) (c : Cfg κ Γ xs) (cached : κ → Bool) :
@@ -145,28 +148,40 @@ theorem Action.cache_apply (a : Action κ Γ) (c : Cfg κ Γ xs) :
   funext i
   cases h : a.work i <;> simp [Cfg.cache, Op.pending, Op.apply, h]
 
-/-- A source step has an encoded target successor, including halted padding. -/
-theorem step_toTM (M : StackMachine Id κ Γ Q) (c : Q × Cfg κ Γ xs) (cached : κ → Bool) :
-    ∃ cached', M.toTM.step ((c.1, c.2.cache cached), c.2.toTM cached) =
-      (((M.step c).1, (M.step c).2.cache cached'), (M.step c).2.toTM cached') := by
-  by_cases h : M.Halted c
-  · have ht : M.toTM.Halted ((c.1, c.2.cache cached), c.2.toTM cached) := h
-    exact ⟨cached, by rw [M.toTM.step_of_halted _ ht, M.step_of_halted _ h]⟩
-  · refine ⟨fun i ↦ (((M.transition c.1 (observe c.2)).run.2).work i).pending.isSome, ?_⟩
-    rw [M.toTM.step_of_not_halted ((c.1, c.2.cache cached), c.2.toTM cached) h,
-      M.step_of_not_halted _ h]
-    have ht : (observe c.2 : Option Γ × (κ → Option Γ)).2 = fun i ↦ (c.2.stacks i).head? := rfl
-    simp only [toTM_transition, Controller.state_prod, Controller.observe_prod, Id.run_pure,
-      Controller.apply_prod, Cfg.observe_toTM, ht, Action.apply_toTM, Action.cache_apply]
+section Interpreted
+
+variable {F : Type → Type*} [Functor F] (m : Type → Type*) [Monad m] [LawfulMonad m]
+  [MonadLiftT F m] [LawfulFunctorLiftT F m] (M : StackMachine F κ Γ Q)
+
+/-- Each source step and the target step are images of the same choice, for every choice shape
+`F` and every interpretation `m`; each target successor encodes its source successor, including
+halted padding. -/
+theorem liftRel_stepWith_toTM (c : Q × Cfg κ Γ xs) (cached : κ → Bool) :
+    LiftRel (fun (c : Q × Cfg κ Γ xs) d ↦ ∃ cached, d = ((c.1, c.2.cache cached), c.2.toTM cached))
+      (M.stepWith m c) (M.toTM.stepWith m ((c.1, c.2.cache cached), c.2.toTM cached)) := by
+  have ht : (observe c.2 : Option Γ × (κ → Option Γ)).2 = fun i ↦ (c.2.stacks i).head? := rfl
+  refine Controller.liftRel_stepWith_of_map m ⟨cached, rfl⟩ Iff.rfl
+    (fun a ↦ ((a.1, fun i ↦ (a.2.work i).pending),
+      a.2.toTM (c.2.cache cached) fun i ↦ (c.2.stacks i).head?))
+    (by simp only [toTM_transition, Controller.state_prod, Controller.observe_prod,
+      Cfg.observe_toTM, ht]) fun a ↦ ⟨fun i ↦ (a.2.work i).pending.isSome, ?_⟩
+  simp only [Controller.apply_prod, Action.apply_toTM, Action.cache_apply]
+
+/-- Bounded runs preserve the encoding for every choice shape and interpretation. -/
+theorem liftRel_runFromWith_toTM (c : Q × Cfg κ Γ xs) (cached : κ → Bool) (n : ℕ) :
+    LiftRel (fun (c : Q × Cfg κ Γ xs) d ↦ ∃ cached, d = ((c.1, c.2.cache cached), c.2.toTM cached))
+      (M.runFromWith m c n) (M.toTM.runFromWith m ((c.1, c.2.cache cached), c.2.toTM cached) n) :=
+  Controller.liftRel_runFromWith m M M.toTM
+    (by rintro c _ ⟨cached, rfl⟩; exact M.liftRel_stepWith_toTM m c cached) ⟨cached, rfl⟩ n
+
+end Interpreted
 
 /-- Bounded runs preserve the encoding without exposing the cache bookkeeping. -/
 theorem runFrom_toTM (M : StackMachine Id κ Γ Q) (c : Q × Cfg κ Γ xs)
     (cached : κ → Bool) (n : ℕ) :
     ∃ cached', M.toTM.runFrom ((c.1, c.2.cache cached), c.2.toTM cached) n =
       (((M.runFrom c n).1, (M.runFrom c n).2.cache cached'), (M.runFrom c n).2.toTM cached') :=
-  Transition.rel_runN
-    (R := fun (c : Q × Cfg κ Γ xs) d ↦ ∃ cached, d = ((c.1, c.2.cache cached), c.2.toTM cached))
-    (by rintro c _ ⟨cached, rfl⟩; exact M.step_toTM c cached) ⟨cached, rfl⟩ n
+  (M.liftRel_runFromWith_toTM Id c cached n).run
 
 /-- No simulated tape visits beyond the peak total number of live stack symbols. -/
 theorem space_runHistoryFrom_toTM_le [Fintype κ] (M : StackMachine Id κ Γ Q)

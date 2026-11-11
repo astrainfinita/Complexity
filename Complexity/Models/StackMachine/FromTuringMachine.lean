@@ -8,7 +8,7 @@ module
 public import Complexity.Models.StackMachine.Deterministic
 public import Complexity.Models.StackMachine.Tape
 public import Complexity.Models.TuringMachine.Deterministic
-public import Complexity.Control.Transition.Simulation
+public import Complexity.Control.Controller.Simulation
 public import Mathlib.Data.Fintype.BigOperators
 public import Mathlib.Algebra.BigOperators.Ring.Finset
 
@@ -17,6 +17,7 @@ public import Mathlib.Algebra.BigOperators.Ring.Finset
 The current symbols belong to finite control. Each tape's left and right sides use two
 synchronized Boolean stacks, encoding a blank flag and a data bit. One tape transition is
 one stack transition; the total stack length is bounded by twice the visited tape space.
+The step correspondence holds for every choice shape and every interpretation of the choices.
 -/
 
 @[expose] public section
@@ -69,19 +70,20 @@ def Action.heads (a : Action κ (Option Bool)) (head : κ → Option Bool)
   | .pos => Stack.symbol (fun b ↦ top (i, true, b))
 
 /-- Simulate each bit-alphabet Turing transition with one Boolean-stack transition. The
-current head symbols are part of the control state. -/
+current head symbols are part of the control state. Every choice is translated separately,
+so the choice shape `F` is unchanged. -/
 @[simps]
-def toStack (M : TM Id κ (Option Bool) Q) :
-    StackMachine Id (κ × Bool × Bool) Bool (Q × (κ → Option Bool)) where
+def toStack {F : Type → Type*} [Functor F] (M : TM F κ (Option Bool) Q) :
+    StackMachine F (κ × Bool × Bool) Bool (Q × (κ → Option Bool)) where
   q₀ := (M.q₀, fun _ ↦ none)
   halt q := M.halt q.1
-  transition q v := pure <|
-    let a := (M.transition q.1 (v.1, q.2)).run
-    ((a.1, a.2.heads q.2 v.2), a.2.toStack q.2)
+  transition q v := (fun a ↦ ((a.1, a.2.heads q.2 v.2), a.2.toStack q.2)) <$>
+    M.transition q.1 (v.1, q.2)
 
 namespace Stack
 
-/-- The encoded tape segments lie in a fixed interval containing the source run. -/
+/-- The encoded tape segments lie in the intervals `V`. The simulation takes `V` to be the
+intervals visited by the source history ending in `c`. -/
 structure Rep (V : κ → NonemptyInterval ℤ)
     (c : Q × Cfg κ (Option Bool) (xs.map some).toArray)
     (d : (Q × (κ → Option Bool)) × StackMachine.Cfg (κ × Bool × Bool) Bool xs.toArray) :
@@ -115,7 +117,8 @@ theorem Rep.observe (h : Rep V c d) :
     obtain ⟨l, r, _, _, ht, _⟩ := h.tapes i
     exact ht.head_eq
 
-theorem Rep.init (M : TM Id κ (Option Bool) Q) (hv : ∀ i, (0 : ℤ) ∈ V i) :
+theorem Rep.init {F : Type → Type*} [Functor F] (M : TM F κ (Option Bool) Q)
+    (hv : ∀ i, (0 : ℤ) ∈ V i) :
     Rep V (M.init (xs.map some)) (M.toStack.init xs) where
   state_eq := rfl
   input_eq := rfl
@@ -176,18 +179,38 @@ theorem Rep.apply (h : Rep V c d) (a : Q × Action κ (Option Bool))
       · simp only [apply_workPos, hd, SignType.cast, List.length_tail] at hp ⊢
         omega
 
-theorem Rep.step (h : Rep V c d) (M : TM Id κ (Option Bool) Q)
-    (hv : ∀ i, (M.step c).2.workPos i ∈ V i) : Rep V (M.step c) (M.toStack.step d) := by
-  have hh : M.toStack.Halted d ↔ M.Halted c := by
-    simp [Controller.Halted, h.state_eq]
-  by_cases hc : M.Halted c
-  · simpa only [M.step_of_halted c hc, M.toStack.step_of_halted d (hh.mpr hc)] using h
-  · rw [M.step_of_not_halted c hc] at hv ⊢
-    rw [M.toStack.step_of_not_halted d (fun hd ↦ hc (hh.mp hd))]
-    have ht : (Controller.observe d.2 : Option Bool × ((κ × Bool × Bool) → Option Bool)).2 =
-        fun i ↦ (d.2.stacks i).head? := rfl
-    simpa only [toStack_transition, Controller.state_prod, Controller.observe_prod, Id.run_pure,
-      h.state_eq, ← h.observe, ht] using h.apply (M.transition c.1 (Controller.observe c.2)).run hv
+/-- A larger window still contains the encoded tape segments. -/
+theorem Rep.mono {V' : κ → NonemptyInterval ℤ} (h : Rep V c d) (hV : V ≤ V') : Rep V' c d where
+  state_eq := h.state_eq
+  input_eq := h.input_eq
+  output_eq := h.output_eq
+  tapes i := by
+    obtain ⟨l, r, hl, hr, ht, hL, hR⟩ := h.tapes i
+    have hi := NonemptyInterval.le_def.mp (hV i)
+    exact ⟨l, r, hl, hr, ht, hi.1.trans hL, hR.trans hi.2⟩
+
+/-- Each source step and the stack step are images of the same choice, for every choice shape
+`F` and every interpretation `m`. Each branch is represented inside the intervals visited by its
+own history. -/
+theorem Rep.liftRel_stepWith {F : Type → Type*} [Functor F] (m : Type → Type*) [Monad m]
+    [LawfulMonad m] [MonadLiftT F m] [LawfulFunctorLiftT F m] (M : TM F κ (Option Bool) Q)
+    {p : Controller.History (Q × Cfg κ (Option Bool) (xs.map some).toArray)
+      (Q × Action κ (Option Bool))} (h : Rep p.snd.visited p.last d) :
+    LiftRel (fun p d ↦ Rep p.snd.visited p.last d) (M.stepWith m p) (M.toStack.stepWith m d) := by
+  have ht : (Controller.observe d.2 : Option Bool × ((κ × Bool × Bool) → Option Bool)).2 =
+      fun i ↦ (d.2.stacks i).head? := rfl
+  refine Controller.liftRel_stepWith_of_map m h (by simp [Controller.Halted, h.state_eq])
+    (fun a ↦ ((a.1, a.2.heads d.1.2 fun i ↦ (d.2.stacks i).head?), a.2.toStack d.1.2))
+    (by simp only [toStack_transition, Controller.History.state_def,
+      Controller.History.observe_def, Controller.state_prod, Controller.observe_prod, h.state_eq,
+      ← h.observe, ht]) fun a ↦ ?_
+  have hs : (Controller.apply a p).snd = p.snd.snoc a.2 := Controller.History.map_snoc ..
+  rw [Controller.History.apply_last, hs]
+  refine (h.mono ?_).apply a fun i ↦ ?_
+  · rw [Controller.History.visited_snoc]
+    exact le_sup_left
+  · simpa only [Controller.History.last_snoc, Controller.History.last_snd]
+      using (p.snd.snoc a.2).head_mem i
 
 theorem Rep.mass_le [Fintype κ] (h : Rep V c d) :
     d.2.mass ≤ 2 * ∑ i, ((V i).snd + 1 - (V i).fst).toNat := by
@@ -200,22 +223,28 @@ theorem Rep.mass_le [Fintype κ] (h : Rep V c d) :
 
 end Stack
 
+/-- Runs match for every choice shape `F` and every interpretation `m`: the source history and
+the stack configuration are images of the same run. Each branch is represented inside the
+intervals visited by its own history. With `m = Multiset`, every source branch corresponds to
+exactly one stack branch, retaining multiplicities (`LiftRel.multisetRel`). -/
+theorem liftRel_runHistoryWith_toStack {F : Type → Type*} [Functor F] (m : Type → Type*)
+    [Monad m] [LawfulMonad m] [MonadLiftT F m] [LawfulFunctorLiftT F m]
+    (M : TM F κ (Option Bool) Q) (xs : List Bool) (n : ℕ) :
+    LiftRel (fun h d ↦ Stack.Rep h.snd.visited h.last d)
+      (M.runHistoryWith m (xs.map some) n) (M.toStack.runWith m xs n) := by
+  rw [Controller.runHistoryWith, Controller.runHistoryFromWith, Controller.runWith]
+  refine Controller.liftRel_runFromWith m M M.toStack
+    (R := fun (h : Controller.History _ _) d ↦ Stack.Rep h.snd.visited h.last d)
+    (fun _ _ h ↦ h.liftRel_stepWith m M) ?_ n
+  rw [Controller.History.snd_nil, Controller.History.visited_nil, Controller.History.last_nil]
+  exact Stack.Rep.init M fun _ ↦ NonemptyInterval.mem_pure_self _
+
 /-- Bounded executions preserve the tape representation inside the source's visited intervals. -/
 theorem run_toStack (M : TM Id κ (Option Bool) Q) (xs : List Bool) (n : ℕ) :
     Stack.Rep (M.runHistory (xs.map some) n).snd.visited
       (M.run (xs.map some) n) (M.toStack.run xs n) := by
-  let c := M.init (xs.map some)
-  have hv (j : ℕ) (hj : j ≤ n) (i : κ) :
-      (M.runFrom c j).2.workPos i ∈ (M.runHistoryFrom c n).snd.visited i :=
-    (M.runHistoryFrom_visited_le_iff c n i _).mp le_rfl j hj
-  refine Transition.rel_runN_of_step (f := M.step) (Stack.Rep.init M (hv 0 (Nat.zero_le n))) ?_
-  intro j hj d hd
-  rw [Transition.runN_succ' (pure ∘ M.step)]
-  apply hd.step M
-  intro i
-  have hi := hv (j + 1) (by omega) i
-  rw [Controller.runFrom_succ'] at hi
-  exact hi
+  rw [← M.last_runHistory]
+  exact (liftRel_runHistoryWith_toStack Id M xs n).run
 
 /-- Boolean-stack simulation preserves time and bounds space by twice the source visits. -/
 theorem ComputesWithin.toStack [Fintype κ] {M : TM Id κ (Option Bool) Q}

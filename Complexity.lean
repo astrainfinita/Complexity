@@ -25,6 +25,8 @@ public import Complexity.Control.Controller.Cost
 public import Complexity.Control.Controller.History.Basic
 public import Complexity.Control.Controller.History.Cost
 public import Complexity.Control.Controller.RunHistory
+public import Complexity.Control.Controller.Simulation
+public import Complexity.Control.LawfulFunctorLift
 public import Complexity.Control.Program.Bound
 public import Complexity.Control.Program.Compiler
 public import Complexity.Control.Program.Control

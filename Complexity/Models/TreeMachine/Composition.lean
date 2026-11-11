@@ -7,7 +7,7 @@ module
 
 public import Complexity.Models.TreeMachine.Deterministic
 public import Complexity.Models.TreeMachine.Embedding
-public import Complexity.Control.Transition.Simulation
+public import Complexity.Control.Controller.Simulation
 
 /-!
 # Sequential composition with shared registers
@@ -109,7 +109,7 @@ private theorem observe_pad {r : ℕ} (h : k ≤ r) (c : Cfg k) :
 theorem runFrom_left (c : Q × Cfg k) (n : ℕ)
     (h : ∀ j < n, ¬M.Halted (M.runFrom c j)) :
     (comp M N).runFrom (left c) n = left (M.runFrom c n) := by
-  exact Transition.rel_runN_of_not_halted (R := fun c d ↦ d = left c)
+  exact Controller.rel_runFrom_of_not_halted M (comp M N) (R := fun c d ↦ d = left c)
     rfl (by rintro c _ rfl hc; exact step_left M N c hc) h
 
 theorem actionSum_left (c : Q × Cfg k) (n : ℕ)
@@ -125,7 +125,8 @@ theorem actionSum_left (c : Q × Cfg k) (n : ℕ)
 
 theorem runFrom_right (c : Q' × Cfg l) (n : ℕ) :
     (comp M N).runFrom (right c) n = right (N.runFrom c n) := by
-  exact Transition.runN_map right (step_right M N) c n
+  exact Controller.rel_runFrom N (comp M N) (R := fun c d ↦ d = right c)
+    (by rintro c _ rfl; exact step_right M N c) rfl n
 
 theorem actionSum_right (c : Q' × Cfg l) (n : ℕ) :
     ((comp M N).runHistoryFrom (right c) n).snd.actionSum Action.sizeCost =

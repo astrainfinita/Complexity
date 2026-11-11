@@ -19,7 +19,8 @@ on the same configurations and actions without a control state. No input/output 
 or resource accounting is imposed here.
 
 `stepWith` and `runFromWith` interpret choices in the target monad `m` through
-`MonadLiftT F m`. Their deterministic counterparts `step` and `runFrom` use `Id`.
+`MonadLiftT F m`; `LawfulFunctorLiftT F m` states that this lift commutes with mapping results.
+Their deterministic counterparts `step` and `runFrom` use `Id`.
 These interfaces and their execution laws are shared by all concrete storage models.
 
 Types are parameters, not fields. Concrete complexity classes impose finiteness
