@@ -55,11 +55,11 @@ theorem usesSpace_of_invariant [Fintype κ] (M : NTM κ Γ Q) {xs : List Γ} {s 
     (hstep : ∀ c, P c → ∀ d ∈ M.stepWith Multiset c, P d)
     (hspace : ∀ c, P c → c.snd.space ≤ s) : M.UsesSpace xs s :=
   fun n h hh ↦
-    hspace h (M.forall_mem_runFromWith hstep hinit n h hh)
+    hspace h (M.forall_mem_runFromWith Multiset hstep hinit n h hh)
 
 theorem UsesTime.mono {M : NTM κ Γ Q} {xs : List Γ} {t t' : ℕ}
     (h : M.UsesTime xs t) (ht : t ≤ t') : M.UsesTime xs t' :=
-  Controller.forall_halted_runFromWith_mono M
+  Controller.forall_halted_runFromWith_mono Multiset M
     (M.init xs) h ht
 
 theorem UsesTime.terminates {M : NTM κ Γ Q} {xs : List Γ} {t : ℕ}
@@ -79,12 +79,12 @@ theorem UsesTime.usesSpace [Fintype κ] {M : NTM κ Γ Q} {xs : List Γ} {t : �
   apply Nat.mul_le_mul_left
   apply Nat.succ_le_succ
   by_cases hn : n ≤ t
-  · exact (M.runHistoryFromWith_mem_spec c n hh).length_le.trans hn
+  · exact (M.runHistoryFromWith_spec Multiset c n h hh).length_le.trans hn
   · rw [UsesTime, Controller.runWith, ← M.last_runHistoryFromWith Multiset, Multiset.fmap_def,
       Multiset.forall_mem_map_iff] at ht
     rw [Controller.runHistoryWith, Controller.runHistoryFromWith,
-      M.runFromWith_eq_of_forall_halted _ ht (Nat.le_of_not_ge hn)] at hh
-    exact (M.runHistoryFromWith_mem_spec c t hh).length_le
+      M.runFromWith_eq_of_forall_halted Multiset _ ht (Nat.le_of_not_ge hn)] at hh
+    exact (M.runHistoryFromWith_spec Multiset c t h hh).length_le
 
 /-- Initial head positions count toward space, even at time zero. -/
 theorem UsesSpace.tapes_le [Fintype κ] {M : NTM κ Γ Q} {xs : List Γ} {s : ℕ}
@@ -96,7 +96,7 @@ theorem UsesSpace.tapes_le [Fintype κ] {M : NTM κ Γ Q} {xs : List Γ} {s : �
 theorem runWith_eq_of_usesTime {M : NTM κ Γ Q} {xs : List Γ} {t t' : ℕ}
     (h : M.UsesTime xs t) (ht : t ≤ t') :
     M.runWith Multiset xs t' = M.runWith Multiset xs t :=
-  Controller.runFromWith_eq_of_forall_halted M
+  Controller.runFromWith_eq_of_forall_halted Multiset M
     (M.init xs) h ht
 
 /-- Some finite computation halts with the given complete output. -/
@@ -112,7 +112,7 @@ theorem produces_iff_of_usesTime {M : NTM κ Γ Q} {xs ys : List Γ} {t : ℕ}
   · rintro ⟨n, c, hc, hh, ho⟩
     refine ⟨c, ?_, ho⟩
     rcases le_total n t with ht | ht
-    · exact Controller.mem_runFromWith_of_halted M
+    · exact Controller.mem_runFromWith_of_halted Multiset M
         (M.init xs) hc hh ht
     · rwa [runWith_eq_of_usesTime h ht] at hc
   · rintro ⟨c, hc, ho⟩

@@ -5,7 +5,6 @@ Authors: Yuyang Zhao
 -/
 module
 
-public import Mathlib.Data.Multiset.Functor
 public import Complexity.Control.Transition.Basic
 
 /-!
@@ -21,6 +20,8 @@ or resource accounting is imposed here.
 `stepWith` and `runFromWith` interpret choices in the target monad `m` through
 `MonadLiftT F m`; `LawfulFunctorLiftT F m` states that this lift commutes with mapping results.
 Their deterministic counterparts `step` and `runFrom` use `Id`.
+Facts about every value a run can return are stated on `returns`, for every interpretation with
+`MonadReturns`.
 These interfaces and their execution laws are shared by all concrete storage models.
 
 Types are parameters, not fields. Concrete complexity classes impose finiteness
@@ -161,54 +162,48 @@ theorem runFromWith_succ' (M : Controller F Observation Action Q)
     M.runFromWith m c n = pure c :=
   Transition.runN_of_fixed _ (M.stepWith_of_halted m c hc) n
 
-end Lawful
-end Interpreted
+variable [MonadReturns m]
 
-section Multiset
+/-- A property preserved by every step holds for every value a run can return. -/
+theorem forall_mem_runFromWith (M : Controller F Observation Action Q) {P : Config → Prop}
+    (hstep : ∀ c, P c → ∀ d ∈ returns (M.stepWith m c), P d) {c : Config} (hc : P c) (n : ℕ) :
+    ∀ d ∈ returns (M.runFromWith m c n), P d :=
+  Transition.forall_mem_runN (M.stepWith m) (P := fun _ ↦ P) hc (fun _ ↦ hstep) n
 
-variable (M : Controller F Observation Action Q)
-    [MonadLiftT F Multiset]
-
-/-- A path of length `n + l` splits at a reachable configuration after `n` steps. -/
-theorem mem_runFromWith_add_iff (c d : Config) (n l : ℕ) :
-    d ∈ M.runFromWith Multiset c (n + l) ↔
-      ∃ b ∈ M.runFromWith Multiset c n,
-        d ∈ M.runFromWith Multiset b l := by
-  rw [runFromWith_add]
-  exact Multiset.mem_bind
-
-/-- A property preserved by every step holds on every finite path. -/
-theorem forall_mem_runFromWith {P : Config → Prop}
-    (hstep : ∀ c, P c → ∀ d ∈ M.stepWith Multiset c, P d) {c : Config} (hc : P c) (n : ℕ) :
-    ∀ d ∈ M.runFromWith Multiset c n, P d :=
-  Transition.forall_mem_runN (M.stepWith Multiset) hstep hc n
-
-/-- A reachable halting configuration remains reachable at every later time. -/
-theorem mem_runFromWith_of_halted (c : Config) {d : Config} {n n' : ℕ}
-    (hd : d ∈ M.runFromWith Multiset c n) (hh : M.Halted d) (hn : n ≤ n') :
-    d ∈ M.runFromWith Multiset c n' := by
-  obtain ⟨l, rfl⟩ := Nat.exists_eq_add_of_le hn
-  refine (M.mem_runFromWith_add_iff c d n l).2 ⟨d, hd, ?_⟩
-  rw [M.runFromWith_of_halted Multiset d hh]
-  exact Multiset.mem_singleton_self d
-
-/-- Once every path has halted, the endpoint multiset is unchanged, including multiplicities. -/
-theorem runFromWith_eq_of_forall_halted (c : Config) {n n' : ℕ}
-    (h : ∀ d ∈ M.runFromWith Multiset c n, M.Halted d) (hn : n ≤ n') :
-    M.runFromWith Multiset c n' = M.runFromWith Multiset c n := by
+/-- Once every value a run can return has halted, more steps leave the run unchanged; on
+`Multiset` the endpoints keep their multiplicities. -/
+theorem runFromWith_eq_of_forall_halted (M : Controller F Observation Action Q) (c : Config)
+    {n n' : ℕ} (h : ∀ d ∈ returns (M.runFromWith m c n), M.Halted d) (hn : n ≤ n') :
+    M.runFromWith m c n' = M.runFromWith m c n := by
   obtain ⟨l, rfl⟩ := Nat.exists_eq_add_of_le hn
   rw [runFromWith_add]
-  simpa only [← Multiset.bind_def, bind_pure] using
-    Multiset.bind_congr fun d hd => M.runFromWith_of_halted Multiset d (h d hd) l
+  conv_rhs => rw [← bind_pure (M.runFromWith m c n)]
+  exact MonadReturns.bind_congr fun d hd ↦ M.runFromWith_of_halted m d (h d hd) l
 
 /-- A common halting deadline remains valid when increased. -/
-theorem forall_halted_runFromWith_mono (c : Config) {n n' : ℕ}
-    (h : ∀ d ∈ M.runFromWith Multiset c n, M.Halted d) (hn : n ≤ n') :
-    ∀ d ∈ M.runFromWith Multiset c n', M.Halted d := by
-  rw [M.runFromWith_eq_of_forall_halted c h hn]
-  exact h
+theorem forall_halted_runFromWith_mono (M : Controller F Observation Action Q) (c : Config)
+    {n n' : ℕ} (h : ∀ d ∈ returns (M.runFromWith m c n), M.Halted d) (hn : n ≤ n') :
+    ∀ d ∈ returns (M.runFromWith m c n'), M.Halted d := by
+  rwa [M.runFromWith_eq_of_forall_halted m c h hn]
 
-end Multiset
+/-- A run of `n + l` steps can return what `l` further steps can return from a value that the
+first `n` steps can return. -/
+theorem mem_runFromWith_add_iff (M : Controller F Observation Action Q) (c d : Config) (n l : ℕ) :
+    d ∈ returns (M.runFromWith m c (n + l)) ↔
+      ∃ b ∈ returns (M.runFromWith m c n), d ∈ returns (M.runFromWith m b l) := by
+  rw [runFromWith_add, mem_returns_bind_iff]
+
+/-- A halted value that a run can return can still be returned at every later time. -/
+theorem mem_runFromWith_of_halted (M : Controller F Observation Action Q) (c : Config)
+    {d : Config} {n n' : ℕ} (hd : d ∈ returns (M.runFromWith m c n)) (hh : M.Halted d)
+    (hn : n ≤ n') : d ∈ returns (M.runFromWith m c n') := by
+  obtain ⟨l, rfl⟩ := Nat.exists_eq_add_of_le hn
+  refine (M.mem_runFromWith_add_iff m c d n l).2 ⟨d, hd, ?_⟩
+  rw [M.runFromWith_of_halted m d hh]
+  exact mem_returns_pure_iff.2 rfl
+
+end Lawful
+end Interpreted
 
 section Deterministic
 

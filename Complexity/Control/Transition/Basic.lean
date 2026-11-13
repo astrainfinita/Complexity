@@ -6,8 +6,8 @@ Authors: Yuyang Zhao
 module
 
 public import Mathlib.Control.Monad.Basic
-public import Mathlib.Data.Multiset.Functor
 public import Mathlib.Logic.Function.Iterate
+public import Complexity.Control.MonadReturns
 
 /-!
 # Bounded execution of monadic transitions
@@ -59,36 +59,20 @@ theorem runN_of_fixed (f : α → m α) {a : α} (h : f a = pure a) (n : ℕ) :
   | zero => rfl
   | succ n ih => simp [runN, h, ih]
 
-/-- If every result of `x` satisfies `P` and `g` sends each such result to a computation whose
-results satisfy `Q`, every result of `x >>= g` satisfies `Q`. -/
-private theorem liftp_bind {β : Type u} {P : α → Prop} {Q : β → Prop} {x : m α} {g : α → m β}
-    (hx : Functor.Liftp P x) (hg : ∀ a, P a → Functor.Liftp Q (g a)) :
-    Functor.Liftp Q (x >>= g) := by
-  obtain ⟨u, rfl⟩ := hx
-  choose v hv using hg
-  refine ⟨u >>= fun a ↦ v a.1 a.2, ?_⟩
-  simp only [map_bind, bind_map_left, hv]
-
-/-- A step-indexed property preserved by every step holds for every result of the iteration. -/
-theorem liftp_runN (f : α → m α) {P : ℕ → α → Prop} {a : α} (ha : P 0 a)
-    (hstep : ∀ k b, P k b → Functor.Liftp (P (k + 1)) (f b)) (n : ℕ) :
-    Functor.Liftp (P n) (runN f n a) := by
+/-- A step-indexed property preserved by every step holds for every value the iteration can
+return. -/
+theorem forall_mem_runN [MonadReturns m] (f : α → m α) {P : ℕ → α → Prop} {a : α} (ha : P 0 a)
+    (hstep : ∀ k b, P k b → ∀ c ∈ returns (f b), P (k + 1) c) (n : ℕ) :
+    ∀ b ∈ returns (runN f n a), P n b := by
   induction n with
-  | zero => exact ⟨pure ⟨a, ha⟩, map_pure _ _⟩
-  | succ n ih => exact runN_succ' f n a ▸ liftp_bind ih (hstep n)
+  | zero => exact fun b hb ↦ mem_returns_pure_iff.mp hb ▸ ha
+  | succ n ih =>
+    intro c hc
+    rw [runN_succ', mem_returns_bind_iff] at hc
+    obtain ⟨b, hb, hc⟩ := hc
+    exact hstep n b (ih b hb) c hc
 
 end Lawful
-
-/-- A property preserved by every successor holds on every finite path. -/
-theorem forall_mem_runN (f : α → Multiset α) {P : α → Prop}
-    (hstep : ∀ a, P a → ∀ b ∈ f a, P b) {a : α} (ha : P a) (n : ℕ) :
-    ∀ b ∈ runN f n a, P b := by
-  induction n generalizing a with
-  | zero => simpa using ha
-  | succ n ih =>
-    intro b hb
-    obtain ⟨c, hc, hb⟩ := Multiset.mem_bind.mp hb
-    exact ih (hstep a ha c hc) b hb
 
 theorem runN_id (f : α → α) (n : ℕ) (a : α) : (runN (m := Id) (pure ∘ f) n a).run = f^[n] a := by
   induction n generalizing a with

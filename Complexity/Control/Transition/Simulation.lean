@@ -12,7 +12,7 @@ public import Complexity.Control.Transition.Basic
 
 `LiftRel R x y` states that `x` and `y` are the two components of one computation whose results
 are related by `R`. It is the version of mathlib's `Functor.Liftr` for two result types, and
-forms a pair with `Functor.Liftp` (see `Transition.liftp_runN`). On `Id` it is the relation
+forms a pair with `Functor.Liftp`. On `Id` it is the relation
 itself; on `Multiset` it is `Multiset.Rel`, which matches the branches one to one and retains
 their multiplicities.
 

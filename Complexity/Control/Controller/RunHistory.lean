@@ -91,17 +91,17 @@ variable (m : Type (max u v) → Type*) [Monad m] [MonadLiftT F m]
 
 variable [LawfulMonad m]
 
-/-- Every returned history satisfies the common bounded-run conditions. -/
-theorem runHistoryFromWith_spec (cfg : Config) (fuel : ℕ) :
-    Functor.Liftp (M.RunConditions cfg fuel) (M.runHistoryFromWith m cfg fuel) := by
-  refine Transition.liftp_runN (M.stepWith m) (P := fun k h ↦ M.RunConditions cfg k h)
-    (RunConditions.nil M cfg) (fun k h hr ↦ ?_) fuel
+/-- Every history a run can return satisfies the common bounded-run conditions. -/
+theorem runHistoryFromWith_spec [MonadReturns m] (cfg : Config) (fuel : ℕ) :
+    ∀ h ∈ returns (M.runHistoryFromWith m cfg fuel), M.RunConditions cfg fuel h := by
+  refine Transition.forall_mem_runN (M.stepWith m) (P := fun k h ↦ M.RunConditions cfg k h)
+    (RunConditions.nil M cfg) (fun k h hr h' hh' ↦ ?_) fuel
   by_cases hh : M.Halted h
-  · rw [M.stepWith_of_halted m h hh]
-    exact ⟨pure ⟨h, hr.of_halted M hh⟩, map_pure _ _⟩
-  · rw [M.stepWith_of_not_halted m h hh]
-    exact ⟨(fun a ↦ ⟨h.snoc a, hr.snoc M hh a⟩) <$>
-      (monadLift (M.transition (state h) (observe h)) : m (Q × Action)), by simp [Functor.map_map]⟩
+  · rw [M.stepWith_of_halted m h hh, mem_returns_pure_iff] at hh'
+    exact hh' ▸ hr.of_halted M hh
+  · rw [M.stepWith_of_not_halted m h hh, mem_returns_map_iff] at hh'
+    obtain ⟨a, -, rfl⟩ := hh'
+    exact hr.snoc M hh a
 
 @[simp] theorem runHistoryFromWith_of_halted (cfg : Config) (h : M.Halted cfg) (fuel : ℕ) :
     M.runHistoryFromWith m cfg fuel = pure (History.nil cfg) :=
@@ -154,20 +154,6 @@ theorem runHistoryFromWith_add (cfg : Config) (n k : ℕ) :
 
 end Interpreted
 
-section Multiset
-
-variable (M : Controller F Observation Action Q) [MonadLiftT F Multiset]
-
-/-- Membership in the returned multiset supplies the bounded-run conditions. -/
-theorem runHistoryFromWith_mem_spec (cfg : Config) (fuel : ℕ) {h : History Config (Q × Action)}
-    (hh : h ∈ M.runHistoryFromWith Multiset cfg fuel) : M.RunConditions cfg fuel h := by
-  obtain ⟨certified, heq⟩ := M.runHistoryFromWith_spec Multiset cfg fuel
-  rw [← heq] at hh
-  obtain ⟨h, _, rfl⟩ := Multiset.mem_map.mp hh
-  exact h.property
-
-end Multiset
-
 section Deterministic
 
 variable (M : Controller Id Observation Action Q)
@@ -177,10 +163,8 @@ def runHistoryFrom (cfg : Config) (fuel : ℕ) : History Config (Q × Action) :=
   (M.runHistoryFromWith Id cfg fuel).run
 
 theorem runHistoryFrom_spec (cfg : Config) (fuel : ℕ) :
-    M.RunConditions cfg fuel (M.runHistoryFrom cfg fuel) := by
-  obtain ⟨u, hu⟩ := M.runHistoryFromWith_spec Id cfg fuel
-  rw [runHistoryFrom, ← hu]
-  exact u.run.property
+    M.RunConditions cfg fuel (M.runHistoryFrom cfg fuel) :=
+  M.runHistoryFromWith_spec Id cfg fuel _ rfl
 
 @[simp] theorem first_runHistoryFrom (cfg : Config) (fuel : ℕ) :
     (M.runHistoryFrom cfg fuel).first = cfg := (M.runHistoryFrom_spec cfg fuel).first_eq
