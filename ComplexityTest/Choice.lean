@@ -53,6 +53,13 @@ example : LawfulFunctorLiftT BinaryChoice Multiset := inferInstance
 example : LawfulFunctorLiftT BinaryChoice (StateT ℕ Multiset) := inferInstance
 example : LawfulFunctorLiftT Id Id := inferInstance
 
+-- Guards what `returns` is on the two interpretations, by definition: the result on `Id`, the
+-- members on `Multiset`. A generic fact about every value a computation can return is then the
+-- plain statement about every branch, with no conversion.
+example (x : Id ℕ) (a : ℕ) : a ∈ returns x ↔ a = x.run := Iff.rfl
+
+example (s : Multiset ℕ) (P : ℕ → Prop) : (∀ a ∈ returns s, P a) = (∀ a ∈ s, P a) := rfl
+
 -- Multiset interpretations may have more than two alternatives, with coincident endpoints.
 private def threeChoices : Controller Multiset Unit Unit ℕ where
   q₀ := 0
@@ -71,7 +78,7 @@ private instance : Controller.Apply ℕ (ℕ × Unit) where
 -- Halting freezes the three paths without collapsing their repeated endpoint.
 example (n : ℕ) (hn : 1 ≤ n) :
     threeChoices.runFromWith Multiset 0 n = ↑[1, 1, 2] := by
-  apply threeChoices.runFromWith_eq_of_forall_halted 0 (hn := hn)
+  apply threeChoices.runFromWith_eq_of_forall_halted Multiset 0 (hn := hn)
   intro d hd
   change d ∈ (↑[1, 1, 2] : Multiset ℕ) at hd
   simp only [Multiset.mem_coe, List.mem_cons, List.not_mem_nil, or_false] at hd

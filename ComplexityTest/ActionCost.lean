@@ -97,7 +97,7 @@ example (data n : ℕ) (hn : (counter.runHistoryFrom data n).length < n) :
 example (n : ℕ) (h : Controller.History Bool (Bool × Bool))
     (hh : h ∈ branches.runHistoryFromWith Multiset false n) :
     h.first = false ∧ h.length ≤ n := by
-  have hr := branches.runHistoryFromWith_mem_spec false n hh
+  have hr := branches.runHistoryFromWith_spec Multiset false n _ hh
   exact ⟨hr.first_eq, hr.length_le⟩
 
 def counterSpace (data : ℕ) : ℕ := if data = 1 then 20 else data + 2
