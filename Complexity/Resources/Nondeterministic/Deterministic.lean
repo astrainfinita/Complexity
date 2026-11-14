@@ -7,7 +7,7 @@ module
 
 public import Complexity.Resources.Nondeterministic.Basic
 public import Complexity.Resources.TuringMachine
-public import Complexity.Models.TuringMachine.Nondeterministic.Deterministic
+public import Complexity.Control.Controller.Binary
 
 /-!
 # Deterministic decision specifications as nondeterministic specifications
@@ -31,18 +31,18 @@ private theorem toBinary_decides {κ : Type*} [Fintype κ] {Q : Type*}
     {t s : ℕ}
     (h : M.ComputesWithin (src.toList.map some)
       ((encode (RawWord Bool) output).toList.map some) t s) :
-    NTM.UsesTime M.toBinary (src.toList.map some) t ∧
-      NTM.UsesSpace M.toBinary (src.toList.map some) s ∧
+    (∀ h ∈ M.toBinary.histories Multiset (src.toList.map some), h.length ≤ t ∧ h.snd.space ≤ s) ∧
       NTM.BooleanOutput M.toBinary src ∧
       (NTM.Accepts M.toBinary src ↔ output = true) := by
   obtain ⟨hhalt, hout⟩ := h.run_spec
-  have ht := (M.usesTime_toBinary_iff _ _).2 hhalt
-  refine ⟨ht, (M.usesSpace_toBinary_iff _ _).2 h.usesSpace, ?_, ?_⟩
-  · rw [NTM.booleanOutput_iff_of_usesTime ht]
+  have ht := (M.forall_halted_runWith_toBinary_iff (src.toList.map some) t).2 hhalt
+  refine ⟨(M.forall_mem_histories_toBinary_iff (src.toList.map some)).2 fun n ↦
+    ⟨M.length_runHistory_le_of_halted (src.toList.map some) hhalt n, h.space_le n⟩, ?_, ?_⟩
+  · rw [NTM.booleanOutput_iff_of_forall_halted ht]
     intro c hc
     obtain rfl := (M.mem_runWith_toBinary_iff _ _ _).1 hc
     exact ⟨output, hout⟩
-  · rw [NTM.accepts_iff_of_usesTime ht]
+  · rw [NTM.accepts_iff_of_forall_halted ht]
     simp only [Controller.mem_runWith_toBinary_iff, exists_eq_left, hout, Array.mk.injEq,
       List.map_inj_right (fun _ _ => Option.some.inj), RawWord.toList_inj,
       UniqueEncoding.encode_inj]
@@ -54,8 +54,8 @@ theorem Computes.decidesWithin {κ : Type*} [Fintype κ] {Q : Type*}
     NTM.DecidesWithin M.toBinary p t s := by
   have h := Encoding.Computes.iff_of_uniqueOutput.mp h
   intro src a hsrc
-  obtain ⟨ht, hs, hvalid, haccept⟩ := toBinary_decides (h a src hsrc)
-  exact ⟨ht, hs, hvalid, haccept.trans (hp a)⟩
+  obtain ⟨hb, hvalid, haccept⟩ := toBinary_decides (h a src hsrc)
+  exact ⟨hb, hvalid, haccept.trans (hp a)⟩
 
 /-- Duplicating a deterministic machine preserves the budgets for the actual input
 code, and retains every halted branch in the nondeterministic output multiset. -/
@@ -67,11 +67,12 @@ theorem nDecidableWithinByCode_of_computable {t s : α → RawWord Bool → ℕ}
   obtain ⟨q, hq, hc⟩ := h a r ha
   obtain rfl := UniqueEncoding.mem_decode_iff.mp hq
   simp only [Id.run_pure] at hc
-  obtain ⟨ht, hs, hvalid, haccept⟩ := toBinary_decides hc
-  simp only [and_assoc, exists_and_left]
-  refine ⟨ht, hs, (NTM.exists_boolean_outputs_iff _ _ _).mpr ?_⟩
-  exact ⟨(NTM.booleanOutput_iff_of_usesTime ht).mp hvalid,
-    (NTM.accepts_iff_of_usesTime ht).symm.trans (haccept.trans (hp a))⟩
+  obtain ⟨hb, hvalid, haccept⟩ := toBinary_decides hc
+  have hn := (M.forall_halted_runWith_toBinary_iff (r.toList.map some) _).2 hc.run_spec.1
+  obtain ⟨ys, he, hv, hp⟩ := (NTM.exists_boolean_outputs_iff _ _ _).mpr
+    ⟨(NTM.booleanOutput_iff_of_forall_halted hn).mp hvalid,
+      (NTM.accepts_iff_of_forall_halted hn).symm.trans (haccept.trans (hp a))⟩
+  exact ⟨ys, ⟨hb, _, hn, he⟩, hv, hp⟩
 
 theorem nDecidableWithin_of_computable
     (h : TimeSpaceModel.tm.ComputableWithin f t s) (hp : Decides f p) :

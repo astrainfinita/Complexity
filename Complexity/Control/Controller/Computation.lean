@@ -15,10 +15,11 @@ public import Mathlib.Data.Nat.Find
 computation from a standard input to an output. Two conventions fix the input and the output:
 `HasConfig` gives the configuration type of each input and its initial configuration, and
 `HasOutput` reads outputs from configurations. On top of them come the runs on a standard input
-(`run`, `runWith`, `runHistory`), halting on an input (`Terminates`, `HaltsAt`), measurements of
-these runs, and the complete specification `ComputesWith`. A lemma belongs here when it is the
-counterpart, at `M.init input`, of a lemma about runs from an arbitrary configuration, or when it
-is about a notion that needs the input and output conventions.
+(`run`, `runWith`, `runHistory`) and the histories they can return at any depth (`histories`),
+halting on an input (`Terminates`, `HaltsAt`), measurements of these runs, and the complete
+specification `ComputesWith`. A lemma belongs here when it is the counterpart, at `M.init input`,
+of a lemma about runs from an arbitrary configuration, or when it is about a notion that needs the
+input and output conventions.
 -/
 
 @[expose] public section
@@ -80,6 +81,15 @@ def runWith (m : Type (max u v) → Type*) [Monad m] [MonadLiftT F m]
     (input : Input)
     [HasConfig Action Input Config] :
     M.runWith m input 0 = pure (M.init input) := rfl
+
+/-- Once every value a standard-input run can return has halted, more steps leave the run
+unchanged. -/
+theorem runWith_eq_of_forall_halted (m : Type (max u v) → Type*) [Monad m] [LawfulMonad m]
+    [MonadLiftT F m] [MonadReturns m] (M : Controller F Observation Action Q) (input : Input)
+    [HasConfig Action Input Config] {n k : ℕ}
+    (h : ∀ c ∈ returns (M.runWith m input n), M.Halted c) (hk : n ≤ k) :
+    M.runWith m input k = M.runWith m input n :=
+  M.runFromWith_eq_of_forall_halted m (M.init input) h hk
 
 /-- Run `M` from its initial configuration on the standard input. -/
 def run (M : Controller Id Observation Action Q) (input : Input) (n : ℕ)
@@ -144,6 +154,73 @@ theorem runHistory_eq_of_halted (M : Controller Id Observation Action Q) (input 
     (h : M.Halted (M.run input n)) (hk : n ≤ k) :
     M.runHistory input k = M.runHistory input n :=
   M.runHistoryFrom_eq_of_halted (M.init input) h hk
+
+/-- A standard-input run that has halted by step `t` records at most `t` actions at every
+depth. -/
+theorem length_runHistory_le_of_halted (M : Controller Id Observation Action Q) (input : Input)
+    [HasConfig Action Input Config] {t : ℕ} (h : M.Halted (M.run input t)) (n : ℕ) :
+    (M.runHistory input n).length ≤ t := by
+  rcases le_total n t with hn | hn
+  · exact (M.length_runHistory_le input n).trans hn
+  · exact M.runHistory_eq_of_halted input h hn ▸ M.length_runHistory_le input t
+
+/-- The histories that a run of `M` on the standard input can return, at any depth. They include
+every finite prefix of every branch. -/
+def histories (m : Type (max u v) → Type*) [Monad m] [MonadLiftT F m] [MonadReturns m]
+    (M : Controller F Observation Action Q) (input : Input) [HasConfig Action Input Config] :
+    Set (History (Q × Config input) (Q × Action)) :=
+  ⋃ n, returns (M.runHistoryWith m input n)
+
+section Histories
+
+variable (m : Type (max u v) → Type*) [Monad m] [MonadLiftT F m] [MonadReturns m]
+  (M : Controller F Observation Action Q) (input : Input) [HasConfig Action Input Config]
+
+theorem mem_histories_iff {h : History (Q × Config input) (Q × Action)} :
+    h ∈ M.histories m input ↔ ∃ n, h ∈ returns (M.runHistoryWith m input n) :=
+  Set.mem_iUnion
+
+theorem forall_mem_histories_iff {P : History (Q × Config input) (Q × Action) → Prop} :
+    (∀ h ∈ M.histories m input, P h) ↔ ∀ n, ∀ h ∈ returns (M.runHistoryWith m input n), P h := by
+  simp only [mem_histories_iff, forall_exists_index]
+  exact forall_comm
+
+variable [LawfulMonad m]
+
+/-- A step invariant holds for every history. -/
+theorem forall_mem_histories {P : History (Q × Config input) (Q × Action) → Prop}
+    (hinit : P (History.nil (M.init input)))
+    (hstep : ∀ h, P h → ∀ h' ∈ returns (M.stepWith m h), P h') :
+    ∀ h ∈ M.histories m input, P h :=
+  (M.forall_mem_histories_iff m input).2 fun n ↦ M.forall_mem_runFromWith m hstep hinit n
+
+/-- Once every value a run can return at step `t` has halted, no history is longer than `t`. -/
+theorem length_le_of_forall_halted {t : ℕ}
+    (ht : ∀ c ∈ returns (M.runWith m input t), M.Halted c) :
+    ∀ h ∈ M.histories m input, h.length ≤ t := by
+  refine (M.forall_mem_histories_iff m input).2 fun n h hh ↦ ?_
+  by_cases hn : n ≤ t
+  · exact (M.runHistoryFromWith_spec m (M.init input) n h hh).length_le.trans hn
+  · have ht' : ∀ p ∈ returns (M.runHistoryFromWith m (M.init input) t), M.Halted p :=
+      fun p hp ↦ ht p.last (by
+        rw [runWith, ← M.last_runHistoryFromWith m, mem_returns_map_iff]; exact ⟨p, hp, rfl⟩)
+    rw [runHistoryWith, runHistoryFromWith,
+      M.runFromWith_eq_of_forall_halted m _ ht' (Nat.le_of_not_ge hn)] at hh
+    exact (M.runHistoryFromWith_spec m (M.init input) t h hh).length_le
+
+/-- If no history is longer than `t`, every value a run can return at step `t + 1` has halted:
+a branch still running after `t` steps would have a longer history at the next step, or has no
+successor and is gone. -/
+theorem forall_halted_succ_of_forall_length_le {t : ℕ}
+    (hl : ∀ h ∈ M.histories m input, h.length ≤ t) :
+    ∀ c ∈ returns (M.runWith m input (t + 1)), M.Halted c := by
+  intro c hc
+  rw [runWith, ← M.last_runHistoryFromWith m, mem_returns_map_iff] at hc
+  obtain ⟨h, hh, rfl⟩ := hc
+  exact (M.runHistoryFromWith_spec m (M.init input) (t + 1) h hh).stopped.resolve_left
+    fun hlen ↦ absurd (hl h ((M.mem_histories_iff m input).2 ⟨t + 1, hh⟩)) (by omega)
+
+end Histories
 
 section Halting
 

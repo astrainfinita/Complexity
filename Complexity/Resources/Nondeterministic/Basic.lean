@@ -38,15 +38,17 @@ def BooleanOutput (M : NTM κ (Option Bool) Q) (xs : RawWord Bool) : Prop :=
 def Accepts (M : NTM κ (Option Bool) Q) (xs : RawWord Bool) : Prop :=
   M.Produces (xs.toList.map some) (⌜true⌝₂.toList.map some)
 
-theorem accepts_iff_of_usesTime {t : ℕ} (h : M.UsesTime (xs.toList.map some) t) :
+theorem accepts_iff_of_forall_halted {t : ℕ}
+    (h : ∀ c ∈ M.runWith Multiset (xs.toList.map some) t, M.Halted c) :
     M.Accepts xs ↔ ∃ c ∈ M.runWith Multiset (xs.toList.map some) t,
         c.2.output = (⌜true⌝₂.toList.map some).toArray :=
-  produces_iff_of_usesTime h
+  produces_iff_of_forall_halted h
 
-theorem booleanOutput_iff_of_usesTime {t : ℕ} (h : M.UsesTime (xs.toList.map some) t) :
+theorem booleanOutput_iff_of_forall_halted {t : ℕ}
+    (h : ∀ c ∈ M.runWith Multiset (xs.toList.map some) t, M.Halted c) :
     M.BooleanOutput xs ↔ ∀ c ∈ M.runWith Multiset (xs.toList.map some) t,
         ∃ b : Bool, c.2.output = (⌜b⌝₂.toList.map some).toArray := by
-  simp only [BooleanOutput, produces_iff_of_usesTime h, ← Array.toList_inj,
+  simp only [BooleanOutput, produces_iff_of_forall_halted h, ← Array.toList_inj,
     forall_exists_index, and_imp]
   rw [forall_comm]
   simp only [forall_comm (α := List (Option Bool)), forall_eq']
@@ -84,17 +86,19 @@ theorem exists_boolean_outputs_iff {C : Type*} (cs : Multiset C) (output : C →
       Multiset.mem_map_of_injective hinj, exists_eq_right, eq_comm] using And.intro hv ha
 
 /-- Finite binary-choice Turing machines, retaining all branch outputs and their
-multiplicities. Resource bounds cover every branch, including rejecting branches. -/
+multiplicities. Resource bounds cover every branch, including rejecting branches. The outputs are
+read at any step by which every branch has halted. -/
 def _root_.Complexity.TimeSpaceModel.ntm : TimeSpaceModel Multiset (RawWord Bool) where
   inputSize := RawWord.length
   behaviors := {R | ∃ (κ : Type) (_ : Fintype κ) (Q : Type) (_ : Finite Q)
-      (M : NTM κ (Option Bool) Q), R = fun xs ys t s =>
-        M.UsesTime (xs.toList.map some) t ∧ M.UsesSpace (xs.toList.map some) s ∧
-        ys.map (fun y => (y.toList.map some).toArray) =
-          (M.runWith Multiset (xs.toList.map some) t).map (·.2.output)}
+      (M : NTM κ (Option Bool) Q), R = fun (xs : RawWord Bool) ys t s =>
+        (∀ h ∈ M.histories Multiset (xs.toList.map some), h.length ≤ t ∧ h.snd.space ≤ s) ∧
+        ∃ n, (∀ c ∈ M.runWith Multiset (xs.toList.map some) n, M.Halted c) ∧
+          ys.map (fun y => (y.toList.map some).toArray) =
+            (M.runWith Multiset (xs.toList.map some) n).map (·.2.output)}
   budget_mono := by
-    rintro R ⟨κ, hκ, Q, hQ, M, rfl⟩ xs ys t s t' s' ⟨ht, hs, ho⟩ htt hss
-    exact ⟨ht.mono htt, hs.mono hss, by rw [runWith_eq_of_usesTime ht htt]; exact ho⟩
+    rintro R ⟨κ, hκ, Q, hQ, M, rfl⟩ xs ys t s t' s' ⟨hb, ho⟩ htt hss
+    exact ⟨fun h hh ↦ (hb h hh).imp (·.trans htt) (·.trans hss), ho⟩
 
 section InputBudgets
 
@@ -104,15 +108,16 @@ variable {α : Type*} [Encoding (RawWord Bool) α]
 /-- Every branch obeys the same value-indexed budgets on every legal input code. -/
 def DecidesWithin [Fintype κ] (M : NTM κ (Option Bool) Q) (p : α → Prop)
     (t s : α → ℕ) : Prop :=
-  ∀ r a, a ∈ decode α r → M.UsesTime (r.toList.map some) (t a) ∧
-    M.UsesSpace (r.toList.map some) (s a) ∧
+  ∀ (r : RawWord Bool) a, a ∈ decode α r →
+    (∀ h ∈ M.histories Multiset (r.toList.map some), h.length ≤ t a ∧ h.snd.space ≤ s a) ∧
     M.BooleanOutput r ∧ (M.Accepts r ↔ p a)
 
 theorem DecidesWithin.mono [Fintype κ]
     (h : DecidesWithin M p t s) {t' s' : α → ℕ}
     (ht : ∀ a, t a ≤ t' a) (hs : ∀ a, s a ≤ s' a) :
     DecidesWithin M p t' s' :=
-  fun r a ha => ⟨(h r a ha).1.mono (ht a), (h r a ha).2.1.mono (hs a), (h r a ha).2.2⟩
+  fun r a ha => ⟨fun c hc ↦ ((h r a ha).1 c hc).imp (·.trans (ht a)) (·.trans (hs a)),
+    (h r a ha).2⟩
 
 theorem nDecidableWithin_iff :
     TimeSpaceModel.ntm.NDecidableWithin p t s ↔
@@ -120,17 +125,20 @@ theorem nDecidableWithin_iff :
         (M : NTM κ (Option Bool) Q), DecidesWithin M p t s := by
   constructor
   · rintro ⟨R, ⟨κ, hκ, Q, hQ, M, rfl⟩, h⟩
-    simp only [Encoding.NDecides, and_assoc, exists_and_left, exists_boolean_outputs_iff] at h
     refine ⟨κ, hκ, Q, hQ, M, fun r a ha => ?_⟩
-    obtain ⟨ht, hs, hb, hp⟩ := h a r ha
-    exact ⟨ht, hs, (booleanOutput_iff_of_usesTime ht).mpr hb,
-      (accepts_iff_of_usesTime ht).trans hp⟩
+    obtain ⟨ys, ⟨hb, n, hn, he⟩, hv, hp⟩ := h a r ha
+    obtain ⟨hv, hp⟩ := (exists_boolean_outputs_iff _ _ _).mp ⟨ys, he, hv, hp⟩
+    exact ⟨hb, (booleanOutput_iff_of_forall_halted hn).mpr hv,
+      (accepts_iff_of_forall_halted hn).trans hp⟩
   · rintro ⟨κ, hκ, Q, hQ, M, h⟩
     refine ⟨_, ⟨κ, hκ, Q, hQ, M, rfl⟩, fun a r ha => ?_⟩
-    simp only [and_assoc, exists_and_left, exists_boolean_outputs_iff]
-    obtain ⟨ht, hs, hb, hp⟩ := h r a ha
-    exact ⟨ht, hs, (booleanOutput_iff_of_usesTime ht).mp hb,
-      (accepts_iff_of_usesTime ht).symm.trans hp⟩
+    obtain ⟨hb, hv, hp⟩ := h r a ha
+    have hn := M.forall_halted_succ_of_forall_length_le Multiset (r.toList.map some)
+      fun c hc ↦ (hb c hc).1
+    obtain ⟨ys, he, hv, hp⟩ := (exists_boolean_outputs_iff _ _ _).mpr
+      ⟨(booleanOutput_iff_of_forall_halted hn).mp hv,
+        (accepts_iff_of_forall_halted hn).symm.trans hp⟩
+    exact ⟨ys, ⟨hb, _, hn, he⟩, hv, hp⟩
 
 theorem DecidesWithin.nDecidableWithin {κ : Type} [Fintype κ]
     {Q : Type} [Finite Q] {M : NTM κ (Option Bool) Q}

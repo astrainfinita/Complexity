@@ -52,10 +52,6 @@ theorem le_actionSum_of_haltsAt {M : TreeMachine Id k Q} {a : Tree} {t : ℕ}
   (M.length_runHistoryFrom_eq _ _ h.2).symm.trans_le
     ((History.length_snd _).symm.trans_le (length_le_actionSum _))
 
-/-- Every finite prefix stays within the given expanded-tree space bound. -/
-def UsesSpace (M : TreeMachine Id k Q) (a : Tree) (s : ℕ) : Prop :=
-  ∀ t, (M.runHistory a t).snd.configSup Cfg.mass ≤ s
-
 /-- Compute a tree in register zero within a cumulative size-charge time budget
 and a maximum expanded-tree space budget. The transition count is an existential witness,
 since the external time charge depends on the trees read or constructed. -/
@@ -124,10 +120,10 @@ theorem ComputesWithin.exists_haltsAt {M : TreeMachine Id k Q} {a : Tree}
   rwa [M.run_eq_of_halted a hh.1 hn] at ha
 
 /-- A terminating bounded computation controls space along the entire padded execution. -/
-theorem ComputesWithin.usesSpace {M : TreeMachine Id k Q} {a : Tree}
-    {b : Tree} {t s : ℕ} (h : M.ComputesWithin a b t s) :
-    M.UsesSpace a s :=
-  Controller.computesWith_configSup_le h
+theorem ComputesWithin.configSup_mass_le {M : TreeMachine Id k Q} {a : Tree}
+    {b : Tree} {t s : ℕ} (h : M.ComputesWithin a b t s)
+    (u : ℕ) : (M.runHistory a u).snd.configSup Cfg.mass ≤ s :=
+  Controller.computesWith_configSup_le h u
 
 theorem ComputesWithin.actionSum_le {M : TreeMachine Id k Q} {a : Tree}
     {b : Tree} {t s : ℕ} (h : M.ComputesWithin a b t s)
@@ -144,7 +140,7 @@ theorem ComputesWithin.configSup_mass_le_add_time
 theorem ComputesWithin.mass_le {M : TreeMachine Id k Q} {a : Tree}
     {b : Tree} {t s : ℕ} (h : M.ComputesWithin a b t s)
     (u : ℕ) : (M.run a u).2.mass ≤ s :=
-  (M.config_le_configSup_runHistory a Cfg.mass (Nat.le_refl u)).trans (h.usesSpace u)
+  (M.config_le_configSup_runHistory a Cfg.mass (Nat.le_refl u)).trans (h.configSup_mass_le u)
 
 theorem ComputesWithin.mass_le_mass_add_time
     {M : TreeMachine Id k Q} {a : Tree} {b : Tree} {t s : ℕ}

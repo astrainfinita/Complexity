@@ -21,10 +21,6 @@ namespace Complexity.TM
 
 variable {κ : Type*} {Γ Q : Type*} [Inhabited Γ] {xs : Array Γ}
 
-/-- Every finite execution prefix uses at most `s` work cells, whether or not the run halts. -/
-def UsesSpace [Fintype κ] (M : TM Id κ Γ Q) (xs : List Γ) (s : ℕ) : Prop :=
-  ∀ t, (M.runHistory xs t).snd.space ≤ s
-
 /-- Compute with unit action time and visited-cell space on one execution history. -/
 def ComputesWithin [Fintype κ] (M : TM Id κ Γ Q) (xs ys : List Γ)
     (t s : ℕ) : Prop :=
@@ -57,9 +53,9 @@ theorem ComputesWithin.terminates [Fintype κ] {M : TM Id κ Γ Q}
   ⟨t, h.run_spec.1⟩
 
 /-- A terminating bounded computation controls space along the entire infinite padded run. -/
-theorem ComputesWithin.usesSpace [Fintype κ] {M : TM Id κ Γ Q}
+theorem ComputesWithin.space_le [Fintype κ] {M : TM Id κ Γ Q}
     {xs ys : List Γ} {t s : ℕ}
-    (h : M.ComputesWithin xs ys t s) : M.UsesSpace xs s :=
-  fun u ↦ Controller.computesWith_space_le h (M.runHistoryFrom_space_mono _) u
+    (h : M.ComputesWithin xs ys t s) (u : ℕ) : (M.runHistory xs u).snd.space ≤ s :=
+  Controller.computesWith_space_le h (M.runHistoryFrom_space_mono _) u
 
 end Complexity.TM

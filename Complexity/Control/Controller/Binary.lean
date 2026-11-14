@@ -66,6 +66,14 @@ variable [Observe Config Observation] [Apply Config (Q × Action)]
     d ∈ M.toBinary.runWith Multiset input n ↔ d = M.run input n :=
   M.mem_runFromWith_toBinary_iff (M.init input) d n
 
+/-- Every branch of the embedded machine has halted at step `n` exactly when the deterministic run
+has. -/
+theorem forall_halted_runWith_toBinary_iff {C : Input → Type u} [∀ x, Observe (C x) Observation]
+    [∀ x, Apply (C x) Action] (input : Input) [HasConfig Action Input C] (n : ℕ) :
+    (∀ c ∈ M.toBinary.runWith Multiset input n, M.toBinary.Halted c) ↔
+      M.Halted (M.run input n) := by
+  simp only [mem_runWith_toBinary_iff, forall_eq, halted_toBinary_iff]
+
 /-- Duplicated deterministic choices record exactly the original action history. -/
 theorem mem_runHistoryFromWith_toBinary_iff (c : Config)
     (h : History Config (Q × Action)) (n : ℕ) :
@@ -78,5 +86,13 @@ theorem mem_runHistoryWith_toBinary_iff {C : Input → Type u} [∀ x, Observe (
     (h : History (Q × C input) (Q × Action)) (n : ℕ) :
     h ∈ M.toBinary.runHistoryWith Multiset input n ↔ h = M.runHistory input n :=
   M.mem_runHistoryFromWith_toBinary_iff (M.init input) h n
+
+/-- Duplicated deterministic choices have exactly the histories of the original run. -/
+theorem forall_mem_histories_toBinary_iff {C : Input → Type u} [∀ x, Observe (C x) Observation]
+    [∀ x, Apply (C x) Action] (input : Input) [HasConfig Action Input C]
+    {P : History (Q × C input) (Q × Action) → Prop} :
+    (∀ h ∈ M.toBinary.histories Multiset input, P h) ↔ ∀ n, P (M.runHistory input n) := by
+  simp only [forall_mem_histories_iff, Multiset.mem_returns, mem_runHistoryWith_toBinary_iff,
+    forall_eq]
 
 end Complexity.Controller
