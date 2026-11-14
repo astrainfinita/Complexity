@@ -11,6 +11,8 @@ import Complexity.Models.TuringMachine.Deterministic
 
 open Complexity
 
+universe u
+
 namespace Complexity.ComputationTest
 
 -- Halting hypotheses simplify both shared execution and history statistics.
@@ -43,6 +45,19 @@ example {κ Γ Q : Type*} [Inhabited Γ] [Fintype κ]
       (M.runHistory xs t).snd.space ≤ s := by
   refine Controller.computesWith_unit_iff.trans ?_
   simp only [TM.hasOutput_isOutput]
+
+-- Guards that the general `ComputesInWith` on `Id` is the deterministic `ComputesWithin`: it bounds
+-- every history at every depth, which the halting history bounds because length and space are
+-- monotone along the run. The simp lemma on histories needs the machine and the input explicitly.
+example {κ Γ Q : Type u} [Inhabited Γ] [Fintype κ] (M : TM Id κ Γ Q) (xs ys : List Γ)
+    (t s : ℕ) :
+    M.ComputesWithin xs ys t s ↔
+      M.ComputesInWith Id xs (pure ys) Controller.History.length Controller.History.space t s := by
+  simp only [Controller.ComputesInWith, M.forall_mem_histories_iff Id xs, Id.mem_returns,
+    forall_eq, liftRel_id_iff]
+  refine ⟨fun h ↦ ⟨fun k ↦ ⟨(Controller.History.length_snd _).trans_le
+    (M.length_runHistory_le_of_halted xs h.run_spec.1 k), h.space_le k⟩,
+    h.imp fun _ ↦ .imp_right And.left⟩, fun ⟨hb, n, hh, ho⟩ ↦ ⟨n, hh, ho, hb n⟩⟩
 
 -- Zero action fees require an execution length separate from the time budget.
 private def oneAction : Controller Id Unit Unit Bool where

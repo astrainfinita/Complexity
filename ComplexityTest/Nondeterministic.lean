@@ -25,10 +25,13 @@ open Controller (History)
 
 namespace NondeterministicTest
 
--- A local encoding override does not change the concrete acceptance convention.
-example {κ Q : Type*} (M : NTM κ (Option Bool) Q) (xs : RawWord Bool) :
-    letI := (inferInstance : UniqueEncoding (RawWord Bool) Bool).ofEquiv Equiv.boolNot
-    M.Accepts xs ↔ M.Produces (xs.toList.map some) [some true, some false, some false] := Iff.rfl
+-- A local encoding override does not change the concrete acceptance convention: the Boolean
+-- special case fixes the code of Booleans where it is defined, so swapping the two codes locally
+-- leaves `DecidesWithin` unchanged.
+example {κ Q : Type} [Fintype κ] (M : NTM κ (Option Bool) Q) (p : List Bool → Prop)
+    (t s : List Bool → ℕ) :
+    (letI := (inferInstance : UniqueEncoding (RawWord Bool) Bool).ofEquiv Equiv.boolNot;
+      M.DecidesWithin p t s) ↔ M.DecidesWithin p t s := Iff.rfl
 
 private def fixedOutputs (ys : Multiset (RawWord Bool)) : TimeSpaceModel Multiset (RawWord Bool) where
   inputSize := RawWord.length
@@ -83,31 +86,17 @@ private theorem guess_time (xs : List (Option Bool)) :
     Prod.mk.injEq] at hm
   rcases hm with ⟨h, _⟩ | ⟨h, _⟩ <;> simp [Controller.Halted, guess, h]
 
-private theorem guess_boolean (xs : RawWord Bool) : guess.BooleanOutput xs := by
-  rw [NTM.booleanOutput_iff_of_forall_halted (guess_time _)]
-  intro c hc
-  have hm := Multiset.mem_map_of_mem (fun c => (c.1, c.2.output)) hc
-  rw [guess_results] at hm
-  simp only [Multiset.mem_coe, List.mem_cons, List.not_mem_nil, or_false, or_self,
-    Prod.mk.injEq] at hm
-  rcases hm with ⟨_, h⟩ | ⟨_, h⟩
-  · exact ⟨false, h⟩
-  · exact ⟨true, h⟩
-
-private theorem guess_accepts (xs : RawWord Bool) : guess.Accepts xs := by
-  rw [NTM.accepts_iff_of_forall_halted (guess_time _)]
-  have hm : (3, #[some true, some false, some false]) ∈
-      (guess.runWith Multiset (xs.toList.map some) 3).map
-        (fun c => (c.1, c.2.output)) := by rw [guess_results]; simp
-  obtain ⟨c, hc, h⟩ := Multiset.mem_map.mp hm
-  exact ⟨c, hc, congrArg Prod.snd h⟩
-
+-- The outputs at step 3 are the codes of `false` and four times `true`.
 theorem guess_spec : guess.DecidesWithin (fun _ : List Bool => True)
     (fun _ => 3) (fun _ => 0) := by
   intro xs a ha
-  refine ⟨fun h hh ↦ ⟨guess.length_le_of_forall_halted Multiset (xs.toList.map some)
-    (guess_time _) h hh, ?_⟩, guess_boolean _, iff_true_intro (guess_accepts _)⟩
-  simp [History.space]
+  have ho : (guess.runWith Multiset (xs.toList.map some) 3).map (·.2.output) =
+      ((↑[false, true, true, true, true] : Multiset Bool).map
+        fun b ↦ ⌜b⌝₂.toList.map some).map List.toArray := rfl
+  rw [← Multiset.rel_eq, Multiset.rel_map] at ho
+  refine ⟨_, ⟨fun h hh ↦ ⟨(History.length_snd h).trans_le <| guess.length_le_of_forall_halted
+    Multiset (xs.toList.map some) (guess_time _) h hh, by simp [History.space]⟩, 3,
+    liftRel_multiset_iff.2 (ho.mono fun c hc _ _ h ↦ ⟨guess_time _ c hc, h⟩)⟩, by simp⟩
 
 private theorem guess_size_spec : TimeSpaceModel.ntm.NDecidableWithinBySize
     (fun _ : List Bool => True) (fun _ => 3) (fun _ => 0) :=
@@ -194,12 +183,14 @@ def mixed : NTM (Fin 0) (Option Bool) (Fin 4) where
   transition q o i := if q = 0 ∧ i = 0 then (0, ⟨0, Fin.elim0, none⟩)
     else guess.transition q o i
 
-example : mixed.Accepts (.ofList []) := by
+-- Some branch of `mixed` halts by step 3 with the code of `true`.
+example : ∃ c ∈ mixed.runWith Multiset ([] : List (Option Bool)) 3,
+    mixed.Halted c ∧ c.2.output = #[some true, some false, some false] := by
   have hm : (3, #[some true, some false, some false]) ∈
       (mixed.runWith
         Multiset ([] : List (Option Bool)) 3).map (fun c => (c.1, c.2.output)) := by decide
   obtain ⟨c, hc, h⟩ := Multiset.mem_map.mp hm
-  refine ⟨3, c, hc, ?_, congrArg Prod.snd h⟩
+  refine ⟨c, hc, ?_, congrArg Prod.snd h⟩
   simp [Controller.Halted, mixed, show c.1 = 3 from congrArg Prod.fst h]
 
 example : ¬∀ h ∈ mixed.histories Multiset ([] : List (Option Bool)), h.length ≤ 3 := by
@@ -208,6 +199,29 @@ example : ¬∀ h ∈ mixed.histories Multiset ([] : List (Option Bool)), h.leng
   obtain ⟨c, hc, he⟩ := Multiset.mem_map.mp hm
   have hh := mixed.forall_halted_succ_of_forall_length_le Multiset ([] : List (Option Bool)) h c hc
   simp [Controller.Halted, mixed, he] at hh
+
+-- The branch that always chooses `0` never halts.
+private theorem mixed_loops (n : ℕ) :
+    ∃ c ∈ mixed.runWith Multiset ([] : List (Option Bool)) n, c.1 = 0 := by
+  induction n with
+  | zero => exact ⟨_, Multiset.mem_singleton_self _, rfl⟩
+  | succ n ih =>
+    obtain ⟨⟨q, c⟩, hc, rfl : q = 0⟩ := ih
+    rw [Controller.runWith, Controller.runFromWith_succ']
+    refine ⟨Controller.apply (mixed.transition 0 (Controller.observe c) 0) (0, c),
+      Multiset.mem_bind.2 ⟨(0, c), hc, ?_⟩, rfl⟩
+    rw [mixed.stepWith_of_not_halted Multiset (0, c) Bool.false_ne_true]
+    exact Multiset.mem_map_of_mem _ (Multiset.mem_coe.2 (List.mem_cons_self ..))
+
+-- Guards that `ComputesInWith` asks for a step at which every branch has halted: the accepting
+-- branch does not help, and no budgets and no outputs fit.
+example (outs : Multiset (List (Option Bool))) (t s : ℕ) :
+    ¬mixed.ComputesInWith Multiset ([] : List (Option Bool)) outs History.length History.space
+      t s := by
+  rintro ⟨-, n, ho⟩
+  obtain ⟨c, hc, h0⟩ := mixed_loops n
+  obtain ⟨-, -, hh, -⟩ := Multiset.exists_mem_of_rel_of_mem ho.multisetRel hc
+  simp [Controller.Halted, mixed, h0] at hh
 
 -- Space alone is meaningful for divergence, but an NSPACE decider must terminate.
 def forever : TM Id (Fin 0) (Option Bool) Unit where
@@ -229,8 +243,8 @@ private theorem forever_diverges (xs : List (Option Bool)) :
 example : ¬∃ t, NTM.DecidesWithin forever.toBinary
     (fun _ : List Bool => False) t (fun _ => 0) := by
   rintro ⟨t, h⟩
-  exact forever_diverges _ ⟨_, fun c hc ↦
-    ((h (encode (RawWord Bool) ([] : List Bool)) [] (by simp)).1 c hc).1⟩
+  obtain ⟨-, ⟨hb, -⟩, -⟩ := h (encode (RawWord Bool) ([] : List Bool)) [] (by simp)
+  exact forever_diverges _ ⟨_, fun c hc ↦ (History.length_snd c).symm.trans_le (hb c hc).1⟩
 
 -- A malformed terminal output cannot silently count as rejection.
 def malformed : TM Id (Fin 0) (Option Bool) Bool where
@@ -238,15 +252,29 @@ def malformed : TM Id (Fin 0) (Option Bool) Bool where
   halt := id
   transition _ _ := pure <| (true, { (answer false true).2 with output := none })
 
-example : ¬NTM.BooleanOutput malformed.toBinary (.ofList []) := by
-  have ht := (malformed.forall_halted_runWith_toBinary_iff ([] : List (Option Bool)) 1).2 rfl
-  rw [NTM.booleanOutput_iff_of_forall_halted ht]
-  intro h
-  have hc : malformed.run ([] : List (Option Bool)) 1 ∈
-      malformed.toBinary.runWith Multiset ([] : List (Option Bool)) 1 := by
-    simp only [Controller.mem_runWith_toBinary_iff]
-  obtain ⟨b, hb⟩ := h _ hc
-  cases b <;> cases congrArg Array.size hb
+-- Guards that the Boolean special case asks every output to be the code of a Boolean: no
+-- multiset of Booleans fits the empty output, whatever the budgets.
+example (t s : ℕ) : ¬∃ bs : Multiset Bool, malformed.toBinary.ComputesInWith Multiset
+    ([] : List (Option Bool)) (bs.map fun b ↦ ⌜b⌝₂.toList.map some) History.length
+      History.space t s := by
+  rintro ⟨bs, -, n, ho⟩
+  obtain ⟨y, hy, hh, he⟩ := Multiset.exists_mem_of_rel_of_mem ho.multisetRel
+    ((malformed.mem_runWith_toBinary_iff ([] : List (Option Bool)) _ n).2 rfl)
+  obtain ⟨b, -, rfl⟩ := Multiset.mem_map.1 hy
+  cases n with
+  | zero => exact absurd hh Bool.false_ne_true
+  | succ n =>
+    rw [malformed.run_eq_of_halted ([] : List (Option Bool)) (n := 1) rfl (by omega),
+      TM.hasOutput_isOutput] at he
+    cases b <;> cases congrArg Array.size he
+
+-- Guards that the budgets of `ComputesInWith` are monotone on `Multiset` by the order alone, for
+-- every nondeterministic machine and every multiset of outputs.
+example {κ Q : Type} [Fintype κ] (M : NTM κ (Option Bool) Q) (xs : List (Option Bool))
+    (outs : Multiset (List (Option Bool))) {t s t' s' : ℕ}
+    (h : M.ComputesInWith Multiset xs outs History.length History.space t s) (ht : t ≤ t')
+    (hs : s ≤ s') : M.ComputesInWith Multiset xs outs History.length History.space t' s' :=
+  Controller.computesInWith_mono h ht hs
 
 -- Refactoring through a common coding predicate preserves the complete old quantifiers:
 -- the behavior is fixed before all inputs, and both budgets constrain the same outputs.
