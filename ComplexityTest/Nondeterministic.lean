@@ -9,7 +9,7 @@ import all Init.Data.List.Scan.Basic
 import Complexity.Classes.Nondeterministic.Basic
 import Complexity.Resources.Nondeterministic.Basic
 import Mathlib.Logic.Equiv.Bool
-import Complexity.Models.TuringMachine.Nondeterministic.Deterministic
+import Complexity.Control.Controller.Binary
 meta import Complexity.Models.TuringMachine.Nondeterministic.Basic
 meta import Complexity.Models.TuringMachine.Basic
 meta import Complexity.Models.TuringMachine.Cost
@@ -74,7 +74,8 @@ private theorem guess_results (xs : List (Option Bool)) :
         (3, #[some true, some false, some false]), (3, #[some true, some false, some false]),
         (3, #[some true, some false, some false])] : List (Fin 4 × Array (Option Bool))) := rfl
 
-private theorem guess_time (xs : List (Option Bool)) : guess.UsesTime xs 3 := by
+private theorem guess_time (xs : List (Option Bool)) :
+    ∀ c ∈ guess.runWith Multiset xs 3, guess.Halted c := by
   intro c hc
   have hm := Multiset.mem_map_of_mem (fun c => (c.1, c.2.output)) hc
   rw [guess_results] at hm
@@ -83,7 +84,7 @@ private theorem guess_time (xs : List (Option Bool)) : guess.UsesTime xs 3 := by
   rcases hm with ⟨h, _⟩ | ⟨h, _⟩ <;> simp [Controller.Halted, guess, h]
 
 private theorem guess_boolean (xs : RawWord Bool) : guess.BooleanOutput xs := by
-  rw [NTM.booleanOutput_iff_of_usesTime (guess_time _)]
+  rw [NTM.booleanOutput_iff_of_forall_halted (guess_time _)]
   intro c hc
   have hm := Multiset.mem_map_of_mem (fun c => (c.1, c.2.output)) hc
   rw [guess_results] at hm
@@ -94,7 +95,7 @@ private theorem guess_boolean (xs : RawWord Bool) : guess.BooleanOutput xs := by
   · exact ⟨true, h⟩
 
 private theorem guess_accepts (xs : RawWord Bool) : guess.Accepts xs := by
-  rw [NTM.accepts_iff_of_usesTime (guess_time _)]
+  rw [NTM.accepts_iff_of_forall_halted (guess_time _)]
   have hm : (3, #[some true, some false, some false]) ∈
       (guess.runWith Multiset (xs.toList.map some) 3).map
         (fun c => (c.1, c.2.output)) := by rw [guess_results]; simp
@@ -104,8 +105,8 @@ private theorem guess_accepts (xs : RawWord Bool) : guess.Accepts xs := by
 theorem guess_spec : guess.DecidesWithin (fun _ : List Bool => True)
     (fun _ => 3) (fun _ => 0) := by
   intro xs a ha
-  refine ⟨guess_time _, ?_, guess_boolean _, iff_true_intro (guess_accepts _)⟩
-  intro n c _
+  refine ⟨fun h hh ↦ ⟨guess.length_le_of_forall_halted Multiset (xs.toList.map some)
+    (guess_time _) h hh, ?_⟩, guess_boolean _, iff_true_intro (guess_accepts _)⟩
   simp [History.space]
 
 private theorem guess_size_spec : TimeSpaceModel.ntm.NDecidableWithinBySize
@@ -150,11 +151,16 @@ def splitHeads : NTM (Fin 1) (Option Bool) Bool where
   Multiset ([] : List (Option Bool)) 4).map (fun h ↦ h.snd.space) = ↑[2, 2]
 
 -- A local invariant proves the space bound at every depth, including halted padding.
-example : splitHeads.UsesSpace [] 2 := by
-  apply splitHeads.usesSpace_of_invariant
+-- Guards that the generic `Controller.forall_mem_histories` applies with a step condition stated
+-- on the members of a `Multiset`.
+example : ∀ h ∈ splitHeads.histories Multiset ([] : List (Option Bool)), h.snd.space ≤ 2 := by
+  intro h hmem
+  have hP := splitHeads.forall_mem_histories Multiset ([] : List (Option Bool))
     (P := fun h ↦ h = History.nil (splitHeads.init ([] : List (Option Bool))) ∨
-      splitHeads.Halted h ∧ h.snd.space ≤ 2)
-  · exact Or.inl rfl
+      splitHeads.Halted h ∧ h.snd.space ≤ 2) (Or.inl rfl) ?_ h hmem
+  · rcases hP with rfl | ⟨_, hs⟩
+    · decide
+    · exact hs
   · intro c hc d hd
     rcases hc with rfl | ⟨hh, hs⟩
     · change d ∈ (_ ::ₘ _ ::ₘ (0 : Multiset _)) at hd
@@ -163,10 +169,6 @@ example : splitHeads.UsesSpace [] 2 := by
     · rw [splitHeads.stepWith_of_halted Multiset c hh] at hd
       obtain rfl := Multiset.mem_singleton.mp hd
       exact Or.inr ⟨hh, hs⟩
-  · intro c hc
-    rcases hc with rfl | ⟨_, hs⟩
-    · decide
-    · exact hs
 
 -- Branches return to the same blank configuration while retaining different visit intervals.
 def rejoinHeads : NTM Unit Bool (Fin 4) where
@@ -200,11 +202,11 @@ example : mixed.Accepts (.ofList []) := by
   refine ⟨3, c, hc, ?_, congrArg Prod.snd h⟩
   simp [Controller.Halted, mixed, show c.1 = 3 from congrArg Prod.fst h]
 
-example : ¬mixed.UsesTime [] 3 := by
+example : ¬∀ h ∈ mixed.histories Multiset ([] : List (Option Bool)), h.length ≤ 3 := by
   intro h
-  have hm : 0 ∈ (mixed.runWith Multiset ([] : List (Option Bool)) 3).map (·.1) := by decide
+  have hm : 0 ∈ (mixed.runWith Multiset ([] : List (Option Bool)) 4).map (·.1) := by decide
   obtain ⟨c, hc, he⟩ := Multiset.mem_map.mp hm
-  have hh := h c hc
+  have hh := mixed.forall_halted_succ_of_forall_length_le Multiset ([] : List (Option Bool)) h c hc
   simp [Controller.Halted, mixed, he] at hh
 
 -- Space alone is meaningful for divergence, but an NSPACE decider must terminate.
@@ -213,19 +215,22 @@ def forever : TM Id (Fin 0) (Option Bool) Unit where
   halt _ := false
   transition _ _ := pure <| ((), ⟨0, Fin.elim0, none⟩)
 
-example (xs : List (Option Bool)) : NTM.UsesSpace forever.toBinary xs 0 := by
-  intro n c _
+example (xs : List (Option Bool)) :
+    ∀ h ∈ forever.toBinary.histories Multiset xs, h.snd.space ≤ 0 := by
+  intro c _
   simp [History.space]
 
-private theorem forever_diverges (xs : List (Option Bool)) : ¬NTM.Terminates forever.toBinary xs := by
-  rw [TM.terminates_toBinary_iff]
-  rintro ⟨n, hn⟩
-  exact Bool.false_ne_true hn
+private theorem forever_diverges (xs : List (Option Bool)) :
+    ¬∃ t, ∀ h ∈ forever.toBinary.histories Multiset xs, h.length ≤ t := by
+  rintro ⟨t, ht⟩
+  exact Bool.false_ne_true <| (forever.forall_halted_runWith_toBinary_iff xs (t + 1)).1 <|
+    forever.toBinary.forall_halted_succ_of_forall_length_le Multiset xs ht
 
 example : ¬∃ t, NTM.DecidesWithin forever.toBinary
     (fun _ : List Bool => False) t (fun _ => 0) := by
   rintro ⟨t, h⟩
-  exact forever_diverges _ (h (encode (RawWord Bool) ([] : List Bool)) [] (by simp)).1.terminates
+  exact forever_diverges _ ⟨_, fun c hc ↦
+    ((h (encode (RawWord Bool) ([] : List Bool)) [] (by simp)).1 c hc).1⟩
 
 -- A malformed terminal output cannot silently count as rejection.
 def malformed : TM Id (Fin 0) (Option Bool) Bool where
@@ -234,9 +239,8 @@ def malformed : TM Id (Fin 0) (Option Bool) Bool where
   transition _ _ := pure <| (true, { (answer false true).2 with output := none })
 
 example : ¬NTM.BooleanOutput malformed.toBinary (.ofList []) := by
-  have ht : NTM.UsesTime malformed.toBinary [] 1 :=
-    (malformed.usesTime_toBinary_iff _ _).2 rfl
-  rw [NTM.booleanOutput_iff_of_usesTime ht]
+  have ht := (malformed.forall_halted_runWith_toBinary_iff ([] : List (Option Bool)) 1).2 rfl
+  rw [NTM.booleanOutput_iff_of_forall_halted ht]
   intro h
   have hc : malformed.run ([] : List (Option Bool)) 1 ∈
       malformed.toBinary.runWith Multiset ([] : List (Option Bool)) 1 := by

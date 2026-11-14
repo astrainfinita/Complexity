@@ -84,6 +84,24 @@ example (n : ℕ) (hn : 1 ≤ n) :
   simp only [Multiset.mem_coe, List.mem_cons, List.not_mem_nil, or_false] at hd
   rcases hd with rfl | rfl | rfl <;> decide
 
+-- Records how a branch without a successor is treated; a `Multiset` of choices may be empty. The
+-- first step either halts in state `9` or goes on for one more step and then has no successor.
+-- While it runs, that branch keeps the halting deadline from holding; afterwards it contributes no
+-- result and the results no longer change. A change here means such branches count differently.
+private def acceptOrStuck : Controller Multiset Unit Unit ℕ where
+  q₀ := 0
+  halt q := q == 9
+  transition q _ := if q = 0 then {(9, ()), (1, ())} else if q = 1 then {(2, ())} else 0
+
+example : ¬∀ c ∈ acceptOrStuck.runFromWith Multiset 0 2, acceptOrStuck.Halted c := by decide
+
+private theorem acceptOrStuck_halted :
+    ∀ c ∈ acceptOrStuck.runFromWith Multiset 0 3, acceptOrStuck.Halted c := by decide
+
+example (n : ℕ) (hn : 3 ≤ n) : acceptOrStuck.runFromWith Multiset 0 n = {9} := by
+  rw [acceptOrStuck.runFromWith_eq_of_forall_halted Multiset 0 acceptOrStuck_halted hn]
+  decide
+
 -- The same controller can use a local interpretation for the same target monad.
 private def binaryChoices : Controller BinaryChoice Unit Unit ℕ where
   q₀ := 0
