@@ -60,6 +60,26 @@ example (x : Id ℕ) (a : ℕ) : a ∈ returns x ↔ a = x.run := Iff.rfl
 
 example (s : Multiset ℕ) (P : ℕ → Prop) : (∀ a ∈ returns s, P a) = (∀ a ∈ s, P a) := rfl
 
+-- Guards what `attach` is on the two interpretations, by definition: mathlib's `Multiset.attach`,
+-- and the result of a deterministic computation with the proof that it is the result.
+example (s : Multiset ℕ) : MonadReturns.attach s = s.attach := rfl
+
+example (x : Id ℕ) : MonadReturns.attach x = pure ⟨x.run, rfl⟩ := rfl
+
+-- Guards what `attach` is for: a fact about every value a computation can return moves into the
+-- type of the values, for every predicate and every interpretation. `bind_congr` alone does not
+-- give this when the computation returns nothing and no value satisfies the predicate.
+example {m : Type → Type} [Monad m] [LawfulMonad m] [MonadReturns m] {P : ℕ → Prop} {x : m ℕ}
+    (h : ∀ a ∈ returns x, P a) : ∃ u : m {a // P a}, Subtype.val <$> u = x :=
+  ⟨(fun a ↦ ⟨a.1, h a.1 a.2⟩) <$> MonadReturns.attach x, by
+    rw [Functor.map_map]; exact MonadReturns.val_map_attach x⟩
+
+-- Guards that the congruence of `bind` on the returned values, a law of the class before `attach`
+-- was added, is still available under the same name.
+example {m : Type → Type} [Monad m] [LawfulMonad m] [MonadReturns m] {x : m ℕ} {f g : ℕ → m ℕ}
+    (h : ∀ a ∈ returns x, f a = g a) : x >>= f = x >>= g :=
+  MonadReturns.bind_congr h
+
 -- Multiset interpretations may have more than two alternatives, with coincident endpoints.
 private def threeChoices : Controller Multiset Unit Unit ℕ where
   q₀ := 0
