@@ -6,6 +6,7 @@ Authors: Yuyang Zhao
 module
 
 public import Complexity.Control.Controller.Cost
+public import Complexity.Control.Transition.Simulation
 public import Mathlib.Data.Nat.Find
 
 /-!
@@ -16,10 +17,19 @@ computation from a standard input to an output. Two conventions fix the input an
 `HasConfig` gives the configuration type of each input and its initial configuration, and
 `HasOutput` reads outputs from configurations. On top of them come the runs on a standard input
 (`run`, `runWith`, `runHistory`) and the histories they can return at any depth (`histories`),
-halting on an input (`Terminates`, `HaltsAt`), measurements of these runs, and the complete
+computing within budgets in every interpretation (`ComputesInWith`), halting on an input
+(`Terminates`, `HaltsAt`), measurements of these runs, and the complete deterministic
 specification `ComputesWith`. A lemma belongs here when it is the counterpart, at `M.init input`,
 of a lemma about runs from an arbitrary configuration, or when it is about a notion that needs the
 input and output conventions.
+
+`ComputesInWith` bounds every history at every depth, so on `Id` it agrees with `ComputesWith`,
+which reads only the halting history, when the measurements are monotone along the run, as length
+and space are. Its outputs live in the same interpretation as the run: on `Multiset` they are the
+outputs of all branches with their multiplicities. The output type lives in the universe of the
+results, `Type (max u v)`; this is a current limitation, not a decision. The way halting is
+stated, inside the correspondence at one step of the run, and the difference from `ComputesWith`
+are the current state too: the deterministic definition is to become the instance on `Id`.
 -/
 
 @[expose] public section
@@ -221,6 +231,34 @@ theorem forall_halted_succ_of_forall_length_le {t : ℕ}
     fun hlen ↦ absurd (hl h ((M.mem_histories_iff m input).2 ⟨t + 1, hh⟩)) (by omega)
 
 end Histories
+
+section ComputesInWith
+
+variable {Output : Type (max u v)}
+
+/-- `M` computes `outputs` from `input` in the interpretation `m` within both budgets: on every
+history the two measurements are within budget, and at some step the results of the run correspond
+to `outputs` branch by branch, each branch halted with the corresponding output. -/
+def ComputesInWith (m : Type (max u v) → Type*) [Monad m] [MonadLiftT F m] [MonadReturns m]
+    (M : Controller F Observation Action Q) (input : Input) [HasConfig Action Input Config]
+    [∀ x, HasOutput (Config x) Output] (outputs : m Output)
+    (timeCost spaceCost : History (Config input) Action → ℕ) (time space : ℕ) : Prop :=
+  (∀ h ∈ M.histories m input, timeCost h.snd ≤ time ∧ spaceCost h.snd ≤ space) ∧
+  ∃ n, LiftRel (fun c y ↦ M.Halted c ∧ HasOutput.IsOutput c.2 y) (M.runWith m input n) outputs
+
+variable {m : Type (max u v) → Type*} [Monad m] [MonadLiftT F m] [MonadReturns m]
+  {M : Controller F Observation Action Q} {input : Input} [HasConfig Action Input Config]
+  [∀ x, HasOutput (Config x) Output] {outputs : m Output}
+  {timeCost spaceCost : History (Config input) Action → ℕ} {time space : ℕ}
+
+/-- Enlarging budgets keeps the same outputs. -/
+theorem computesInWith_mono {time' space' : ℕ}
+    (h : M.ComputesInWith m input outputs timeCost spaceCost time space)
+    (ht : time ≤ time') (hs : space ≤ space') :
+    M.ComputesInWith m input outputs timeCost spaceCost time' space' :=
+  ⟨fun h' hh ↦ (h.1 h' hh).imp (·.trans ht) (·.trans hs), h.2⟩
+
+end ComputesInWith
 
 section Halting
 

@@ -26,8 +26,11 @@ a step at which every branch has halted, `Controller.length_le_of_forall_halted`
 `Controller.forall_mem_histories` proves a step invariant. Each history bounds its space by its
 length, `History.space_le_length`, so a time bound also bounds space.
 
-Output interpretations belong to the resource interface; the machine itself produces lists of
-symbols.
+What a machine computes is stated with the general `Controller.ComputesInWith` as well:
+`M.ComputesInWith Multiset xs outputs History.length History.space t s` is the bound above together
+with a step at which every branch has halted and `outputs : Multiset (List Γ)` are the outputs of
+all branches, with their multiplicities. Output interpretations, such as Boolean decisions, belong
+to the resource interface; the machine itself produces lists of symbols.
 -/
 
 @[expose] public section
@@ -48,24 +51,6 @@ theorem card_le_of_forall_space_le [Fintype κ] {M : NTM κ Γ Q} {xs : List Γ}
     (hs : ∀ h ∈ M.histories Multiset xs, h.snd.space ≤ s) : Fintype.card κ ≤ s := by
   simpa only [History.snd_nil, History.space_nil] using
     hs _ ((M.mem_histories_iff Multiset xs).2 ⟨0, Multiset.mem_singleton_self _⟩)
-
-/-- Some finite computation halts with the given complete output. -/
-def Produces (M : NTM κ Γ Q) (xs ys : List Γ) : Prop :=
-  ∃ n c, c ∈ M.runWith Multiset xs n ∧ M.Halted c ∧ c.2.output = ys.toArray
-
-/-- A common halting deadline allows eventual output to be checked at one fixed depth. -/
-theorem produces_iff_of_forall_halted {M : NTM κ Γ Q} {xs ys : List Γ} {t : ℕ}
-    (h : ∀ c ∈ M.runWith Multiset xs t, M.Halted c) :
-    M.Produces xs ys ↔ ∃ c ∈ M.runWith Multiset xs t, c.2.output = ys.toArray := by
-  constructor
-  · rintro ⟨n, c, hc, hh, ho⟩
-    refine ⟨c, ?_, ho⟩
-    rcases le_total n t with ht | ht
-    · exact Controller.mem_runFromWith_of_halted Multiset M
-        (M.init xs) hc hh ht
-    · rwa [M.runWith_eq_of_forall_halted Multiset xs h ht] at hc
-  · rintro ⟨c, hc, ho⟩
-    exact ⟨t, c, hc, h c hc, ho⟩
 
 end NTM
 end Complexity

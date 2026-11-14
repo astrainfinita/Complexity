@@ -50,6 +50,23 @@ theorem iff_of_uniqueInput [UniqueEncoding Data α] :
 
 end Encoding.NDecides
 
+/-- With a unique Boolean encoding, the outputs of a decision are the codes of a multiset of
+Booleans. -/
+theorem Encoding.NDecides.iff_of_uniqueOutput {Data α : Type*} [Encoding Data α]
+    [UniqueEncoding Data Bool] {p : α → Prop} {P : α → Data → Multiset Data → Prop} :
+    NDecides p P ↔ ∀ a src, a ∈ decode α src →
+      ∃ bs : Multiset Bool, P a src (bs.map (encode Data)) ∧ (true ∈ bs ↔ p a) := by
+  have : CanLift Data Bool (encode Data) fun d ↦ (decode Bool d).Dom :=
+    ⟨fun _ h ↦ UniqueEncoding.dom_decode_iff.1 h⟩
+  have hmem (bs : Multiset Bool) :
+      (∃ dst ∈ bs.map (encode Data), true ∈ decode Bool dst) ↔ true ∈ bs := by
+    simp only [UniqueEncoding.mem_decode_iff, exists_eq_right',
+      Multiset.mem_map_of_injective UniqueEncoding.encode_injective]
+  refine forall₃_congr fun a src _ ↦ ⟨fun ⟨outs, hP, hv, hp⟩ ↦ ?_, fun ⟨bs, hP, hp⟩ ↦ ?_⟩
+  · lift outs to Multiset Bool using hv
+    exact ⟨outs, hP, (hmem outs).symm.trans hp⟩
+  · exact ⟨_, hP, Multiset.forall_mem_map_iff.2 fun _ _ ↦ by simp, (hmem bs).trans hp⟩
+
 namespace TimeSpaceModel
 
 section InputBudgets
