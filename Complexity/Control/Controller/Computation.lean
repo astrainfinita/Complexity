@@ -17,10 +17,11 @@ computation from a standard input to an output. Two conventions fix the input an
 `HasConfig` gives the configuration type of each input and its initial configuration, and
 `HasOutput` reads outputs from configurations. On top of them come the runs on a standard input
 (`run`, `runWith`, `runHistory`) and the histories they can return at any depth (`histories`),
-computing within budgets in every interpretation (`ComputesInWith`) and its deterministic case
-`ComputesIn`, halting on an input (`Terminates`, `HaltsAt`), and measurements of these runs. A
-lemma belongs here when it is the counterpart, at `M.init input`, of a lemma about runs from an
-arbitrary configuration, or when it is about a notion that needs the input and output conventions.
+computing within budgets in every interpretation (`ComputesInWith`), its transfer along a
+correspondence of histories (`ComputesInWith.of_liftRel`) and its deterministic case `ComputesIn`,
+halting on an input (`Terminates`, `HaltsAt`), and measurements of these runs. A lemma belongs
+here when it is the counterpart, at `M.init input`, of a lemma about runs from an arbitrary
+configuration, or when it is about a notion that needs the input and output conventions.
 
 `ComputesInWith` bounds every history at every depth. Its outputs live in the same interpretation
 as the run: on `Multiset` they are the outputs of all branches with their multiplicities. The
@@ -148,6 +149,13 @@ theorem length_runHistory_le (M : Controller Id Observation Action Q) (input : I
     (M.runHistory input n).last = M.run input n :=
   M.last_runHistoryFrom (M.init input) n
 
+/-- Forgetting the histories of a standard-input run recovers the run. -/
+@[simp] theorem last_runHistoryWith (m : Type (max u v) → Type*) [Monad m] [LawfulMonad m]
+    [MonadLiftT F m] (M : Controller F Observation Action Q) (input : Input) (n : ℕ)
+    [HasConfig Action Input Config] :
+    History.last <$> M.runHistoryWith m input n = M.runWith m input n :=
+  M.last_runHistoryFromWith m (M.init input) n
+
 /-- One more step extends a standard input run. -/
 theorem run_succ (M : Controller Id Observation Action Q) (input : Input) (n : ℕ)
     [HasConfig Action Input Config] :
@@ -216,7 +224,7 @@ theorem length_le_of_forall_halted {t : ℕ}
   · exact (M.runHistoryFromWith_spec m (M.init input) n h hh).length_le.trans hn
   · have ht' : ∀ p ∈ returns (M.runHistoryFromWith m (M.init input) t), M.Halted p :=
       fun p hp ↦ ht p.last (by
-        rw [runWith, ← M.last_runHistoryFromWith m, mem_returns_map_iff]; exact ⟨p, hp, rfl⟩)
+        rw [← M.last_runHistoryWith m, mem_returns_map_iff]; exact ⟨p, hp, rfl⟩)
     rw [runHistoryWith, runHistoryFromWith,
       M.runFromWith_eq_of_forall_halted m _ ht' (Nat.le_of_not_ge hn)] at hh
     exact (M.runHistoryFromWith_spec m (M.init input) t h hh).length_le
@@ -228,7 +236,7 @@ theorem forall_halted_succ_of_forall_length_le {t : ℕ}
     (hl : ∀ h ∈ M.histories m input, h.length ≤ t) :
     ∀ c ∈ returns (M.runWith m input (t + 1)), M.Halted c := by
   intro c hc
-  rw [runWith, ← M.last_runHistoryFromWith m, mem_returns_map_iff] at hc
+  rw [← M.last_runHistoryWith m, mem_returns_map_iff] at hc
   obtain ⟨h, hh, rfl⟩ := hc
   exact (M.runHistoryFromWith_spec m (M.init input) (t + 1) h hh).stopped.resolve_left
     fun hlen ↦ absurd (hl h ((M.mem_histories_iff m input).2 ⟨t + 1, hh⟩)) (by omega)
@@ -271,6 +279,49 @@ theorem computesInWith_mono {time' space' : ℕ}
     (ht : time ≤ time') (hs : space ≤ space') :
     M.ComputesInWith m input outputs timeCost spaceCost time' space' :=
   ⟨fun h' hh ↦ (h.1 h' hh).imp (·.trans ht) (·.trans hs), h.2⟩
+
+section Transfer
+
+variable [LawfulMonad m] {F' : Type (max u v) → Type*} {Input' Observation' : Type*}
+  {Action' : Type u} {Config' : Input' → Type u} {Q' : Type v} {Output' : Type (max u v)}
+  [∀ x, Observe (Config' x) Observation'] [∀ x, Apply (Config' x) Action'] [MonadLiftT F' m]
+  {N : Controller F' Observation' Action' Q'} {input' : Input'} [HasConfig Action' Input' Config']
+  [∀ x, HasOutput (Config' x) Output'] {timeCost' spaceCost' : History (Config' input') Action' → ℕ}
+  {time' space' : ℕ}
+
+/-- A computation passes along a correspondence of histories: when at every depth the histories of
+`M` and `N` correspond under `S`, and `S` carries the budgets, halting and the outputs, `N`
+computes the images under `g` of the outputs of `M`. The outputs of `M` are given as a function
+`out` of its configuration, since two correspondences cannot be composed in an arbitrary
+interpretation. Apply it against the expected statement: the second machine and its input are not
+inferred from `hS` alone, because the configuration type depends on the input. -/
+theorem ComputesInWith.of_liftRel
+    {S : History (Q × Config input) (Q × Action) →
+      History (Q' × Config' input') (Q' × Action') → Prop} {g : Output → Output'}
+    (h : M.ComputesInWith m input outputs timeCost spaceCost time space)
+    (hS : ∀ n, LiftRel S (M.runHistoryWith m input n) (N.runHistoryWith m input' n))
+    (out : Q × Config input → Output) (hout : ∀ c y, HasOutput.IsOutput c.2 y → y = out c)
+    (hb : ∀ p q, S p q → timeCost p.snd ≤ time ∧ spaceCost p.snd ≤ space →
+      timeCost' q.snd ≤ time' ∧ spaceCost' q.snd ≤ space')
+    (hh : ∀ p q, S p q → M.Halted p → N.Halted q)
+    (ho : ∀ p q y, S p q → HasOutput.IsOutput p.last.2 y → HasOutput.IsOutput q.last.2 (g y)) :
+    N.ComputesInWith m input' (g <$> outputs) timeCost' spaceCost' time' space' := by
+  obtain ⟨hbud, n, hn⟩ := h
+  refine ⟨fun q hq ↦ ?_, n, ?_⟩
+  · obtain ⟨k, hk⟩ := (N.mem_histories_iff m input').1 hq
+    obtain ⟨p, hp, hpq⟩ := (hS k).exists_mem_of_mem_right hk
+    exact hb p q hpq (hbud p ((M.mem_histories_iff m input).2 ⟨k, hp⟩))
+  rw [← last_runHistoryWith] at hn
+  rw [hn.eq_map fun c y h ↦ hout c y h.2, ← last_runHistoryWith, Functor.map_map,
+    Functor.map_map]
+  have h' : LiftRel (fun p q ↦ N.Halted q.last ∧ HasOutput.IsOutput q.last.2 (g (out p.last)))
+      (M.runHistoryWith m input n) (N.runHistoryWith m input' n) :=
+    (hS n).mono_of_mem fun p hp q hpq ↦
+      let ⟨y, _, hH, hy⟩ := hn.exists_mem_of_mem_left (mem_returns_map_iff.2 ⟨p, hp, rfl⟩)
+      ⟨hh p q hpq hH, hout _ _ hy ▸ ho p q y hpq hy⟩
+  exact (h'.map fun _ _ ↦ id).swap
+
+end Transfer
 
 end ComputesInWith
 

@@ -240,6 +240,11 @@ instance : Apply (History Config Action) Action where
 @[simp↓] theorem apply_last (a : Action) (p : History Config Action) :
     (apply a p).last = apply a p.last := last_snoc _ _
 
+/-- The data part after an action extends the data part by the data part of the action. -/
+theorem snd_apply {Q C A : Type*} (a : Q × A) (p : History (Q × C) (Q × A)) :
+    (apply a p).snd = p.snd.snoc a.2 :=
+  p.map_snoc a _ _
+
 end History
 
 @[simp] theorem halted_history {F : Type _ → Type*} {Config Action Observation : Type*}

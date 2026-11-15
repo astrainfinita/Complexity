@@ -16,7 +16,8 @@ public import Complexity.Control.Controller.Simulation
 Each stack occupies the positive addresses of one tape. A newly pushed top stays in finite
 control until the next action; the remaining symbols are already on tape. This representation
 is preserved by one target transition, with each head always at its source stack height. The
-step correspondence holds for every choice shape and every interpretation of the choices.
+correspondence of histories (`Tape.HistRep`) holds for every choice shape and every interpretation
+of the choices, and carries computations along (`ComputesInWith.toTM`).
 -/
 
 @[expose] public section
@@ -148,6 +149,38 @@ theorem Action.cache_apply (a : Action κ Γ) (c : Cfg κ Γ xs) :
   funext i
   cases h : a.work i <;> simp [Cfg.cache, Op.pending, Op.apply, h]
 
+theorem init_toTM {F : Type → Type*} [Functor F] (M : StackMachine F κ Γ Q) (xs : List Γ) :
+    (((M.init xs).1, (M.init xs).2.cache fun _ ↦ false), (M.init xs).2.toTM fun _ ↦ false) =
+      M.toTM.init (xs.map some) := by
+  refine Prod.ext (Prod.ext rfl (funext fun _ ↦ rfl)) ?_
+  apply TM.Cfg.ext <;> first | rfl | simp [funext_iff, Cfg.init, TM.Cfg.init]
+
+/-- A stack history and a tape history of the same length: the last tape configuration encodes the
+last stack configuration, with some tops kept in finite control, and each tape has visited
+exactly the heights of its stack along the stack history. -/
+structure Tape.HistRep (p : Controller.History (Q × Cfg κ Γ xs) (Q × Action κ Γ))
+    (e : Controller.History
+      (ControlState κ Γ Q × TM.Cfg κ (Option Γ) (xs.toList.map some).toArray)
+      (ControlState κ Γ Q × TM.Action κ (Option Γ))) : Prop where
+  last_eq : ∃ cached, e.last = ((p.last.1, p.last.2.cache cached), p.last.2.toTM cached)
+  length_eq : e.length = p.length
+  visited_eq : e.snd.visited = p.snd.configSup fun c i ↦ .pure ((c.stacks i).length : ℤ)
+
+variable {p : Controller.History (Q × Cfg κ Γ xs) (Q × Action κ Γ)}
+  {e : Controller.History (ControlState κ Γ Q × TM.Cfg κ (Option Γ) (xs.toList.map some).toArray)
+    (ControlState κ Γ Q × TM.Action κ (Option Γ))}
+
+/-- No simulated tape visits beyond the peak total number of live stack symbols. -/
+theorem Tape.HistRep.space_le [Fintype κ] (h : Tape.HistRep p e) :
+    e.snd.space ≤ Fintype.card κ * (p.snd.configSup Cfg.mass + 1) := by
+  set s := p.snd.configSup Cfg.mass
+  refine (Controller.History.space_le_of_visited_le _ (fun _ ↦ ⟨(0, s), Int.natCast_nonneg s⟩)
+    ?_).trans (Finset.sum_const_nat fun _ _ ↦ by dsimp only; omega).le
+  rw [h.visited_eq, Controller.History.configSup_le_iff]
+  refine fun c hc i ↦ NonemptyInterval.le_def.mpr ⟨Int.natCast_nonneg _, Int.ofNat_le.mpr ?_⟩
+  exact (Finset.single_le_sum (fun _ _ ↦ Nat.zero_le _) (Finset.mem_univ i)).trans
+    (p.snd.config_le_configSup Cfg.mass hc)
+
 section Interpreted
 
 variable {F : Type → Type*} [Functor F] (m : Type → Type*) [Monad m] [LawfulMonad m]
@@ -156,81 +189,62 @@ variable {F : Type → Type*} [Functor F] (m : Type → Type*) [Monad m] [Lawful
 /-- Each source step and the target step are images of the same choice, for every choice shape
 `F` and every interpretation `m`; each target successor encodes its source successor, including
 halted padding. -/
-theorem liftRel_stepWith_toTM (c : Q × Cfg κ Γ xs) (cached : κ → Bool) :
-    LiftRel (fun (c : Q × Cfg κ Γ xs) d ↦ ∃ cached, d = ((c.1, c.2.cache cached), c.2.toTM cached))
-      (M.stepWith m c) (M.toTM.stepWith m ((c.1, c.2.cache cached), c.2.toTM cached)) := by
-  have ht : (observe c.2 : Option Γ × (κ → Option Γ)).2 = fun i ↦ (c.2.stacks i).head? := rfl
-  refine Controller.liftRel_stepWith_of_map m ⟨cached, rfl⟩ Iff.rfl
+theorem Tape.HistRep.liftRel_stepWith (h : Tape.HistRep p e) :
+    LiftRel Tape.HistRep (M.stepWith m p) (M.toTM.stepWith m e) := by
+  obtain ⟨cached, he⟩ := h.last_eq
+  have ht : (observe p.last.2 : Option Γ × (κ → Option Γ)).2 =
+      fun i ↦ (p.last.2.stacks i).head? := rfl
+  refine Controller.liftRel_stepWith_of_map m h (by simp [Controller.Halted, he])
     (fun a ↦ ((a.1, fun i ↦ (a.2.work i).pending),
-      a.2.toTM (c.2.cache cached) fun i ↦ (c.2.stacks i).head?))
-    (by simp only [toTM_transition, Controller.state_prod, Controller.observe_prod,
-      Cfg.observe_toTM, ht]) fun a ↦ ⟨fun i ↦ (a.2.work i).pending.isSome, ?_⟩
-  simp only [Controller.apply_prod, Action.apply_toTM, Action.cache_apply]
+      a.2.toTM (p.last.2.cache cached) fun i ↦ (p.last.2.stacks i).head?))
+    (by simp only [toTM_transition, Controller.History.state_def,
+      Controller.History.observe_def, he, Controller.state_prod, Controller.observe_prod,
+      Cfg.observe_toTM, ht]) fun a ↦ ?_
+  refine ⟨⟨fun i ↦ (a.2.work i).pending.isSome, ?_⟩,
+    by simp [Controller.History.apply_def, h.length_eq], ?_⟩
+  · simp only [Controller.History.apply_last, he, Controller.apply_prod, Action.apply_toTM,
+      Action.cache_apply]
+  · rw [Controller.History.snd_apply, Controller.History.snd_apply,
+      Controller.History.visited_snoc, h.visited_eq, Controller.History.configSup_snoc,
+      Controller.History.last_snd, Controller.History.last_snd, he]
+    simp only [Action.apply_toTM, Cfg.toTM_workPos]
 
-/-- Bounded runs preserve the encoding for every choice shape and interpretation. -/
-theorem liftRel_runFromWith_toTM (c : Q × Cfg κ Γ xs) (cached : κ → Bool) (n : ℕ) :
-    LiftRel (fun (c : Q × Cfg κ Γ xs) d ↦ ∃ cached, d = ((c.1, c.2.cache cached), c.2.toTM cached))
-      (M.runFromWith m c n) (M.toTM.runFromWith m ((c.1, c.2.cache cached), c.2.toTM cached) n) :=
-  Controller.liftRel_runFromWith m M M.toTM
-    (by rintro c _ ⟨cached, rfl⟩; exact M.liftRel_stepWith_toTM m c cached) ⟨cached, rfl⟩ n
+/-- Bounded runs preserve the encoding for every choice shape and interpretation, and each target
+history visits on every tape exactly the heights of the corresponding stack in its own source
+history. With `m = Multiset`, every stack branch corresponds to exactly one tape branch,
+retaining multiplicities (`LiftRel.multisetRel`). -/
+theorem liftRel_runHistoryWith_toTM (xs : List Γ) (n : ℕ) :
+    LiftRel Tape.HistRep (M.runHistoryWith m xs n) (M.toTM.runHistoryWith m (xs.map some) n) := by
+  rw [Controller.runHistoryWith, Controller.runHistoryWith, ← init_toTM]
+  exact Controller.liftRel_runFromWith m M M.toTM (fun _ _ h ↦ h.liftRel_stepWith m M)
+    ⟨⟨_, rfl⟩, rfl, by simp⟩ n
+
+variable {m} [MonadReturns m] {M}
+
+/-- Simulation passes a computation along, for every choice shape and every interpretation: it
+preserves time and bounds every tape by the source peak stack space, including the blank bottom
+cell. On `Multiset` the outputs of the branches correspond with their multiplicities. -/
+theorem _root_.Complexity.Controller.ComputesInWith.toTM [Fintype κ] {xs : List Γ}
+    {outs : m (List Γ)} {t s : ℕ}
+    (h : M.ComputesInWith m xs outs Controller.History.length
+      (fun h ↦ h.configSup Cfg.mass) t s) :
+    M.toTM.ComputesInWith m (xs.map some) ((·.map some) <$> outs)
+      Controller.History.length Controller.History.space t (Fintype.card κ * (s + 1)) :=
+  h.of_liftRel (liftRel_runHistoryWith_toTM m M xs) (fun c ↦ c.2.output.toList)
+    (fun _ _ _ ↦ by simp_all)
+    (fun _ _ hr hb ↦ ⟨by simpa only [Controller.History.length_snd, hr.length_eq] using hb.1,
+      hr.space_le.trans (Nat.mul_le_mul_left _ (Nat.succ_le_succ hb.2))⟩)
+    (fun _ _ hr hp ↦ by obtain ⟨_, he⟩ := hr.last_eq; simpa [Controller.Halted, he] using hp)
+    (fun _ _ _ hr _ ↦ by obtain ⟨_, he⟩ := hr.last_eq; simp_all)
 
 end Interpreted
-
-/-- Bounded runs preserve the encoding without exposing the cache bookkeeping. -/
-theorem runFrom_toTM (M : StackMachine Id κ Γ Q) (c : Q × Cfg κ Γ xs)
-    (cached : κ → Bool) (n : ℕ) :
-    ∃ cached', M.toTM.runFrom ((c.1, c.2.cache cached), c.2.toTM cached) n =
-      (((M.runFrom c n).1, (M.runFrom c n).2.cache cached'), (M.runFrom c n).2.toTM cached') :=
-  (M.liftRel_runFromWith_toTM Id c cached n).run
-
-/-- No simulated tape visits beyond the peak total number of live stack symbols. -/
-theorem space_runHistoryFrom_toTM_le [Fintype κ] (M : StackMachine Id κ Γ Q)
-    (c : Q × Cfg κ Γ xs) (cached : κ → Bool) (n : ℕ) :
-    (M.toTM.runHistoryFrom ((c.1, c.2.cache cached), c.2.toTM cached) n).snd.space ≤
-      Fintype.card κ * ((M.runHistoryFrom c n).snd.configSup Cfg.mass + 1) := by
-  set s := (M.runHistoryFrom c n).snd.configSup Cfg.mass
-  let v : NonemptyInterval ℤ := ⟨(0, s), by omega⟩
-  have hv : (M.toTM.runHistoryFrom ((c.1, c.2.cache cached), c.2.toTM cached) n).snd.visited ≤
-      fun _ ↦ v := by
-    intro i
-    apply (M.toTM.runHistoryFrom_visited_le_iff _ _ i v).mpr
-    intro m hm
-    obtain ⟨cached', hc⟩ := M.runFrom_toTM c cached m
-    rw [hc, Cfg.toTM_workPos, NonemptyInterval.mem_def]
-    have hi : ((M.runFrom c m).2.stacks i).length ≤ s :=
-      (Finset.single_le_sum (fun _ _ ↦ Nat.zero_le _) (Finset.mem_univ i)).trans
-        (M.config_le_configSup_runHistoryFrom Cfg.mass c hm)
-    exact ⟨by simp [v], by simpa [v] using hi⟩
-  simpa [v] using Controller.History.space_le_of_visited_le _ (fun _ ↦ v) hv
-
-theorem init_toTM (M : StackMachine Id κ Γ Q) (xs : List Γ) :
-    (((M.init xs).1, (M.init xs).2.cache fun _ ↦ false), (M.init xs).2.toTM fun _ ↦ false) =
-      M.toTM.init (xs.map some) := by
-  refine Prod.ext (Prod.ext rfl (funext fun _ ↦ rfl)) ?_
-  apply TM.Cfg.ext <;> first | rfl | simp [funext_iff, Cfg.init, TM.Cfg.init]
-
-/-- The target run preserves the input/output convention of the source run. -/
-theorem run_toTM (M : StackMachine Id κ Γ Q) (xs : List Γ) (n : ℕ) :
-    ∃ cached, M.toTM.run (xs.map some) n =
-      (((M.run xs n).1, (M.run xs n).2.cache cached), (M.run xs n).2.toTM cached) := by
-  rw [Controller.run, Controller.run, ← init_toTM]
-  exact M.runFrom_toTM (M.init xs) (fun _ ↦ false) n
 
 /-- Simulation preserves time and bounds every tape by the source peak stack space,
 including the blank bottom cell. -/
 theorem ComputesWithin.toTM [Fintype κ] {M : StackMachine Id κ Γ Q}
     {xs ys : List Γ} {t s : ℕ} (h : M.ComputesWithin xs ys t s) :
     M.toTM.ComputesWithin (xs.map some) (ys.map some)
-      t (Fintype.card κ * (s + 1)) := by
-  obtain ⟨hh, ho, hs⟩ := Controller.computesIn_unit_iff.mp h
-  obtain ⟨cached, hr⟩ := M.run_toTM xs t
-  apply Controller.computesIn_unit_iff.mpr
-  refine ⟨?_, ?_, fun k ↦ ?_⟩
-  · simpa only [hr, Controller.Halted, Controller.state_prod, toTM_halt] using hh
-  · simpa only [TM.hasOutput_isOutput, hr, Cfg.toTM_output,
-      List.map_toArray] using congrArg (Array.map some) ho
-  · have hv := M.space_runHistoryFrom_toTM_le (M.init xs) (fun _ ↦ false) k
-    rw [init_toTM] at hv
-    exact hv.trans (Nat.mul_le_mul_left _ (Nat.succ_le_succ (hs k)))
+      t (Fintype.card κ * (s + 1)) :=
+  Controller.ComputesInWith.toTM h
 
 end Complexity.StackMachine

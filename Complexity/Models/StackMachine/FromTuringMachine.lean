@@ -17,7 +17,8 @@ public import Mathlib.Algebra.BigOperators.Ring.Finset
 The current symbols belong to finite control. Each tape's left and right sides use two
 synchronized Boolean stacks, encoding a blank flag and a data bit. One tape transition is
 one stack transition; the total stack length is bounded by twice the visited tape space.
-The step correspondence holds for every choice shape and every interpretation of the choices.
+The correspondence of histories (`Stack.HistRep`) holds for every choice shape and every
+interpretation of the choices, and carries computations along (`ComputesInWith.toStack`).
 -/
 
 @[expose] public section
@@ -189,29 +190,6 @@ theorem Rep.mono {V' : κ → NonemptyInterval ℤ} (h : Rep V c d) (hV : V ≤ 
     have hi := NonemptyInterval.le_def.mp (hV i)
     exact ⟨l, r, hl, hr, ht, hi.1.trans hL, hR.trans hi.2⟩
 
-/-- Each source step and the stack step are images of the same choice, for every choice shape
-`F` and every interpretation `m`. Each branch is represented inside the intervals visited by its
-own history. -/
-theorem Rep.liftRel_stepWith {F : Type → Type*} [Functor F] (m : Type → Type*) [Monad m]
-    [LawfulMonad m] [MonadLiftT F m] [LawfulFunctorLiftT F m] (M : TM F κ (Option Bool) Q)
-    {p : Controller.History (Q × Cfg κ (Option Bool) (xs.map some).toArray)
-      (Q × Action κ (Option Bool))} (h : Rep p.snd.visited p.last d) :
-    LiftRel (fun p d ↦ Rep p.snd.visited p.last d) (M.stepWith m p) (M.toStack.stepWith m d) := by
-  have ht : (Controller.observe d.2 : Option Bool × ((κ × Bool × Bool) → Option Bool)).2 =
-      fun i ↦ (d.2.stacks i).head? := rfl
-  refine Controller.liftRel_stepWith_of_map m h (by simp [Controller.Halted, h.state_eq])
-    (fun a ↦ ((a.1, a.2.heads d.1.2 fun i ↦ (d.2.stacks i).head?), a.2.toStack d.1.2))
-    (by simp only [toStack_transition, Controller.History.state_def,
-      Controller.History.observe_def, Controller.state_prod, Controller.observe_prod, h.state_eq,
-      ← h.observe, ht]) fun a ↦ ?_
-  have hs : (Controller.apply a p).snd = p.snd.snoc a.2 := Controller.History.map_snoc ..
-  rw [Controller.History.apply_last, hs]
-  refine (h.mono ?_).apply a fun i ↦ ?_
-  · rw [Controller.History.visited_snoc]
-    exact le_sup_left
-  · simpa only [Controller.History.last_snoc, Controller.History.last_snd]
-      using (p.snd.snoc a.2).head_mem i
-
 theorem Rep.mass_le [Fintype κ] (h : Rep V c d) :
     d.2.mass ≤ 2 * ∑ i, ((V i).snd + 1 - (V i).fst).toNat := by
   rw [StackMachine.Cfg.mass, Fintype.sum_prod_type, Finset.mul_sum]
@@ -221,44 +199,106 @@ theorem Rep.mass_le [Fintype κ] (h : Rep V c d) :
   simp only [Fintype.sum_prod_type, Fintype.sum_bool, hl, hr, List.length_map]
   omega
 
+/-- A source history and a stack history of the same length: the last stack configuration
+represents the last source configuration, and every stack configuration along the history
+represents some source configuration, all inside the intervals the source history visited. -/
+structure HistRep (p : Controller.History (Q × Cfg κ (Option Bool) (xs.map some).toArray)
+      (Q × Action κ (Option Bool)))
+    (q : Controller.History
+      ((Q × (κ → Option Bool)) × StackMachine.Cfg (κ × Bool × Bool) Bool xs.toArray)
+      ((Q × (κ → Option Bool)) × StackMachine.Action (κ × Bool × Bool) Bool)) : Prop where
+  rep : Rep p.snd.visited p.last q.last
+  length_eq : q.length = p.length
+  forall_rep : ∀ d ∈ q.configs, ∃ c, Rep p.snd.visited c d
+
+/-- The peak stack mass is at most twice the space of the source history. -/
+theorem HistRep.configSup_mass_le [Fintype κ] {p q}
+    (h : HistRep (κ := κ) (Q := Q) (xs := xs) p q) :
+    q.snd.configSup StackMachine.Cfg.mass ≤ 2 * p.snd.space := by
+  rw [Controller.History.configSup_le_iff, Controller.History.configs_snd]
+  intro _ hd
+  obtain ⟨d, hq, rfl⟩ := List.mem_map.1 hd
+  obtain ⟨c, hc⟩ := h.forall_rep d hq
+  exact hc.mass_le
+
+/-- Each source step and the stack step are images of the same choice, for every choice shape
+`F` and every interpretation `m`. Each branch is represented inside the intervals visited by its
+own history. -/
+theorem HistRep.liftRel_stepWith {F : Type → Type*} [Functor F] (m : Type → Type*) [Monad m]
+    [LawfulMonad m] [MonadLiftT F m] [LawfulFunctorLiftT F m] (M : TM F κ (Option Bool) Q)
+    {p q} (h : HistRep (xs := xs) p q) :
+    LiftRel HistRep (M.stepWith m p) (M.toStack.stepWith m q) := by
+  have ht : (Controller.observe q.last.2 : Option Bool × ((κ × Bool × Bool) → Option Bool)).2 =
+      fun i ↦ (q.last.2.stacks i).head? := rfl
+  refine Controller.liftRel_stepWith_of_map m h (by simp [Controller.Halted, h.rep.state_eq])
+    (fun a ↦ ((a.1, a.2.heads q.last.1.2 fun i ↦ (q.last.2.stacks i).head?),
+      a.2.toStack q.last.1.2))
+    (by simp only [toStack_transition, Controller.History.state_def,
+      Controller.History.observe_def, Controller.state_prod, Controller.observe_prod,
+      h.rep.state_eq, ← h.rep.observe, ht]) fun a ↦ ?_
+  have hv : p.snd.visited ≤ (p.snd.snoc a.2).visited := by
+    rw [Controller.History.visited_snoc]
+    exact le_sup_left
+  have hr := (h.rep.mono hv).apply a fun i ↦ by
+    simpa only [Controller.History.last_snoc, Controller.History.last_snd]
+      using (p.snd.snoc a.2).head_mem i
+  refine ⟨?_, ?_, ?_⟩
+  · rw [Controller.History.apply_last, Controller.History.apply_last,
+      Controller.History.snd_apply]
+    exact hr
+  · simp [Controller.History.apply_def, h.length_eq]
+  · rw [Controller.History.snd_apply, Controller.History.apply_def,
+      Controller.History.configs_snoc]
+    intro d hd
+    rcases List.mem_append.1 hd with hd | hd
+    · obtain ⟨c, hc⟩ := h.forall_rep d hd
+      exact ⟨c, hc.mono hv⟩
+    · exact ⟨_, List.mem_singleton.1 hd ▸ hr⟩
+
 end Stack
 
 /-- Runs match for every choice shape `F` and every interpretation `m`: the source history and
-the stack configuration are images of the same run. Each branch is represented inside the
-intervals visited by its own history. With `m = Multiset`, every source branch corresponds to
-exactly one stack branch, retaining multiplicities (`LiftRel.multisetRel`). -/
+the stack history are images of the same run. Each branch is represented inside the intervals
+visited by its own history. With `m = Multiset`, every source branch corresponds to exactly one
+stack branch, retaining multiplicities (`LiftRel.multisetRel`). -/
 theorem liftRel_runHistoryWith_toStack {F : Type → Type*} [Functor F] (m : Type → Type*)
     [Monad m] [LawfulMonad m] [MonadLiftT F m] [LawfulFunctorLiftT F m]
     (M : TM F κ (Option Bool) Q) (xs : List Bool) (n : ℕ) :
-    LiftRel (fun h d ↦ Stack.Rep h.snd.visited h.last d)
-      (M.runHistoryWith m (xs.map some) n) (M.toStack.runWith m xs n) := by
-  rw [Controller.runHistoryWith, Controller.runHistoryFromWith, Controller.runWith]
-  refine Controller.liftRel_runFromWith m M M.toStack
-    (R := fun (h : Controller.History _ _) d ↦ Stack.Rep h.snd.visited h.last d)
-    (fun _ _ h ↦ h.liftRel_stepWith m M) ?_ n
-  rw [Controller.History.snd_nil, Controller.History.visited_nil, Controller.History.last_nil]
-  exact Stack.Rep.init M fun _ ↦ NonemptyInterval.mem_pure_self _
+    LiftRel Stack.HistRep (M.runHistoryWith m (xs.map some) n)
+      (M.toStack.runHistoryWith m xs n) := by
+  have h : Stack.Rep (Controller.History.nil (Action := Q × Action κ (Option Bool))
+      (M.init (xs.map some))).snd.visited (M.init (xs.map some)) (M.toStack.init xs) := by
+    rw [Controller.History.snd_nil, Controller.History.visited_nil]
+    exact Stack.Rep.init M fun _ ↦ NonemptyInterval.mem_pure_self _
+  refine Controller.liftRel_runFromWith m M M.toStack (fun _ _ h ↦ h.liftRel_stepWith m M)
+    ⟨h, rfl, fun d hd ↦ ?_⟩ n
+  rw [Controller.History.configs_nil, List.mem_singleton] at hd
+  exact ⟨_, hd ▸ h⟩
 
-/-- Bounded executions preserve the tape representation inside the source's visited intervals. -/
-theorem run_toStack (M : TM Id κ (Option Bool) Q) (xs : List Bool) (n : ℕ) :
-    Stack.Rep (M.runHistory (xs.map some) n).snd.visited
-      (M.run (xs.map some) n) (M.toStack.run xs n) := by
-  rw [← M.last_runHistory]
-  exact (liftRel_runHistoryWith_toStack Id M xs n).run
+/-- Boolean-stack simulation passes a computation along, for every choice shape and every
+interpretation: it preserves time and bounds the peak stack mass by twice the visited tape space.
+On `Multiset` the outputs of the branches correspond with their multiplicities. -/
+theorem _root_.Complexity.Controller.ComputesInWith.toStack [Fintype κ] {F : Type → Type*}
+    [Functor F] {m : Type → Type*} [Monad m] [LawfulMonad m] [MonadLiftT F m]
+    [LawfulFunctorLiftT F m] [MonadReturns m] {M : TM F κ (Option Bool) Q} {outs : m (List Bool)}
+    {t s : ℕ}
+    (h : M.ComputesInWith m (xs.map some) ((·.map some) <$> outs) Controller.History.length
+      Controller.History.space t s) :
+    M.toStack.ComputesInWith m xs outs Controller.History.length
+      (fun h ↦ h.configSup StackMachine.Cfg.mass) t (2 * s) := by
+  rw [← show (·.filterMap id) <$> (·.map some) <$> outs = outs by simp [Functor.map_map]]
+  exact h.of_liftRel (liftRel_runHistoryWith_toStack m M xs) (fun c ↦ c.2.output.toList)
+    (fun _ _ _ ↦ by simp_all)
+    (fun _ _ hr hb ↦ ⟨by simpa only [Controller.History.length_snd, hr.length_eq] using hb.1,
+      hr.configSup_mass_le.trans (Nat.mul_le_mul_left 2 hb.2)⟩)
+    (fun _ _ hr hp ↦ by simpa [Controller.Halted, hr.rep.state_eq] using hp)
+    (fun _ _ _ hr _ ↦ by simp_all [hr.rep.output_eq])
 
 /-- Boolean-stack simulation preserves time and bounds space by twice the source visits. -/
 theorem ComputesWithin.toStack [Fintype κ] {M : TM Id κ (Option Bool) Q}
     {xs ys : List Bool} {t s : ℕ}
     (h : M.ComputesWithin (xs.map some) (ys.map some) t s) :
-    M.toStack.ComputesWithin xs ys t (2 * s) := by
-  obtain ⟨hh, ho⟩ := h.run_spec
-  have hr := M.run_toStack xs t
-  apply Controller.computesIn_unit_iff.mpr
-  refine ⟨?_, ?_, fun k ↦ ?_⟩
-  · simpa only [Controller.Halted, Controller.state_prod, toStack_halt, hr.state_eq] using hh
-  · simpa [ho] using hr.output_eq
-  · apply (M.toStack.configSup_runHistory_le_iff xs StackMachine.Cfg.mass k (2 * s)).mpr
-    intro i _
-    exact (M.run_toStack xs i).mass_le.trans (Nat.mul_le_mul_left 2 (h.space_le i))
+    M.toStack.ComputesWithin xs ys t (2 * s) :=
+  Controller.ComputesInWith.toStack h
 
 end Complexity.TM
