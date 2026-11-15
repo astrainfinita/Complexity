@@ -102,14 +102,23 @@ private def stackBranchOutputs (n : ℕ) : Multiset (List Bool) :=
 
 -- Guards that one simulation lemma gives both the deterministic and the branching statement.
 example (M : TM Id Unit (Option Bool) (Fin 13)) (xs : List Bool) (n : ℕ) :
-    TM.Stack.Rep (M.runHistory (xs.map some) n).snd.visited (M.runHistory (xs.map some) n).last
-      (M.toStack.run xs n) :=
+    TM.Stack.HistRep (M.runHistory (xs.map some) n) (M.toStack.runHistory xs n) :=
   (TM.liftRel_runHistoryWith_toStack Id M xs n).run
 
 example (M : NTM Unit (Option Bool) (Fin 3)) (xs : List Bool) (n : ℕ) :
-    Multiset.Rel (fun h d ↦ TM.Stack.Rep h.snd.visited h.last d)
-      (M.runHistoryWith Multiset (xs.map some) n) (M.toStack.runWith Multiset xs n) :=
+    Multiset.Rel TM.Stack.HistRep
+      (M.runHistoryWith Multiset (xs.map some) n) (M.toStack.runHistoryWith Multiset xs n) :=
   (TM.liftRel_runHistoryWith_toStack Multiset M xs n).multisetRel
+
+-- Guards that a computation of a nondeterministic Turing machine passes along to the stack
+-- machine on `Multiset`, with the source outputs written as `.ntm` writes them.
+example {κ Q : Type} [Fintype κ] (M : NTM κ (Option Bool) Q) (xs : List Bool)
+    (outs : Multiset (List Bool)) (t s : ℕ)
+    (h : M.ComputesInWith Multiset (xs.map some) (outs.map (·.map some))
+      Controller.History.length Controller.History.space t s) :
+    M.toStack.ComputesInWith Multiset xs outs Controller.History.length
+      (fun h ↦ h.configSup StackMachine.Cfg.mass) t (2 * s) :=
+  h.toStack
 
 -- Guess a bit and push it, guess and push again, then pop. The target keeps a pushed top in
 -- control and writes it to the tape at the next push; the output records the observed tops, so
@@ -133,5 +142,15 @@ private def tmGuessOutputs (n : ℕ) : Multiset (List Bool) :=
 #guard tmGuessOutputs 3 =
   {[false, false], [false, false], [false, true], [false, true],
     [true, false], [true, false], [true, true], [true, true]}
+
+-- Guards that a computation of a nondeterministic stack machine passes along to the Turing
+-- machine on `Multiset`.
+example {κ Q : Type} [Fintype κ] (M : StackMachine BinaryChoice κ Bool Q) (xs : List Bool)
+    (outs : Multiset (List Bool)) (t s : ℕ)
+    (h : M.ComputesInWith Multiset xs outs Controller.History.length
+      (fun h ↦ h.configSup StackMachine.Cfg.mass) t s) :
+    M.toTM.ComputesInWith Multiset (xs.map some) (outs.map (·.map some))
+      Controller.History.length Controller.History.space t (Fintype.card κ * (s + 1)) :=
+  h.toTM
 
 end Complexity.StackSimulationTest
