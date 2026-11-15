@@ -29,7 +29,7 @@ variable {α : Type*} [Encoding (RawWord Bool) α]
 private theorem toBinary_decides {κ Q : Type} [Fintype κ] {M : TM Id κ (Option Bool) Q}
     {src : RawWord Bool} {output : Bool} {t s : ℕ}
     (h : M.ComputesWithin (src.toList.map some) (⌜output⌝₂.toList.map some) t s) :
-    ∃ bs : Multiset Bool, M.toBinary.ComputesInWith Multiset (src.toList.map some)
+    ∃ bs : Multiset Bool, M.toBinary.ComputesWithinCostWith Multiset (src.toList.map some)
       (bs.map fun b ↦ ⌜b⌝₂.toList.map some) Controller.History.length Controller.History.space
         t s ∧ (true ∈ bs ↔ output = true) := by
   obtain ⟨hhalt, hout⟩ := h.run_spec

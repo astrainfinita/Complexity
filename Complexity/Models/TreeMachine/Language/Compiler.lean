@@ -221,7 +221,7 @@ def compile (p : Procedure ν) : TreeMachine Id p.registers (p.code.State ⊕ p.
 covers retained locals; two extra tree nodes cover the copy macro's temporary pair. -/
 theorem Bounded.compile {p : Procedure ν} {x y : Tree} {time space : ℕ}
     (h : p.Bounded x y time space) :
-    p.compile.ComputesInUnitTimeAndSpace x y time (p.registers * (space + 2)) := by
+    p.compile.ComputesWithinUnitTime x y time (p.registers * (space + 2)) := by
   obtain ⟨n, s, a, hr, hy, ht, hx, ha, hs⟩ := h
   let ρ : History (TreeMachine.Cfg p.registers) (TreeMachine.Action p.registers) :=
     History.nil (TreeMachine.Cfg.init p.registers x)
@@ -243,7 +243,7 @@ theorem Bounded.compile {p : Procedure ν} {x y : Tree} {time space : ℕ}
     p.register_ne_empty σ hinit hz
   obtain ⟨υ, he, hυ, hout⟩ := p.result.exec_assign_history 0 p.register p.empty
     (FinEnum.card ν + 2) (by simp [registers]) p.register_lt (by simp [empty]) τ hzτ
-  apply TreeMachine.Program.computesInUnitTimeAndSpace_of_exec
+  apply TreeMachine.Program.computesWithinUnitTime_of_exec
     (p := p.code) (hcopy.bind (hb.bind he)) ht
   · simpa [hτ, hy] using hυ 0 (by simp)
   · apply (TreeMachine.configSup_mass_le_sum υ).trans
@@ -298,7 +298,7 @@ the returned value already fits by the source bound. Four transitions cover inpu
 theorem Bounded.compile {p : Code Value} {x y : Tree} {time space : ℕ}
     (h : p.Bounded 1 (Function.update (fun _ ↦ Tree.nil) 0 x) time space
       (fun v s ↦ v.eval s = y)) (hx : x.size ≤ space) :
-    p.compile.ComputesInUnitTimeAndSpace x y (time + 4) (p.registers * (space + 2)) := by
+    p.compile.ComputesWithinUnitTime x y (time + 4) (p.registers * (space + 2)) := by
   obtain ⟨n, s, b, hr, hn, hb, ho⟩ := h
   apply Procedure.Bounded.compile (Procedure.close_bounded ?_)
   refine ⟨n, s, b, hr, ?_, ?_, hx, hb, ?_⟩

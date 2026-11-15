@@ -49,7 +49,7 @@ def _root_.Complexity.TimeSpaceModel.sizeCostTree : TimeSpaceModel Id Tree where
 def _root_.Complexity.TimeSpaceModel.tree : TimeSpaceModel Id Tree where
   inputSize := Tree.size
   behaviors := {R | ∃ (k : ℕ) (_ : NeZero k) (Q : Type) (_ : Finite Q)
-      (M : TreeMachine Id k Q), R = fun a result => M.ComputesInUnitTimeAndSpace a result.run}
+      (M : TreeMachine Id k Q), R = fun a result => M.ComputesWithinUnitTime a result.run}
   budget_mono := by
     rintro R ⟨k, hk, Q, hQ, M, rfl⟩ x y t s t' s' h ht hs
     exact h.mono ht hs

@@ -55,11 +55,11 @@ theorem spec_root (i : Fin k) (s : History (Cfg k) (TreeMachine.Action k))
   Program.spec_perform (Op.root i) historySemantics s b hb x
 
 /-- A history specification gives actual unit time and peak space for the compiled machine. -/
-theorem computesInUnitTimeAndSpace_of_exec [NeZero k] {p : TreeMachine.Program k α}
+theorem computesWithinUnitTime_of_exec [NeZero k] {p : TreeMachine.Program k α}
     {x y : Tree} {n t s : ℕ} {a : α} {v : History (Cfg k) (TreeMachine.Action k)}
     (h : p.Exec historySemantics (History.nil (Cfg.init k x)) n a v)
     (hn : n ≤ t) (ho : v.last.regs 0 = y) (hs : v.configSup Cfg.mass ≤ s) :
-    p.compile.ComputesInUnitTimeAndSpace x y t s := by
+    p.compile.ComputesWithinUnitTime x y t s := by
   obtain ⟨e, _, hr⟩ := h.runFrom_compile .nop
   rw [Controller.runFrom_prod_nil, Prod.mk.injEq] at hr
   have hl := congrArg History.last hr.2
@@ -70,13 +70,13 @@ theorem computesInUnitTimeAndSpace_of_exec [NeZero k] {p : TreeMachine.Program k
     ((congrArg (·.configSup Cfg.mass) hr.2).le.trans hs)
 
 /-- A program contract yields the machine bound without inspecting compiled control states. -/
-theorem computesInUnitTimeAndSpace [NeZero k] {p : TreeMachine.Program k α}
+theorem computesWithinUnitTime [NeZero k] {p : TreeMachine.Program k α}
     {x y : Tree} {t s : ℕ} {P : History (Cfg k) (TreeMachine.Action k) → ℕ → Prop}
     (h : Triple (p.verify historySemantics) P
       (fun _ v _ ↦ v.last.regs 0 = y ∧ v.configSup Cfg.mass ≤ s) ())
     (hp : P (History.nil (Cfg.init k x)) t) :
-    p.compile.ComputesInUnitTimeAndSpace x y t s := by
+    p.compile.ComputesWithinUnitTime x y t s := by
   obtain ⟨n, a, v, hn, he, ho, hs⟩ := Program.exec_of_spec h hp
-  exact computesInUnitTimeAndSpace_of_exec he hn ho hs
+  exact computesWithinUnitTime_of_exec he hn ho hs
 
 end Complexity.TreeMachine.Program

@@ -17,28 +17,26 @@ computation from a standard input to an output. Two conventions fix the input an
 `HasConfig` gives the configuration type of each input and its initial configuration, and
 `HasOutput` reads outputs from configurations. On top of them come the runs on a standard input
 (`run`, `runWith`, `runHistory`) and the histories they can return at any depth (`histories`),
-computing in every interpretation (`ComputesWith`) and within budgets (`ComputesInWith`), their
-transfer along a correspondence of histories (`forall_mem_histories_of_liftRel`,
-`ComputesWith.of_liftRel`, together `ComputesInWith.of_liftRel`) and the deterministic case
-`ComputesIn`, halting on an input (`Terminates`, `HaltsAt`), and measurements of these runs. A
-lemma belongs here when it is the counterpart, at `M.init input`, of a lemma about runs from an
-arbitrary configuration, or when it is about a notion that needs the input and output
-conventions.
+computing in every interpretation (`ComputesWith`) and within budgets (`ComputesWithinCostWith`),
+their transfer along a correspondence of histories (`forall_mem_histories_of_liftRel`,
+`ComputesWith.of_liftRel`, together `ComputesWithinCostWith.of_liftRel`) and the deterministic case
+`ComputesWithinCost`, halting on an input (`Terminates`, `HaltsAt`), and measurements of these runs.
+A lemma belongs here when it is the counterpart, at `M.init input`, of a lemma about runs from an
+arbitrary configuration, or when it is about a notion that needs the input and output conventions.
 
 A requirement on a run is stated on its histories alone, `∀ h ∈ M.histories m input, P h`, which
-covers every history at every depth. `ComputesWith` is the other half: the run halts and its
-outputs are read. They live in the same interpretation as the run: on `Multiset` they are the
-outputs of all branches with their multiplicities. `ComputesInWith` is the conjunction of the
-requirement that two measurements stay within budget with `ComputesWith`. The
-deterministic `ComputesIn` is the instance on `Id`: the budgets bound the history at every depth,
-including the halted padding, and the run halts with the output (`computesIn_iff`). When both
-measurements are monotone along the run, the bounds at a halting step are enough
-(`ComputesIn.of_halted`); each model specification has its own `of_halted` with the monotonicity
-filled in. Supplying monotonicity through one lemma per specification is the current state, not a
-decision, and so is reading the budgets at every depth rather than on halted histories only. The
-output type lives in the universe of the results, `Type (max u v)`; this is a current limitation,
-not a decision. The way halting is stated, inside the correspondence at one step of the run, is
-the current state too.
+covers every history at every depth. `ComputesWith` is the other half: the run halts and its outputs
+are read. They live in the same interpretation as the run: on `Multiset` they are the outputs of all
+branches with their multiplicities. `ComputesWithinCostWith` is the conjunction of the requirement
+that two measurements stay within budget with `ComputesWith`. The deterministic `ComputesWithinCost`
+is the instance on `Id`: the budgets bound the history at every depth, including the halted padding,
+and the run halts with the output (`computesWithinCost_iff`). When both measurements are monotone
+along the run, the bounds at a halting step are enough (`ComputesWithinCost.of_halted`); each model
+specification has its own `of_halted` with the monotonicity filled in. Supplying monotonicity
+through one lemma per specification is the current state, not a decision, and so is reading the
+budgets at every depth rather than on halted histories only. The output type lives in the universe
+of the results, `Type (max u v)`; this is a current limitation, not a decision. The way halting is
+stated, inside the correspondence at one step of the run, is the current state too.
 -/
 
 @[expose] public section
@@ -259,25 +257,26 @@ def ComputesWith (m : Type (max u v) → Type*) [Monad m] [MonadLiftT F m]
 
 /-- `M` computes `outputs` from `input` in the interpretation `m` within both budgets: on every
 history the two measurements are within budget, and `M` computes `outputs`. -/
-def ComputesInWith (m : Type (max u v) → Type*) [Monad m] [MonadLiftT F m] [MonadReturns m]
+def ComputesWithinCostWith (m : Type (max u v) → Type*) [Monad m] [MonadLiftT F m] [MonadReturns m]
     (M : Controller F Observation Action Q) (input : Input) [HasConfig Action Input Config]
     [∀ x, HasOutput (Config x) Output] (outputs : m Output)
     (timeCost spaceCost : History (Config input) Action → ℕ) (time space : ℕ) : Prop :=
   (∀ h ∈ M.histories m input, timeCost h.snd ≤ time ∧ spaceCost h.snd ≤ space) ∧
     M.ComputesWith m input outputs
 
-/-- The deterministic case of `ComputesInWith`: on every history of the run, including the halted
-padding, the two measurements are within budget, and the run halts with `output`. The measurements
-read histories without the control states.
+/-- The deterministic case of `ComputesWithinCostWith`: on every history of the run, including the
+halted padding, the two measurements are within budget, and the run halts with `output`. The
+measurements read histories without the control states.
 
-Build it with `ComputesIn.of_halted`, or with the `of_halted` of a model specification, and take it
-apart with `ComputesIn.exists_halted`; `computesIn_iff` is its reading on `Id`. The definition
-unfolds to the general predicate and is not meant to be opened by hand: an anonymous constructor
-or a pattern would meet the two clauses of `ComputesInWith`, not the halting step. -/
-def ComputesIn (M : Controller Id Observation Action Q) (input : Input)
+Build it with `ComputesWithinCost.of_halted`, or with the `of_halted` of a model specification, and
+take it apart with `ComputesWithinCost.exists_halted`; `computesWithinCost_iff` is its reading on
+`Id`. The definition unfolds to the general predicate and is not meant to be opened by hand: an
+anonymous constructor or a pattern would meet the two clauses of `ComputesWithinCostWith`, not the
+halting step. -/
+def ComputesWithinCost (M : Controller Id Observation Action Q) (input : Input)
     [HasConfig Action Input Config] [∀ x, HasOutput (Config x) Output] (output : Output)
     (timeCost spaceCost : History (Config input) Action → ℕ) (time space : ℕ) : Prop :=
-  M.ComputesInWith Id input (pure output) timeCost spaceCost time space
+  M.ComputesWithinCostWith Id input (pure output) timeCost spaceCost time space
 
 variable {m : Type (max u v) → Type*} [Monad m] [MonadLiftT F m] [MonadReturns m]
   {M : Controller F Observation Action Q} {input : Input} [HasConfig Action Input Config]
@@ -285,10 +284,10 @@ variable {m : Type (max u v) → Type*} [Monad m] [MonadLiftT F m] [MonadReturns
   {timeCost spaceCost : History (Config input) Action → ℕ} {time space : ℕ}
 
 /-- Enlarging budgets keeps the same outputs. -/
-theorem computesInWith_mono {time' space' : ℕ}
-    (h : M.ComputesInWith m input outputs timeCost spaceCost time space)
+theorem computesWithinCostWith_mono {time' space' : ℕ}
+    (h : M.ComputesWithinCostWith m input outputs timeCost spaceCost time space)
     (ht : time ≤ time') (hs : space ≤ space') :
-    M.ComputesInWith m input outputs timeCost spaceCost time' space' :=
+    M.ComputesWithinCostWith m input outputs timeCost spaceCost time' space' :=
   ⟨fun h' hh ↦ (h.1 h' hh).imp (·.trans ht) (·.trans hs), h.2⟩
 
 section Transfer
@@ -347,15 +346,15 @@ theorem ComputesWith.of_liftRel {g : Output → Output'} (h : M.ComputesWith m i
 /-- A computation within budgets passes along a correspondence of histories: the budgets by
 `forall_mem_histories_of_liftRel`, the outputs by `ComputesWith.of_liftRel`. Apply it against the
 expected statement, as `ComputesWith.of_liftRel`. -/
-theorem ComputesInWith.of_liftRel {g : Output → Output'}
-    (h : M.ComputesInWith m input outputs timeCost spaceCost time space)
+theorem ComputesWithinCostWith.of_liftRel {g : Output → Output'}
+    (h : M.ComputesWithinCostWith m input outputs timeCost spaceCost time space)
     (hS : ∀ n, LiftRel S (M.runHistoryWith m input n) (N.runHistoryWith m input' n))
     (out : Q × Config input → Output) (hout : ∀ c y, HasOutput.IsOutput c.2 y → y = out c)
     (hb : ∀ p q, S p q → timeCost p.snd ≤ time ∧ spaceCost p.snd ≤ space →
       timeCost' q.snd ≤ time' ∧ spaceCost' q.snd ≤ space')
     (hh : ∀ p q, S p q → M.Halted p → N.Halted q)
     (ho : ∀ p q y, S p q → HasOutput.IsOutput p.last.2 y → HasOutput.IsOutput q.last.2 (g y)) :
-    N.ComputesInWith m input' (g <$> outputs) timeCost' spaceCost' time' space' :=
+    N.ComputesWithinCostWith m input' (g <$> outputs) timeCost' spaceCost' time' space' :=
   ⟨M.forall_mem_histories_of_liftRel input N input' hS hb h.1, h.2.of_liftRel hS out hout hh ho⟩
 
 end Transfer
@@ -436,60 +435,63 @@ variable {M : Controller Id Observation Action Q} {input : Input} [HasConfig Act
   {timeCost spaceCost : History (Config input) Action → ℕ} {time space : ℕ}
 
 /-- The budgets bound the history at every depth, and the run halts with the output. -/
-theorem computesIn_iff :
-    M.ComputesIn input output timeCost spaceCost time space ↔
+theorem computesWithinCost_iff :
+    M.ComputesWithinCost input output timeCost spaceCost time space ↔
       (∀ k, timeCost (M.runHistory input k).snd ≤ time ∧
         spaceCost (M.runHistory input k).snd ≤ space) ∧
       ∃ n, M.Halted (M.run input n) ∧ HasOutput.IsOutput (M.run input n).2 output := by
-  simp only [ComputesIn, ComputesInWith, ComputesWith, M.forall_mem_histories_iff Id input,
-    Id.mem_returns, forall_eq, liftRel_id_iff]
+  simp only [ComputesWithinCost, ComputesWithinCostWith, ComputesWith,
+    M.forall_mem_histories_iff Id input, Id.mem_returns, forall_eq, liftRel_id_iff]
   rfl
 
 /-- When both measurements are monotone along the run, the bounds at a halting step bound every
 depth, since the history stays fixed after halting. -/
-theorem ComputesIn.of_halted (ht : Monotone fun k ↦ timeCost (M.runHistory input k).snd)
+theorem ComputesWithinCost.of_halted (ht : Monotone fun k ↦ timeCost (M.runHistory input k).snd)
     (hs : Monotone fun k ↦ spaceCost (M.runHistory input k).snd) (n : ℕ)
     (hn : M.Halted (M.run input n)) (ho : HasOutput.IsOutput (M.run input n).2 output)
     (htn : timeCost (M.runHistory input n).snd ≤ time)
     (hsn : spaceCost (M.runHistory input n).snd ≤ space) :
-    M.ComputesIn input output timeCost spaceCost time space := by
-  refine computesIn_iff.2 ⟨fun k ↦ ?_, n, hn, ho⟩
+    M.ComputesWithinCost input output timeCost spaceCost time space := by
+  refine computesWithinCost_iff.2 ⟨fun k ↦ ?_, n, hn, ho⟩
   rcases le_total k n with hk | hk
   · exact ⟨(ht hk).trans htn, (hs hk).trans hsn⟩
   · rw [M.runHistory_eq_of_halted input hn hk]
     exact ⟨htn, hsn⟩
 
 /-- The halting step of a computation, with the output and both measurements within budget. -/
-theorem ComputesIn.exists_halted (h : M.ComputesIn input output timeCost spaceCost time space) :
+theorem ComputesWithinCost.exists_halted
+    (h : M.ComputesWithinCost input output timeCost spaceCost time space) :
     ∃ n, M.Halted (M.run input n) ∧ HasOutput.IsOutput (M.run input n).2 output ∧
       timeCost (M.runHistory input n).snd ≤ time ∧
       spaceCost (M.runHistory input n).snd ≤ space :=
-  let ⟨hb, n, hn, ho⟩ := computesIn_iff.1 h
+  let ⟨hb, n, hn, ho⟩ := computesWithinCost_iff.1 h
   ⟨n, hn, ho, hb n⟩
 
 /-- Enlarging budgets keeps the same output. -/
-theorem computesIn_mono {time' space' : ℕ}
-    (h : M.ComputesIn input output timeCost spaceCost time space)
+theorem computesWithinCost_mono {time' space' : ℕ}
+    (h : M.ComputesWithinCost input output timeCost spaceCost time space)
     (ht : time ≤ time') (hs : space ≤ space') :
-    M.ComputesIn input output timeCost spaceCost time' space' :=
-  computesInWith_mono h ht hs
+    M.ComputesWithinCost input output timeCost spaceCost time' space' :=
+  computesWithinCostWith_mono h ht hs
 
 /-- The time budget bounds the history at every depth. -/
-theorem computesIn_time_le (h : M.ComputesIn input output timeCost spaceCost time space)
-    (k : ℕ) : timeCost (M.runHistory input k).snd ≤ time :=
-  ((computesIn_iff.1 h).1 k).1
+theorem computesWithinCost_time_le
+    (h : M.ComputesWithinCost input output timeCost spaceCost time space) (k : ℕ) :
+    timeCost (M.runHistory input k).snd ≤ time :=
+  ((computesWithinCost_iff.1 h).1 k).1
 
 /-- The space budget bounds the history at every depth. -/
-theorem computesIn_space_le (h : M.ComputesIn input output timeCost spaceCost time space)
-    (k : ℕ) : spaceCost (M.runHistory input k).snd ≤ space :=
-  ((computesIn_iff.1 h).1 k).2
+theorem computesWithinCost_space_le
+    (h : M.ComputesWithinCost input output timeCost spaceCost time space) (k : ℕ) :
+    spaceCost (M.runHistory input k).snd ≤ space :=
+  ((computesWithinCost_iff.1 h).1 k).2
 
 /-- Counting recorded actions describes the halted run at the advertised time bound. -/
-theorem computesIn_unit_iff :
-    M.ComputesIn input output History.length spaceCost time space ↔
+theorem computesWithinCost_unit_iff :
+    M.ComputesWithinCost input output History.length spaceCost time space ↔
       M.Halted (M.run input time) ∧ HasOutput.IsOutput (M.run input time).2 output ∧
       ∀ k, spaceCost (M.runHistory input k).snd ≤ space := by
-  rw [computesIn_iff]
+  rw [computesWithinCost_iff]
   constructor
   · rintro ⟨hb, n, hn, ho⟩
     have he : M.run input (M.runHistory input n).length = M.run input n :=

@@ -17,7 +17,7 @@ Each stack occupies the positive addresses of one tape. A newly pushed top stays
 control until the next action; the remaining symbols are already on tape. This representation
 is preserved by one target transition, with each head always at its source stack height. The
 correspondence of histories (`Tape.HistRep`) holds for every choice shape and every interpretation
-of the choices, and carries computations along (`ComputesInWith.toTM`).
+of the choices, and carries computations along (`ComputesWithinCostWith.toTM`).
 -/
 
 @[expose] public section
@@ -224,11 +224,11 @@ variable {m} [MonadReturns m] {M}
 /-- Simulation passes a computation along, for every choice shape and every interpretation: it
 preserves time and bounds every tape by the source peak stack space, including the blank bottom
 cell. On `Multiset` the outputs of the branches correspond with their multiplicities. -/
-theorem _root_.Complexity.Controller.ComputesInWith.toTM [Fintype κ] {xs : List Γ}
+theorem _root_.Complexity.Controller.ComputesWithinCostWith.toTM [Fintype κ] {xs : List Γ}
     {outs : m (List Γ)} {t s : ℕ}
-    (h : M.ComputesInWith m xs outs Controller.History.length
+    (h : M.ComputesWithinCostWith m xs outs Controller.History.length
       (fun h ↦ h.configSup Cfg.mass) t s) :
-    M.toTM.ComputesInWith m (xs.map some) ((·.map some) <$> outs)
+    M.toTM.ComputesWithinCostWith m (xs.map some) ((·.map some) <$> outs)
       Controller.History.length Controller.History.space t (Fintype.card κ * (s + 1)) :=
   h.of_liftRel (liftRel_runHistoryWith_toTM m M xs) (fun c ↦ c.2.output.toList)
     (fun _ _ _ ↦ by simp_all)
@@ -245,6 +245,6 @@ theorem ComputesWithin.toTM [Fintype κ] {M : StackMachine Id κ Γ Q}
     {xs ys : List Γ} {t s : ℕ} (h : M.ComputesWithin xs ys t s) :
     M.toTM.ComputesWithin (xs.map some) (ys.map some)
       t (Fintype.card κ * (s + 1)) :=
-  Controller.ComputesInWith.toTM h
+  Controller.ComputesWithinCostWith.toTM h
 
 end Complexity.StackMachine

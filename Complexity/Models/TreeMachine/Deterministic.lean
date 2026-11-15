@@ -16,8 +16,8 @@ All three ignore halted padding.
 The cumulative cost bounds time and, together with initial mass, every intermediate mass.
 It is bounded above by the unit time multiplied by the peak register mass.
 A running `nop` costs one and preserves the register bank.
-The specifications take control states in `Type`, because `Controller.ComputesInWith` keeps outputs,
-here trees, in the universe of the results; this is a current limitation, not a decision.
+The specifications take control states in `Type`, because `Controller.ComputesWithinCostWith` keeps
+outputs, here trees, in the universe of the results; this is a current limitation, not a decision.
 -/
 
 @[expose] public section
@@ -61,7 +61,7 @@ and a maximum expanded-tree space budget. The transition count is an existential
 since the external time charge depends on the trees read or constructed. -/
 def ComputesWithin (M : TreeMachine Id k Q) (a : Tree)
     (b : Tree) (t s : ℕ) : Prop :=
-  M.ComputesIn a b (fun h ↦ h.actionSum Action.sizeCost) (fun h ↦ h.configSup Cfg.mass) t s
+  M.ComputesWithinCost a b (fun h ↦ h.actionSum Action.sizeCost) (fun h ↦ h.configSup Cfg.mass) t s
 
 /-- Bounds at a halting step are enough: the size charges and the peak register mass grow along
 the run. -/
@@ -70,40 +70,40 @@ theorem ComputesWithin.of_halted {M : TreeMachine Id k Q} {a b : Tree} {t s : �
     (ht : (M.runHistory a n).snd.actionSum Action.sizeCost ≤ t)
     (hs : (M.runHistory a n).snd.configSup Cfg.mass ≤ s) :
     M.ComputesWithin a b t s :=
-  Controller.ComputesIn.of_halted (fun _ _ ↦ M.actionSum_runHistory_mono _ _)
+  Controller.ComputesWithinCost.of_halted (fun _ _ ↦ M.actionSum_runHistory_mono _ _)
     (fun _ _ ↦ M.configSup_runHistory_mono _ _) n hh ho ht hs
 
 /-- Compute with one unit per active transition and peak expanded-tree space. -/
-def ComputesInUnitTimeAndSpace (M : TreeMachine Id k Q) (a b : Tree) (t s : ℕ) : Prop :=
-  M.ComputesIn a b History.length (fun h ↦ h.configSup Cfg.mass) t s
+def ComputesWithinUnitTime (M : TreeMachine Id k Q) (a b : Tree) (t s : ℕ) : Prop :=
+  M.ComputesWithinCost a b History.length (fun h ↦ h.configSup Cfg.mass) t s
 
 /-- Bounds at a halting step are enough: length and the peak register mass grow along the run. -/
-theorem ComputesInUnitTimeAndSpace.of_halted {M : TreeMachine Id k Q} {a b : Tree} {t s : ℕ}
+theorem ComputesWithinUnitTime.of_halted {M : TreeMachine Id k Q} {a b : Tree} {t s : ℕ}
     (n : ℕ) (hh : M.Halted (M.run a n)) (ho : (M.run a n).2.regs 0 = b)
     (ht : (M.runHistory a n).snd.length ≤ t)
     (hs : (M.runHistory a n).snd.configSup Cfg.mass ≤ s) :
-    M.ComputesInUnitTimeAndSpace a b t s :=
-  Controller.ComputesIn.of_halted (fun _ _ ↦ M.length_runHistory_mono _)
+    M.ComputesWithinUnitTime a b t s :=
+  Controller.ComputesWithinCost.of_halted (fun _ _ ↦ M.length_runHistory_mono _)
     (fun _ _ ↦ M.configSup_runHistory_mono _ _) n hh ho ht hs
 
 /-- Switching to unit charges preserves both advertised bounds on the same run. -/
 theorem ComputesWithin.toUnitTime {M : TreeMachine Id k Q} {a b : Tree}
     {t s : ℕ} (h : M.ComputesWithin a b t s) :
-    M.ComputesInUnitTimeAndSpace a b t s := by
+    M.ComputesWithinUnitTime a b t s := by
   obtain ⟨n, hh, ho, ht, hs⟩ := h.exists_halted
   exact .of_halted n hh ho ((length_le_actionSum _).trans ht) hs
 
 /-- A bound on all intermediate register trees permits size charging on the same run. -/
-theorem ComputesInUnitTimeAndSpace.toSizeCost {M : TreeMachine Id k Q} {a b : Tree}
-    {t s : ℕ} (h : M.ComputesInUnitTimeAndSpace a b t s) :
+theorem ComputesWithinUnitTime.toSizeCost {M : TreeMachine Id k Q} {a b : Tree}
+    {t s : ℕ} (h : M.ComputesWithinUnitTime a b t s) :
     M.ComputesWithin a b (t * s) s := by
   obtain ⟨n, hh, ho, ht, hs⟩ := h.exists_halted
   exact .of_halted n hh ho ((actionSum_le_length_mul_mass _).trans (Nat.mul_le_mul ht hs)) hs
 
-theorem ComputesInUnitTimeAndSpace.mono {M : TreeMachine Id k Q} {a b : Tree}
-    {t s t' s' : ℕ} (h : M.ComputesInUnitTimeAndSpace a b t s)
-    (ht : t ≤ t') (hs : s ≤ s') : M.ComputesInUnitTimeAndSpace a b t' s' :=
-  Controller.computesIn_mono h ht hs
+theorem ComputesWithinUnitTime.mono {M : TreeMachine Id k Q} {a b : Tree}
+    {t s t' s' : ℕ} (h : M.ComputesWithinUnitTime a b t s)
+    (ht : t ≤ t') (hs : s ≤ s') : M.ComputesWithinUnitTime a b t' s' :=
+  Controller.computesWithinCost_mono h ht hs
 
 /-- A halted run's time budget also bounds its peak space by input size and register count. -/
 theorem ComputesWithin.of_run {M : TreeMachine Id k Q} {a b : Tree} {n t s : ℕ}
@@ -146,12 +146,12 @@ theorem ComputesWithin.exists_haltsAt {M : TreeMachine Id k Q} {a : Tree}
 theorem ComputesWithin.configSup_mass_le {M : TreeMachine Id k Q} {a : Tree}
     {b : Tree} {t s : ℕ} (h : M.ComputesWithin a b t s)
     (u : ℕ) : (M.runHistory a u).snd.configSup Cfg.mass ≤ s :=
-  Controller.computesIn_space_le h u
+  Controller.computesWithinCost_space_le h u
 
 theorem ComputesWithin.actionSum_le {M : TreeMachine Id k Q} {a : Tree}
     {b : Tree} {t s : ℕ} (h : M.ComputesWithin a b t s)
     (u : ℕ) : (M.runHistory a u).snd.actionSum Action.sizeCost ≤ t :=
-  Controller.computesIn_time_le h u
+  Controller.computesWithinCost_time_le h u
 
 /-- The time budget controls space even without using the explicit space budget. -/
 theorem ComputesWithin.configSup_mass_le_add_time
@@ -201,7 +201,7 @@ theorem ComputesWithin.output_size_le_mass_add_time
 theorem ComputesWithin.mono {M : TreeMachine Id k Q} {a : Tree}
     {b : Tree} {t s t' s' : ℕ} (h : M.ComputesWithin a b t s)
     (ht : t ≤ t') (hs : s ≤ s') : M.ComputesWithin a b t' s' :=
-  Controller.computesIn_mono h ht hs
+  Controller.computesWithinCost_mono h ht hs
 
 end Canonical
 

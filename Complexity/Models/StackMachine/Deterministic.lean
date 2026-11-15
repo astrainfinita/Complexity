@@ -12,7 +12,7 @@ public import Mathlib.Algebra.Order.BigOperators.Group.Finset
 # Transition time and peak work-stack space
 
 In the specification `ComputesWithin` the parameters `κ`, `Γ` and `Q` share one universe, because
-`Controller.ComputesInWith` keeps outputs in the universe of the results; this is a current
+`Controller.ComputesWithinCostWith` keeps outputs in the universe of the results; this is a current
 limitation, not a decision.
 -/
 
@@ -55,7 +55,7 @@ variable {κ Γ Q : Type u} [Fintype κ]
 /-- The run halts with the output, and its transitions and peak total work-stack length stay
 within budget at every depth. -/
 def ComputesWithin (M : StackMachine Id κ Γ Q) (xs ys : List Γ) (t s : ℕ) : Prop :=
-  M.ComputesIn xs ys Controller.History.length (fun h ↦ h.configSup Cfg.mass) t s
+  M.ComputesWithinCost xs ys Controller.History.length (fun h ↦ h.configSup Cfg.mass) t s
 
 /-- Bounds at a halting step are enough: length and the peak work-stack mass grow along the run. -/
 theorem ComputesWithin.of_halted {M : StackMachine Id κ Γ Q} {xs ys : List Γ} {t s : ℕ} (n : ℕ)
@@ -63,7 +63,7 @@ theorem ComputesWithin.of_halted {M : StackMachine Id κ Γ Q} {xs ys : List Γ}
     (ht : (M.runHistory xs n).snd.length ≤ t)
     (hs : (M.runHistory xs n).snd.configSup Cfg.mass ≤ s) :
     M.ComputesWithin xs ys t s :=
-  Controller.ComputesIn.of_halted (fun _ _ ↦ M.length_runHistory_mono _)
+  Controller.ComputesWithinCost.of_halted (fun _ _ ↦ M.length_runHistory_mono _)
     (fun _ _ ↦ M.configSup_runHistory_mono _ _) n hh ho ht hs
 
 /-- Initially empty work stacks grow by at most one symbol per stack per transition. -/
@@ -82,7 +82,7 @@ theorem ComputesWithin.of_run {M : StackMachine Id κ Γ Q}
 theorem ComputesWithin.run_spec {M : StackMachine Id κ Γ Q}
     {xs ys : List Γ} {t s : ℕ} (h : M.ComputesWithin xs ys t s) :
     M.Halted (M.run xs t) ∧ (M.run xs t).2.output = ys.toArray := by
-  have ⟨hh, ho, _⟩ := Controller.computesIn_unit_iff.mp h
+  have ⟨hh, ho, _⟩ := Controller.computesWithinCost_unit_iff.mp h
   exact ⟨hh, ho⟩
 
 theorem ComputesWithin.space_of_time {M : StackMachine Id κ Γ Q}
@@ -93,6 +93,6 @@ theorem ComputesWithin.space_of_time {M : StackMachine Id κ Γ Q}
 theorem ComputesWithin.mono {M : StackMachine Id κ Γ Q}
     {xs ys : List Γ} {t s t' s' : ℕ} (h : M.ComputesWithin xs ys t s)
     (ht : t ≤ t') (hs : s ≤ s') : M.ComputesWithin xs ys t' s' :=
-  Controller.computesIn_mono h ht hs
+  Controller.computesWithinCost_mono h ht hs
 
 end Complexity.StackMachine

@@ -14,8 +14,8 @@ These definitions specialize the choice shape to `Id`. Space counts visited work
 including the initial head positions and blank cells, and excludes input and output.
 `ComputesWithin` bounds length and space at every depth of the run, including the halted padding;
 both grow along the run, so the bounds at a halting step are enough (`ComputesWithin.of_halted`).
-The parameters `κ`, `Γ` and `Q` share one universe, because `Controller.ComputesInWith` keeps
-outputs in the universe of the results; this is a current limitation, not a decision.
+The parameters `κ`, `Γ` and `Q` share one universe, because `Controller.ComputesWithinCostWith`
+keeps outputs in the universe of the results; this is a current limitation, not a decision.
 -/
 
 @[expose] public section
@@ -30,21 +30,21 @@ variable {κ Γ Q : Type u} [Inhabited Γ] {xs : Array Γ}
 measurements stay within budget at every depth. -/
 def ComputesWithin [Fintype κ] (M : TM Id κ Γ Q) (xs ys : List Γ)
     (t s : ℕ) : Prop :=
-  M.ComputesIn xs ys Controller.History.length Controller.History.space t s
+  M.ComputesWithinCost xs ys Controller.History.length Controller.History.space t s
 
 /-- Bounds at a halting step are enough: length and visited space grow along the run. -/
 theorem ComputesWithin.of_halted [Fintype κ] {M : TM Id κ Γ Q} {xs ys : List Γ} {t s : ℕ} (n : ℕ)
     (hh : M.Halted (M.run xs n)) (ho : (M.run xs n).2.output = ys.toArray)
     (ht : (M.runHistory xs n).snd.length ≤ t) (hs : (M.runHistory xs n).snd.space ≤ s) :
     M.ComputesWithin xs ys t s :=
-  Controller.ComputesIn.of_halted (fun _ _ ↦ M.length_runHistory_mono _)
+  Controller.ComputesWithinCost.of_halted (fun _ _ ↦ M.length_runHistory_mono _)
     (M.runHistoryFrom_space_mono _) n hh ho ht hs
 
 theorem ComputesWithin.mono [Fintype κ] {M : TM Id κ Γ Q}
     {xs ys : List Γ} {t s t' s' : ℕ}
     (h : M.ComputesWithin xs ys t s) (ht : t ≤ t') (hs : s ≤ s') :
     M.ComputesWithin xs ys t' s' :=
-  Controller.computesIn_mono h ht hs
+  Controller.computesWithinCost_mono h ht hs
 
 /-- Unit-time computation visits at most one new cell per tape per transition. -/
 theorem ComputesWithin.space_of_time [Fintype κ] {M : TM Id κ Γ Q}
@@ -58,7 +58,7 @@ theorem ComputesWithin.space_of_time [Fintype κ] {M : TM Id κ Γ Q}
 theorem ComputesWithin.run_spec [Fintype κ] {M : TM Id κ Γ Q}
     {xs ys : List Γ} {t s : ℕ} (h : M.ComputesWithin xs ys t s) :
     M.Halted (M.run xs t) ∧ (M.run xs t).2.output = ys.toArray := by
-  have ⟨hh, ho, _⟩ := Controller.computesIn_unit_iff.mp h
+  have ⟨hh, ho, _⟩ := Controller.computesWithinCost_unit_iff.mp h
   simpa only [hasOutput_isOutput] using And.intro hh ho
 
 theorem ComputesWithin.terminates [Fintype κ] {M : TM Id κ Γ Q}
@@ -70,6 +70,6 @@ theorem ComputesWithin.terminates [Fintype κ] {M : TM Id κ Γ Q}
 theorem ComputesWithin.space_le [Fintype κ] {M : TM Id κ Γ Q}
     {xs ys : List Γ} {t s : ℕ}
     (h : M.ComputesWithin xs ys t s) (u : ℕ) : (M.runHistory xs u).snd.space ≤ s :=
-  Controller.computesIn_space_le h u
+  Controller.computesWithinCost_space_le h u
 
 end Complexity.TM
