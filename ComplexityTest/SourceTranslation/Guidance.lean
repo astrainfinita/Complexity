@@ -153,6 +153,108 @@ example {g h : List Bool → List Bool}
       done
   trivial
 
+-- Guards a hypothesis with a time within `IsO` and a polynomial peak: the composition uses the
+-- stated time growth and the chosen peak growth `hg.peak`.
+example {g : List Bool → List Bool}
+    {program : TreeProgram.Value → TreeProgram.Code TreeProgram.Value}
+    (hg : HasProgramIn g program IsO(fun xs => ⌜xs⌝ₜ.size) (IsPoly fun xs => ⌜xs⌝ₜ.size)) :
+    HasProgramInO (fun xs : List Bool => g xs.reverse) hole(program ⊢ composed)
+      (fun xs => ⌜xs⌝ₜ.size) (fun xs => max ⌜xs⌝ₜ.size (hg.peak xs.reverse)) := by
+  fill_hole composed in source_fun_prop
+
+-- Guards the converse hypothesis: the chosen time growth `hg.time` and the stated peak growth.
+example {g : List Bool → List Bool}
+    {program : TreeProgram.Value → TreeProgram.Code TreeProgram.Value}
+    (hg : HasProgramIn g program (IsPoly fun xs => ⌜xs⌝ₜ.size) IsO(fun xs => ⌜xs⌝ₜ.size)) :
+    HasProgramInO (fun xs : List Bool => g xs.reverse) hole(program ⊢ composed)
+      (fun xs => ⌜xs⌝ₜ.size + hg.time xs.reverse) (fun xs => ⌜xs⌝ₜ.size) := by
+  fill_hole composed in source_fun_prop
+
+def retainMixed (xs : List Bool) := xs
+
+-- Guards a goal with a time within `IsO` and a polynomial peak.
+theorem hasProgramIn_retainMixed : HasProgramIn retainMixed hole(⊢ program)
+    IsO(fun xs => ⌜xs⌝ₜ.size) (IsPoly fun xs => ⌜xs⌝ₜ.size) := by
+  abstract_hole program using programRetainMixed
+  fill_hole program in source_fun_prop
+
+-- Guards a registration with a time within `IsO` and a polynomial peak: a call uses the stated
+-- time growth.
+attribute [local program] hasProgramIn_retainMixed in
+example : HasProgramIn (fun xs : List Bool => retainMixed xs.reverse) hole(⊢ program)
+    IsO(fun xs => ⌜xs⌝ₜ.size) (IsPoly fun xs => ⌜xs⌝ₜ.size) := by
+  fill_hole program in source_fun_prop
+
+-- Guards a goal with a polynomial time and a peak within `IsO`.
+example : HasProgramIn (List.reverse : List Bool → List Bool) hole(⊢ program)
+    (IsPoly fun xs => ⌜xs⌝ₜ.size) IsO(fun xs => ⌜xs⌝ₜ.size) := by
+  fill_hole program in model_fun_prop
+
+-- Guards growth bounds left as placeholders, as written to see the translated growths.
+example := (by source_fun_prop :
+  HasProgramIn (List.reverse : List Bool → List Bool) _ IsO(_) IsO(_))
+
+-- Guards a growth property that always holds: it leaves no goal.
+example : HasProgramIn (List.reverse : List Bool → List Bool) hole(⊢ program)
+    IsO(fun xs => ⌜xs⌝ₜ.size) (fun _ => True) := by
+  fill_hole program in source_fun_prop
+
+-- Guards the tags of the polynomial goals: `time` and `peak`, as for the comparisons under `IsO`.
+example : HasProgramIn (List.reverse : List Bool → List Bool) hole(⊢ program)
+    (IsPoly fun xs => ⌜xs⌝ₜ.size) (IsPoly fun xs => ⌜xs⌝ₜ.size) := by
+  fill_hole program in source_fun_prop (disch := skip)
+  case time => dominated
+  case peak => dominated
+
+/-- Linear growth, through a reducible definition. -/
+abbrev IsLinear (t : List Bool → ℕ) : Prop := Dominated t fun xs => ⌜xs⌝ₜ.size
+
+/-- Growth polynomial in the code size, through a reducible definition. -/
+abbrev IsPolySize (t : List Bool → ℕ) : Prop := IsPoly (fun xs => ⌜xs⌝ₜ.size) t
+
+-- Guards growth properties given through reducible definitions, in a hypothesis and in the goal:
+-- the hypothesis's linear time growth is the stated one.
+example {g : List Bool → List Bool}
+    {program : TreeProgram.Value → TreeProgram.Code TreeProgram.Value}
+    (_hg : HasProgramIn g program IsLinear IsPolySize) :
+    HasProgramIn (fun xs : List Bool => g xs.reverse) hole(program ⊢ composed)
+      IsLinear IsPolySize := by
+  fill_hole composed in source_fun_prop
+
+-- Guards the order of the goals left: `time` before `peak`, here a polynomial goal before a
+-- comparison of the translation.
+example : HasProgramIn (List.reverse : List Bool → List Bool) hole(⊢ program)
+    (IsPoly fun xs => ⌜xs⌝ₜ.size) IsO(fun xs => 2 * ⌜xs⌝ₜ.size) := by
+  fill_hole program in source_fun_prop (disch := skip)
+  · show IsPoly _ _
+    dominated
+  · show Dominated _ _
+    dominated
+
+-- Records that growth properties left open are rejected. A proof cannot make a false statement
+-- true, so the translation succeeds wrongly only by deciding an open part of the statement:
+-- before this error, both properties left open became `IsPoly` in the code size, a statement the
+-- user had not written. If this starts to succeed, the translation chooses a property again.
+/--
+error: source translation: the time growth property is left open; write `IsO(_)` to have the translated growth filled in
+-/
+#guard_msgs in
+example := (by source_fun_prop :
+  HasProgramIn (List.reverse : List Bool → List Bool) List.Code.reverse _ _)
+
+/-- A growth property of no supported shape. -/
+def Unconstrained (_t : List Bool → ℕ) : Prop := True
+
+-- Records the error for a growth property of an unsupported shape; a definition that is not
+-- reducible is not unfolded.
+/--
+error: source translation: unsupported time growth property `Unconstrained`; expected `IsO(T)`, `IsPoly s` or `fun _ => True`, also through reducible definitions
+-/
+#guard_msgs in
+example : HasProgramIn (List.reverse : List Bool → List Bool) hole(⊢ program) Unconstrained
+    IsO(fun xs => ⌜xs⌝ₜ.size) := by
+  fill_hole program in source_fun_prop
+
 def chosenReverse {α : Type*} : List α → List α := List.reverse
 
 -- The program attribute saves the implementation of an equality's right-hand side for ordinary
