@@ -22,7 +22,7 @@ private def bit : TM Id (Fin 0) (Option Bool) Bool where
 private theorem bit_spec : TM.Computes bit (id : Bool → Bool) (fun _ => 4) (fun _ => 0) := by
   apply Encoding.Computes.iff_of_uniqueEncoding.mpr
   intro b
-  cases b <;> apply Controller.computesIn_unit_iff.mpr <;>
+  cases b <;> apply Controller.computesWithinCost_unit_iff.mpr <;>
     exact ⟨rfl, rfl, fun _ ↦ by simp [Controller.History.space]⟩
 
 private theorem bit_fp : (id : Bool → Bool) ∈ FP .tm := by

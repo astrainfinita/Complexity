@@ -24,7 +24,7 @@ example : pairOnce.ComputesWithin Tree.nil (Tree.pair Tree.nil Tree.nil) 3 3 := 
   refine .of_halted 1 rfl rfl ?_ ?_ <;> decide
 
 private theorem pairOnce_unit :
-    pairOnce.ComputesInUnitTimeAndSpace Tree.nil (Tree.pair Tree.nil Tree.nil) 1 3 := by
+    pairOnce.ComputesWithinUnitTime Tree.nil (Tree.pair Tree.nil Tree.nil) 1 3 := by
   refine .of_halted 1 rfl rfl ?_ ?_ <;> decide
 
 example : pairOnce.ComputesWithin Tree.nil (Tree.pair Tree.nil Tree.nil) 3 3 :=
@@ -38,13 +38,13 @@ def rightOnce : TreeMachine Id 1 Bool where
 
 example : rightOnce.ComputesWithin
     (.pair (.pair .nil .nil) .nil) .nil 5 5 := by
-  have h : rightOnce.ComputesInUnitTimeAndSpace
+  have h : rightOnce.ComputesWithinUnitTime
       (.pair (.pair .nil .nil) .nil) .nil 1 5 := by
     refine .of_halted 1 rfl rfl ?_ ?_ <;> decide
   exact h.toSizeCost
 
 -- Padding the requested run does not add to the recorded unit-time cost.
-example : pairOnce.ComputesInUnitTimeAndSpace Tree.nil (Tree.pair Tree.nil Tree.nil) 1 3 := by
+example : pairOnce.ComputesWithinUnitTime Tree.nil (Tree.pair Tree.nil Tree.nil) 1 3 := by
   refine .of_halted 10 rfl rfl ?_ ?_ <;> decide
 
 -- One machine handles every input code, with budgets measured on that code.
@@ -63,7 +63,7 @@ example : TimeSpaceModel.sizeCostTree.ComputableWithin
   simpa using pairBool_unit.toSizeCost
 
 -- This difference affects bounded computations, not just reported diagnostic totals.
-example : ¬Controller.ComputesIn pairOnce Tree.nil (Tree.pair Tree.nil Tree.nil)
+example : ¬Controller.ComputesWithinCost pairOnce Tree.nil (Tree.pair Tree.nil Tree.nil)
     (fun h ↦ h.actionSum Action.sizeCost) (fun h ↦ h.configSup Cfg.mass) 1 3 := by
   intro h
   have hbound : pairOnce.ComputesWithin _ _ _ _ := h
@@ -71,11 +71,11 @@ example : ¬Controller.ComputesIn pairOnce Tree.nil (Tree.pair Tree.nil Tree.nil
   norm_num [pairOnce, Cfg.mass, input, Tree.size] at this
 
 -- The execution also uses the selected state-space measure.
-example : Controller.ComputesIn pairOnce Tree.nil (Tree.pair Tree.nil Tree.nil)
+example : Controller.ComputesWithinCost pairOnce Tree.nil (Tree.pair Tree.nil Tree.nil)
     Controller.History.length (fun _ ↦ 0) 1 0 :=
-  Controller.computesIn_unit_iff.mpr ⟨rfl, rfl, fun _ ↦ le_rfl⟩
+  Controller.computesWithinCost_unit_iff.mpr ⟨rfl, rfl, fun _ ↦ le_rfl⟩
 
-example : ¬Controller.ComputesIn pairOnce Tree.nil (Tree.pair Tree.nil Tree.nil)
+example : ¬Controller.ComputesWithinCost pairOnce Tree.nil (Tree.pair Tree.nil Tree.nil)
     (fun h ↦ h.actionSum Action.sizeCost) (fun h ↦ h.configSup Cfg.mass) 3 2 := by
   intro h
   have hbound : pairOnce.ComputesWithin _ _ _ _ := h

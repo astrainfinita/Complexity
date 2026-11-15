@@ -18,7 +18,7 @@ namespace Complexity.TreeProgramLibraryTest
 
 -- The source list proof gives a machine bound, including input/output setup and retained locals.
 example (x : Tree) :
-    (List.Code.reverse .input).compile.ComputesInUnitTimeAndSpace x (x.reverseAppend .nil)
+    (List.Code.reverse .input).compile.ComputesWithinUnitTime x (x.reverseAppend .nil)
       (13 * x.listLength + 12) ((List.Code.reverse .input).registers * (x.size + 3)) := by
   have h := List.Code.reverse_bounded .input 1 (Function.update (fun _ ↦ Tree.nil) 0 x)
   exact (h.mono le_rfl le_rfl (fun _ _ h ↦ h.1)).compile (by simp)

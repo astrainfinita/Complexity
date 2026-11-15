@@ -25,14 +25,14 @@ example {k : ℕ} {Q : Type*} (M : TreeMachine Id k Q) (c : Q × TreeMachine.Cfg
 -- Each model's complete interface recovers its existing resource relation.
 example {k : ℕ} [NeZero k] {Q : Type} (M : TreeMachine Id k Q)
     (a b : Tree) (t s : ℕ) :
-    M.ComputesIn a b (fun h ↦ h.actionSum TreeMachine.Action.sizeCost)
+    M.ComputesWithinCost a b (fun h ↦ h.actionSum TreeMachine.Action.sizeCost)
       (fun h ↦ h.configSup TreeMachine.Cfg.mass) t s ↔
       M.ComputesWithin a b t s :=
   Iff.rfl
 
 example {κ Γ Q : Type u} [Inhabited Γ] [Fintype κ]
     (M : TM Id κ Γ Q) (xs ys : List Γ) (t s : ℕ) :
-    M.ComputesIn xs ys Controller.History.length Controller.History.space t s ↔
+    M.ComputesWithinCost xs ys Controller.History.length Controller.History.space t s ↔
       M.ComputesWithin xs ys t s :=
   Iff.rfl
 
@@ -44,25 +44,27 @@ example {κ Γ Q : Type u} [Inhabited Γ] [Fintype κ]
       M.Halted (M.run xs t) ∧
       (M.run xs t).2.output = ys.toArray ∧
       (M.runHistory xs t).snd.space ≤ s := by
-  refine Controller.computesIn_unit_iff.trans ?_
+  refine Controller.computesWithinCost_unit_iff.trans ?_
   simp only [TM.hasOutput_isOutput]
   refine and_congr_right fun hh ↦ and_congr_right fun _ ↦ ⟨fun hs ↦ hs t, fun hs k ↦ ?_⟩
   rcases le_total k t with hk | hk
   · exact (M.runHistoryFrom_space_mono _ hk).trans hs
   · rwa [M.runHistory_eq_of_halted xs hh hk]
 
--- Guards that the deterministic `ComputesWithin` is the general `ComputesInWith` on `Id` by
+-- Guards that the deterministic `ComputesWithin` is the general `ComputesWithinCostWith` on `Id` by
 -- definition.
 example {κ Γ Q : Type u} [Inhabited Γ] [Fintype κ] (M : TM Id κ Γ Q) (xs ys : List Γ)
     (t s : ℕ) :
     M.ComputesWithin xs ys t s ↔
-      M.ComputesInWith Id xs (pure ys) Controller.History.length Controller.History.space t s :=
+      M.ComputesWithinCostWith Id xs (pure ys) Controller.History.length
+        Controller.History.space t s :=
   Iff.rfl
 
 -- The two entries of the unified definition work through a model's specification, in the order
 -- step, halted, output, time, space. Also records that the definition is not built by an anonymous
--- constructor, since it unfolds to the two clauses of `ComputesInWith`; if that starts to succeed,
--- the definition can be opened by hand again and the entries are no longer the only way in.
+-- constructor, since it unfolds to the two clauses of `ComputesWithinCostWith`; if that starts to
+-- succeed, the definition can be opened by hand again and the entries are no longer the only way
+-- in.
 example {κ Γ Q : Type u} [Inhabited Γ] [Fintype κ] (M : TM Id κ Γ Q) (xs ys : List Γ) (t s : ℕ)
     (h : M.ComputesWithin xs ys t s) : M.ComputesWithin xs ys t s := by
   obtain ⟨n, hh, ho, ht, hs⟩ := h.exists_halted
@@ -96,28 +98,28 @@ private instance : Controller.HasConfig Unit Unit (fun _ ↦ ℕ) where
 private instance : Controller.HasOutput ℕ ℕ where
   IsOutput c n := c = n
 
-example : oneAction.ComputesIn () 1 (fun _ ↦ 0) (fun h ↦ h.configSup id) 0 1 :=
-  Controller.ComputesIn.of_halted monotone_const
+example : oneAction.ComputesWithinCost () 1 (fun _ ↦ 0) (fun h ↦ h.configSup id) 0 1 :=
+  Controller.ComputesWithinCost.of_halted monotone_const
     (fun _ _ ↦ oneAction.configSup_runHistory_mono () id) 1 rfl rfl le_rfl (by decide)
 
 -- Unit costs permit halted padding, but cannot hide the first active step in a zero budget.
-example : oneAction.ComputesIn () 1
+example : oneAction.ComputesWithinCost () 1
     Controller.History.length (fun h ↦ h.configSup id) 5 1 :=
-  Controller.ComputesIn.of_halted (fun _ _ ↦ oneAction.length_runHistory_mono ())
+  Controller.ComputesWithinCost.of_halted (fun _ _ ↦ oneAction.length_runHistory_mono ())
     (fun _ _ ↦ oneAction.configSup_runHistory_mono () id) 5 rfl rfl (by decide) (by decide)
 
-example : ¬oneAction.ComputesIn () 1
+example : ¬oneAction.ComputesWithinCost () 1
     Controller.History.length (fun h ↦ h.configSup id) 0 1 := by
   intro h
-  have hh := (Controller.computesIn_unit_iff.mp h).1
+  have hh := (Controller.computesWithinCost_unit_iff.mp h).1
   contradiction
 
 -- Records that the budgets bound the history at every depth, also for a measurement that
 -- decreases along the run: this one is `1` on the empty history and `0` afterwards, so a space
 -- budget of `0` fails although the halting history measures `0`.
-example : ¬oneAction.ComputesIn () 1
+example : ¬oneAction.ComputesWithinCost () 1
     Controller.History.length (fun h ↦ if h.length = 0 then 1 else 0) 5 0 :=
-  fun h ↦ absurd (Controller.computesIn_space_le h 0) (by decide)
+  fun h ↦ absurd (Controller.computesWithinCost_space_le h 0) (by decide)
 
 -- The standard output type is inferred from the output instance.
 example : Controller.HasOutput.IsOutput (1 : ℕ) 1 := rfl

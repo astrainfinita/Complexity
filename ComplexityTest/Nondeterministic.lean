@@ -266,19 +266,19 @@ example : ¬∃ bs : Multiset Bool, malformed.toBinary.ComputesWith Multiset
       TM.hasOutput_isOutput] at he
     cases b <;> cases congrArg Array.size he
 
--- Guards that the budgets of `ComputesInWith` are monotone on `Multiset` by the order alone, for
--- every nondeterministic machine and every multiset of outputs.
+-- Guards that the budgets of `ComputesWithinCostWith` are monotone on `Multiset` by the order
+-- alone, for every nondeterministic machine and every multiset of outputs.
 example {κ Q : Type} [Fintype κ] (M : NTM κ (Option Bool) Q) (xs : List (Option Bool))
     (outs : Multiset (List (Option Bool))) {t s t' s' : ℕ}
-    (h : M.ComputesInWith Multiset xs outs History.length History.space t s) (ht : t ≤ t')
-    (hs : s ≤ s') : M.ComputesInWith Multiset xs outs History.length History.space t' s' :=
-  Controller.computesInWith_mono h ht hs
+    (h : M.ComputesWithinCostWith Multiset xs outs History.length History.space t s) (ht : t ≤ t')
+    (hs : s ≤ s') : M.ComputesWithinCostWith Multiset xs outs History.length History.space t' s' :=
+  Controller.computesWithinCostWith_mono h ht hs
 
 -- Guards that computing within budgets is, by definition, the budgets on every history together
 -- with computing the outputs.
 example {κ Q : Type} [Fintype κ] (M : NTM κ (Option Bool) Q) (xs : List (Option Bool))
     (outs : Multiset (List (Option Bool))) (t s : ℕ) :
-    M.ComputesInWith Multiset xs outs History.length History.space t s ↔
+    M.ComputesWithinCostWith Multiset xs outs History.length History.space t s ↔
       (∀ h ∈ M.histories Multiset xs, h.snd.length ≤ t ∧ h.snd.space ≤ s) ∧
         M.ComputesWith Multiset xs outs :=
   Iff.rfl
