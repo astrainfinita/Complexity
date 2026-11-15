@@ -60,6 +60,34 @@ example : (fun b : Bool => b = true) ∈ DTISP .tm (fun _ => 4) (fun _ => 0) :=
   DTISP.of_decides bit_spec.computableWithin.mem_fdtisp
     (fun _ => Iff.rfl)
 
+-- Guards that `.tm`, `.stack` and `.ntm`, stated as instances of `TimeSpaceModel.tmWith` and
+-- `TimeSpaceModel.stackWith`, keep by definition the behaviors they were written with: the
+-- deterministic specifications on `Id`, and on `Multiset` the outputs of all branches mapped.
+example : TimeSpaceModel.tm.behaviors =
+    {R | ∃ (κ : Type) (_ : Fintype κ) (Q : Type) (_ : Finite Q) (M : TM Id κ (Option Bool) Q),
+      R = fun xs result => M.ComputesWithin (xs.toList.map some) (result.run.toList.map some)} :=
+  rfl
+
+example : TimeSpaceModel.stack.behaviors =
+    {R | ∃ (κ : Type) (_ : Fintype κ) (Q : Type) (_ : Finite Q) (M : StackMachine Id κ Bool Q),
+      R = fun xs result ↦ M.ComputesWithin xs.toList result.run.toList} :=
+  rfl
+
+example : TimeSpaceModel.ntm.behaviors =
+    {R | ∃ (κ : Type) (_ : Fintype κ) (Q : Type) (_ : Finite Q) (M : NTM κ (Option Bool) Q),
+      R = fun (xs : RawWord Bool) ys =>
+        M.ComputesWithinWith Multiset (xs.toList.map some) (ys.map fun y ↦ y.toList.map some)} :=
+  rfl
+
+-- Guards that a behavior of `.tm` opened by hand, rather than through
+-- `TM.computableWithin_iff`, reaches the entries of the specification by dot notation: it is the
+-- general specification of the model at `Id`, to which `mono` and `exists_halted` are attached.
+example {f : Bool → Bool} {t s : Bool → ℕ} (h : TimeSpaceModel.tm.ComputableWithin f t s)
+    (r : RawWord Bool) (b : Bool) (hb : b ∈ decode Bool r) : True := by
+  obtain ⟨R, ⟨κ, hκ, Q, hQ, M, rfl⟩, h⟩ := h
+  obtain ⟨q, hq, hc⟩ := h b r hb
+  exact (hc.mono (Nat.le_succ _) le_rfl).exists_halted.elim fun _ _ ↦ trivial
+
 -- A halted tree machine already has the Boolean result in its input/output register.
 private def tree : TreeMachine Id 1 Unit where
   q₀ := ()

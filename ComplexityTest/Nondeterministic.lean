@@ -8,6 +8,7 @@ module
 import all Init.Data.List.Scan.Basic
 import Complexity.Classes.Nondeterministic.Basic
 import Complexity.Resources.Nondeterministic.Basic
+import Complexity.Resources.StackMachine.TuringMachine
 import Mathlib.Logic.Equiv.Bool
 import Complexity.Control.Controller.Binary
 meta import Complexity.Models.TuringMachine.Nondeterministic.Basic
@@ -124,6 +125,13 @@ example : (fun xs : List Bool => xs = xs) ∈ NTISP .ntm id (fun _ => 0) := by
 -- A space-only machine proof supplies its implicit time bound through the model bridge.
 example : ∃ t, TimeSpaceModel.ntm.NDecidableWithin (fun _ : List Bool => True) t (fun _ => 0) :=
   ⟨_, guess_spec.nDecidableWithin⟩
+
+-- Guards the two bridges between binary-choice Turing and stack machines: the decision of `guess`
+-- passes to `.nstack` with twice its space, and back to `.ntm`, keeping the time budget. The
+-- bridges are stated with budgets depending on the code; value budgets use them by definition.
+example : ∃ c, TimeSpaceModel.ntm.NDecidableWithin (fun _ : List Bool => True) (fun _ => 3)
+    (fun _ => c * (2 * 0 + 1)) :=
+  guess_spec.nDecidableWithin.toStack_of_ntm.toNTM
 
 -- The two branches visit [-1,0] and [0,1]: each uses two cells.
 def splitHeads : NTM (Fin 1) (Option Bool) Bool where
