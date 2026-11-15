@@ -58,7 +58,7 @@ theorem nDecidableWithinByCode_of_computable {t s : α → RawWord Bool → ℕ}
   obtain ⟨q, hq, hc⟩ := h a r ha
   obtain rfl := UniqueEncoding.mem_decode_iff.mp hq
   obtain ⟨bs, hc, hb⟩ := toBinary_decides hc
-  exact ⟨bs, by rwa [Multiset.map_map], hb.trans (hp a)⟩
+  exact ⟨bs, by rwa [Multiset.fmap_def, Multiset.map_map], hb.trans (hp a)⟩
 
 theorem nDecidableWithin_of_computable
     (h : TimeSpaceModel.tm.ComputableWithin f t s) (hp : Decides f p) :

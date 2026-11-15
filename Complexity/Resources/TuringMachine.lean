@@ -20,6 +20,10 @@ excludes the read-only input and append-only output.
 legal representations. Complexity classes measure actual code length at their boundary.
 Specifications require one fixed finite machine on all valid inputs. Time-only and
 space-only variants omit one bound, but still require termination.
+
+The model is stated once for every choice shape and interpretation, `TimeSpaceModel.tmWith`;
+`TimeSpaceModel.tm` is its deterministic instance, and `TimeSpaceModel.ntm` its instance with
+binary choices on `Multiset`.
 -/
 
 @[expose] public section
@@ -28,17 +32,25 @@ namespace Complexity.TM
 
 variable {α β : Type*} [Encoding (RawWord Bool) α] [Encoding (RawWord Bool) β]
 
-/-- Finite Turing machines on bit strings, with transition time and visited
-work-cell space. Each behavior is realized by one machine for all inputs. -/
-def _root_.Complexity.TimeSpaceModel.tm : TimeSpaceModel Id (RawWord Bool) where
+/-- Finite Turing machines on bit strings, with choices of shape `F` interpreted in `m`,
+transition time and visited work-cell space. Each behavior is realized by one machine for all
+inputs: on every history both measurements stay within budget, and at some step every result has
+halted with the corresponding output. -/
+def _root_.Complexity.TimeSpaceModel.tmWith (F : Type → Type*) (m : Type → Type*) [Monad m]
+    [MonadLiftT F m] [MonadReturns m] : TimeSpaceModel m (RawWord Bool) where
   inputSize := RawWord.length
   behaviors := {R | ∃ (κ : Type) (_ : Fintype κ) (Q : Type) (_ : Finite Q)
-      (M : TM Id κ (Option Bool) Q),
-      R = fun xs result =>
-        M.ComputesWithin (xs.toList.map some) (result.run.toList.map some)}
+      (M : TM F κ (Option Bool) Q), R = fun (xs : RawWord Bool) ys =>
+        M.ComputesWithinWith m (xs.toList.map some) ((fun y ↦ y.toList.map some) <$> ys)}
   budget_mono := by
     rintro R ⟨κ, hκ, Q, hQ, M, rfl⟩ x y t s t' s' h ht hs
     exact h.mono ht hs
+
+/-- Finite Turing machines on bit strings, with transition time and visited
+work-cell space. Each behavior is realized by one machine for all inputs. This is the
+deterministic instance of `TimeSpaceModel.tmWith`. -/
+def _root_.Complexity.TimeSpaceModel.tm : TimeSpaceModel Id (RawWord Bool) :=
+  TimeSpaceModel.tmWith Id Id
 
 section InputBudgets
 

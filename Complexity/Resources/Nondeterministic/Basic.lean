@@ -6,6 +6,7 @@ Authors: Yuyang Zhao
 module
 
 public import Complexity.Resources.TimeSpaceModel.Nondeterministic
+public import Complexity.Resources.TuringMachine
 public import Complexity.Encoding.RawWord
 public import Complexity.Models.TuringMachine.Nondeterministic.Basic
 
@@ -32,15 +33,10 @@ namespace Complexity.NTM
 
 /-- Finite binary-choice Turing machines, retaining all branch outputs and their
 multiplicities. Resource bounds cover every branch, including rejecting branches. The outputs are
-read at any step by which every branch has halted. -/
-def _root_.Complexity.TimeSpaceModel.ntm : TimeSpaceModel Multiset (RawWord Bool) where
-  inputSize := RawWord.length
-  behaviors := {R | ∃ (κ : Type) (_ : Fintype κ) (Q : Type) (_ : Finite Q)
-      (M : NTM κ (Option Bool) Q), R = fun (xs : RawWord Bool) ys =>
-        M.ComputesWithinWith Multiset (xs.toList.map some) (ys.map fun y ↦ y.toList.map some)}
-  budget_mono := by
-    rintro R ⟨κ, hκ, Q, hQ, M, rfl⟩ x y t s t' s' h ht hs
-    exact h.mono ht hs
+read at any step by which every branch has halted. This is the instance of
+`TimeSpaceModel.tmWith` with binary choices interpreted in `Multiset`. -/
+def _root_.Complexity.TimeSpaceModel.ntm : TimeSpaceModel Multiset (RawWord Bool) :=
+  TimeSpaceModel.tmWith BinaryChoice Multiset
 
 section InputBudgets
 
@@ -68,11 +64,11 @@ theorem nDecidableWithin_iff :
   · rintro ⟨R, ⟨κ, hκ, Q, hQ, M, rfl⟩, h⟩
     refine ⟨κ, hκ, Q, hQ, M, fun r a ha ↦ ?_⟩
     obtain ⟨bs, hc, hp⟩ := Encoding.NDecides.iff_of_uniqueOutput.1 h a r ha
-    exact ⟨bs, by rwa [Multiset.map_map] at hc, hp⟩
+    exact ⟨bs, by rwa [Multiset.fmap_def, Multiset.map_map] at hc, hp⟩
   · rintro ⟨κ, hκ, Q, hQ, M, h⟩
     refine ⟨_, ⟨κ, hκ, Q, hQ, M, rfl⟩, Encoding.NDecides.iff_of_uniqueOutput.2 fun a r ha ↦ ?_⟩
     obtain ⟨bs, hc, hp⟩ := h r a ha
-    exact ⟨bs, by rwa [Multiset.map_map], hp⟩
+    exact ⟨bs, by rwa [Multiset.fmap_def, Multiset.map_map], hp⟩
 
 theorem DecidesWithin.nDecidableWithin [Fintype κ] [Finite Q] (h : DecidesWithin M p t s) :
     TimeSpaceModel.ntm.NDecidableWithin p t s :=
