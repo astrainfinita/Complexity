@@ -13,14 +13,13 @@ public import Complexity.Models.TuringMachine.Nondeterministic.Basic
 # Resource bounds for nondeterministic decisions
 
 A single binary-choice machine handles every valid input code. The behaviours of the model are
-`Controller.ComputesWithinCostWith` on `Multiset`: every history of every branch obeys both budgets,
-and at some step every branch has halted; the outputs of all branches at that step, with their
-multiplicities, are the outputs of the behaviour. A decision asks every output to be the code of a
-Boolean, and a predicate holds exactly when some branch outputs `true`. On the machine,
-`NTM.DecidesWithin` is the Boolean special case: `ComputesWithinCostWith` to the codes of a multiset
-of Booleans `bs`, with `true ∈ bs` exactly when the predicate holds. Time and work-space bounds
-apply to every branch, not merely to an accepting witness. The space-only specification still
-requires termination.
+`TM.ComputesWithinWith` on `Multiset`: every history of every branch obeys both budgets, and at some
+step every branch has halted; the outputs of all branches at that step, with their multiplicities,
+are the outputs of the behaviour. A decision asks every output to be the code of a Boolean, and a
+predicate holds exactly when some branch outputs `true`. On the machine, `NTM.DecidesWithin` is the
+Boolean special case: `ComputesWithinWith` to the codes of a multiset of Booleans `bs`, with
+`true ∈ bs` exactly when the predicate holds. Time and work-space bounds apply to every branch, not
+merely to an accepting witness. The space-only specification still requires termination.
 
 Raw bit strings occupy `some b` input cells, and `none` is blank. Resource budgets depend
 on the decoded value and uniformly cover every representation of that value.
@@ -38,11 +37,10 @@ def _root_.Complexity.TimeSpaceModel.ntm : TimeSpaceModel Multiset (RawWord Bool
   inputSize := RawWord.length
   behaviors := {R | ∃ (κ : Type) (_ : Fintype κ) (Q : Type) (_ : Finite Q)
       (M : NTM κ (Option Bool) Q), R = fun (xs : RawWord Bool) ys =>
-        M.ComputesWithinCostWith Multiset (xs.toList.map some) (ys.map fun y ↦ y.toList.map some)
-          Controller.History.length Controller.History.space}
+        M.ComputesWithinWith Multiset (xs.toList.map some) (ys.map fun y ↦ y.toList.map some)}
   budget_mono := by
     rintro R ⟨κ, hκ, Q, hQ, M, rfl⟩ x y t s t' s' h ht hs
-    exact Controller.computesWithinCostWith_mono h ht hs
+    exact h.mono ht hs
 
 section InputBudgets
 
@@ -53,15 +51,14 @@ variable {α : Type*} [Encoding (RawWord Bool) α]
 value-indexed budgets, and `true` is among them exactly when `p` holds. -/
 def DecidesWithin [Fintype κ] (M : NTM κ (Option Bool) Q) (p : α → Prop) (t s : α → ℕ) : Prop :=
   ∀ (r : RawWord Bool) a, a ∈ decode α r → ∃ bs : Multiset Bool,
-    M.ComputesWithinCostWith Multiset (r.toList.map some) (bs.map fun b ↦ ⌜b⌝₂.toList.map some)
-      Controller.History.length Controller.History.space (t a) (s a) ∧ (true ∈ bs ↔ p a)
+    M.ComputesWithinWith Multiset (r.toList.map some) (bs.map fun b ↦ ⌜b⌝₂.toList.map some)
+      (t a) (s a) ∧ (true ∈ bs ↔ p a)
 
 theorem DecidesWithin.mono [Fintype κ]
     (h : DecidesWithin M p t s) {t' s' : α → ℕ}
     (ht : ∀ a, t a ≤ t' a) (hs : ∀ a, s a ≤ s' a) :
     DecidesWithin M p t' s' :=
-  fun r a ha ↦ (h r a ha).imp fun _ ↦
-    .imp_left (Controller.computesWithinCostWith_mono · (ht a) (hs a))
+  fun r a ha ↦ (h r a ha).imp fun _ ↦ .imp_left (·.mono (ht a) (hs a))
 
 theorem nDecidableWithin_iff :
     TimeSpaceModel.ntm.NDecidableWithin p t s ↔

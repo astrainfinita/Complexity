@@ -29,9 +29,8 @@ variable {α : Type*} [Encoding (RawWord Bool) α]
 private theorem toBinary_decides {κ Q : Type} [Fintype κ] {M : TM Id κ (Option Bool) Q}
     {src : RawWord Bool} {output : Bool} {t s : ℕ}
     (h : M.ComputesWithin (src.toList.map some) (⌜output⌝₂.toList.map some) t s) :
-    ∃ bs : Multiset Bool, M.toBinary.ComputesWithinCostWith Multiset (src.toList.map some)
-      (bs.map fun b ↦ ⌜b⌝₂.toList.map some) Controller.History.length Controller.History.space
-        t s ∧ (true ∈ bs ↔ output = true) := by
+    ∃ bs : Multiset Bool, ComputesWithinWith Multiset M.toBinary (src.toList.map some)
+      (bs.map fun b ↦ ⌜b⌝₂.toList.map some) t s ∧ (true ∈ bs ↔ output = true) := by
   obtain ⟨hhalt, hout⟩ := h.run_spec
   refine ⟨(M.toBinary.runWith Multiset (src.toList.map some) t).map fun _ ↦ output,
     ⟨(M.forall_mem_histories_toBinary_iff (src.toList.map some)).2 fun n ↦

@@ -11,7 +11,13 @@ public import Mathlib.Algebra.Order.BigOperators.Group.Finset
 /-!
 # Transition time and peak work-stack space
 
-In the specification `ComputesWithin` the parameters `κ`, `Γ` and `Q` share one universe, because
+`ComputesWithinWith` is the specification of this model for every choice shape and every
+interpretation: `Controller.ComputesWithinCostWith` with the number of transitions as time and the
+peak total work-stack length as space. The deterministic `ComputesWithin` is its instance on `Id`.
+Build that one with `ComputesWithinWith.of_halted` and take it apart with
+`ComputesWithinWith.exists_halted`; both are attached to the general specification, so dot notation
+finds them on a `ComputesWithin` and also on a `ComputesWithinWith Id` that was not stated through
+it. In the specifications the parameters `κ`, `Γ` and `Q` share one universe, because
 `Controller.ComputesWithinCostWith` keeps outputs in the universe of the results; this is a current
 limitation, not a decision.
 -/
@@ -52,19 +58,41 @@ end Mass
 
 variable {κ Γ Q : Type u} [Fintype κ]
 
+/-- Compute in the interpretation `m` with transitions as time and the peak total work-stack
+length as space: every history of the run stays within both budgets, and at some step every result
+has halted with the corresponding output. -/
+def ComputesWithinWith {F : Type u → Type*} (m : Type u → Type*) [Monad m] [MonadLiftT F m]
+    [MonadReturns m] (M : StackMachine F κ Γ Q) (xs : List Γ) (outs : m (List Γ))
+    (t s : ℕ) : Prop :=
+  M.ComputesWithinCostWith m xs outs Controller.History.length (fun h ↦ h.configSup Cfg.mass) t s
+
+/-- Enlarging budgets keeps the same outputs. -/
+theorem ComputesWithinWith.mono {F : Type u → Type*} {m : Type u → Type*} [Monad m]
+    [MonadLiftT F m] [MonadReturns m] {M : StackMachine F κ Γ Q} {xs : List Γ}
+    {outs : m (List Γ)} {t s t' s' : ℕ} (h : M.ComputesWithinWith m xs outs t s)
+    (ht : t ≤ t') (hs : s ≤ s') : M.ComputesWithinWith m xs outs t' s' :=
+  Controller.computesWithinCostWith_mono h ht hs
+
 /-- The run halts with the output, and its transitions and peak total work-stack length stay
 within budget at every depth. -/
 def ComputesWithin (M : StackMachine Id κ Γ Q) (xs ys : List Γ) (t s : ℕ) : Prop :=
-  M.ComputesWithinCost xs ys Controller.History.length (fun h ↦ h.configSup Cfg.mass) t s
+  M.ComputesWithinWith Id xs (pure ys) t s
 
 /-- Bounds at a halting step are enough: length and the peak work-stack mass grow along the run. -/
-theorem ComputesWithin.of_halted {M : StackMachine Id κ Γ Q} {xs ys : List Γ} {t s : ℕ} (n : ℕ)
-    (hh : M.Halted (M.run xs n)) (ho : (M.run xs n).2.output = ys.toArray)
+theorem ComputesWithinWith.of_halted {M : StackMachine Id κ Γ Q} {xs ys : List Γ} {t s : ℕ}
+    (n : ℕ) (hh : M.Halted (M.run xs n)) (ho : (M.run xs n).2.output = ys.toArray)
     (ht : (M.runHistory xs n).snd.length ≤ t)
     (hs : (M.runHistory xs n).snd.configSup Cfg.mass ≤ s) :
-    M.ComputesWithin xs ys t s :=
+    M.ComputesWithinWith Id xs (pure ys) t s :=
   Controller.ComputesWithinCost.of_halted (fun _ _ ↦ M.length_runHistory_mono _)
     (fun _ _ ↦ M.configSup_runHistory_mono _ _) n hh ho ht hs
+
+/-- The halting step of a computation, with the output and both measurements within budget. -/
+theorem ComputesWithinWith.exists_halted {M : StackMachine Id κ Γ Q} {xs ys : List Γ} {t s : ℕ}
+    (h : M.ComputesWithinWith Id xs (pure ys) t s) :
+    ∃ n, M.Halted (M.run xs n) ∧ (M.run xs n).2.output = ys.toArray ∧
+      (M.runHistory xs n).snd.length ≤ t ∧ (M.runHistory xs n).snd.configSup Cfg.mass ≤ s :=
+  Controller.ComputesWithinCost.exists_halted h
 
 /-- Initially empty work stacks grow by at most one symbol per stack per transition. -/
 theorem ComputesWithin.of_run {M : StackMachine Id κ Γ Q}
@@ -89,10 +117,5 @@ theorem ComputesWithin.space_of_time {M : StackMachine Id κ Γ Q}
     {xs ys : List Γ} {t s : ℕ} (h : M.ComputesWithin xs ys t s) :
     M.ComputesWithin xs ys t (Fintype.card κ * t) :=
   .of_run h.run_spec.1 h.run_spec.2 le_rfl
-
-theorem ComputesWithin.mono {M : StackMachine Id κ Γ Q}
-    {xs ys : List Γ} {t s t' s' : ℕ} (h : M.ComputesWithin xs ys t s)
-    (ht : t ≤ t') (hs : s ≤ s') : M.ComputesWithin xs ys t' s' :=
-  Controller.computesWithinCost_mono h ht hs
 
 end Complexity.StackMachine

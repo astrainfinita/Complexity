@@ -9,7 +9,16 @@ public import Complexity.Models.TuringMachine.Basic
 public import Complexity.Models.TuringMachine.History
 public import Complexity.Control.Controller.Cost
 
-/-! # Time and visited-cell space of Turing-machine histories -/
+/-!
+# Time and visited-cell space of Turing-machine histories
+
+`ComputesWithinWith` is the specification of this model for every choice shape and every
+interpretation: `Controller.ComputesWithinCostWith` with the number of transitions as time and the
+visited work cells as space. The deterministic `ComputesWithin` is its instance on `Id`. The
+parameters `κ`, `Γ` and `Q` of the specification share one universe, because
+`Controller.ComputesWithinCostWith` keeps outputs in the universe of the results; this is a current
+limitation, not a decision.
+-/
 
 @[expose] public section
 
@@ -36,5 +45,26 @@ theorem runHistoryFrom_visited_le_iff (M : TM Id κ Γ Q) (c : Q × Cfg κ Γ xs
   simp only [History.visited_apply_le_iff, History.configs_snd, List.mem_map,
     Controller.mem_configs_runHistoryFrom, forall_exists_index, and_imp,
     forall_apply_eq_imp_iff₂]
+
+section ComputesWithinWith
+
+universe u
+
+/-- Compute in the interpretation `m` with unit action time and visited-cell space: every history
+of the run stays within both budgets, and at some step every result has halted with the
+corresponding output. -/
+def ComputesWithinWith {F : Type u → Type*} {κ Γ Q : Type u} [Inhabited Γ] [Fintype κ]
+    (m : Type u → Type*) [Monad m] [MonadLiftT F m] [MonadReturns m] (M : TM F κ Γ Q)
+    (xs : List Γ) (outs : m (List Γ)) (t s : ℕ) : Prop :=
+  M.ComputesWithinCostWith m xs outs History.length History.space t s
+
+/-- Enlarging budgets keeps the same outputs. -/
+theorem ComputesWithinWith.mono {F : Type u → Type*} {κ Γ Q : Type u} [Inhabited Γ] [Fintype κ]
+    {m : Type u → Type*} [Monad m] [MonadLiftT F m] [MonadReturns m] {M : TM F κ Γ Q}
+    {xs : List Γ} {outs : m (List Γ)} {t s t' s' : ℕ} (h : M.ComputesWithinWith m xs outs t s)
+    (ht : t ≤ t') (hs : s ≤ s') : M.ComputesWithinWith m xs outs t' s' :=
+  Controller.computesWithinCostWith_mono h ht hs
+
+end ComputesWithinWith
 
 end Complexity.TM

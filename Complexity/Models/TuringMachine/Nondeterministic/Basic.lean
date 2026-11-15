@@ -26,11 +26,11 @@ a step at which every branch has halted, `Controller.length_le_of_forall_halted`
 `Controller.forall_mem_histories` proves a step invariant. Each history bounds its space by its
 length, `History.space_le_length`, so a time bound also bounds space.
 
-What a machine computes is stated with the general `Controller.ComputesWithinCostWith` as well:
-`M.ComputesWithinCostWith Multiset xs outputs History.length History.space t s` is the bound above
-together with a step at which every branch has halted and `outputs : Multiset (List Γ)` are the
-outputs of all branches, with their multiplicities. Output interpretations, such as Boolean
-decisions, belong to the resource interface; the machine itself produces lists of symbols.
+What a machine computes is stated with the general specification of the model,
+`TM.ComputesWithinWith`: `M.ComputesWithinWith Multiset xs outputs t s` is the bound above together
+with a step at which every branch has halted and `outputs : Multiset (List Γ)` are the outputs of
+all branches, with their multiplicities. Output interpretations, such as Boolean decisions, belong
+to the resource interface; the machine itself produces lists of symbols.
 -/
 
 @[expose] public section

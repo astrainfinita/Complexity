@@ -18,7 +18,7 @@ The current symbols belong to finite control. Each tape's left and right sides u
 synchronized Boolean stacks, encoding a blank flag and a data bit. One tape transition is
 one stack transition; the total stack length is bounded by twice the visited tape space.
 The correspondence of histories (`Stack.HistRep`) holds for every choice shape and every
-interpretation of the choices, and carries computations along (`ComputesWithinCostWith.toStack`).
+interpretation of the choices, and carries computations along (`ComputesWithinWith.toStack`).
 -/
 
 @[expose] public section
@@ -278,14 +278,11 @@ theorem liftRel_runHistoryWith_toStack {F : Type → Type*} [Functor F] (m : Typ
 /-- Boolean-stack simulation passes a computation along, for every choice shape and every
 interpretation: it preserves time and bounds the peak stack mass by twice the visited tape space.
 On `Multiset` the outputs of the branches correspond with their multiplicities. -/
-theorem _root_.Complexity.Controller.ComputesWithinCostWith.toStack [Fintype κ] {F : Type → Type*}
-    [Functor F] {m : Type → Type*} [Monad m] [LawfulMonad m] [MonadLiftT F m]
-    [LawfulFunctorLiftT F m] [MonadReturns m] {M : TM F κ (Option Bool) Q} {outs : m (List Bool)}
-    {t s : ℕ}
-    (h : M.ComputesWithinCostWith m (xs.map some) ((·.map some) <$> outs) Controller.History.length
-      Controller.History.space t s) :
-    M.toStack.ComputesWithinCostWith m xs outs Controller.History.length
-      (fun h ↦ h.configSup StackMachine.Cfg.mass) t (2 * s) := by
+theorem ComputesWithinWith.toStack [Fintype κ] {F : Type → Type*} [Functor F]
+    {m : Type → Type*} [Monad m] [LawfulMonad m] [MonadLiftT F m] [LawfulFunctorLiftT F m]
+    [MonadReturns m] {M : TM F κ (Option Bool) Q} {outs : m (List Bool)} {t s : ℕ}
+    (h : M.ComputesWithinWith m (xs.map some) ((·.map some) <$> outs) t s) :
+    M.toStack.ComputesWithinWith m xs outs t (2 * s) := by
   rw [← show (·.filterMap id) <$> (·.map some) <$> outs = outs by simp [Functor.map_map]]
   exact h.of_liftRel (liftRel_runHistoryWith_toStack m M xs) (fun c ↦ c.2.output.toList)
     (fun _ _ _ ↦ by simp_all)
@@ -299,6 +296,6 @@ theorem ComputesWithin.toStack [Fintype κ] {M : TM Id κ (Option Bool) Q}
     {xs ys : List Bool} {t s : ℕ}
     (h : M.ComputesWithin (xs.map some) (ys.map some) t s) :
     M.toStack.ComputesWithin xs ys t (2 * s) :=
-  Controller.ComputesWithinCostWith.toStack h
+  ComputesWithinWith.toStack h
 
 end Complexity.TM

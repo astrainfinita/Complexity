@@ -12,10 +12,14 @@ public import Complexity.Models.TuringMachine.Cost
 
 These definitions specialize the choice shape to `Id`. Space counts visited work cells,
 including the initial head positions and blank cells, and excludes input and output.
-`ComputesWithin` bounds length and space at every depth of the run, including the halted padding;
-both grow along the run, so the bounds at a halting step are enough (`ComputesWithin.of_halted`).
-The parameters `κ`, `Γ` and `Q` share one universe, because `Controller.ComputesWithinCostWith`
-keeps outputs in the universe of the results; this is a current limitation, not a decision.
+`ComputesWithin` is `ComputesWithinWith` on `Id`: it bounds length and space at every depth of the
+run, including the halted padding; both grow along the run, so the bounds at a halting step are
+enough. Build it with `ComputesWithinWith.of_halted` and take it apart with
+`ComputesWithinWith.exists_halted`. Both are attached to the general specification, so dot
+notation finds them on a `ComputesWithin` and also on a `ComputesWithinWith Id` that was not stated
+through it. The parameters `κ`, `Γ` and `Q` share one universe, because
+`Controller.ComputesWithinCostWith` keeps outputs in the universe of the results; this is a current
+limitation, not a decision.
 -/
 
 @[expose] public section
@@ -30,21 +34,22 @@ variable {κ Γ Q : Type u} [Inhabited Γ] {xs : Array Γ}
 measurements stay within budget at every depth. -/
 def ComputesWithin [Fintype κ] (M : TM Id κ Γ Q) (xs ys : List Γ)
     (t s : ℕ) : Prop :=
-  M.ComputesWithinCost xs ys Controller.History.length Controller.History.space t s
+  M.ComputesWithinWith Id xs (pure ys) t s
 
 /-- Bounds at a halting step are enough: length and visited space grow along the run. -/
-theorem ComputesWithin.of_halted [Fintype κ] {M : TM Id κ Γ Q} {xs ys : List Γ} {t s : ℕ} (n : ℕ)
-    (hh : M.Halted (M.run xs n)) (ho : (M.run xs n).2.output = ys.toArray)
+theorem ComputesWithinWith.of_halted [Fintype κ] {M : TM Id κ Γ Q} {xs ys : List Γ} {t s : ℕ}
+    (n : ℕ) (hh : M.Halted (M.run xs n)) (ho : (M.run xs n).2.output = ys.toArray)
     (ht : (M.runHistory xs n).snd.length ≤ t) (hs : (M.runHistory xs n).snd.space ≤ s) :
-    M.ComputesWithin xs ys t s :=
+    M.ComputesWithinWith Id xs (pure ys) t s :=
   Controller.ComputesWithinCost.of_halted (fun _ _ ↦ M.length_runHistory_mono _)
     (M.runHistoryFrom_space_mono _) n hh ho ht hs
 
-theorem ComputesWithin.mono [Fintype κ] {M : TM Id κ Γ Q}
-    {xs ys : List Γ} {t s t' s' : ℕ}
-    (h : M.ComputesWithin xs ys t s) (ht : t ≤ t') (hs : s ≤ s') :
-    M.ComputesWithin xs ys t' s' :=
-  Controller.computesWithinCost_mono h ht hs
+/-- The halting step of a computation, with the output and both measurements within budget. -/
+theorem ComputesWithinWith.exists_halted [Fintype κ] {M : TM Id κ Γ Q} {xs ys : List Γ}
+    {t s : ℕ} (h : M.ComputesWithinWith Id xs (pure ys) t s) :
+    ∃ n, M.Halted (M.run xs n) ∧ (M.run xs n).2.output = ys.toArray ∧
+      (M.runHistory xs n).snd.length ≤ t ∧ (M.runHistory xs n).snd.space ≤ s :=
+  Controller.ComputesWithinCost.exists_halted h
 
 /-- Unit-time computation visits at most one new cell per tape per transition. -/
 theorem ComputesWithin.space_of_time [Fintype κ] {M : TM Id κ Γ Q}
