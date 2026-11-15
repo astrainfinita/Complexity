@@ -314,9 +314,21 @@ private def sourceQuery (search : Lean.Expr → FunPropM (Option Result))
   return result.map (·.proof)
 
 open Lean Meta in
+/-- The bound `T` of a growth property `IsO(T)`, matched up to reducible definitions; a bound left
+as a placeholder, as in `IsO(_)`, becomes a metavariable. -/
+private def growthBound? (property : Lean.Expr) : MetaM (Option Lean.Expr) := do
+  if (← instantiateMVars property).isMVar then return none
+  let growthType := (← whnf (← inferType property)).bindingDomain!
+  let bound ← mkFreshExprMVar growthType
+  let bigO ← withLocalDeclD `t growthType fun t => do
+    mkLambdaFVars #[t] (← mkAppM ``Dominated #[t, bound])
+  unless ← withReducible (isDefEq property bigO) do return none
+  return some (← instantiateMVars bound)
+
+open Lean Meta in
 /-- The form the translation composes of an implementation `h`: itself, or for `HasProgramIn` the
-same program within `IsO(time)` and `IsO(peak)` with these growths, and under other growth
-properties with the growths of its chosen budgets. -/
+same program, each growth being the stated `T` under `IsO(T)` and that of the chosen budgets under
+another growth property. -/
 private def composedProgram? (h : Lean.Expr) : MetaM (Option Lean.Expr) := do
   let type := (← instantiateMVars (← inferType h)).consumeMData
   if type.isAppOfArity ``HasProgramInO 8 then return some h
@@ -324,25 +336,86 @@ private def composedProgram? (h : Lean.Expr) : MetaM (Option Lean.Expr) := do
   -- The arguments are read off the statement, so no instance is synthesized again.
   let levels := type.getAppFn.constLevels!
   let args := type.getAppArgs
-  let bound? (e : Lean.Expr) : Option Lean.Expr := match e.consumeMData with
-    | .lam _ _ body _ =>
-      if body.isAppOf ``Dominated && body.getAppNumArgs ≥ 2 && body.appFn!.appArg! == .bvar 0 &&
-        !body.appArg!.hasLooseBVars then some body.appArg! else none
-    | _ => none
-  if let (some t, some p) := (bound? args[6]!, bound? args[7]!) then
+  let ofImplementation (name : Name) := mkAppN (mkConst name levels) (args ++ #[h])
+  match ← growthBound? args[6]!, ← growthBound? args[7]! with
+  | some t, some p =>
     return some (mkAppN (mkConst ``HasProgramInO.mk levels) (args.extract 0 6 ++ #[t, p, h]))
-  return some (mkAppN (mkConst ``HasProgramIn.hasProgramInO levels) (args ++ #[h]))
+  | none, none => return some (ofImplementation ``HasProgramIn.hasProgramInO)
+  | time?, peak? =>
+    -- The chosen growth is weakened to a stated one by its specification.
+    let component (bound? : Option Lean.Expr) (chosen : Lean.Expr) (spec : Name) :
+        MetaM (Lean.Expr × Lean.Expr) := do
+      match bound? with
+      | some bound => return (bound, ofImplementation spec)
+      | none => return (chosen, ← mkAppM ``Dominated.refl #[chosen])
+    let time := ofImplementation ``HasProgramIn.time
+    let peak := ofImplementation ``HasProgramIn.peak
+    let (t, ht) ← component time? time ``HasProgramIn.time_spec
+    let (p, hp) ← component peak? peak ``HasProgramIn.peak_spec
+    return some (mkAppN (mkConst ``HasProgramInO.mono levels) (args.extract 0 6 ++
+      #[time, peak, ofImplementation ``HasProgramIn.hasProgramInO, t, p, ht, hp]))
 
-open Lean in
-/-- The rule turning a `HasProgramIn` target into the form the translation composes: within
-`IsO(time)` and `IsO(peak)` with these growths, otherwise for growths polynomial in a measure. -/
-private def programInRule (target : Lean.Expr) : Name :=
-  let isBigO (e : Lean.Expr) : Bool := match e.consumeMData with
-    | .lam _ _ body _ => body.isAppOf ``Dominated
-    | _ => false
-  let args := target.consumeMData.getAppArgs
-  if args.size == 8 && isBigO args[6]! && isBigO args[7]! then ``HasProgramInO.toHasProgramIn
-  else ``HasProgramInO.hasProgramIn
+open Lean Meta in
+/-- `fun t h => proof h`, showing that every growth `t` dominated by `growth` has a property. -/
+private def forallDominated (growth : Lean.Expr) (proof : Lean.Expr → MetaM Lean.Expr) :
+    MetaM Lean.Expr := do
+  withLocalDeclD `t (← inferType growth) fun t => do
+    withLocalDeclD `h (← mkAppM ``Dominated #[t, growth]) fun h => do
+      mkLambdaFVars #[t, h] (← proof h)
+
+open Lean Meta in
+/-- One growth property `T` of a `HasProgramIn` goal, read by its shape. Returns the growth `t`
+asked of the implementation, the proof of `∀ t', Dominated t' t → T t'` that
+`HasProgramInO.hasProgramIn_of_forall_dominated` takes, and the goals left:
+
+* `IsO(B)`: `t` is `B` and the proof is `fun _ h => h`, so the translation compares its growth
+  with `B`;
+* `IsPoly s`: `t` is left to the translation and the proof is
+  `fun _ h => IsPoly.of_dominated ?poly h`, where `?poly : IsPoly s t` is the goal left, tagged
+  `tag`;
+* `fun _ => True`: `t` is left to the translation and the proof is `fun _ _ => trivial`.
+
+Reducible definitions are unfolded. A property left open is rejected: choosing one would decide
+the statement for the user. The supported shapes are listed here by hand, which is the current
+state, not a decision (W73). -/
+private def growthComponent (growthType property : Lean.Expr) (tag : Name) :
+    MetaM (Lean.Expr × Lean.Expr × List MVarId) := do
+  if (← instantiateMVars property).isMVar then
+    throwError "source translation: the {tag} growth property is left open; write `IsO(_)` to \
+      have the translated growth filled in"
+  if let some bound ← growthBound? property then
+    return (bound, ← forallDominated bound pure, [])
+  let growth ← mkFreshExprMVar growthType
+  let shape := (← whnfR property).consumeMData.eta
+  if shape.isAppOfArity ``IsPoly 2 then
+    let poly ← mkFreshExprSyntheticOpaqueMVar (← mkAppM ``IsPoly #[shape.appArg!, growth]) tag
+    return (growth, ← forallDominated growth (mkAppM ``IsPoly.of_dominated #[poly, ·]),
+      [poly.mvarId!])
+  if let .lam _ _ (.const ``True _) _ := shape then
+    return (growth, ← forallDominated growth fun _ => pure (mkConst ``True.intro), [])
+  throwError "source translation: unsupported {tag} growth property `{property}`; expected \
+    `IsO(T)`, `IsPoly s` or `fun _ => True`, also through reducible definitions"
+
+open Lean Meta in
+/-- Reduce a `HasProgramIn` goal to the form the translation composes: the goal is assigned
+`HasProgramInO.hasProgramIn_of_forall_dominated ?implementation ht hp`, where `growthComponent`
+gives, for the time and for the peak property, the growth asked of `?implementation` and the
+proofs `ht`, `hp`. The term is assembled here and not by `refine`: the program of the goal may be
+a hole being filled, which `refine` rejects, and the goals left carry the tags `time` and `peak`.
+Returns the implementation goal followed by the polynomial goals. -/
+private def programInGoals (goal : MVarId) : MetaM (List MVarId) := goal.withContext do
+  let target := (← instantiateMVars (← goal.getType)).consumeMData
+  -- The arguments are read off the statement, as in `composedProgram?`.
+  let levels := target.getAppFn.constLevels!
+  let args := target.getAppArgs
+  let growthType ← mkArrow args[0]! (mkConst ``Nat)
+  let (t, ht, timeGoals) ← growthComponent growthType args[6]! `time
+  let (p, hp, peakGoals) ← growthComponent growthType args[7]! `peak
+  let implementation ← mkFreshExprSyntheticOpaqueMVar
+    (mkAppN (mkConst ``HasProgramInO levels) (args.extract 0 6 ++ #[t, p])) `implementation
+  goal.assign (mkAppN (mkConst ``HasProgramInO.hasProgramIn_of_forall_dominated levels)
+    (args.extract 0 6 ++ #[t, p, args[6]!, args[7]!, implementation, ht, hp]))
+  return implementation.mvarId! :: timeGoals ++ peakGoals
 
 open Lean Meta Mathlib.Meta.FunProp in
 private def localSourceCertificate (goal : Lean.Expr) : FunPropM (Option Result) := do
@@ -981,6 +1054,17 @@ def dischargeGrowth (disch : Option (TSyntax ``Lean.Parser.Tactic.discharger))
     saved.restore
     return [goal]
 
+open Lean Meta in
+/-- Put the goal tagged `time` before the one tagged `peak`: a comparison left by the translation
+would otherwise precede a polynomial goal of the other growth. -/
+private def timeBeforePeak (goals : List MVarId) : MetaM (List MVarId) := do
+  let tagged (tag : Name) (goal : MVarId) : MetaM Bool :=
+    return (← goal.getTag).eraseMacroScopes == tag
+  let some peak ← goals.findM? (tagged `peak) | return goals
+  let (before, after) := goals.span (· != peak)
+  let some time ← after.findM? (tagged `time) | return goals
+  return before ++ time :: after.erase time
+
 open Lean Meta Elab Tactic in
 /-- Translate a source function and reduce its model time-space bound to arithmetic goals. -/
 private def modelFunPropCore (disch : Option (TSyntax ``Lean.Parser.Tactic.discharger))
@@ -1008,9 +1092,7 @@ private def modelFunPropCore (disch : Option (TSyntax ``Lean.Parser.Tactic.disch
       pure (do let t ← t; let s ← s; if s > 0 then some (t, s) else none)
     else pure none
   if program then
-    -- Unified with the target first: the output encodings may depend on the input. Growths within
-    -- `IsO(time)` and `IsO(peak)` are those of the translation; others are polynomial ones.
-    evalTactic (← `(tactic| apply $(mkCIdent (programInRule target))))
+    replaceMainGoal (← programInGoals (← getMainGoal))
   else if machine then
     evalTactic (← `(tactic| refine HasProgramInO.computableIn_of_dominated
       (program := ?program) (hf := ?implementation) (t := ?time_bound) (p := ?peak_bound)
@@ -1034,7 +1116,8 @@ private def modelFunPropCore (disch : Option (TSyntax ``Lean.Parser.Tactic.disch
   setGoals [implementation]
   let obligations ← translate
   let remaining ← (pending.erase implementation).filterM fun g => return !(← g.isAssigned)
-  setGoals ((← dischargeGrowth disch (obligations ++ remaining)) ++ originalGoals.drop 1)
+  let left ← timeBeforePeak (← dischargeGrowth disch (obligations ++ remaining))
+  setGoals (left ++ originalGoals.drop 1)
 
 open Lean Elab Tactic in
 def modelFunProp (disch : Option (TSyntax ``Lean.Parser.Tactic.discharger))

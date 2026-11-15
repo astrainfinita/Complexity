@@ -339,4 +339,13 @@ theorem Internal.HasProgramInO.hasProgramIn {α : Type*} {β : α → Type*} [Un
   let ⟨b, hb, hbt, hbp⟩ := hf
   ⟨b, hb, ht.of_dominated hbt, hp.of_dominated hbp⟩
 
+/-- A program within `O(t)` and `O(p)` meets growth properties holding of every growth dominated by
+`t` and by `p`, such as `IsO(t)`, `IsPoly s` for `t` polynomial in `s`, or `fun _ => True`. -/
+theorem Internal.HasProgramInO.hasProgramIn_of_forall_dominated {α : Type*} {β : α → Type*}
+    [UniqueEncoding Tree α] [∀ x, UniqueEncoding Tree (β x)] {f : (x : α) → β x}
+    {program : Value → Code Value} {t p : α → ℕ} {T P : (α → ℕ) → Prop}
+    (hf : HasProgramInO f program t p) (ht : ∀ t', Dominated t' t → T t')
+    (hp : ∀ p', Dominated p' p → P p') : HasProgramIn f program T P :=
+  hf.toHasProgramIn.mono ht hp
+
 end Complexity.TreeProgram.Source
