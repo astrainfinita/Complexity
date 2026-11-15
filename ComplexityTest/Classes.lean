@@ -22,8 +22,8 @@ private def bit : TM Id (Fin 0) (Option Bool) Bool where
 private theorem bit_spec : TM.Computes bit (id : Bool → Bool) (fun _ => 4) (fun _ => 0) := by
   apply Encoding.Computes.iff_of_uniqueEncoding.mpr
   intro b
-  cases b <;> apply Controller.computesWith_unit_iff.mpr <;>
-    exact ⟨rfl, rfl, by simp [Controller.History.space]⟩
+  cases b <;> apply Controller.computesIn_unit_iff.mpr <;>
+    exact ⟨rfl, rfl, fun _ ↦ by simp [Controller.History.space]⟩
 
 private theorem bit_fp : (id : Bool → Bool) ∈ FP .tm := by
   exact FP.of_time_le (FDTISP.subset_time (bit_spec.computableWithin.mem_fdtisp (T := fun _ => 4) (S := fun _ => 0)))
@@ -70,7 +70,7 @@ private theorem tree_spec :
     TreeMachine.Computes tree (id : Bool → Bool) (fun _ => 0) (fun b => (encode Tree b).size) := by
   apply Encoding.Computes.iff_of_uniqueEncoding.mpr
   intro b
-  refine ⟨0, rfl, ?_, le_rfl, ?_⟩
+  refine .of_halted 0 rfl ?_ le_rfl ?_
   · exact TreeMachine.input_get (0 : Fin 1) _
   · simp [TreeMachine.Cfg.mass]
 

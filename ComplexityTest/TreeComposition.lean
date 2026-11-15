@@ -108,11 +108,11 @@ def narrower := dirty.comp (needsClean 2)
   Action.sizeCost = 1
 
 private theorem dirty_computes : dirty.ComputesWithin a (.pair a a) 21 21 := by
-  refine ⟨3, rfl, rfl, ?_, ?_⟩ <;> decide
+  refine .of_halted 3 rfl rfl ?_ ?_ <;> decide
 
 private theorem needsClean_computes :
     (needsClean 4).ComputesWithin (.pair a a) a 7 10 := by
-  refine ⟨1, rfl, rfl, ?_, ?_⟩ <;> decide
+  refine .of_halted 1 rfl rfl ?_ ?_ <;> decide
 
 -- The public composition bound agrees with the concrete execution above.
 example : wider.ComputesWithin a a 32 23 :=
@@ -132,7 +132,7 @@ private theorem halted_growth :
   refine ⟨fun _ => 0, fun _ => 3, ?_, Dominated.refl _, Dominated.const 3⟩
   intro x r hx
   obtain ⟨hr, rfl⟩ := hx
-  refine ⟨r, ⟨hr, rfl⟩, 0, rfl, input_get (0 : Fin 1) r, le_rfl, ?_⟩
+  refine ⟨r, ⟨hr, rfl⟩, .of_halted 0 rfl (input_get (0 : Fin 1) r) le_rfl ?_⟩
   rcases hr with rfl | rfl <;> decide
 
 -- Zero component time leaves the genuine clearing cost in the fixed composite;
