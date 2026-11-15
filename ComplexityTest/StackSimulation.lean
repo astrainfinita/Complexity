@@ -114,10 +114,8 @@ example (M : NTM Unit (Option Bool) (Fin 3)) (xs : List Bool) (n : ℕ) :
 -- machine on `Multiset`, with the source outputs written as `.ntm` writes them.
 example {κ Q : Type} [Fintype κ] (M : NTM κ (Option Bool) Q) (xs : List Bool)
     (outs : Multiset (List Bool)) (t s : ℕ)
-    (h : M.ComputesWithinCostWith Multiset (xs.map some) (outs.map (·.map some))
-      Controller.History.length Controller.History.space t s) :
-    M.toStack.ComputesWithinCostWith Multiset xs outs Controller.History.length
-      (fun h ↦ h.configSup StackMachine.Cfg.mass) t (2 * s) :=
+    (h : M.ComputesWithinWith Multiset (xs.map some) (outs.map (·.map some)) t s) :
+    M.toStack.ComputesWithinWith Multiset xs outs t (2 * s) :=
   h.toStack
 
 -- A machine that never halts, so it computes nothing.
@@ -163,10 +161,9 @@ private def tmGuessOutputs (n : ℕ) : Multiset (List Bool) :=
 -- machine on `Multiset`.
 example {κ Q : Type} [Fintype κ] (M : StackMachine BinaryChoice κ Bool Q) (xs : List Bool)
     (outs : Multiset (List Bool)) (t s : ℕ)
-    (h : M.ComputesWithinCostWith Multiset xs outs Controller.History.length
-      (fun h ↦ h.configSup StackMachine.Cfg.mass) t s) :
-    M.toTM.ComputesWithinCostWith Multiset (xs.map some) (outs.map (·.map some))
-      Controller.History.length Controller.History.space t (Fintype.card κ * (s + 1)) :=
+    (h : M.ComputesWithinWith Multiset xs outs t s) :
+    M.toTM.ComputesWithinWith Multiset (xs.map some) (outs.map (·.map some)) t
+      (Fintype.card κ * (s + 1)) :=
   h.toTM
 
 end Complexity.StackSimulationTest

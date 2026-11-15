@@ -71,6 +71,15 @@ example {κ Γ Q : Type u} [Inhabited Γ] [Fintype κ] (M : TM Id κ Γ Q) (xs y
   fail_if_success exact ⟨n, hh, ho, ht, hs⟩
   exact .of_halted n hh ho ht hs
 
+-- Guards that the same entries, and `mono`, are found by dot notation on the general
+-- specification of the model at `Id` when it is not stated through `ComputesWithin`: they are
+-- attached to `TM.ComputesWithinWith`, which `ComputesWithin` unfolds to.
+example {κ Γ Q : Type u} [Inhabited Γ] [Fintype κ] (M : TM Id κ Γ Q) (xs ys : List Γ) (t s : ℕ)
+    (h : M.ComputesWithinWith Id xs (pure ys) t s) :
+    M.ComputesWithinWith Id xs (pure ys) (t + 1) s := by
+  obtain ⟨n, hh, ho, ht, hs⟩ := (h.mono (Nat.le_succ t) le_rfl).exists_halted
+  exact .of_halted n hh ho ht hs
+
 -- Records the current universe limitation of the specifications: tape indices, alphabet and
 -- control states share one universe, so control states in `Type 1` over `Bool` do not fit. If
 -- this starts to succeed, the limitation is gone.
