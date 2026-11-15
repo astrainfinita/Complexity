@@ -36,11 +36,9 @@ private theorem toBinary_decides {κ Q : Type} [Fintype κ] {M : TM Id κ (Optio
   refine ⟨(M.toBinary.runWith Multiset (src.toList.map some) t).map fun _ ↦ output,
     ⟨(M.forall_mem_histories_toBinary_iff (src.toList.map some)).2 fun n ↦
       ⟨(Controller.History.length_snd _).trans_le (M.length_runHistory_le_of_halted _ hhalt n),
-        h.space_le n⟩, t, ?_⟩, ?_⟩
-  · rw [liftRel_multiset_iff, Multiset.map_map, Multiset.rel_map_right]
-    refine Multiset.rel_refl_of_refl_on fun c hc ↦ ?_
-    obtain rfl := (M.mem_runWith_toBinary_iff _ _ _).1 hc
-    exact ⟨hhalt, hout⟩
+        h.space_le n⟩, ?_⟩, ?_⟩
+  · rw [Multiset.map_map]
+    exact M.computesWith_toBinary hhalt hout
   · simp only [Multiset.mem_map, Controller.mem_runWith_toBinary_iff, exists_eq_left]
 
 /-- Duplicating deterministic transitions preserves both input-dependent budgets on all

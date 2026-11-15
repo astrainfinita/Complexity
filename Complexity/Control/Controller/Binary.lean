@@ -95,4 +95,17 @@ theorem forall_mem_histories_toBinary_iff {C : Input → Type u} [∀ x, Observe
   simp only [forall_mem_histories_iff, Multiset.mem_returns, mem_runHistoryWith_toBinary_iff,
     forall_eq]
 
+/-- Duplicated deterministic choices compute, on every branch, the output of the original run. -/
+theorem computesWith_toBinary {C : Input → Type u} [∀ x, Observe (C x) Observation]
+    [∀ x, Apply (C x) Action] {input : Input} [HasConfig Action Input C]
+    {Output : Type (max u v)} [∀ x, HasOutput (C x) Output] {output : Output} {n : ℕ}
+    (hh : M.Halted (M.run input n)) (ho : HasOutput.IsOutput (M.run input n).2 output) :
+    M.toBinary.ComputesWith Multiset input
+      ((M.toBinary.runWith Multiset input n).map fun _ ↦ output) := by
+  refine ⟨n, ?_⟩
+  rw [liftRel_multiset_iff, Multiset.rel_map_right]
+  refine Multiset.rel_refl_of_refl_on fun c hc ↦ ?_
+  obtain rfl := (M.mem_runWith_toBinary_iff _ _ _).1 hc
+  exact ⟨hh, ho⟩
+
 end Complexity.Controller

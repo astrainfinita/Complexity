@@ -17,14 +17,19 @@ computation from a standard input to an output. Two conventions fix the input an
 `HasConfig` gives the configuration type of each input and its initial configuration, and
 `HasOutput` reads outputs from configurations. On top of them come the runs on a standard input
 (`run`, `runWith`, `runHistory`) and the histories they can return at any depth (`histories`),
-computing within budgets in every interpretation (`ComputesInWith`), its transfer along a
-correspondence of histories (`ComputesInWith.of_liftRel`) and its deterministic case `ComputesIn`,
-halting on an input (`Terminates`, `HaltsAt`), and measurements of these runs. A lemma belongs
-here when it is the counterpart, at `M.init input`, of a lemma about runs from an arbitrary
-configuration, or when it is about a notion that needs the input and output conventions.
+computing in every interpretation (`ComputesWith`) and within budgets (`ComputesInWith`), their
+transfer along a correspondence of histories (`forall_mem_histories_of_liftRel`,
+`ComputesWith.of_liftRel`, together `ComputesInWith.of_liftRel`) and the deterministic case
+`ComputesIn`, halting on an input (`Terminates`, `HaltsAt`), and measurements of these runs. A
+lemma belongs here when it is the counterpart, at `M.init input`, of a lemma about runs from an
+arbitrary configuration, or when it is about a notion that needs the input and output
+conventions.
 
-`ComputesInWith` bounds every history at every depth. Its outputs live in the same interpretation
-as the run: on `Multiset` they are the outputs of all branches with their multiplicities. The
+A requirement on a run is stated on its histories alone, `∀ h ∈ M.histories m input, P h`, which
+covers every history at every depth. `ComputesWith` is the other half: the run halts and its
+outputs are read. They live in the same interpretation as the run: on `Multiset` they are the
+outputs of all branches with their multiplicities. `ComputesInWith` is the conjunction of the
+requirement that two measurements stay within budget with `ComputesWith`. The
 deterministic `ComputesIn` is the instance on `Id`: the budgets bound the history at every depth,
 including the halted padding, and the run halts with the output (`computesIn_iff`). When both
 measurements are monotone along the run, the bounds at a halting step are enough
@@ -243,17 +248,23 @@ theorem forall_halted_succ_of_forall_length_le {t : ℕ}
 
 end Histories
 
-section ComputesInWith
+section ComputesWith
+
+/-- `M` computes `outputs` from `input` in the interpretation `m`: at some step the results of the
+run correspond to `outputs` branch by branch, each branch halted with the corresponding output. -/
+def ComputesWith (m : Type (max u v) → Type*) [Monad m] [MonadLiftT F m]
+    (M : Controller F Observation Action Q) (input : Input) [HasConfig Action Input Config]
+    [∀ x, HasOutput (Config x) Output] (outputs : m Output) : Prop :=
+  ∃ n, LiftRel (fun c y ↦ M.Halted c ∧ HasOutput.IsOutput c.2 y) (M.runWith m input n) outputs
 
 /-- `M` computes `outputs` from `input` in the interpretation `m` within both budgets: on every
-history the two measurements are within budget, and at some step the results of the run correspond
-to `outputs` branch by branch, each branch halted with the corresponding output. -/
+history the two measurements are within budget, and `M` computes `outputs`. -/
 def ComputesInWith (m : Type (max u v) → Type*) [Monad m] [MonadLiftT F m] [MonadReturns m]
     (M : Controller F Observation Action Q) (input : Input) [HasConfig Action Input Config]
     [∀ x, HasOutput (Config x) Output] (outputs : m Output)
     (timeCost spaceCost : History (Config input) Action → ℕ) (time space : ℕ) : Prop :=
   (∀ h ∈ M.histories m input, timeCost h.snd ≤ time ∧ spaceCost h.snd ≤ space) ∧
-  ∃ n, LiftRel (fun c y ↦ M.Halted c ∧ HasOutput.IsOutput c.2 y) (M.runWith m input n) outputs
+    M.ComputesWith m input outputs
 
 /-- The deterministic case of `ComputesInWith`: on every history of the run, including the halted
 padding, the two measurements are within budget, and the run halts with `output`. The measurements
@@ -288,29 +299,41 @@ variable [LawfulMonad m] {F' : Type (max u v) → Type*} {Input' Observation' : 
   {N : Controller F' Observation' Action' Q'} {input' : Input'} [HasConfig Action' Input' Config']
   [∀ x, HasOutput (Config' x) Output'] {timeCost' spaceCost' : History (Config' input') Action' → ℕ}
   {time' space' : ℕ}
+  {S : History (Q × Config input) (Q × Action) →
+    History (Q' × Config' input') (Q' × Action') → Prop}
+
+/-- A requirement on the histories passes along a correspondence of histories: when at every depth
+the histories of `M` and `N` correspond under `S`, and `S` carries `P` to `P'`, every history of
+`N` satisfies `P'`. The machines and the inputs are explicit: when the configuration type depends
+on the input they are not inferred from the statement, nor from `hS`. -/
+theorem forall_mem_histories_of_liftRel (M : Controller F Observation Action Q) (input : Input)
+    (N : Controller F' Observation' Action' Q') (input' : Input')
+    {S : History (Q × Config input) (Q × Action) →
+      History (Q' × Config' input') (Q' × Action') → Prop}
+    {P : History (Q × Config input) (Q × Action) → Prop}
+    {P' : History (Q' × Config' input') (Q' × Action') → Prop}
+    (hS : ∀ n, LiftRel S (M.runHistoryWith m input n) (N.runHistoryWith m input' n))
+    (hP : ∀ p q, S p q → P p → P' q) (h : ∀ p ∈ M.histories m input, P p) :
+    ∀ q ∈ N.histories m input', P' q := by
+  intro q hq
+  obtain ⟨k, hk⟩ := (N.mem_histories_iff m input').1 hq
+  obtain ⟨p, hp, hpq⟩ := (hS k).exists_mem_of_mem_right hk
+  exact hP p q hpq (h p ((M.mem_histories_iff m input).2 ⟨k, hp⟩))
 
 /-- A computation passes along a correspondence of histories: when at every depth the histories of
-`M` and `N` correspond under `S`, and `S` carries the budgets, halting and the outputs, `N`
-computes the images under `g` of the outputs of `M`. The outputs of `M` are given as a function
-`out` of its configuration, since two correspondences cannot be composed in an arbitrary
-interpretation. Apply it against the expected statement: the second machine and its input are not
-inferred from `hS` alone, because the configuration type depends on the input. -/
-theorem ComputesInWith.of_liftRel
-    {S : History (Q × Config input) (Q × Action) →
-      History (Q' × Config' input') (Q' × Action') → Prop} {g : Output → Output'}
-    (h : M.ComputesInWith m input outputs timeCost spaceCost time space)
+`M` and `N` correspond under `S`, and `S` carries halting and the outputs, `N` computes the images
+under `g` of the outputs of `M`. The outputs of `M` are given as a function `out` of its
+configuration, since two correspondences cannot be composed in an arbitrary interpretation. Apply
+it against the expected statement: the second machine and its input are not inferred from `hS`
+alone, because the configuration type depends on the input. -/
+theorem ComputesWith.of_liftRel {g : Output → Output'} (h : M.ComputesWith m input outputs)
     (hS : ∀ n, LiftRel S (M.runHistoryWith m input n) (N.runHistoryWith m input' n))
     (out : Q × Config input → Output) (hout : ∀ c y, HasOutput.IsOutput c.2 y → y = out c)
-    (hb : ∀ p q, S p q → timeCost p.snd ≤ time ∧ spaceCost p.snd ≤ space →
-      timeCost' q.snd ≤ time' ∧ spaceCost' q.snd ≤ space')
     (hh : ∀ p q, S p q → M.Halted p → N.Halted q)
     (ho : ∀ p q y, S p q → HasOutput.IsOutput p.last.2 y → HasOutput.IsOutput q.last.2 (g y)) :
-    N.ComputesInWith m input' (g <$> outputs) timeCost' spaceCost' time' space' := by
-  obtain ⟨hbud, n, hn⟩ := h
-  refine ⟨fun q hq ↦ ?_, n, ?_⟩
-  · obtain ⟨k, hk⟩ := (N.mem_histories_iff m input').1 hq
-    obtain ⟨p, hp, hpq⟩ := (hS k).exists_mem_of_mem_right hk
-    exact hb p q hpq (hbud p ((M.mem_histories_iff m input).2 ⟨k, hp⟩))
+    N.ComputesWith m input' (g <$> outputs) := by
+  obtain ⟨n, hn⟩ := h
+  refine ⟨n, ?_⟩
   rw [← last_runHistoryWith] at hn
   rw [hn.eq_map fun c y h ↦ hout c y h.2, ← last_runHistoryWith, Functor.map_map,
     Functor.map_map]
@@ -321,9 +344,23 @@ theorem ComputesInWith.of_liftRel
       ⟨hh p q hpq hH, hout _ _ hy ▸ ho p q y hpq hy⟩
   exact (h'.map fun _ _ ↦ id).swap
 
+/-- A computation within budgets passes along a correspondence of histories: the budgets by
+`forall_mem_histories_of_liftRel`, the outputs by `ComputesWith.of_liftRel`. Apply it against the
+expected statement, as `ComputesWith.of_liftRel`. -/
+theorem ComputesInWith.of_liftRel {g : Output → Output'}
+    (h : M.ComputesInWith m input outputs timeCost spaceCost time space)
+    (hS : ∀ n, LiftRel S (M.runHistoryWith m input n) (N.runHistoryWith m input' n))
+    (out : Q × Config input → Output) (hout : ∀ c y, HasOutput.IsOutput c.2 y → y = out c)
+    (hb : ∀ p q, S p q → timeCost p.snd ≤ time ∧ spaceCost p.snd ≤ space →
+      timeCost' q.snd ≤ time' ∧ spaceCost' q.snd ≤ space')
+    (hh : ∀ p q, S p q → M.Halted p → N.Halted q)
+    (ho : ∀ p q y, S p q → HasOutput.IsOutput p.last.2 y → HasOutput.IsOutput q.last.2 (g y)) :
+    N.ComputesInWith m input' (g <$> outputs) timeCost' spaceCost' time' space' :=
+  ⟨M.forall_mem_histories_of_liftRel input N input' hS hb h.1, h.2.of_liftRel hS out hout hh ho⟩
+
 end Transfer
 
-end ComputesInWith
+end ComputesWith
 
 section Halting
 
@@ -404,8 +441,8 @@ theorem computesIn_iff :
       (∀ k, timeCost (M.runHistory input k).snd ≤ time ∧
         spaceCost (M.runHistory input k).snd ≤ space) ∧
       ∃ n, M.Halted (M.run input n) ∧ HasOutput.IsOutput (M.run input n).2 output := by
-  simp only [ComputesIn, ComputesInWith, M.forall_mem_histories_iff Id input, Id.mem_returns,
-    forall_eq, liftRel_id_iff]
+  simp only [ComputesIn, ComputesInWith, ComputesWith, M.forall_mem_histories_iff Id input,
+    Id.mem_returns, forall_eq, liftRel_id_iff]
   rfl
 
 /-- When both measurements are monotone along the run, the bounds at a halting step bound every
