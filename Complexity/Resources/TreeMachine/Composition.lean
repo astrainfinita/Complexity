@@ -21,7 +21,7 @@ of the two phase budgets after padding their register files.
 namespace Complexity.TreeMachine
 
 variable {α β γ : Type*} [Encoding Tree α] [Encoding Tree β] [Encoding Tree γ]
-  {k l : ℕ} [NeZero k] [NeZero l] {Q Q' : Type*}
+  {k l : ℕ} [NeZero k] [NeZero l] {Q Q' : Type}
 
 /-- Compose computations on all valid codes, allowing any valid intermediate
 representation of the computed value. The clearing pass costs a fixed number of

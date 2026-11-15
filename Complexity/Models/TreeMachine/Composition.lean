@@ -291,7 +291,7 @@ end Comp
 
 /-- Sequential machines share their work registers. Clearing costs only the fixed number
 of work registers; peak space is the larger padded phase bound. -/
-theorem comp_computesWithin [NeZero k] [NeZero l]
+theorem comp_computesWithin [NeZero k] [NeZero l] {Q Q' : Type}
     (M : TreeMachine Id k Q) (N : TreeMachine Id l Q')
     {x a b : Tree} {t s u v : ℕ}
     (hM : M.ComputesWithin x a t s)
@@ -322,10 +322,10 @@ theorem comp_computesWithin [NeZero k] [NeZero l]
       Controller.actionSum_runHistoryFrom_add, Controller.runFrom_add, ← Controller.run, h₁, h₂, h₀,
       Comp.actionSum_left M N _ n hn.2, Comp.actionSum_clear M N c hn.1, Comp.actionSum_right M N]
     exact Nat.add_le_add (Nat.add_le_add_right hc _) hd
-  refine ⟨n + max k l + m, ?_, ?_, hw, ?_⟩
+  refine .of_halted (n + max k l + m) ?_ ?_ hw ?_
   · rw [hright]
     exact hm.1
-  · rw [hasOutput_isOutput, hright]
+  · rw [hright]
     exact (pad_get (by omega) (N.run a m).2.regs 0).trans hb
   · apply (C.configSup_runHistory_le_iff x Cfg.mass _ _).2
     intro d _

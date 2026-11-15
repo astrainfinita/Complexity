@@ -76,9 +76,9 @@ theorem computesWithin_history [Fintype κ] {p : StackMachine.Program κ Γ α}
   rw [Controller.runFrom_prod_nil, Prod.mk.injEq] at hr
   have hl := congrArg History.last hr.2
   rw [History.last_snd, Controller.last_runHistoryFrom] at hl
-  exact ⟨n, (congrArg p.compile.halt hr.1).trans rfl, (congrArg Cfg.output hl).trans ho,
-    (History.length_snd _).trans_le ((p.compile.length_runHistory_le _ n).trans hn),
-    (congrArg (·.configSup Cfg.mass) hr.2).le.trans hs⟩
+  exact .of_halted n ((congrArg p.compile.halt hr.1).trans rfl) ((congrArg Cfg.output hl).trans ho)
+    ((History.length_snd _).trans_le ((p.compile.length_runHistory_le _ n).trans hn))
+    ((congrArg (·.configSup Cfg.mass) hr.2).le.trans hs)
 
 /-- A total stack-program specification yields native computation and resource bounds. -/
 theorem computesWithin [Fintype κ] (p : StackMachine.Program κ Γ α)

@@ -222,15 +222,15 @@ theorem ComputesWithin.toTM [Fintype κ] {M : StackMachine Id κ Γ Q}
     {xs ys : List Γ} {t s : ℕ} (h : M.ComputesWithin xs ys t s) :
     M.toTM.ComputesWithin (xs.map some) (ys.map some)
       t (Fintype.card κ * (s + 1)) := by
-  obtain ⟨hh, ho, hs⟩ := Controller.computesWith_unit_iff.mp h
+  obtain ⟨hh, ho, hs⟩ := Controller.computesIn_unit_iff.mp h
   obtain ⟨cached, hr⟩ := M.run_toTM xs t
-  apply Controller.computesWith_unit_iff.mpr
-  refine ⟨?_, ?_, ?_⟩
+  apply Controller.computesIn_unit_iff.mpr
+  refine ⟨?_, ?_, fun k ↦ ?_⟩
   · simpa only [hr, Controller.Halted, Controller.state_prod, toTM_halt] using hh
   · simpa only [TM.hasOutput_isOutput, hr, Cfg.toTM_output,
       List.map_toArray] using congrArg (Array.map some) ho
-  · have hv := M.space_runHistoryFrom_toTM_le (M.init xs) (fun _ ↦ false) t
+  · have hv := M.space_runHistoryFrom_toTM_le (M.init xs) (fun _ ↦ false) k
     rw [init_toTM] at hv
-    exact hv.trans (Nat.mul_le_mul_left _ (Nat.succ_le_succ hs))
+    exact hv.trans (Nat.mul_le_mul_left _ (Nat.succ_le_succ (hs k)))
 
 end Complexity.StackMachine

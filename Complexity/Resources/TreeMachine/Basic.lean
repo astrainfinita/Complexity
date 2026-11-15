@@ -23,7 +23,7 @@ A single finite machine must handle every valid input.
 
 namespace Complexity.TreeMachine
 
-variable {α β : Type*} {k : ℕ} {Q : Type*} [NeZero k]
+variable {α β : Type*} {k : ℕ} {Q : Type} [NeZero k]
 
 /-- Destination-size charges also control the size of an intermediate output code. -/
 theorem ComputesWithin.output_size_le {M : TreeMachine Id k Q}

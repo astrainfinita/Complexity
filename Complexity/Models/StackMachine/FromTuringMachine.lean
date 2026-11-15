@@ -253,11 +253,11 @@ theorem ComputesWithin.toStack [Fintype κ] {M : TM Id κ (Option Bool) Q}
     M.toStack.ComputesWithin xs ys t (2 * s) := by
   obtain ⟨hh, ho⟩ := h.run_spec
   have hr := M.run_toStack xs t
-  apply Controller.computesWith_unit_iff.mpr
-  refine ⟨?_, ?_, ?_⟩
+  apply Controller.computesIn_unit_iff.mpr
+  refine ⟨?_, ?_, fun k ↦ ?_⟩
   · simpa only [Controller.Halted, Controller.state_prod, toStack_halt, hr.state_eq] using hh
   · simpa [ho] using hr.output_eq
-  · apply (M.toStack.configSup_runHistory_le_iff xs StackMachine.Cfg.mass t (2 * s)).mpr
+  · apply (M.toStack.configSup_runHistory_le_iff xs StackMachine.Cfg.mass k (2 * s)).mpr
     intro i _
     exact (M.run_toStack xs i).mass_le.trans (Nat.mul_le_mul_left 2 (h.space_le i))
 

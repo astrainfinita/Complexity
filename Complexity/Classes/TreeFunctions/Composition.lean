@@ -53,7 +53,7 @@ theorem fp_id : (id : α → α) ∈ FP .sizeCostTree := by
   refine ⟨fun _ => 0, ⟨fun n => n, _,
     ⟨1, inferInstance, Unit, inferInstance, identity, rfl⟩, ?_⟩, DominatedAtTop.refl _⟩
   intro x a hx
-  refine ⟨a, hx, 0, rfl, ?_, ?_, ?_⟩
+  refine ⟨a, hx, .of_halted 0 rfl ?_ ?_ ?_⟩
   · exact TreeMachine.input_get (0 : Fin 1) a
   · simp
   · simp [TreeMachine.Cfg.mass]

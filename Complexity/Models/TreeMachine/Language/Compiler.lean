@@ -271,7 +271,7 @@ theorem compile_correct {p : Procedure ν} {x y : Tree} (h : p.Exec x y) :
       (max x.size (max b (p.result.maxSize s))) :=
     ⟨n, s, b, hr, hy, le_rfl, le_max_left ..,
       (le_max_left ..).trans (le_max_right ..), (le_max_right ..).trans (le_max_right ..)⟩
-  obtain ⟨n, hh, ho, _, _⟩ := h.compile
+  obtain ⟨n, hh, ho, _, _⟩ := h.compile.exists_halted
   exact ⟨n, hh, ho⟩
 
 end Procedure

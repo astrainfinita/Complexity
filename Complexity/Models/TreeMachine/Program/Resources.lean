@@ -64,9 +64,10 @@ theorem computesInUnitTimeAndSpace_of_exec [NeZero k] {p : TreeMachine.Program k
   rw [Controller.runFrom_prod_nil, Prod.mk.injEq] at hr
   have hl := congrArg History.last hr.2
   rw [History.last_snd, Controller.last_runHistoryFrom] at hl
-  exact ⟨n, (congrArg p.compile.halt hr.1).trans rfl, (congrArg (fun c ↦ c.regs 0) hl).trans ho,
-    (History.length_snd _).trans_le ((p.compile.length_runHistory_le x n).trans hn),
-    (congrArg (·.configSup Cfg.mass) hr.2).le.trans hs⟩
+  exact .of_halted n ((congrArg p.compile.halt hr.1).trans rfl)
+    ((congrArg (fun c ↦ c.regs 0) hl).trans ho)
+    ((History.length_snd _).trans_le ((p.compile.length_runHistory_le x n).trans hn))
+    ((congrArg (·.configSup Cfg.mass) hr.2).le.trans hs)
 
 /-- A program contract yields the machine bound without inspecting compiled control states. -/
 theorem computesInUnitTimeAndSpace [NeZero k] {p : TreeMachine.Program k α}

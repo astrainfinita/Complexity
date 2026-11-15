@@ -38,7 +38,7 @@ section InputBudgets
 variable {α β : Type*} [Encoding (RawWord Bool) α] [Encoding (RawWord Bool) β]
 
 /-- One stack machine with budgets depending on its input value. -/
-def Computes {κ Q : Type*} [Fintype κ] (M : StackMachine Id κ Bool Q)
+def Computes {κ Q : Type} [Fintype κ] (M : StackMachine Id κ Bool Q)
     (f : α → β) (t s : α → ℕ) : Prop :=
   Encoding.Computes f fun value (input output : RawWord Bool) =>
     M.ComputesWithin input.toList output.toList (t value) (s value)
@@ -53,7 +53,7 @@ theorem computableWithin_iff {f : α → β} {t s : α → ℕ} :
   · rintro ⟨κ, hκ, Q, hQ, M, h⟩
     exact ⟨_, ⟨κ, hκ, Q, hQ, M, rfl⟩, h⟩
 
-theorem Computes.mono {κ Q : Type*} [Fintype κ] {M : StackMachine Id κ Bool Q}
+theorem Computes.mono {κ Q : Type} [Fintype κ] {M : StackMachine Id κ Bool Q}
     {f : α → β} {t s t' s' : α → ℕ} (h : Computes M f t s)
     (ht : ∀ a, t a ≤ t' a) (hs : ∀ a, s a ≤ s' a) : Computes M f t' s' :=
   Encoding.Computes.mono h (fun hc => hc.mono (ht _) (hs _))

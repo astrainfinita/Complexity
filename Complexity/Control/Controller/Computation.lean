@@ -17,19 +17,22 @@ computation from a standard input to an output. Two conventions fix the input an
 `HasConfig` gives the configuration type of each input and its initial configuration, and
 `HasOutput` reads outputs from configurations. On top of them come the runs on a standard input
 (`run`, `runWith`, `runHistory`) and the histories they can return at any depth (`histories`),
-computing within budgets in every interpretation (`ComputesInWith`), halting on an input
-(`Terminates`, `HaltsAt`), measurements of these runs, and the complete deterministic
-specification `ComputesWith`. A lemma belongs here when it is the counterpart, at `M.init input`,
-of a lemma about runs from an arbitrary configuration, or when it is about a notion that needs the
-input and output conventions.
+computing within budgets in every interpretation (`ComputesInWith`) and its deterministic case
+`ComputesIn`, halting on an input (`Terminates`, `HaltsAt`), and measurements of these runs. A
+lemma belongs here when it is the counterpart, at `M.init input`, of a lemma about runs from an
+arbitrary configuration, or when it is about a notion that needs the input and output conventions.
 
-`ComputesInWith` bounds every history at every depth, so on `Id` it agrees with `ComputesWith`,
-which reads only the halting history, when the measurements are monotone along the run, as length
-and space are. Its outputs live in the same interpretation as the run: on `Multiset` they are the
-outputs of all branches with their multiplicities. The output type lives in the universe of the
-results, `Type (max u v)`; this is a current limitation, not a decision. The way halting is
-stated, inside the correspondence at one step of the run, and the difference from `ComputesWith`
-are the current state too: the deterministic definition is to become the instance on `Id`.
+`ComputesInWith` bounds every history at every depth. Its outputs live in the same interpretation
+as the run: on `Multiset` they are the outputs of all branches with their multiplicities. The
+deterministic `ComputesIn` is the instance on `Id`: the budgets bound the history at every depth,
+including the halted padding, and the run halts with the output (`computesIn_iff`). When both
+measurements are monotone along the run, the bounds at a halting step are enough
+(`ComputesIn.of_halted`); each model specification has its own `of_halted` with the monotonicity
+filled in. Supplying monotonicity through one lemma per specification is the current state, not a
+decision, and so is reading the budgets at every depth rather than on halted histories only. The
+output type lives in the universe of the results, `Type (max u v)`; this is a current limitation,
+not a decision. The way halting is stated, inside the correspondence at one step of the run, is
+the current state too.
 -/
 
 @[expose] public section
@@ -74,9 +77,9 @@ def init {Input : Type*} {Config : Input → Type u} (M : Controller F Observati
 
 end Conventions
 
-variable {F : Type (max u v) → Type*} {Input Output Observation : Type*} {Action : Type u}
-  {Config : Input → Type u} {Q : Type v} [∀ x, Observe (Config x) Observation]
-  [∀ x, Apply (Config x) Action]
+variable {F : Type (max u v) → Type*} {Input Observation : Type*} {Action : Type u}
+  {Config : Input → Type u} {Q : Type v} {Output : Type (max u v)}
+  [∀ x, Observe (Config x) Observation] [∀ x, Apply (Config x) Action]
 
 /-- Run `M` from its initial configuration on the standard input, in the target monad. -/
 def runWith (m : Type (max u v) → Type*) [Monad m] [MonadLiftT F m]
@@ -234,8 +237,6 @@ end Histories
 
 section ComputesInWith
 
-variable {Output : Type (max u v)}
-
 /-- `M` computes `outputs` from `input` in the interpretation `m` within both budgets: on every
 history the two measurements are within budget, and at some step the results of the run correspond
 to `outputs` branch by branch, each branch halted with the corresponding output. -/
@@ -245,6 +246,19 @@ def ComputesInWith (m : Type (max u v) → Type*) [Monad m] [MonadLiftT F m] [Mo
     (timeCost spaceCost : History (Config input) Action → ℕ) (time space : ℕ) : Prop :=
   (∀ h ∈ M.histories m input, timeCost h.snd ≤ time ∧ spaceCost h.snd ≤ space) ∧
   ∃ n, LiftRel (fun c y ↦ M.Halted c ∧ HasOutput.IsOutput c.2 y) (M.runWith m input n) outputs
+
+/-- The deterministic case of `ComputesInWith`: on every history of the run, including the halted
+padding, the two measurements are within budget, and the run halts with `output`. The measurements
+read histories without the control states.
+
+Build it with `ComputesIn.of_halted`, or with the `of_halted` of a model specification, and take it
+apart with `ComputesIn.exists_halted`; `computesIn_iff` is its reading on `Id`. The definition
+unfolds to the general predicate and is not meant to be opened by hand: an anonymous constructor
+or a pattern would meet the two clauses of `ComputesInWith`, not the halting step. -/
+def ComputesIn (M : Controller Id Observation Action Q) (input : Input)
+    [HasConfig Action Input Config] [∀ x, HasOutput (Config x) Output] (output : Output)
+    (timeCost spaceCost : History (Config input) Action → ℕ) (time space : ℕ) : Prop :=
+  M.ComputesInWith Id input (pure output) timeCost spaceCost time space
 
 variable {m : Type (max u v) → Type*} [Monad m] [MonadLiftT F m] [MonadReturns m]
   {M : Controller F Observation Action Q} {input : Input} [HasConfig Action Input Config]
@@ -306,6 +320,10 @@ theorem actionSum_runHistory_mono (input : Input) [HasConfig Action Input Config
       (M.runHistory input k).snd.actionSum cost :=
   M.actionSum_runHistoryFrom_mono cost (M.init input) h
 
+theorem length_runHistory_mono (input : Input) [HasConfig Action Input Config] {n k : ℕ}
+    (h : n ≤ k) : (M.runHistory input n).snd.length ≤ (M.runHistory input k).snd.length := by
+  simpa only [History.actionSum_unit] using M.actionSum_runHistory_mono input (fun _ _ ↦ 1) h
+
 theorem configSup_runHistory_mono (input : Input) [HasConfig Action Input Config]
     (space : Config input → α) {n k : ℕ} (h : n ≤ k) :
     (M.runHistory input n).snd.configSup space ≤
@@ -325,70 +343,73 @@ theorem configSup_runHistory_le_iff (input : Input) [HasConfig Action Input Conf
 
 end Resources
 
-/-- One terminating run satisfies both budgets. The measurements read its history without the
-control states. -/
-def ComputesWith (M : Controller Id Observation Action Q) (input : Input)
-    [HasConfig Action Input Config] [∀ x, HasOutput (Config x) Output] (output : Output)
-    (timeCost spaceCost : History (Config input) Action → ℕ) (time space : ℕ) : Prop :=
-  ∃ n, M.Halted (M.run input n) ∧ HasOutput.IsOutput (M.run input n).2 output ∧
-    timeCost (M.runHistory input n).snd ≤ time ∧
-    spaceCost (M.runHistory input n).snd ≤ space
-
 variable {M : Controller Id Observation Action Q} {input : Input} [HasConfig Action Input Config]
   [∀ x, HasOutput (Config x) Output] {output : Output}
   {timeCost spaceCost : History (Config input) Action → ℕ} {time space : ℕ}
 
-/-- Enlarging budgets preserves the same execution. -/
-theorem computesWith_mono {time' space' : ℕ}
-    (h : M.ComputesWith input output timeCost spaceCost time space)
+/-- The budgets bound the history at every depth, and the run halts with the output. -/
+theorem computesIn_iff :
+    M.ComputesIn input output timeCost spaceCost time space ↔
+      (∀ k, timeCost (M.runHistory input k).snd ≤ time ∧
+        spaceCost (M.runHistory input k).snd ≤ space) ∧
+      ∃ n, M.Halted (M.run input n) ∧ HasOutput.IsOutput (M.run input n).2 output := by
+  simp only [ComputesIn, ComputesInWith, M.forall_mem_histories_iff Id input, Id.mem_returns,
+    forall_eq, liftRel_id_iff]
+  rfl
+
+/-- When both measurements are monotone along the run, the bounds at a halting step bound every
+depth, since the history stays fixed after halting. -/
+theorem ComputesIn.of_halted (ht : Monotone fun k ↦ timeCost (M.runHistory input k).snd)
+    (hs : Monotone fun k ↦ spaceCost (M.runHistory input k).snd) (n : ℕ)
+    (hn : M.Halted (M.run input n)) (ho : HasOutput.IsOutput (M.run input n).2 output)
+    (htn : timeCost (M.runHistory input n).snd ≤ time)
+    (hsn : spaceCost (M.runHistory input n).snd ≤ space) :
+    M.ComputesIn input output timeCost spaceCost time space := by
+  refine computesIn_iff.2 ⟨fun k ↦ ?_, n, hn, ho⟩
+  rcases le_total k n with hk | hk
+  · exact ⟨(ht hk).trans htn, (hs hk).trans hsn⟩
+  · rw [M.runHistory_eq_of_halted input hn hk]
+    exact ⟨htn, hsn⟩
+
+/-- The halting step of a computation, with the output and both measurements within budget. -/
+theorem ComputesIn.exists_halted (h : M.ComputesIn input output timeCost spaceCost time space) :
+    ∃ n, M.Halted (M.run input n) ∧ HasOutput.IsOutput (M.run input n).2 output ∧
+      timeCost (M.runHistory input n).snd ≤ time ∧
+      spaceCost (M.runHistory input n).snd ≤ space :=
+  let ⟨hb, n, hn, ho⟩ := computesIn_iff.1 h
+  ⟨n, hn, ho, hb n⟩
+
+/-- Enlarging budgets keeps the same output. -/
+theorem computesIn_mono {time' space' : ℕ}
+    (h : M.ComputesIn input output timeCost spaceCost time space)
     (ht : time ≤ time') (hs : space ≤ space') :
-    M.ComputesWith input output timeCost spaceCost time' space' := by
-  obtain ⟨n, hn, ho, htime, hspace⟩ := h
-  exact ⟨n, hn, ho, htime.trans ht, hspace.trans hs⟩
+    M.ComputesIn input output timeCost spaceCost time' space' :=
+  computesInWith_mono h ht hs
 
-/-- An additive action budget bounds every prefix, including halted padding. -/
-theorem computesWith_actionSum_le {cost : Action → Config input → ℕ}
-    (h : M.ComputesWith input output (fun h ↦ h.actionSum cost) spaceCost time space) (u : ℕ) :
-    (M.runHistory input u).snd.actionSum cost ≤ time := by
-  obtain ⟨n, hn, _, ht, _⟩ := h
-  by_cases hu : u ≤ n
-  · exact (M.actionSum_runHistory_mono input cost hu).trans ht
-  · rw [M.runHistory_eq_of_halted input hn (by omega : n ≤ u)]
-    exact ht
+/-- The time budget bounds the history at every depth. -/
+theorem computesIn_time_le (h : M.ComputesIn input output timeCost spaceCost time space)
+    (k : ℕ) : timeCost (M.runHistory input k).snd ≤ time :=
+  ((computesIn_iff.1 h).1 k).1
 
-/-- A prefix-monotone history measurement bounds space throughout a computation. -/
-theorem computesWith_space_le (h : M.ComputesWith input output timeCost spaceCost time space)
-    (hmono : Monotone fun n ↦ spaceCost (M.runHistory input n).snd)
-    (u : ℕ) : spaceCost (M.runHistory input u).snd ≤ space := by
-  obtain ⟨n, hn, _, _, hs⟩ := h
-  by_cases hu : u ≤ n
-  · exact (hmono hu).trans hs
-  · rw [M.runHistory_eq_of_halted input hn (by omega : n ≤ u)]
-    exact hs
-
-/-- A maximum configuration budget bounds every prefix, including halted padding. -/
-theorem computesWith_configSup_le {size : Config input → ℕ}
-    (h : M.ComputesWith input output timeCost (fun h ↦ h.configSup size) time space) (u : ℕ) :
-    (M.runHistory input u).snd.configSup size ≤ space :=
-  computesWith_space_le h (fun _ _ hn ↦ M.configSup_runHistory_mono input size hn) u
+/-- The space budget bounds the history at every depth. -/
+theorem computesIn_space_le (h : M.ComputesIn input output timeCost spaceCost time space)
+    (k : ℕ) : spaceCost (M.runHistory input k).snd ≤ space :=
+  ((computesIn_iff.1 h).1 k).2
 
 /-- Counting recorded actions describes the halted run at the advertised time bound. -/
-theorem computesWith_unit_iff : M.ComputesWith input output History.length spaceCost time space ↔
-      M.Halted (M.run input time) ∧
-      HasOutput.IsOutput (M.run input time).2 output ∧
-      spaceCost (M.runHistory input time).snd ≤ space := by
+theorem computesIn_unit_iff :
+    M.ComputesIn input output History.length spaceCost time space ↔
+      M.Halted (M.run input time) ∧ HasOutput.IsOutput (M.run input time).2 output ∧
+      ∀ k, spaceCost (M.runHistory input k).snd ≤ space := by
+  rw [computesIn_iff]
   constructor
-  · rintro ⟨n, hn, ho, ht, hs⟩
-    rw [History.length_snd] at ht
-    have he : M.run input (M.runHistory input n).length =
-        M.run input n := M.runFrom_length_runHistoryFrom (M.init input) n
-    have hh := he.symm ▸ hn
-    have hp := M.runHistory_eq_of_halted input hh (M.length_runHistory_le input n)
-    have hq := M.runHistory_eq_of_halted input hh ht
-    have hr := hq.trans hp.symm
-    simpa only [← last_runHistory, hr] using And.intro hn (And.intro ho hs)
+  · rintro ⟨hb, n, hn, ho⟩
+    have he : M.run input (M.runHistory input n).length = M.run input n :=
+      M.runFrom_length_runHistoryFrom (M.init input) n
+    rw [M.run_eq_of_halted input (he ▸ hn) ((History.length_snd _).symm.trans_le (hb n).1), he]
+    exact ⟨hn, ho, fun k ↦ (hb k).2⟩
   · rintro ⟨hn, ho, hs⟩
-    exact ⟨time, hn, ho, (History.length_snd _).trans_le (M.length_runHistory_le input time),
-      hs⟩
+    exact ⟨fun k ↦ ⟨(History.length_snd _).trans_le (M.length_runHistory_le_of_halted input hn k),
+      hs k⟩, time, hn, ho⟩
 
 end Complexity.Controller
