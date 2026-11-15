@@ -213,12 +213,11 @@ private theorem mixed_loops (n : ℕ) :
     rw [mixed.stepWith_of_not_halted Multiset (0, c) Bool.false_ne_true]
     exact Multiset.mem_map_of_mem _ (Multiset.mem_coe.2 (List.mem_cons_self ..))
 
--- Guards that `ComputesInWith` asks for a step at which every branch has halted: the accepting
--- branch does not help, and no budgets and no outputs fit.
-example (outs : Multiset (List (Option Bool))) (t s : ℕ) :
-    ¬mixed.ComputesInWith Multiset ([] : List (Option Bool)) outs History.length History.space
-      t s := by
-  rintro ⟨-, n, ho⟩
+-- Guards that `ComputesWith` asks for a step at which every branch has halted: the accepting
+-- branch does not help, and no outputs fit.
+example (outs : Multiset (List (Option Bool))) :
+    ¬mixed.ComputesWith Multiset ([] : List (Option Bool)) outs := by
+  rintro ⟨n, ho⟩
   obtain ⟨c, hc, h0⟩ := mixed_loops n
   obtain ⟨-, -, hh, -⟩ := Multiset.exists_mem_of_rel_of_mem ho.multisetRel hc
   simp [Controller.Halted, mixed, h0] at hh
@@ -253,11 +252,10 @@ def malformed : TM Id (Fin 0) (Option Bool) Bool where
   transition _ _ := pure <| (true, { (answer false true).2 with output := none })
 
 -- Guards that the Boolean special case asks every output to be the code of a Boolean: no
--- multiset of Booleans fits the empty output, whatever the budgets.
-example (t s : ℕ) : ¬∃ bs : Multiset Bool, malformed.toBinary.ComputesInWith Multiset
-    ([] : List (Option Bool)) (bs.map fun b ↦ ⌜b⌝₂.toList.map some) History.length
-      History.space t s := by
-  rintro ⟨bs, -, n, ho⟩
+-- multiset of Booleans fits the empty output.
+example : ¬∃ bs : Multiset Bool, malformed.toBinary.ComputesWith Multiset
+    ([] : List (Option Bool)) (bs.map fun b ↦ ⌜b⌝₂.toList.map some) := by
+  rintro ⟨bs, n, ho⟩
   obtain ⟨y, hy, hh, he⟩ := Multiset.exists_mem_of_rel_of_mem ho.multisetRel
     ((malformed.mem_runWith_toBinary_iff ([] : List (Option Bool)) _ n).2 rfl)
   obtain ⟨b, -, rfl⟩ := Multiset.mem_map.1 hy
@@ -275,6 +273,15 @@ example {κ Q : Type} [Fintype κ] (M : NTM κ (Option Bool) Q) (xs : List (Opti
     (h : M.ComputesInWith Multiset xs outs History.length History.space t s) (ht : t ≤ t')
     (hs : s ≤ s') : M.ComputesInWith Multiset xs outs History.length History.space t' s' :=
   Controller.computesInWith_mono h ht hs
+
+-- Guards that computing within budgets is, by definition, the budgets on every history together
+-- with computing the outputs.
+example {κ Q : Type} [Fintype κ] (M : NTM κ (Option Bool) Q) (xs : List (Option Bool))
+    (outs : Multiset (List (Option Bool))) (t s : ℕ) :
+    M.ComputesInWith Multiset xs outs History.length History.space t s ↔
+      (∀ h ∈ M.histories Multiset xs, h.snd.length ≤ t ∧ h.snd.space ≤ s) ∧
+        M.ComputesWith Multiset xs outs :=
+  Iff.rfl
 
 -- Refactoring through a common coding predicate preserves the complete old quantifiers:
 -- the behavior is fixed before all inputs, and both budgets constrain the same outputs.

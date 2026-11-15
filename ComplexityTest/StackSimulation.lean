@@ -120,6 +120,22 @@ example {κ Q : Type} [Fintype κ] (M : NTM κ (Option Bool) Q) (xs : List Bool)
       (fun h ↦ h.configSup StackMachine.Cfg.mass) t (2 * s) :=
   h.toStack
 
+-- A machine that never halts, so it computes nothing.
+private def forever : TM Id (Fin 0) (Option Bool) Unit where
+  q₀ := ()
+  halt _ := false
+  transition _ _ := pure ((), ⟨0, Fin.elim0, none⟩)
+
+-- Guards that a requirement on the histories passes along the simulation on its own, without a
+-- computation: a space bound of `forever` bounds the stack mass of its simulation.
+example (xs : List Bool) (s : ℕ) :
+    ∀ h ∈ forever.toStack.histories Id xs, h.snd.configSup StackMachine.Cfg.mass ≤ 2 * s := by
+  have hs : ∀ h ∈ forever.histories Id (xs.map some), h.snd.space ≤ s := fun _ _ ↦ by
+    simp [Controller.History.space]
+  exact forever.forall_mem_histories_of_liftRel (xs.map some) forever.toStack xs
+    (TM.liftRel_runHistoryWith_toStack Id forever xs)
+    (fun _ _ hr hb ↦ hr.configSup_mass_le.trans (Nat.mul_le_mul_left 2 hb)) hs
+
 -- Guess a bit and push it, guess and push again, then pop. The target keeps a pushed top in
 -- control and writes it to the tape at the next push; the output records the observed tops, so
 -- the third guess only doubles the branches.
