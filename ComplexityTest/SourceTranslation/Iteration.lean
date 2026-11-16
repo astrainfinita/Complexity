@@ -71,7 +71,8 @@ example {α : Type*} [UniqueEncoding Tree α] {f : α → α} {t p : α → ℕ}
     max (max ⌜((2 : ℕ), x)⌝ₜ.size
       (max ⌜((1 : ℕ), f x)⌝ₜ.size ⌜((0 : ℕ), f (f x))⌝ₜ.size))
       (max (p x) (p (f x)))
-  have bounds := Dominated.iterate_of_potential (t := t) (p := p) I (fun _ => 2) id
+  have bounds := Dominated.iterate_of_potential (f := fun _ => f) (t := fun _ => t)
+    (p := fun _ => p) I (fun _ => 2) id
     remaining peak (fun _ => Or.inl ⟨rfl, rfl⟩) (fun x n a hi => by
       rcases hi with ⟨hn, rfl⟩ | ⟨hn, rfl⟩ | ⟨hn, _⟩
       · exact Or.inr (Or.inl ⟨by omega, rfl⟩)
@@ -119,5 +120,58 @@ example {ρ α : Type*} [UniqueEncoding Tree ρ] [UniqueEncoding Tree α]
   fill_hole program in
     exact (hi.iterate_with hs).mono (Dominated.of_le fun _ => by simp)
       (Dominated.of_le fun _ => by simp)
+
+section IterateGrowth
+
+-- The growth of an iteration whose count is the length of a list is settled without the user: a
+-- polynomial time and peak. Guards the rules `IsPoly.iterateTime` and `IsPoly.iteratePeak`
+-- registered with `@[dominated_traversal]`; if this needs a `dominated` line again, they are no
+-- longer applied.
+example : HasProgramIn repeatNot hole(⊢ program) (IsPoly fun x => ⌜x⌝ₜ.size)
+    (IsPoly fun x => ⌜x⌝ₜ.size) := by
+  fill_hole program in source_fun_prop
+
+-- The peak is linear: the states, the stored counters and the callback are. Guards
+-- `Dominated.iteratePeak_of_reached`. The same with a callback reading a captured flag.
+example : HasProgramIn repeatNot hole(⊢ program) (IsPoly fun x => ⌜x⌝ₜ.size)
+    IsO(fun x => ⌜x⌝ₜ.size) := by
+  fill_hole program in source_fun_prop
+
+example : HasProgramIn repeatAnd hole(⊢ program) (IsPoly fun x => ⌜x⌝ₜ.size)
+    IsO(fun x => ⌜x⌝ₜ.size) := by
+  fill_hole program in source_fun_prop
+
+private theorem size_cons_iterate_le (k : ℕ) (l : List Bool) :
+    ⌜(List.cons true)^[k] l⌝ₜ.size ≤ ⌜l⌝ₜ.size + 4 * k := by
+  induction k generalizing l with
+  | zero => simp
+  | succ k ih =>
+    have := ih (true :: l)
+    have := size_encode_bool_le true
+    simp only [Function.iterate_succ_apply, encode_list_cons, size_encode_prod] at *
+    omega
+
+-- A state that grows needs a bound on the states reached within the count: the user gives it as
+-- a lemma about the iteration of any count, and the rules do the rest.
+example : HasProgramIn (fun x : List Unit × List Bool => (List.cons true)^[x.1.length] x.2)
+    hole(⊢ program) (IsPoly fun x => ⌜x⌝ₜ.size) (IsPoly fun x => ⌜x⌝ₜ.size) := by
+  fill_hole program in source_fun_prop
+  all_goals dominated [size_cons_iterate_le]
+
+private theorem size_reverse_iterate (k : ℕ) (l : List Bool) :
+    ⌜List.reverse^[k] l⌝ₜ.size = ⌜l⌝ₜ.size := by
+  induction k generalizing l with
+  | zero => rfl
+  | succ k ih => rw [Function.iterate_succ_apply, ih, size_encode_reverse]
+
+-- The count is a number: `x.1` rounds can be exponential in the code, so no growth in the code
+-- alone bounds them. In a measure that counts the number itself, the count premise holds and the
+-- rules settle the rest, with the size of the states given.
+example : HasProgramIn repeatReverse hole(⊢ program) (IsPoly fun x => x.1 + ⌜x⌝ₜ.size)
+    (IsPoly fun x => x.1 + ⌜x⌝ₜ.size) := by
+  fill_hole program in source_fun_prop
+  all_goals dominated [size_reverse_iterate]
+
+end IterateGrowth
 
 end ComplexityTest.SourceTranslation.Iteration
