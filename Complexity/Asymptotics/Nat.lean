@@ -431,6 +431,17 @@ theorem sum_finRange {n : α → ℕ} {a : (x : α) → Fin (n x) → ℕ} (hn :
     IsPoly (fun z : Σ x, Fin (n x) => s z.1) fun z => n z.1 * a z.1 z.2)
   exact ⟨d, Dominated.sum_finRange_of_mul h⟩
 
+/-- A sum over a list is polynomial when its length and the summands of the elements that occur
+are, the summands uniformly in the measure of their input. -/
+theorem list_sum {ι : Type*} {xs : α → List ι} {a : α → ι → ℕ}
+    (hn : IsPoly s fun x => (xs x).length)
+    (h : IsPoly (fun z : {p : α × ι // p.2 ∈ xs p.1} => s z.1.1) fun z => a z.1.1 z.1.2) :
+    IsPoly s fun x => ((xs x).map (a x)).sum := by
+  obtain ⟨d, h⟩ := h
+  refine (hn.mul ((IsPoly.refl.add (.const 1)).pow d)).of_dominated
+    ((Dominated.list_sum xs a (fun x _ => (s x + 1) ^ d) h).mono fun x => ?_)
+  simp only [List.map_const', List.sum_replicate, Nat.nsmul_eq_mul, le_refl]
+
 /-- A function polynomial on the inputs where `p` holds and on those where it fails is
 polynomial. -/
 theorem of_cases (p : α → Prop)

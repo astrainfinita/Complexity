@@ -1039,6 +1039,60 @@ list, and the list, are linear in `s`. A peak is a maximum, so nested folds keep
     ((hp.comp fun z : {z : ε × α × List α × β // I z.1 (z.2.1 :: z.2.2.1) z.2.2.2} =>
       (z.1.1, (z.1.2.2.2, z.1.2.1))).trans hstep)).2.mono_left fun _ => le_max_right _ _
 
+omit [UniqueEncoding Tree β] in
+/-- The time of a fold is within `g` when its list's code is and the time of each callback is
+linear in the code of its element, whatever the state. Times that also grow with the state or the
+environment add up to a product with the length, so they are not covered. -/
+@[dominated_traversal] theorem Dominated.foldlTime_of_size_encode {t : ε → β × α → ℕ} {g : ε → ℕ}
+    (hxs : Dominated (fun x => ⌜xs x⌝ₜ.size) g)
+    (ht : Dominated (fun z : ε × (β × α) => t z.1 z.2) fun z => ⌜z.2.2⌝ₜ.size) :
+    Dominated (fun x => foldlTime (f x) (t x) (a x) (xs x)) g := by
+  obtain ⟨C, hC⟩ := dominated_iff.mp ht
+  refine (Dominated.of_le_mul C fun x => ?_).trans hxs
+  have h := foldlTime_le_sum (f := f x) (fun y => C * ⌜y⌝ₜ.size)
+    (fun z => by simpa only [smul_eq_mul] using hC (x, z)) (a x) (xs x)
+  rw [List.sum_map_mul_left] at h
+  exact h.trans (Nat.mul_le_mul_left C (by rw [size_encode_list (xs x)]; omega))
+
 end Prefix
+
+section Map
+
+variable {ε α β : Type*} [UniqueEncoding Tree β] {xs : ε → List α} {f : ε → α → β}
+
+/-- The code of a mapped list is polynomial in a measure `s` of its input when the list's length
+is, and so are the codes of the images of the elements that occur. -/
+@[dominated_traversal] theorem IsPoly.size_encode_map {s : ε → ℕ}
+    (hn : IsPoly s fun x => (xs x).length)
+    (h : IsPoly (fun z : {p : ε × α // p.2 ∈ xs p.1} => s z.1.1) fun z => ⌜f z.1.1 z.1.2⌝ₜ.size) :
+    IsPoly s fun x => ⌜(xs x).map (f x)⌝ₜ.size := by
+  simpa only [size_encode_list, List.map_map, Function.comp_def, List.length_map] using
+    ((IsPoly.list_sum (a := fun x y => ⌜f x y⌝ₜ.size) hn h).add hn).add (.const 1)
+
+variable [UniqueEncoding Tree α]
+
+/-- A sum over a list is within `g` when the list's code is and the summand of each element that
+occurs is linear in the element's code. Summands that also grow with the environment add up to a
+product with the length, so they are not covered. -/
+@[dominated_traversal] theorem Dominated.list_sum_of_size_encode {a : ε → α → ℕ} {g : ε → ℕ}
+    (hxs : Dominated (fun x => ⌜xs x⌝ₜ.size) g)
+    (h : Dominated (fun z : {p : ε × α // p.2 ∈ xs p.1} => a z.1.1 z.1.2) fun z => ⌜z.1.2⌝ₜ.size) :
+    Dominated (fun x => ((xs x).map (a x)).sum) g :=
+  ((Dominated.list_sum xs a (fun _ y => ⌜y⌝ₜ.size) h).trans
+    (Dominated.of_le fun x => by rw [size_encode_list (xs x)]; omega)).trans hxs
+
+/-- The code of a mapped list is within `g` when the list's code is and the code of the image of
+each element that occurs is linear in the element's code. -/
+@[dominated_traversal] theorem Dominated.size_encode_map {g : ε → ℕ}
+    (hxs : Dominated (fun x => ⌜xs x⌝ₜ.size) g)
+    (h : Dominated (fun z : {p : ε × α // p.2 ∈ xs p.1} => ⌜f z.1.1 z.1.2⌝ₜ.size)
+      fun z => ⌜z.1.2⌝ₜ.size) :
+    Dominated (fun x => ⌜(xs x).map (f x)⌝ₜ.size) g := by
+  refine (((Dominated.list_sum_of_size_encode (a := fun x y => ⌜f x y⌝ₜ.size) (.refl _) h).add_same
+    (.refl _)).mono_left fun x => ?_).trans hxs
+  simp only [size_encode_list, List.map_map, Function.comp_def, List.length_map]
+  omega
+
+end Map
 
 end Complexity.TreeProgram.Source

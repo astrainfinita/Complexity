@@ -43,9 +43,9 @@ attribute [dominated] Tree.size_pos size_encode_bool_le Fin.isLt size_encode_fin
 
 /- The traversal rules of `Asymptotics`. For each kind they are tried in this order: a maximum over
 a list of the elements that occur before a maximum over a list of dependent elements, then a table
-sum. -/
+sum, then a sum over a list of the elements that occur. -/
 attribute [dominated_traversal] Dominated.list_foldr_max_le Dominated.foldr_max_le
-  IsPoly.list_foldr_max IsPoly.foldr_max IsPoly.sum_finRange
+  IsPoly.list_foldr_max IsPoly.foldr_max IsPoly.sum_finRange IsPoly.list_sum
 attribute [dominated_traversal mul] Dominated.sum_finRange_of_mul
 
 end Complexity

@@ -119,8 +119,8 @@ structure Context where
   /-- Statements concluding `IsPoly r T`, registered with `@[dominated]` or in the list, by the
   part `T a` each is about; read on `IsPoly` goals only. -/
   polyLemmas : DiscrTree Lean.Expr := {}
-  /-- The rules registered with `@[dominated_traversal]`, in the order of registration. -/
-  traversalRules : Array TraversalRule
+  /-- The rules registered with `@[dominated_traversal]`. -/
+  traversalRules : TraversalRules
 
 /-- Comparisons settled during one call, and the summands left to the user. -/
 structure State where
@@ -695,12 +695,16 @@ def along (target : Target) (domain π : Lean.Expr) : MetaM Target := do
   | dominated g => return dominated (← comp g)
   | poly s => return poly (← comp s)
 
-/-- The traversal rules of the target's kind, in the order of registration, each with the
-normalization of its elements: the expansion of encoded sizes, also distributing the table length
-over an entry for a rule registered with `mul`. -/
-def traversals (target : Target) (ctx : Context) : Array (Name × LazySimp) :=
+/-- The traversal rules of the target's kind whose growth matches the left side `f`, in the order
+of registration, each with the normalization of its elements: the expansion of encoded sizes, also
+distributing the table length over an entry for a rule registered with `mul`. -/
+def traversals (target : Target) (f : Lean.Expr) (ctx : Context) :
+    MetaM (Array (Name × LazySimp)) := do
   let poly := target matches poly _
-  ctx.traversalRules.filterMap fun r =>
+  let found ← withLocalDeclD `x (← domainOf f) fun x =>
+    ctx.traversalRules.index.getMatch (f.beta #[x])
+  return (found.qsort (· < ·)).filterMap fun i =>
+    let r := ctx.traversalRules.rules[i]!
     if r.poly == poly then some (r.name, if r.mul then ctx.sizesMul else ctx.sizes) else none
 
 end Target
@@ -958,7 +962,7 @@ partial def prove (f : Lean.Expr) (target : Target) : DominatedM (Option Lean.Ex
     let element (ctx : LazySimp) (type : Lean.Expr) : DominatedM (Option Lean.Expr) := do
       let some (a, target) := Target.of? type.consumeMData | return none
       split a target ctx prove
-    for (rule, ctx) in target.traversals (← read) do
+    for (rule, ctx) in ← target.traversals f (← read) do
       if let some h ← viaRule rule type (element ctx) then return some h
     match target with
     | .dominated g =>
