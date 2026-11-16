@@ -18,18 +18,6 @@ namespace ComplexityTest.SourceTranslation.Examples
 
 attribute [local program] hasProgramIn_duplicate
 
-private theorem size_encode_map_le {α β : Type*}
-    [UniqueEncoding Tree α] [UniqueEncoding Tree β] (f : α → β) (xs : List α)
-    (k : ℕ) (hk : 1 ≤ k) (h : ∀ x ∈ xs, ⌜f x⌝ₜ.size ≤ k * ⌜x⌝ₜ.size) :
-    ⌜xs.map f⌝ₜ.size ≤ k * ⌜xs⌝ₜ.size := by
-  induction xs with
-  | nil => simpa using hk
-  | cons x xs ih =>
-    simp only [List.mem_cons, forall_eq_or_imp] at h
-    have := ih h.2
-    simp only [List.map_cons, encode_list_cons, size_encode_prod]
-    nlinarith [h.1]
-
 -- A shared let computes the reversal once; the unshared source reverses twice.
 example : HasProgramInO sharePlain hole(⊢ program)
     (fun xs => ⌜xs⌝ₜ.size + (0 + (0 + 1) + (xs.reverse.length + 1)))
@@ -418,16 +406,10 @@ example : HasProgramInO (List.map (List.reverse : List Unit → List Unit)) hole
       (Dominated.of_le fun xss => (size_encode_list xss).ge)
       (Dominated.refl _)
 
--- Only ordinary size arithmetic remains; no generated code appears in this proof.
+-- Only the size of the callback's result is given; no generated code appears in this proof.
 theorem mapGateClauses_fdtisp {α : Type*} [UniqueEncoding Tree α] :
     List.map (gateClauses (α := α)) ∈ FDTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by
-  have hout := Dominated.of_le_mul 4 (fun xs =>
-    size_encode_map_le (gateClauses (α := α)) xs 4 (by decide)
-      (fun x _ => gateClauses_size_le x))
-  have hlength := Dominated.of_le
-    (length_le_codeSize : ∀ xs : List (Σ k, FirstOrder.Language.booleanAlgebra.Functions k ×
-      (Fin k → α) × α), xs.length ≤ ⌜xs⌝ₜ.size)
-  model_fun_prop
+  model_fun_prop (disch := dominated [gateClauses_size_le])
 
 example {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
     {f : α → β} {q : Value → Code Value} {t p : α → ℕ} (hf : HasProgramInO f q t p) := (by source_fun_prop :
@@ -507,29 +489,10 @@ example := (by source_fun_prop :
 
 def repeatFlag (x : Bool × List Unit) : List Bool := x.2.map (fun _ => x.1)
 
+-- The linear growth of a map whose callback returns a captured flag is settled without the
+-- user. Guards the rules for list sums and mapped lists registered with `@[dominated_traversal]`.
 theorem repeatFlag_fdtisp : repeatFlag ∈ FDTISP .tree (fun n => n) (fun n => n) := by
   model_fun_prop
-  · have hs : Dominated (fun x : Bool × List Unit => ⌜x.2⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) :=
-      by dominated
-    have hout : Dominated (fun x : Bool × List Unit => ⌜x.2.map (fun _ => x.1)⌝ₜ.size)
-        (fun x => ⌜x⌝ₜ.size) :=
-      (Dominated.of_le_mul 3 fun (x : Bool × List Unit) =>
-        size_encode_map_le (fun _ : Unit => x.1) x.2 3 (by decide)
-        (fun a _ => by cases a; simpa using size_encode_bool_le x.1)).trans hs
-    have hu (u : Unit) : ⌜u⌝ₜ.size = 1 := by cases u; rfl
-    simp only [size_encode_prod, Dominated.add_iff, Dominated.max_iff]
-    repeat' apply And.intro
-    all_goals first
-      | assumption
-      | exact Dominated.refl _
-      | exact Dominated.zero
-      | exact Dominated.const_of_pos _ (fun _ => Tree.size_pos _)
-      | apply Dominated.foldr_max_le
-        apply Dominated.of_le_mul 3
-        intro z
-        have := Tree.size_pos ⌜z.1⌝ₜ
-        simp [hu]
-        omega
 
 -- Imported public exits retain the selected implementations and their callback specifications.
 theorem gateClauses_fdtisp {α : Type*} [UniqueEncoding Tree α] :

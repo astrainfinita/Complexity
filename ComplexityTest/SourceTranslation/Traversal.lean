@@ -21,40 +21,27 @@ private def mapReverseCode := List.Code.map List.Code.reverse .input
     (p.compile.init ⌜mapInput⌝ₜ) 186
   p.compile.halt c.1 && decide (c.2.regs 0 = ⌜mapOutput⌝ₜ)
 
--- One long callback and many empty callbacks have linear, not quadratic, total time.
+-- One long callback and many empty callbacks have linear, not quadratic, total time: the time of
+-- each callback is linear in its element whatever the state, so the time of the fold is settled
+-- without the user. Guards `Dominated.foldlTime_of_size_encode`; if the time comes back as a
+-- goal, the rule is no longer applied. The peak holds the states, which the user bounds.
 example : HasProgramInO
     (fun x : List Unit × List (List Unit) => x.2.foldl (fun _ ys => ys.reverse) x.1)
     hole(⊢ program) (fun x => ⌜x⌝ₜ.size) (fun x => ⌜x⌝ₜ.size) := by
   fill_hole program in source_fun_prop
-  · apply Dominated.of_le_mul 2
-    rintro ⟨a, xs⟩
-    have ht := foldlTime_le_sum (f := fun _ ys : List Unit => ys.reverse)
-      (fun ys => 1 + ⌜ys⌝ₜ.size) (fun _ => le_rfl) a xs
-    have hs := size_encode_list xs
-    simp [List.sum_map_add] at ht ⊢
-    omega
-  · apply Dominated.of_le
-    rintro ⟨a, xs⟩
-    have := foldlPeak_le_of_size (f := fun _ ys : List Unit => ys.reverse)
-      (p := fun z => max ⌜z⌝ₜ.size ⌜z.2⌝ₜ.size) a xs (fun _ _ => by simp [size_encode_prod])
-      (fun _ _ => by simp [size_encode_prod])
-    simp [size_encode_prod]
-    omega
+  apply Dominated.of_le
+  rintro ⟨a, xs⟩
+  have := foldlPeak_le_of_size (f := fun _ ys : List Unit => ys.reverse)
+    (p := fun z => max ⌜z⌝ₜ.size ⌜z.2⌝ₜ.size) a xs (fun _ _ => by simp [size_encode_prod])
+    (fun _ _ => by simp [size_encode_prod])
+  simp [size_encode_prod]
+  omega
 
--- Capturing a runtime flag preserves per-element summation.
+-- Capturing a runtime flag preserves per-element summation: the linear time is settled as well.
 private def reverseCaptured (input : Bool × List (List Unit)) : List Unit :=
   input.2.foldl (fun _ ys => if input.1 then ys.reverse else ys) []
 
-example := (by
-    source_fun_prop
-    apply Dominated.of_le_mul 6
-    rintro ⟨b, xs⟩
-    have := foldlTime_le_sum (f := fun _ ys : List Unit => if b then ys.reverse else ys)
-      (t := fun z => 1 + (if b = true then 1 + ⌜z.2⌝ₜ.size else 1) + 1)
-      (fun ys => 5 + ⌜ys⌝ₜ.size) (fun _ => by split <;> omega) [] xs
-    have hs := size_encode_list xs
-    simp [List.sum_map_add] at this ⊢
-    omega : HasProgramInO reverseCaptured _ (fun x => ⌜x⌝ₜ.size) _)
+example := (by source_fun_prop : HasProgramInO reverseCaptured _ (fun x => ⌜x⌝ₜ.size) _)
 
 section FoldGrowth
 
@@ -120,6 +107,95 @@ example : HasProgramIn (fun x : ℕ × List ℕ => x.2.foldl (fun b u => b || x.
     ?_ ?_ ?_).1.trans ?_ <;> dominated
 
 end FoldGrowth
+
+section MapGrowth
+
+-- The growth of a map is settled without the user: its time, a sum over the elements, and its
+-- result are polynomial in the code. Guards the rules `IsPoly.list_sum` and
+-- `IsPoly.size_encode_map` registered with `@[dominated_traversal]`; if this needs a `dominated`
+-- line again, they are no longer applied.
+example : HasProgramIn (fun xs : List (List ℕ) => xs.map List.reverse) hole(⊢ program)
+    (IsPoly fun x => ⌜x⌝ₜ.size) (IsPoly fun x => ⌜x⌝ₜ.size) := by
+  fill_hole program in source_fun_prop
+
+-- The natural linear bounds: the time and the result of each callback are linear in its element,
+-- so the time, the result and the peak of the map are linear in the list. Guards
+-- `Dominated.list_sum_of_size_encode` and `Dominated.size_encode_map`.
+example : HasProgramIn (fun xs : List (List ℕ) => xs.map List.reverse) hole(⊢ program)
+    IsO(fun x => ⌜x⌝ₜ.size) IsO(fun x => ⌜x⌝ₜ.size) := by
+  fill_hole program in source_fun_prop
+
+-- The same with a captured value that leaves the costs of each callback linear in its element.
+example : HasProgramIn
+    (fun x : Bool × List (List ℕ) => x.2.map (fun l => if x.1 then l.reverse else l))
+    hole(⊢ program) IsO(fun x => ⌜x⌝ₜ.size) IsO(fun x => ⌜x⌝ₜ.size) := by
+  fill_hole program in source_fun_prop
+
+-- Nested maps keep the linear bounds: the inner map is the callback of the outer one.
+example : HasProgramIn (fun xs : List (List ℕ) => xs.map (fun l => l.map (· == 0)))
+    hole(⊢ program) IsO(fun x => ⌜x⌝ₜ.size) IsO(fun x => ⌜x⌝ₜ.size) := by
+  fill_hole program in source_fun_prop
+
+-- A callback whose costs grow with the captured list: the time and the result are the length
+-- times the captured list, polynomial but not linear, and the polynomial statement is settled.
+example : HasProgramIn (fun x : List ℕ × List (List ℕ) => x.2.map (fun l => x.1 ++ l))
+    hole(⊢ program) (IsPoly fun x => ⌜x⌝ₜ.size) (IsPoly fun x => ⌜x⌝ₜ.size) := by
+  fill_hole program in source_fun_prop
+
+-- A fold in the callback of a map: the fold rules settle each callback, the map rules the sum,
+-- and the peak stays linear.
+example : HasProgramIn
+    (fun x : ℕ × List (List ℕ) => x.2.map (fun l => l.foldl (fun b u => b || u == x.1) false))
+    hole(⊢ program) (IsPoly fun x => ⌜x⌝ₜ.size) IsO(fun x => ⌜x⌝ₜ.size) := by
+  fill_hole program in source_fun_prop
+
+-- A map in the callback of a fold, and a fold over a mapped list: the size of the mapped list is
+-- the list premise of the fold rules.
+example : HasProgramIn
+    (fun xs : List (List ℕ) => xs.foldl (fun b l => b && (l.map (· == 0)).isEmpty) true)
+    hole(⊢ program) (IsPoly fun x => ⌜x⌝ₜ.size) (IsPoly fun x => ⌜x⌝ₜ.size) := by
+  fill_hole program in source_fun_prop
+
+example : HasProgramIn
+    (fun xs : List (List ℕ) => (xs.map List.reverse).foldl (fun b l => b && l.isEmpty) true)
+    hole(⊢ program) (IsPoly fun x => ⌜x⌝ₜ.size) (IsPoly fun x => ⌜x⌝ₜ.size) := by
+  fill_hole program in source_fun_prop
+
+-- Records a limit: a callback known only to be polynomial has no known result size (plan W69),
+-- so the user states it, here from the peak of the callback; the map rules do the rest.
+example {g : List ℕ → List ℕ} {pg : Value → Code Value}
+    (hg : HasProgramIn g pg (IsPoly fun t => ⌜t⌝ₜ.size) (IsPoly fun t => ⌜t⌝ₜ.size)) :
+    HasProgramIn (fun xs : List (List ℕ) => xs.map g) hole(pg ⊢ program)
+      (IsPoly fun x => ⌜x⌝ₜ.size) (IsPoly fun x => ⌜x⌝ₜ.size) := by
+  have : IsPoly (fun y : List ℕ => ⌜y⌝ₜ.size) fun y => ⌜g y⌝ₜ.size :=
+    (IsPoly.refl.max hg.isPoly_peak).of_dominated hg.hasProgramInO.size_encode
+  fill_hole program in source_fun_prop
+
+-- Records a limit: an explicit degree of the time of a map whose callback costs grow with the
+-- captured list has no rule of its own. The user bounds each callback by the input and sums the
+-- bound; the linear peak is still settled by the rules. This proof should shrink when explicit
+-- time bounds of sums get a rule, as the table sums have (`Dominated.sum_finRange_of_mul`; plan
+-- W81).
+example : HasProgramIn (fun x : List ℕ × List (List ℕ) => x.2.map (fun l => (x.1 ++ l).isEmpty))
+    hole(⊢ program) IsO(fun x => ⌜x⌝ₜ.size ^ 2) IsO(fun x => ⌜x⌝ₜ.size) := by
+  fill_hole program in source_fun_prop
+  all_goals dominated
+  refine (Dominated.list_sum (fun e : List ℕ × List (List ℕ) => e.2) _ (fun e _ => ⌜e⌝ₜ.size)
+    (by dominated)).trans ?_
+  simp only [List.map_const', List.sum_replicate, smul_eq_mul]
+  dominated
+
+-- Records a limit: the rules are stated for lists of a fixed type, so a map over a list whose
+-- element type depends on the input, as a list of indices into a table, keeps its sum and its
+-- result to the user. Not settled at all now (plan W82).
+example : True := by
+  fail_if_success
+    have : HasProgramIn (fun x : Σ n, (Fin n → ℕ) × List (Fin n) => x.2.2.map x.2.1)
+        hole(⊢ program) (IsPoly fun x => ⌜x⌝ₜ.size) (IsPoly fun x => ⌜x⌝ₜ.size) := by
+      fill_hole program in source_fun_prop
+  trivial
+
+end MapGrowth
 
 section DependentMap
 

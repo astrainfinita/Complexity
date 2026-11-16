@@ -321,4 +321,13 @@ example : Dominated (fun x : ℕ × ℕ => no_index (x.1 * x.1 + x.2))
     (fun x => (x.1 + 1) ^ 2 + x.2) := by
   dominated
 
+-- A traversal rule is found through an index on the growth it compares, read from the `fun` of
+-- its conclusion when it is registered. Records the requirement: a conclusion about a growth that
+-- is not written as a `fun` cannot be indexed and is rejected.
+private theorem notFun {f g : ℕ → ℕ} (h : Dominated f g) : Dominated f g := h
+
+/-- error: `dominated_traversal` expects the growth compared to be a `fun` -/
+#guard_msgs in
+attribute [local dominated_traversal] notFun
+
 end ComplexityTest.SourceTranslation.GrowthTactic
