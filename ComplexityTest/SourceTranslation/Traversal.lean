@@ -56,6 +56,71 @@ example := (by
     simp [List.sum_map_add] at this ⊢
     omega : HasProgramInO reverseCaptured _ (fun x => ⌜x⌝ₜ.size) _)
 
+section FoldGrowth
+
+-- The growth of a fold is settled without the user: a time polynomial and a peak linear in the
+-- code, with a captured value and a bounded accumulator. Guards the fold rules registered with
+-- `@[dominated_traversal]`; if this needs a `dominated` line again, they are no longer applied.
+example : HasProgramIn (fun x : ℕ × List ℕ => x.2.foldl (fun b u => b || x.1 == u) false)
+    hole(⊢ program) (IsPoly fun x => ⌜x⌝ₜ.size) IsO(fun x => ⌜x⌝ₜ.size) := by
+  fill_hole program in source_fun_prop
+
+-- The same for nested folds: the inner fold is in the callback of the outer one, and the peak
+-- stays linear.
+example : HasProgramIn (fun x : List (List ℕ) × ℕ =>
+      x.1.foldl (fun b l => b && l.foldl (fun c u => c || x.2 == u) false) true)
+    hole(⊢ program) (IsPoly fun x => ⌜x⌝ₜ.size) IsO(fun x => ⌜x⌝ₜ.size) := by
+  fill_hole program in source_fun_prop
+
+private theorem size_foldl_keep_le (n : ℕ) (ys acc : List ℕ) :
+    ⌜ys.foldl (fun acc v => if v < n then v :: acc else acc) acc⌝ₜ.size ≤
+      ⌜ys⌝ₜ.size + ⌜acc⌝ₜ.size := by
+  induction ys generalizing acc with
+  | nil => simp
+  | cons y ys ih =>
+    rw [List.foldl_cons]
+    by_cases h : y < n
+    · have := ih (y :: acc)
+      simp only [h, ↓reduceIte, encode_list_cons, size_encode_prod] at this ⊢
+      omega
+    · have := ih acc
+      simp only [h, ↓reduceIte, encode_list_cons, size_encode_prod] at this ⊢
+      omega
+
+-- An accumulator that grows needs a bound on the state after every prefix of the list: the user
+-- gives it as a lemma about the fold of any list, and the rules do the rest.
+example : HasProgramIn
+    (fun x : ℕ × List ℕ => x.2.foldl (fun acc v => if v < x.1 then v :: acc else acc) [])
+    hole(⊢ program) (IsPoly fun x => ⌜x⌝ₜ.size) (IsPoly fun x => ⌜x⌝ₜ.size) := by
+  fill_hole program in source_fun_prop
+  all_goals dominated [size_foldl_keep_le]
+
+-- A callback known only to be polynomial, given as a hypothesis and applied to a captured value:
+-- its growth enters the fold as an opaque function, and the rules still settle the fold. This is
+-- the shape of a check of every element of a list by a function taken from a class.
+example {α : Type*} [UniqueEncoding Tree α] {V : α × Tree → Bool} {pV : Value → Code Value}
+    (hV : HasProgramIn V pV (IsPoly fun t => ⌜t⌝ₜ.size) (IsPoly fun t => ⌜t⌝ₜ.size)) :
+    ∃ p, HasProgramIn (fun x : α × List Tree => x.2.foldl (fun b t => b && V (x.1, t)) true) p
+      (IsPoly fun x => ⌜x⌝ₜ.size) (IsPoly fun x => ⌜x⌝ₜ.size) :=
+  ⟨_, by source_fun_prop⟩
+
+-- Records a limit: an explicit degree of the time of a fold has no rule of its own. It goes
+-- through `Dominated.foldl_of_invariant`, where the user gives the invariant (the remaining list
+-- is no larger than the folded one) and the time bound of a round; `dominated` closes the
+-- comparisons left, and the linear peak is still settled by the rules. This proof should shrink
+-- when explicit time bounds of folds get a rule.
+example : HasProgramIn (fun x : ℕ × List ℕ => x.2.foldl (fun b u => b || x.1 == u) false)
+    hole(⊢ program) IsO(fun x => ⌜x⌝ₜ.size ^ 2) IsO(fun x => ⌜x⌝ₜ.size) := by
+  fill_hole program in source_fun_prop
+  all_goals dominated
+  refine (Dominated.foldl_of_invariant (p := fun _ _ => 0)
+    (fun (x : ℕ × List ℕ) (rest : List ℕ) (_ : Bool) => ⌜rest⌝ₜ.size ≤ ⌜x.2⌝ₜ.size)
+    (fun x => x.2) (fun _ => false) (fun x => ⌜x⌝ₜ.size) (fun x => ⌜x⌝ₜ.size)
+    (fun _ => le_rfl) (fun _ a rest _ h => (size_encode_tail_le (a :: rest)).trans h)
+    ?_ ?_ ?_).1.trans ?_ <;> dominated
+
+end FoldGrowth
+
 section DependentMap
 
 -- A runtime table and its indices share the same runtime length; the table is captured once.
