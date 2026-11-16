@@ -6,11 +6,11 @@ Authors: Yuyang Zhao
 module
 
 import Complexity.Problems.CircuitSAT.KSAT
-import Complexity.Problems.CircuitSAT.Verifier
+import Complexity.Problems.KSAT.Membership
 import Complexity.Resources.Circuit.Tseitin
 import Complexity.Encoding.RawWord
 meta import Complexity.Models.Circuit.Tseitin
-meta import Complexity.Problems.CircuitSAT.Verifier
+meta import Complexity.Problems.KSAT.Verifier
 
 namespace Complexity.SATTest
 
@@ -147,17 +147,14 @@ def sparse : KCNF 2 ℕ := ⟨[[.pos 1000000, .neg 0]], by decide⟩
 example : KSAT 2 sparse :=
   (KSAT.exists_verify_iff sparse).mpr ⟨[], List.nil_sublist _, rfl⟩
 
-/-- A circuit with many inputs, of which only the last is used. -/
-def lastInput : Circuit .booleanAlgebra 1000001 1 := .outputs fun _ => 1000000
-
-#guard CircuitSAT.verify (⟨_, lastInput⟩, [1000000])
-#guard !CircuitSAT.verify (⟨_, lastInput⟩, [999999, 1000001])
-
--- A listed number beyond the inputs is not a gate value: the gate wire 0 stays false.
-#guard !CircuitSAT.verify (⟨0, Circuit.ofGate botFunc Fin.elim0⟩, [0])
-
-example (w : List ℕ) : CircuitSAT.verify (⟨1, contradiction⟩, w) = false :=
-  Bool.eq_false_iff.mpr fun h => not_contradiction ⟨_, h⟩
+-- Circuits need no verifier of their own: the verifier of `3`-SAT after the Tseitin reduction
+-- accepts exactly the satisfiable circuits, with the witnesses of the Tseitin formula. Guards
+-- that the reduction and the verifier chain as stated, which the membership of `CircuitSAT` in
+-- NP relies on.
+example (c : Σ n, Circuit .booleanAlgebra n 1) :
+    CircuitSAT c ↔ ∃ w : List ℕ, w.Sublist (CircuitSAT.toKSAT c).val.atoms ∧
+      KSAT.verify 3 (CircuitSAT.toKSAT c, w) = true :=
+  (CircuitSAT.toKSAT_correct c).trans (KSAT.exists_verify_iff _)
 
 end Verifiers
 
@@ -167,5 +164,16 @@ example {α : Type*} [UniqueEncoding Tree α] (a : α) :
     (Literal.Code.mk .input .nil).Computes
       (encode Tree a) (encode Tree (Literal.neg a)) := by
   simp [computes_iff]
+
+-- The sparse verifier of `k`-SAT is polynomial-time in the size-charged tree model. Guards the
+-- exit `KSAT.verify_fp`; its program is found by the translation alone, through the rule for
+-- `CNF.eval` with the assignment as a callback and the view equation of membership.
+example : KSAT.verify 3 ∈ FP .sizeCostTree := KSAT.verify_fp 3
+
+-- Guards the statement of the verifier's program: a polynomial time and a linear peak.
+open TreeProgram.Source in
+example : HasProgramIn (KSAT.verify 3) KSAT.programVerify
+    (IsPoly fun x => ⌜x⌝ₜ.size) IsO(fun x => ⌜x⌝ₜ.size) :=
+  KSAT.hasProgramIn_verify 3
 
 end Complexity.SATTest
