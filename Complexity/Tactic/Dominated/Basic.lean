@@ -200,13 +200,36 @@ def domainOf (f : Lean.Expr) : MetaM Lean.Expr := do
 partial def eraseMData (e : Lean.Expr) : Lean.Expr :=
   e.replace fun | .mdata _ b => some (eraseMData b) | _ => none
 
+/-- In a goal `a ≤ b`, replace the maxima `max u v` of the right side by variables `m` with
+`u ≤ m` and `v ≤ m`. The right side grows with its maxima unless it subtracts, so the goal holds
+for all values exactly when it follows from these bounds, and `omega` has no cases of the maxima
+to split; a right side with a subtraction is left as it is. -/
+partial def abstractRightMaxima (goal : MVarId) : MetaM MVarId := goal.withContext do
+  let target ← instantiateMVars (← goal.getType)
+  unless target.isAppOfArity ``LE.le 4 do return goal
+  let rhs := target.appArg!
+  if (rhs.find? (·.isAppOfArity ``HSub.hSub 6)).isSome then return goal
+  let some m := rhs.find? fun e => e.isAppOfArity ``Max.max 4 && !e.hasLooseBVars &&
+      e.getAppArgs[0]!.isConstOf ``Nat | return goal
+  let (u, v) := (m.appFn!.appArg!, m.appArg!)
+  let type ← withLocalDeclD `m (mkConst ``Nat) fun x => do
+    let rhs' := rhs.replace fun e => if e == m then some x else none
+    mkForallFVars #[x] (← mkArrow (← mkAppM ``LE.le #[u, x]) (← mkArrow (← mkAppM ``LE.le #[v, x])
+      (mkApp target.appFn! rhs')))
+  let new ← mkFreshExprSyntheticOpaqueMVar type
+  goal.assign (mkApp3 new m (← mkAppM ``le_max_left #[u, v]) (← mkAppM ``le_max_right #[u, v]))
+  let (_, g) ← new.mvarId!.introN 3
+  abstractRightMaxima g
+
 /-- Close one case of the pointwise step by `omega` with the size facts, and the facts about
-products and powers when `nonlinear`, expanding the encoded sizes that splitting has exposed. -/
+products and powers when `nonlinear`, expanding the encoded sizes that splitting has exposed. The
+maxima of the right side are bounded variables for `omega` (`abstractRightMaxima`). -/
 def closeCase (outer : FVarIdSet) (goal : MVarId) : DominatedM Bool := do
   let nonlinear := (← get).nonlinear
   let ctx ← read
   -- `omega` takes a term under metadata, as the alternatives of a `match` carry, for an atom.
   let goal ← goal.replaceTargetDefEq (eraseMData (← instantiateMVars (← goal.getType)))
+  let goal ← abstractRightMaxima goal
   closes goal do
     let some g ← simpOwn outer (← ctx.expand.get)
         (← addSizeFacts outer ctx.statements ctx.premises goal) ctx.numerals
