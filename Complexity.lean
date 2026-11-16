@@ -130,8 +130,8 @@ public import Complexity.Models.TuringMachine.Program.Specification.Configuratio
 public import Complexity.Models.TuringMachine.Program.Specification.History
 public import Complexity.Problems.CircuitSAT.Basic
 public import Complexity.Problems.CircuitSAT.KSAT
-public import Complexity.Problems.CircuitSAT.Verifier
 public import Complexity.Problems.KSAT.Basic
+public import Complexity.Problems.KSAT.Membership
 public import Complexity.Problems.KSAT.Verifier
 public import Complexity.Resources.Basic
 public import Complexity.Resources.Circuit.Basic

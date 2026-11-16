@@ -288,6 +288,15 @@ private theorem map_bounded {α β : Type*} {space : ℕ}
     xs.foldr (fun x n => max (cost x) n) 0 ≤ bound ↔ ∀ x ∈ xs, cost x ≤ bound := by
   induction xs <;> simp_all
 
+/-- A maximum over a list of maxima is the maximum of the two maxima over the list, as
+`List.sum_map_add` for sums. -/
+theorem foldr_max_max {α : Type*} (a b : α → ℕ) (xs : List α) :
+    xs.foldr (fun x n => max (max (a x) (b x)) n) 0 =
+      max (xs.foldr (fun x n => max (a x) n) 0) (xs.foldr (fun x n => max (b x) n) 0) := by
+  induction xs with
+  | nil => rfl
+  | cons x xs ih => rw [List.foldr_cons, List.foldr_cons, List.foldr_cons, ih, max_max_max_comm]
+
 /-- Map bounds, summing callback times and including traversal overhead. -/
 @[simps] def mapBounds {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
     (f : α → β) (b : Bounds α) : Bounds (List α) :=
