@@ -10,11 +10,12 @@ import Complexity.Tactic.TreeProgram.Library
 For each construct whose growth is made of the growths of its steps, the simplest use, stated with
 `IsPoly` in the code size and, where there is a natural exact bound, with that bound. A use closed
 by `fill_hole program in source_fun_prop` alone guards that the translation settles its growth;
-a use that is not records the limit and its plan item. Folds and maps are covered in `Traversal`
-(`FoldGrowth`, `MapGrowth`), iterations in `Iteration` (`IterateGrowth`). Tail loops and stack
-recursion are not here: they take an invariant or a scale from the user with `using loop` and
-`using recursion` (tests `TailRecursion`, `AsymptoticTailRecursion`, `Recursion`), and the growth
-of a stack recursion has no rule that settles it (plan W83). -/
+a use that is not records the limit and its plan item. Folds, maps and checks of the elements are
+covered in `Traversal` (`FoldGrowth`, `MapGrowth`, `AllAnyGrowth`), iterations in `Iteration`
+(`IterateGrowth`). Tail loops and stack recursion are not here: they take an invariant or a scale
+from the user with `using loop` and `using recursion` (tests `TailRecursion`,
+`AsymptoticTailRecursion`, `Recursion`), and the growth of a stack recursion has no rule that
+settles it (plan W83). -/
 
 open Complexity TreeProgram Complexity.TreeProgram.Source
 
@@ -34,6 +35,20 @@ example : HasProgramIn (fun xs : List ℕ => xs.foldl (fun b u => b || u == 0) f
   fill_hole program in source_fun_prop
 
 end Fold
+
+section Check
+
+-- A check of every element of a list with a predicate capturing nothing: polynomial, and linear
+-- in time and peak. The captured forms and membership are in `Traversal` (`AllAnyGrowth`).
+example : HasProgramIn (fun xs : List ℕ => xs.all (fun u => u == 0))
+    hole(⊢ program) (IsPoly fun x => ⌜x⌝ₜ.size) (IsPoly fun x => ⌜x⌝ₜ.size) := by
+  fill_hole program in source_fun_prop
+
+example : HasProgramIn (fun xs : List ℕ => xs.all (fun u => u == 0))
+    hole(⊢ program) IsO(fun x => ⌜x⌝ₜ.size) IsO(fun x => ⌜x⌝ₜ.size) := by
+  fill_hole program in source_fun_prop
+
+end Check
 
 section Branch
 

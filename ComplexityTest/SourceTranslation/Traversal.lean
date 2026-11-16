@@ -197,6 +197,66 @@ example : True := by
 
 end MapGrowth
 
+section AllAnyGrowth
+
+-- A check of every element, or of some element, with a predicate capturing a value is translated
+-- without a `via`: it is computed as the conjunction or disjunction of the mapped list, by the
+-- view equations `encode_list_all` and `encode_list_any`, so its growth is that of a map and is
+-- settled by the same rules: a time polynomial and a peak linear in the code. If these need a
+-- `via` or a `dominated` line again, the views are no longer applied.
+example : HasProgramIn (fun x : ℕ × List ℕ => x.2.all (fun u => u == x.1)) hole(⊢ program)
+    (IsPoly fun x => ⌜x⌝ₜ.size) IsO(fun x => ⌜x⌝ₜ.size) := by
+  fill_hole program in source_fun_prop
+
+example : HasProgramIn (fun x : ℕ × List ℕ => x.2.any (fun u => u == x.1)) hole(⊢ program)
+    (IsPoly fun x => ⌜x⌝ₜ.size) IsO(fun x => ⌜x⌝ₜ.size) := by
+  fill_hole program in source_fun_prop
+
+-- A predicate capturing nothing whose costs are linear in its element: the time is linear too.
+example : HasProgramIn (fun xs : List ℕ => xs.any (fun u => u == 0)) hole(⊢ program)
+    IsO(fun x => ⌜x⌝ₜ.size) IsO(fun x => ⌜x⌝ₜ.size) := by
+  fill_hole program in source_fun_prop
+
+-- Membership is a check of some element with `==` (`encode_list_elem`), for any type whose `==`
+-- has an implementation: numbers and Booleans here.
+example : HasProgramIn (fun x : ℕ × List ℕ => x.2.contains x.1) hole(⊢ program)
+    (IsPoly fun x => ⌜x⌝ₜ.size) IsO(fun x => ⌜x⌝ₜ.size) := by
+  fill_hole program in source_fun_prop
+
+example : HasProgramIn (fun x : Bool × List Bool => x.2.contains x.1) hole(⊢ program)
+    (IsPoly fun x => ⌜x⌝ₜ.size) IsO(fun x => ⌜x⌝ₜ.size) := by
+  fill_hole program in source_fun_prop
+
+-- Nested checks with membership in a captured list: the shape of evaluating a formula in
+-- conjunctive normal form under the assignment that lists the true variables.
+example : HasProgramIn
+    (fun x : List (List ℕ) × List ℕ => x.1.all (fun l => l.any (fun u => x.2.contains u)))
+    hole(⊢ program) (IsPoly fun x => ⌜x⌝ₜ.size) IsO(fun x => ⌜x⌝ₜ.size) := by
+  fill_hole program in source_fun_prop
+
+private def allOf (p : ℕ → Bool) (xs : List ℕ) : Bool := xs.all p
+
+-- Records a limit: a definition taking a predicate is unfolded only as the source function itself;
+-- elsewhere it needs a selected implementation, which a `[program]` statement cannot give, since
+-- the predicate has no code.
+example : True := by
+  fail_if_success
+    have : HasProgramIn (fun x : ℕ × List ℕ => allOf (· == x.1) x.2) hole(⊢ program)
+        (IsPoly fun x => ⌜x⌝ₜ.size) IsO(fun x => ⌜x⌝ₜ.size) := by
+      fill_hole program in source_fun_prop
+  trivial
+
+-- The way out: a view equation says how its value is computed. Guards that view equations reach
+-- definitions with function arguments.
+@[local source_view] private theorem encode_allOf (p : ℕ → Bool) (xs : List ℕ) :
+    ⌜allOf p xs⌝ₜ = ⌜xs.all p⌝ₜ := rfl
+
+example : HasProgramIn (fun x : ℕ × List ℕ => allOf (· == x.1) x.2) hole(⊢ program)
+    (IsPoly fun x => ⌜x⌝ₜ.size) IsO(fun x => ⌜x⌝ₜ.size) := by
+  fill_hole program in source_fun_prop
+
+end AllAnyGrowth
+
 section DependentMap
 
 -- A runtime table and its indices share the same runtime length; the table is captured once.
