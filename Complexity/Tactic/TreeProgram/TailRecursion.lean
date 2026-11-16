@@ -203,6 +203,69 @@ theorem tail_loop (hc : HasProgramInO test qc tc pc) (hs : HasProgramInO next qs
 
 end Internal.HasProgramInO
 
+section Poly
+
+variable {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
+  {test : α → Bool} {next : α → α} {finish result : α → β} {qc qs qd : Value → Code Value}
+  {Tc Pc Ts Ps Td Pd : α → ℕ}
+
+/-- A tail loop polynomial in a scale `S` of the initial input, in which the number of rounds and
+the codes of the states reachable under an invariant are polynomial. Each callback is polynomial in
+a time measure and a peak measure, polynomial in the code of its input. -/
+theorem HasProgramIn.tail_loop_isPoly
+    (hc : HasProgramIn test qc (IsPoly Tc) (IsPoly Pc))
+    (hs : HasProgramIn next qs (IsPoly Ts) (IsPoly Ps))
+    (hd : HasProgramIn finish qd (IsPoly Td) (IsPoly Pd))
+    (S : α → ℕ) (I : α → α → Prop) (measure : α → ℕ)
+    (equation : ∀ y, result y = if test y then result (next y) else finish y)
+    (initial : ∀ x, I x x) (next_state : ∀ x y, I x y → test y = true → I x (next y))
+    (decreases : ∀ x y, I x y → test y = true → measure (next y) < measure y)
+    (hmeasure : IsPoly S measure)
+    (hsize : IsPoly (fun z : {p : α × α // I p.1 p.2} => S z.1.1) fun z => ⌜z.1.2⌝ₜ.size)
+    (hTc : IsPoly (fun y => ⌜y⌝ₜ.size) Tc) (hPc : IsPoly (fun y => ⌜y⌝ₜ.size) Pc)
+    (hTs : IsPoly (fun y => ⌜y⌝ₜ.size) Ts) (hPs : IsPoly (fun y => ⌜y⌝ₜ.size) Ps)
+    (hTd : IsPoly (fun y => ⌜y⌝ₜ.size) Td) (hPd : IsPoly (fun y => ⌜y⌝ₜ.size) Pd) :
+    HasProgramIn result (loopCode qc qs qd) (IsPoly S) (IsPoly S) := by
+  let Sub := {p : α × α // I p.1 p.2}
+  have reach {T t : α → ℕ} (h : IsPoly T t) (hT : IsPoly (fun y => ⌜y⌝ₜ.size) T) :
+      IsPoly (fun z : Sub => S z.1.1) fun z => t z.1.2 :=
+    h.comp (hT.comp hsize)
+  have htc := reach hc.isPoly_time hTc
+  obtain ⟨d₁, h₁⟩ := hsize
+  obtain ⟨d₂, h₂⟩ := reach hc.isPoly_peak hPc
+  obtain ⟨d₃, h₃⟩ := reach hs.isPoly_peak hPs
+  obtain ⟨d₄, h₄⟩ := reach hd.isPoly_peak hPd
+  obtain ⟨d₅, h₅⟩ := reach hd.isPoly_time hTd
+  obtain ⟨d₆, h₆⟩ := reach hs.isPoly_time hTs
+  obtain ⟨d₇, h₇⟩ := reach hc.isPoly_time hTc
+  let D := d₁ + d₂ + d₃ + d₄ + d₅ + d₆ + d₇
+  have lift {t : Sub → ℕ} {d : ℕ} (h : Dominated t fun z => (S z.1.1 + 1) ^ d) (hd : d ≤ D) :
+      Dominated t fun z => (S z.1.1 + 1) ^ D :=
+    h.mono_pow hd fun _ => Nat.succ_pos _
+  have hpos {γ : Type _} (u : γ → Sub) : Dominated (fun _ => 1) fun z => (S (u z).1.1 + 1) ^ D :=
+    Dominated.const_of_pos 1 fun _ => Nat.pow_pos (Nat.succ_pos _)
+  let run (z : {p : α × α // I p.1 p.2 ∧ test p.2 = true}) : Sub := ⟨z.1, z.2.1⟩
+  let stop (z : {p : α × α // I p.1 p.2 ∧ test p.2 = false}) : Sub := ⟨z.1, z.2.1⟩
+  let after (z : {p : α × α // I p.1 p.2 ∧ test p.2 = true}) : Sub :=
+    ⟨(z.1.1, next z.1.2), next_state _ _ z.2.1 z.2.2⟩
+  have h := HasProgramInO.tail_loop_potential hc.hasProgramInO hs.hasProgramInO hd.hasProgramInO
+    I (fun x y => measure y * (S x + 1) ^ D) (fun x => (S x + 1) ^ D) (fun x => (S x + 1) ^ D)
+    equation initial next_state (lift h₁ (by omega)) (lift h₂ (by omega))
+    ((lift h₃ (by omega)).comp run) ((lift h₄ (by omega)).comp stop)
+    (((lift h₅ (by omega)).comp stop).add_same (hpos stop))
+    ((((lift h₆ (by omega)).comp run).add_same ((lift h₇ (by omega)).comp after)).add_same
+      (hpos run) |>.mono fun z => by
+        change (S z.1.1 + 1) ^ D ≤ measure z.1.2 * _ - measure (next z.1.2) * _
+        rw [← Nat.sub_mul]
+        have := decreases z.1.1 z.1.2 z.2.1 z.2.2
+        exact Nat.le_mul_of_pos_left _ (by omega))
+  have hD : IsPoly S fun x => (S x + 1) ^ D := (IsPoly.refl.add (.const 1)).pow D
+  exact h.hasProgramIn
+    (((htc.comp (h := fun x => ⟨(x, x), initial x⟩) IsPoly.refl).add
+      ((hmeasure.mul hD).add hD)).add (.const 1)) hD
+
+end Poly
+
 end Complexity.TreeProgram.Source
 
 end
