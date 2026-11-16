@@ -118,6 +118,12 @@ theorem eval_congr (f : CNF α) (x y : α → Bool)
   · obtain ⟨l, hl, hv⟩ := hx clause hc
     exact ⟨l, hl, (h clause hc l hl).trans hv⟩
 
+/-- The variables of the literal occurrences of a formula, in order and with repetitions. -/
+def atoms (f : CNF α) : List α := f.flatMap (List.map Literal.atom)
+
+theorem mem_atoms {f : CNF α} {a : α} : a ∈ f.atoms ↔ ∃ clause ∈ f, ∃ l ∈ clause, l.atom = a := by
+  simp [atoms]
+
 end CNF
 
 end Complexity
