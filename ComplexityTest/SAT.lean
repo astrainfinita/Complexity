@@ -6,9 +6,11 @@ Authors: Yuyang Zhao
 module
 
 import Complexity.Problems.CircuitSAT.KSAT
+import Complexity.Problems.CircuitSAT.Verifier
 import Complexity.Resources.Circuit.Tseitin
 import Complexity.Encoding.RawWord
 meta import Complexity.Models.Circuit.Tseitin
+meta import Complexity.Problems.CircuitSAT.Verifier
 
 namespace Complexity.SATTest
 
@@ -127,6 +129,37 @@ example : decode (Literal ℕ) (Tree.pair .nil (.pair .nil (.pair .nil .nil))) =
   rintro ⟨a, p⟩ h
   rw [UniqueEncoding.mem_decode_iff] at h
   cases p <;> simp at h
+
+section Verifiers
+
+open FirstOrder.BooleanAlgebra
+
+/-- One variable with a large number; a witness lists only true variables. -/
+def sparse : KCNF 2 ℕ := ⟨[[.pos 1000000, .neg 0]], by decide⟩
+
+#guard KSAT.verify 2 (sparse, [1000000])
+#guard KSAT.verify 2 (sparse, [])
+#guard !KSAT.verify 1 (⟨[[.pos 1000000], [.neg 1000000]], by decide⟩, [1000000])
+
+-- Variables missing from the witness are false.
+#guard !KSAT.verify 1 (⟨[[.pos 3]], by decide⟩, [0, 1, 2])
+
+example : KSAT 2 sparse :=
+  (KSAT.exists_verify_iff sparse).mpr ⟨[], List.nil_sublist _, rfl⟩
+
+/-- A circuit with many inputs, of which only the last is used. -/
+def lastInput : Circuit .booleanAlgebra 1000001 1 := .outputs fun _ => 1000000
+
+#guard CircuitSAT.verify (⟨_, lastInput⟩, [1000000])
+#guard !CircuitSAT.verify (⟨_, lastInput⟩, [999999, 1000001])
+
+-- A listed number beyond the inputs is not a gate value: the gate wire 0 stays false.
+#guard !CircuitSAT.verify (⟨0, Circuit.ofGate botFunc Fin.elim0⟩, [0])
+
+example (w : List ℕ) : CircuitSAT.verify (⟨1, contradiction⟩, w) = false :=
+  Bool.eq_false_iff.mpr fun h => not_contradiction ⟨_, h⟩
+
+end Verifiers
 
 open TreeProgram TreeProgram.Code
 
