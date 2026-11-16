@@ -335,6 +335,51 @@ theorem _root_.List.hasProgramIn_length {α : Type*} [UniqueEncoding Tree α] :
 
 attribute [scoped program] List.hasProgramIn_length
 
+/-- The conjunction of a list of Booleans, by a left fold without short-circuiting. -/
+theorem _root_.List.hasProgramIn_and : HasProgramIn List.and hole(⊢ program)
+    IsO(fun bs => ⌜bs⌝ₜ.size) IsO(fun bs => ⌜bs⌝ₜ.size) := by
+  abstract_hole program using programAnd
+  fill_hole program in
+    source_fun_prop via (fun bs : List Bool => bs.foldl (fun b x => b && x) true)
+  case source_eq =>
+    funext bs
+    suffices ∀ c, (c && bs.and) = bs.foldl (fun b x => b && x) c by simpa using this true
+    induction bs with
+    | nil => simp
+    | cons x bs ih => intro c; simp [← ih, Bool.and_assoc]
+
+/-- The disjunction of a list of Booleans, by a left fold without short-circuiting. -/
+theorem _root_.List.hasProgramIn_or : HasProgramIn List.or hole(⊢ program)
+    IsO(fun bs => ⌜bs⌝ₜ.size) IsO(fun bs => ⌜bs⌝ₜ.size) := by
+  abstract_hole program using programOr
+  fill_hole program in
+    source_fun_prop via (fun bs : List Bool => bs.foldl (fun b x => b || x) false)
+  case source_eq =>
+    funext bs
+    suffices ∀ c, (c || bs.or) = bs.foldl (fun b x => b || x) c by simpa using this false
+    induction bs with
+    | nil => simp
+    | cons x bs ih => intro c; simp [← ih, Bool.or_assoc]
+
+attribute [scoped program] List.hasProgramIn_and List.hasProgramIn_or
+
+/-- A check of every element of a list is computed as the conjunction of the mapped list: the
+predicate is a callback of the map, so it may capture values. -/
+@[source_view] theorem encode_list_all {α : Type*} (xs : List α) (p : α → Bool) :
+    ⌜xs.all p⌝ₜ = ⌜(xs.map p).and⌝ₜ := by
+  simp [List.and, List.all_map]
+
+/-- A check of some element of a list is computed as the disjunction of the mapped list. -/
+@[source_view] theorem encode_list_any {α : Type*} (xs : List α) (p : α → Bool) :
+    ⌜xs.any p⌝ₜ = ⌜(xs.map p).or⌝ₜ := by
+  simp [List.or, List.any_map]
+
+/-- Membership is computed as a check of some element with `==`, for any type whose `==` has an
+implementation. `List.contains` is reducible to `List.elem`. -/
+@[source_view] theorem encode_list_elem {α : Type*} [BEq α] (a : α) (xs : List α) :
+    ⌜xs.elem a⌝ₜ = ⌜xs.any (a == ·)⌝ₜ := by
+  rw [List.elem_eq_contains, List.contains_eq_any_beq]
+
 /-- Construct a represented tuple using one selected callback for every environment and index.
 Tabulation sums the callback growth; one coefficient covers every environment and index. -/
 theorem Internal.HasProgramInO.fin_function {ρ : Type*} {β : ρ → Type*}
