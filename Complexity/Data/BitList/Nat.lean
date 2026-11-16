@@ -76,6 +76,11 @@ theorem length_decrement_le (xs : List Bool) : (decrement xs).length ≤ xs.leng
   | nil => simp
   | cons b xs ih => cases b <;> simp_all; split <;> simp_all
 
+/-- A smaller number has no more binary digits. -/
+theorem _root_.Nat.length_bits_le_length_bits {m n : ℕ} (h : m ≤ n) :
+    m.bits.length ≤ n.bits.length := by
+  simpa only [Nat.digits_two_eq_bits, List.length_map] using Nat.le_length_digits_le 2 m n h
+
 /-- Add two little-endian bit strings with an incoming carry. -/
 def addCarry (c : Bool) : List Bool → List Bool → List Bool
   | [], ys => if c then increment ys else ys

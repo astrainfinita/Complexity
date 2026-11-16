@@ -112,27 +112,27 @@ theorem iterate_le_of_invariant {t p : α → ℕ} (I : ℕ → α → Prop) (re
 /-- A potential may depend on the initial input, the remaining count and the current state.
 The round and callback comparisons cover the active invariant family with one coefficient;
 terminal states only require their stored size. -/
-theorem Dominated.iterate_of_potential {ρ : Type*} {t p : α → ℕ}
+theorem Dominated.iterate_of_potential {ρ : Type*} {f : ρ → α → α} {t p : ρ → α → ℕ}
     (I : ρ → ℕ → α → Prop) (count : ρ → ℕ) (initial : ρ → α)
     (remaining : ρ → ℕ → α → ℕ) (peak : ρ → ℕ)
     (start : ∀ x, I x (count x) (initial x))
-    (next : ∀ x n a, I x (n + 1) a → I x n (f a))
+    (next : ∀ x n a, I x (n + 1) a → I x n (f x a))
     (hround : Dominated
       (fun z : {z : ρ × ℕ × α // I z.1 (z.2.1 + 1) z.2.2} =>
-        t z.1.2.2 + ⌜z.1.2.1 + 1⌝ₜ.size)
+        t z.1.1 z.1.2.2 + ⌜z.1.2.1 + 1⌝ₜ.size)
       (fun z => remaining z.1.1 (z.1.2.1 + 1) z.1.2.2 -
-        remaining z.1.1 z.1.2.1 (f z.1.2.2)))
+        remaining z.1.1 z.1.2.1 (f z.1.1 z.1.2.2)))
     (hsize : Dominated (fun z : {z : ρ × ℕ × α // I z.1 z.2.1 z.2.2} => ⌜z.1.2⌝ₜ.size)
       (fun z => peak z.1.1))
-    (hp : Dominated (fun z : {z : ρ × ℕ × α // I z.1 (z.2.1 + 1) z.2.2} => p z.1.2.2)
+    (hp : Dominated (fun z : {z : ρ × ℕ × α // I z.1 (z.2.1 + 1) z.2.2} => p z.1.1 z.1.2.2)
       (fun z => peak z.1.1)) :
-    Dominated (fun x => iterateTime f t (count x) (initial x))
+    Dominated (fun x => iterateTime (f x) (t x) (count x) (initial x))
       (fun x => remaining x (count x) (initial x)) ∧
-    Dominated (fun x => iteratePeak f p (count x) (initial x)) peak := by
+    Dominated (fun x => iteratePeak (f x) (p x) (count x) (initial x)) peak := by
   obtain ⟨C, hC⟩ := hround
   obtain ⟨D, hD⟩ := hsize
   obtain ⟨P, hP⟩ := hp
-  have bound (x : ρ) := iterate_le_of_invariant (p := p) (I x)
+  have bound (x : ρ) := iterate_le_of_invariant (f := f x) (t := t x) (p := p x) (I x)
     (fun n a => C * remaining x n a) ((D + P) * peak x) (count x) (initial x) (start x)
     (fun n a ha => by
       have ht := hC ⟨(x, n, a), ha⟩
@@ -155,20 +155,21 @@ theorem Dominated.iterate_of_potential {ρ : Type*} {t p : α → ℕ}
 
 /-- A common round allowance is the potential `remaining count * round allowance`.
 Callback allowances are compared only when the remaining count is positive. -/
-theorem Dominated.iterate_of_invariant {ρ : Type*} {t p : α → ℕ}
+theorem Dominated.iterate_of_invariant {ρ : Type*} {f : ρ → α → α} {t p : ρ → α → ℕ}
     (I : ρ → ℕ → α → Prop) (count : ρ → ℕ) (initial : ρ → α) (time peak : ρ → ℕ)
     (start : ∀ x, I x (count x) (initial x))
-    (next : ∀ x n a, I x (n + 1) a → I x n (f a))
+    (next : ∀ x n a, I x (n + 1) a → I x n (f x a))
     (hcount : Dominated (fun z : {z : ρ × ℕ × α // I z.1 z.2.1 z.2.2} => ⌜z.1.2.1⌝ₜ.size)
       (fun z => time z.1.1))
     (hsize : Dominated (fun z : {z : ρ × ℕ × α // I z.1 z.2.1 z.2.2} => ⌜z.1.2⌝ₜ.size)
       (fun z => peak z.1.1))
-    (ht : Dominated (fun z : {z : ρ × ℕ × α // I z.1 (z.2.1 + 1) z.2.2} => t z.1.2.2)
+    (ht : Dominated (fun z : {z : ρ × ℕ × α // I z.1 (z.2.1 + 1) z.2.2} => t z.1.1 z.1.2.2)
       (fun z => time z.1.1))
-    (hp : Dominated (fun z : {z : ρ × ℕ × α // I z.1 (z.2.1 + 1) z.2.2} => p z.1.2.2)
+    (hp : Dominated (fun z : {z : ρ × ℕ × α // I z.1 (z.2.1 + 1) z.2.2} => p z.1.1 z.1.2.2)
       (fun z => peak z.1.1)) :
-    Dominated (fun x => iterateTime f t (count x) (initial x)) (fun x => count x * time x) ∧
-    Dominated (fun x => iteratePeak f p (count x) (initial x)) peak := by
+    Dominated (fun x => iterateTime (f x) (t x) (count x) (initial x))
+      (fun x => count x * time x) ∧
+    Dominated (fun x => iteratePeak (f x) (p x) (count x) (initial x)) peak := by
   apply Dominated.iterate_of_potential I count initial (fun x n _ => n * time x) peak start next
     ?_ hsize hp
   let active (z : {z : ρ × ℕ × α // I z.1 (z.2.1 + 1) z.2.2}) :
@@ -179,19 +180,19 @@ theorem Dominated.iterate_of_invariant {ρ : Type*} {t p : α → ℕ}
 
 /-- A count polynomial in a scale of the initial input, and stored states and callbacks polynomial
 in it over the invariant family, make the iteration polynomial in that scale. -/
-theorem IsPoly.iterate_of_invariant {ρ : Type*} {t p : α → ℕ}
+theorem IsPoly.iterate_of_invariant {ρ : Type*} {f : ρ → α → α} {t p : ρ → α → ℕ}
     (I : ρ → ℕ → α → Prop) (count : ρ → ℕ) (initial : ρ → α) (S : ρ → ℕ)
     (start : ∀ x, I x (count x) (initial x))
-    (next : ∀ x n a, I x (n + 1) a → I x n (f a))
+    (next : ∀ x n a, I x (n + 1) a → I x n (f x a))
     (hcount : IsPoly S count)
     (hsize : IsPoly (fun z : {z : ρ × ℕ × α // I z.1 z.2.1 z.2.2} => S z.1.1)
       fun z => ⌜z.1.2⌝ₜ.size)
     (ht : IsPoly (fun z : {z : ρ × ℕ × α // I z.1 (z.2.1 + 1) z.2.2} => S z.1.1)
-      fun z => t z.1.2.2)
+      fun z => t z.1.1 z.1.2.2)
     (hp : IsPoly (fun z : {z : ρ × ℕ × α // I z.1 (z.2.1 + 1) z.2.2} => S z.1.1)
-      fun z => p z.1.2.2) :
-    IsPoly S (fun x => iterateTime f t (count x) (initial x)) ∧
-    IsPoly S (fun x => iteratePeak f p (count x) (initial x)) := by
+      fun z => p z.1.1 z.1.2.2) :
+    IsPoly S (fun x => iterateTime (f x) (t x) (count x) (initial x)) ∧
+    IsPoly S (fun x => iteratePeak (f x) (p x) (count x) (initial x)) := by
   obtain ⟨d₁, h₁⟩ := hsize
   obtain ⟨d₂, h₂⟩ := ht
   obtain ⟨d₃, h₃⟩ := hp
@@ -211,6 +212,107 @@ theorem IsPoly.iterate_of_invariant {ρ : Type*} {t p : α → ℕ}
   exact ⟨(hcount.mul hD).of_dominated h.1, hD.of_dominated h.2⟩
 
 end Cost
+
+section Reached
+
+variable {ε α : Type*} [UniqueEncoding Tree α] {s : ε → ℕ} {f : ε → α → α} {n : ε → ℕ}
+  {a : ε → α}
+
+/-- An iteration is polynomial in a measure `s` of its input when its callbacks are polynomial in
+`s` and the codes of their arguments, the states it reaches within its count are polynomial in
+`s`, and so is its count. The invariant is that the state is reached after the rounds done. -/
+theorem IsPoly.iterate_of_reached {t p : ε → α → ℕ}
+    (ht : IsPoly (fun z : ε × α => s z.1 + ⌜z.2⌝ₜ.size) fun z => t z.1 z.2)
+    (hp : IsPoly (fun z : ε × α => s z.1 + ⌜z.2⌝ₜ.size) fun z => p z.1 z.2)
+    (hstate : IsPoly (fun z : {z : ε × ℕ // z.2 ≤ n z.1} => s z.1.1)
+      fun z => ⌜(f z.1.1)^[z.1.2] (a z.1.1)⌝ₜ.size)
+    (hn : IsPoly s n) :
+    IsPoly s (fun x => iterateTime (f x) (t x) (n x) (a x)) ∧
+      IsPoly s (fun x => iteratePeak (f x) (p x) (n x) (a x)) := by
+  let I x m b := ∃ k, k + m = n x ∧ (f x)^[k] (a x) = b
+  have hb := hstate.comp (h := fun z : {z : ε × ℕ × α // I z.1 z.2.1 z.2.2} =>
+    ⟨(z.1.1, z.2.choose), (Nat.le_add_right _ _).trans_eq z.2.choose_spec.1⟩) IsPoly.refl
+  have hm := hn.comp (h := fun z : {z : ε × ℕ × α // I z.1 z.2.1 z.2.2} => z.1.1) IsPoly.refl
+  have hsize : IsPoly (fun z : {z : ε × ℕ × α // I z.1 z.2.1 z.2.2} => s z.1.1)
+      fun z => ⌜z.1.2⌝ₜ.size := by
+    refine ((((IsPoly.const 1).add (hm.mul (.const 4))).add (.const 1)).add hb).of_dominated
+      (Dominated.of_le fun z => ?_)
+    have := size_encode_nat_le z.1.2.1
+    have := z.2.choose_spec.1
+    simp only [Prod.size_encode_eq, z.2.choose_spec.2]
+    omega
+  have hstep : IsPoly (fun z : {z : ε × ℕ × α // I z.1 (z.2.1 + 1) z.2.2} => s z.1.1)
+      fun z => s z.1.1 + ⌜z.1.2.2⌝ₜ.size :=
+    IsPoly.refl.add ((hsize.comp (h := fun z : {z : ε × ℕ × α // I z.1 (z.2.1 + 1) z.2.2} =>
+      ⟨(z.1.1, z.1.2.1 + 1, z.1.2.2), z.2⟩) IsPoly.refl).of_dominated
+        (Dominated.of_le fun z => by simp only [Prod.size_encode_eq]; omega))
+  let step (z : {z : ε × ℕ × α // I z.1 (z.2.1 + 1) z.2.2}) : ε × α := (z.1.1, z.1.2.2)
+  exact IsPoly.iterate_of_invariant I n a s (fun _ => ⟨0, by simp, rfl⟩)
+    (fun x m b ⟨k, h, hb⟩ => ⟨k + 1, by omega, by rw [Function.iterate_succ_apply', hb]⟩)
+    hn hsize (ht.comp (h := step) hstep) (hp.comp (h := step) hstep)
+
+/-- The time of `IsPoly.iterate_of_reached`, for a goal about the time alone. The premises come in
+the order `dominated` tries them, the reached states first: they fail when no bound is known. -/
+@[dominated_traversal] theorem IsPoly.iterateTime {t : ε → α → ℕ}
+    (hstate : IsPoly (fun z : {z : ε × ℕ // z.2 ≤ n z.1} => s z.1.1)
+      fun z => ⌜(f z.1.1)^[z.1.2] (a z.1.1)⌝ₜ.size)
+    (hn : IsPoly s n)
+    (ht : IsPoly (fun z : ε × α => s z.1 + ⌜z.2⌝ₜ.size) fun z => t z.1 z.2) :
+    IsPoly s fun x => iterateTime (f x) (t x) (n x) (a x) :=
+  (IsPoly.iterate_of_reached (p := fun _ _ => 0) ht (.const 0) hstate hn).1
+
+/-- The peak of `IsPoly.iterate_of_reached`, for a goal about the peak alone, with the premises of
+`IsPoly.iterateTime`. -/
+@[dominated_traversal] theorem IsPoly.iteratePeak {p : ε → α → ℕ}
+    (hstate : IsPoly (fun z : {z : ε × ℕ // z.2 ≤ n z.1} => s z.1.1)
+      fun z => ⌜(f z.1.1)^[z.1.2] (a z.1.1)⌝ₜ.size)
+    (hn : IsPoly s n)
+    (hp : IsPoly (fun z : ε × α => s z.1 + ⌜z.2⌝ₜ.size) fun z => p z.1 z.2) :
+    IsPoly s fun x => iteratePeak (f x) (p x) (n x) (a x) :=
+  (IsPoly.iterate_of_reached (t := fun _ _ => 0) (.const 0) hp hstate hn).2
+
+/-- The peak of an iteration is linear in a measure `s` of its input when the peak of its callback
+is linear in `s` and the code of its argument, and the states it reaches within its count, and the
+code of the count, are linear in `s`. The stored counters have no more bits than the count. -/
+@[dominated_traversal] theorem Dominated.iteratePeak_of_reached {p : ε → α → ℕ}
+    (hstate : Dominated (fun z : {z : ε × ℕ // z.2 ≤ n z.1} =>
+      ⌜(f z.1.1)^[z.1.2] (a z.1.1)⌝ₜ.size) fun z => s z.1.1)
+    (hn : Dominated (fun x => ⌜n x⌝ₜ.size) s)
+    (hp : Dominated (fun z : ε × α => p z.1 z.2) fun z => s z.1 + ⌜z.2⌝ₜ.size) :
+    Dominated (fun x => iteratePeak (f x) (p x) (n x) (a x)) s := by
+  let I x m b := ∃ k, k + m = n x ∧ (f x)^[k] (a x) = b
+  have hcount : Dominated (fun z : {z : ε × ℕ × α // I z.1 z.2.1 z.2.2} => ⌜z.1.2.1⌝ₜ.size)
+      fun z => s z.1.1 := by
+    refine (Dominated.of_le_mul 5 fun z => ?_).trans
+      (hn.comp fun z : {z : ε × ℕ × α // I z.1 z.2.1 z.2.2} => z.1.1)
+    obtain ⟨k, hk, -⟩ := z.2
+    have := Nat.length_bits_le_length_bits ((Nat.le_add_left z.1.2.1 k).trans_eq hk)
+    have := size_encode_nat_le_length_bits z.1.2.1
+    have := length_bits_le_size_encode (n z.1.1)
+    have := Tree.size_pos ⌜n z.1.1⌝ₜ
+    simp only [Function.comp_apply]
+    omega
+  have hsize : Dominated (fun z : {z : ε × ℕ × α // I z.1 z.2.1 z.2.2} => ⌜z.1.2⌝ₜ.size)
+      fun z => s z.1.1 := by
+    have hb := hstate.comp fun z : {z : ε × ℕ × α // I z.1 z.2.1 z.2.2} =>
+      ⟨(z.1.1, z.2.choose), (Nat.le_add_right _ _).trans_eq z.2.choose_spec.1⟩
+    refine ((hcount.add_same hcount).add_same hb).mono_left fun z => ?_
+    have := Tree.size_pos ⌜z.1.2.1⌝ₜ
+    simp only [Function.comp_apply, Prod.size_encode_eq, z.2.choose_spec.2]
+    omega
+  have hstep : Dominated (fun z : {z : ε × ℕ × α // I z.1 (z.2.1 + 1) z.2.2} =>
+      s z.1.1 + ⌜z.1.2.2⌝ₜ.size) fun z => s z.1.1 :=
+    (Dominated.refl _).add_same ((hsize.comp fun z : {z : ε × ℕ × α //
+      I z.1 (z.2.1 + 1) z.2.2} => ⟨(z.1.1, z.1.2.1 + 1, z.1.2.2), z.2⟩).mono_left
+      fun z => by simp only [Function.comp_apply, Prod.size_encode_eq]; omega)
+  exact (Dominated.iterate_of_invariant (t := fun _ _ => 0) I n a s s
+    (fun _ => ⟨0, by simp, rfl⟩)
+    (fun x m b ⟨k, h, hb⟩ => ⟨k + 1, by omega, by rw [Function.iterate_succ_apply', hb]⟩)
+    hcount hsize (Dominated.of_le fun _ => Nat.zero_le _)
+    ((hp.comp fun z : {z : ε × ℕ × α // I z.1 (z.2.1 + 1) z.2.2} =>
+      (z.1.1, z.1.2.2)).trans hstep)).2
+
+end Reached
 
 section Lift
 

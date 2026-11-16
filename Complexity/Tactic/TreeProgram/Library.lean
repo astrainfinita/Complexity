@@ -88,9 +88,7 @@ theorem hasProgramIn_lookup {α : Type*} [UniqueEncoding Tree α] :
     | nil => simp [lookupContinues] at ht
     | cons a ys =>
       have hm : m ≠ 0 := by intro hm; subst m; simp [lookupContinues] at ht
-      have hp : m.pred.bits.length ≤ m.bits.length := by
-        simpa [Nat.pred_eq_sub_one] using BitList.length_decrement_le m.bits
-      refine ⟨hp.trans hi.1, ?_, ?_⟩
+      refine ⟨(Nat.length_bits_le_length_bits m.pred_le).trans hi.1, ?_, ?_⟩
       · exact (show ⌜ys⌝ₜ.size ≤ ⌜a :: ys⌝ₜ.size by simp).trans hi.2.1
       · simpa [lookupStep, List.getElem?_cons, hm, Nat.pred_eq_sub_one] using hi.2.2
   case decreases =>

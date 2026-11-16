@@ -104,8 +104,9 @@ theorem hasProgramIn_unroll : HasProgramIn (fun x : UnrollInput => x.2.1.unroll 
       have hm := Nat.mul_le_mul_right step.size (show i ≤ t by omega)
       simp only [unrollStepScale, unrollScale, Circuit.size_unroll, Nat.add_mul, Nat.one_mul]
       omega)
-  have hiter := IsPoly.iterate_of_invariant (f := unrollStep) I (fun x => (unrollInitial x).1)
-    (fun x => (unrollInitial x).2) unrollScale
+  have hiter := IsPoly.iterate_of_invariant (f := fun _ => unrollStep)
+    (t := fun _ => hasProgramIn_unrollStep.time) (p := fun _ => hasProgramIn_unrollStep.peak) I
+    (fun x => (unrollInitial x).1) (fun x => (unrollInitial x).2) unrollScale
     (fun _ => ⟨0, by simp only [unrollInitial, Nat.zero_add], rfl⟩)
     (by rintro x r y ⟨i, hi, rfl⟩; exact ⟨i + 1, by omega, rfl⟩)
     (by dominated [unrollScale, unrollInitial]) hstate
