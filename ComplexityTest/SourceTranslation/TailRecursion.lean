@@ -139,6 +139,33 @@ theorem hasProgramIn_gatherLoop : HasProgramIn gather hole(⊢ program)
         (fun z : {p : GatherInput × GatherInput //
           gatherInvariant p.1 p.2 ∧ gatherCheck p.2 = true} => ⟨z.1.2, z.2.2⟩)
 
+-- The same loop stated as polynomial: the user gives the invariant, the measure and the bound on
+-- the reachable states, and no bounds for a round, the stop or the space. Guards
+-- `HasProgramIn.tail_loop_isPoly`; compare the potential argument of `hasProgramIn_gatherLoop`.
+example : ∃ program, HasProgramIn gather program (IsPoly fun x => ⌜x⌝ₜ.size)
+    (IsPoly fun x => ⌜x⌝ₜ.size) :=
+  ⟨_, hasProgramIn_gatherCheck.isPoly.tail_loop_isPoly hasProgramIn_advance.isPoly
+    hasProgramIn_gatherFinish.isPoly (fun x => ⌜x⌝ₜ.size) gatherInvariant (fun x => x.2.1.length)
+    (by rintro ⟨tag, xs, acc⟩; cases xs <;> simp [gather, gatherCheck, advance])
+    (fun _ => le_rfl)
+    (by
+      rintro ⟨xt, original, initial⟩ ⟨tag, ys, acc⟩ hi ht
+      cases ys with
+      | nil => simp [gatherCheck] at ht
+      | cons xs rest =>
+        have ha := size_encode_list_append xs.reverse acc
+        simp only [size_encode_reverse] at ha
+        dsimp only [gatherInvariant, advance] at *
+        cases tag <;> simp only [size_encode_prod, encode_bool_false, encode_bool_true,
+          encode_list_cons, size_encode_unit, List.length_cons] at hi ⊢ <;> omega)
+    (by
+      rintro _ ⟨tag, ys, acc⟩ _ ht
+      cases ys with
+      | nil => simp [gatherCheck] at ht
+      | cons xs rest => simp [advance])
+    (by dominated) (IsPoly.refl.of_dominated gather_input_size)
+    (.const 1) .refl (by dominated [chunkWork]) (by dominated) (.const 1) .refl⟩
+
 @[program] theorem hasProgramIn_gather : HasProgramIn gather hole(⊢ program)
     IsO(fun x => ⌜x⌝ₜ.size) IsO(fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programGather
