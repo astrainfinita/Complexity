@@ -320,8 +320,8 @@ theorem _root_.List.hasProgramIn_length {α : Type*} [UniqueEncoding Tree α] :
         I z.1 (z.2.1 :: z.2.2.1) z.2.2.2} =>
           ⟨(z.1.1, z.1.2.1 :: z.1.2.2.1, z.1.2.2.2), z.2⟩)).mono_left
       (fun z => by simp only [Function.comp_apply, size_encode_prod, encode_list_cons]; omega)
-  have hfold := Dominated.foldl_of_invariant (f := fun n (_ : α) => n + 1)
-    (t := fun x => ⌜x.1⌝ₜ.size) (p := fun x => ⌜x⌝ₜ.size) I (fun xs => xs) (fun _ => 0)
+  have hfold := Dominated.foldl_of_invariant (f := fun _ n (_ : α) => n + 1)
+    (t := fun _ x => ⌜x.1⌝ₜ.size) (p := fun _ x => ⌜x⌝ₜ.size) I (fun xs => xs) (fun _ => 0)
     (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size) (fun _ => ⟨by simp, le_rfl⟩)
     (by
       intro xs a rest acc hi

@@ -24,10 +24,11 @@ The left side is normalized with `@[dominated_simp]`, and its sums and maxima ar
 (but for a factor that can vanish). A difference is compared as stated when it is the target or a
 fact, and through its minuend otherwise. Each summand is tried in turn through a `Dominated`
 hypothesis, a genuine property of the source function matched reducibly, and on an `IsPoly` goal
-also a polynomial growth `IsPoly r T` applied in it; entry by entry for maxima over lists and sums
-over tables; by the pointwise step, against `g` or `s + 1`; and, against a power of degree at least
-2 on the right or on an `IsPoly` goal, by cases on an `if`, and for its products and powers or, on
-an `IsPoly` goal, through an upper bound polynomial in turn (`viaBound`).
+also a polynomial growth `IsPoly r T` applied in it; entry by entry by a rule registered with
+`@[dominated_traversal]`, such as for maxima over lists and sums over tables; by the pointwise
+step, against `g` or `s + 1`; and, against a power of degree at least 2 on the right or on an
+`IsPoly` goal, by cases on an `if`, and for its products and powers or, on an `IsPoly` goal,
+through an upper bound polynomial in turn (`viaBound`).
 
 ## The pointwise step
 
@@ -118,6 +119,8 @@ structure Context where
   /-- Statements concluding `IsPoly r T`, registered with `@[dominated]` or in the list, by the
   part `T a` each is about; read on `IsPoly` goals only. -/
   polyLemmas : DiscrTree Lean.Expr := {}
+  /-- The rules registered with `@[dominated_traversal]`, in the order of registration. -/
+  traversalRules : Array TraversalRule
 
 /-- Comparisons settled during one call, and the summands left to the user. -/
 structure State where
@@ -692,15 +695,13 @@ def along (target : Target) (domain π : Lean.Expr) : MetaM Target := do
   | dominated g => return dominated (← comp g)
   | poly s => return poly (← comp s)
 
-/-- The traversal rules, each with the normalization of its elements: a maximum over a list of the
-elements that occur, a maximum over a list of dependent elements, and a table sum entry by entry,
-after multiplying each entry by the table length against a given right side. -/
+/-- The traversal rules of the target's kind, in the order of registration, each with the
+normalization of its elements: the expansion of encoded sizes, also distributing the table length
+over an entry for a rule registered with `mul`. -/
 def traversals (target : Target) (ctx : Context) : Array (Name × LazySimp) :=
-  match target with
-  | dominated _ => #[(``Dominated.list_foldr_max_le, ctx.sizes),
-      (``Dominated.foldr_max_le, ctx.sizes), (``Dominated.sum_finRange_of_mul, ctx.sizesMul)]
-  | poly _ => #[(``IsPoly.list_foldr_max, ctx.sizes), (``IsPoly.foldr_max, ctx.sizes),
-      (``IsPoly.sum_finRange, ctx.sizes)]
+  let poly := target matches poly _
+  ctx.traversalRules.filterMap fun r =>
+    if r.poly == poly then some (r.name, if r.mul then ctx.sizesMul else ctx.sizes) else none
 
 end Target
 
@@ -943,8 +944,8 @@ partial def viaBound (f s : Lean.Expr) : DominatedM (Option Lean.Expr) := do
     if r.expr == t then return #[]
     ofEq r.expr (← r.getProof)
 
-/-- One summand against the target: a fact; a traversal rule, comparing a maximum over a list,
-possibly of dependent elements, element by element and a table sum entry by entry; the linear
+/-- One summand against the target: a fact; a registered traversal rule, comparing for example a
+maximum over a list element by element or a table sum entry by entry; the linear
 pointwise step, against `g` or `s + 1`; and then, on an `IsPoly` goal or against a power of degree
 at least 2 on the right, the facts about products and powers for a `match` on a pattern (against
 `g` only), cases on the condition of an `if`, and degree synthesis against `g` or an upper bound
@@ -1059,7 +1060,7 @@ def mkContext (target : Target) (unfolds : Array Name) (lemmas growths : Array L
     true).add ``encodeParts true]
   let ctx : Context := {
     statements := ← factTree lemmas, premises := ← premiseTree, facts, sizes, sizesMul, expand,
-    numerals, sizesUnfold }
+    numerals, sizesUnfold, traversalRules := dominatedTraversalExt.getState (← getEnv) }
   let .poly _ := target | return ctx
   return { ctx with polyFacts, polyLemmas := ← polyTree growths }
 

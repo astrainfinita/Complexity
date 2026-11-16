@@ -20,7 +20,8 @@ public import Complexity.Tactic.Dominated.Attr
 (`dominated_simp`, and `dominated_expand` for the pointwise expansion) and the size facts
 instantiated at matching terms (`dominated`) and at hypotheses (`dominated_forward`). Lemmas of this
 library are registered where they are stated; this file registers those from Lean and Mathlib and
-those whose files do not import this one. -/
+those whose files do not import this one, among them the traversal rules of `Asymptotics`
+(`dominated_traversal`). -/
 
 @[expose] public section
 
@@ -39,5 +40,12 @@ growth; their sizes are the defining equations of `Tree.size`. -/
 attribute [dominated_expand] Tree.encode_self Tree.size_nil Tree.size_pair
 
 attribute [dominated] Tree.size_pos size_encode_bool_le Fin.isLt size_encode_fin_table_le
+
+/- The traversal rules of `Asymptotics`. For each kind they are tried in this order: a maximum over
+a list of the elements that occur before a maximum over a list of dependent elements, then a table
+sum. -/
+attribute [dominated_traversal] Dominated.list_foldr_max_le Dominated.foldr_max_le
+  IsPoly.list_foldr_max IsPoly.foldr_max IsPoly.sum_finRange
+attribute [dominated_traversal mul] Dominated.sum_finRange_of_mul
 
 end Complexity

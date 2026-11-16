@@ -80,6 +80,19 @@ theorem size_encode_list_le {α : Type*} [UniqueEncoding Tree α] (xs : List α)
     ⌜xs.tail⌝ₜ.size ≤ ⌜xs⌝ₜ.size := by
   cases xs <;> simp [size_encode_prod]
 
+/-- A sublist keeps a subset of the element codes and of the list nodes. -/
+theorem _root_.List.Sublist.size_encode_le {α : Type*} [UniqueEncoding Tree α] {xs ys : List α}
+    (h : xs.Sublist ys) : ⌜xs⌝ₜ.size ≤ ⌜ys⌝ₜ.size := by
+  have hs := (h.map fun x => ⌜x⌝ₜ.size).sum_le_sum fun _ _ => Nat.zero_le _
+  have hl := h.length_le
+  simp only [size_encode_list]
+  omega
+
+/-- A prefix is a sublist. -/
+@[dominated_forward] theorem _root_.List.IsPrefix.size_encode_le {α : Type*}
+    [UniqueEncoding Tree α] {xs ys : List α} (h : xs <+: ys) : ⌜xs⌝ₜ.size ≤ ⌜ys⌝ₜ.size :=
+  h.sublist.size_encode_le
+
 @[dominated_forward] theorem size_encode_le_list_of_mem {α : Type*} [UniqueEncoding Tree α]
     {x : α} {xs : List α} (hx : x ∈ xs) : ⌜x⌝ₜ.size ≤ ⌜xs⌝ₜ.size := by
   have h := List.le_sum_of_mem (List.mem_map.mpr ⟨x, hx, rfl⟩ :

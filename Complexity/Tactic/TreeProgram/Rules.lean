@@ -866,26 +866,27 @@ attribute [scoped fun_prop] HasProgramInO.foldl_with
 /-- Fold callbacks share one coefficient across all environments and reachable states.
 Time is charged per element and space is a peak, not multiplied by the list length. -/
 theorem Dominated.foldl_of_invariant {α β ρ : Type*} [UniqueEncoding Tree α]
-    [UniqueEncoding Tree β] {f : β → α → β} {t p : β × α → ℕ}
+    [UniqueEncoding Tree β] {f : ρ → β → α → β} {t p : ρ → β × α → ℕ}
     (I : ρ → List α → β → Prop) (xs : ρ → List α) (initial : ρ → β)
     (time peak : ρ → ℕ) (start : ∀ x, I x (xs x) (initial x))
-    (next : ∀ x a rest acc, I x (a :: rest) acc → I x rest (f acc a))
+    (next : ∀ x a rest acc, I x (a :: rest) acc → I x rest (f x acc a))
     (hsize : Dominated
       (fun z : {z : ρ × List α × β // I z.1 z.2.1 z.2.2} => ⌜(z.1.2.2, z.1.2.1)⌝ₜ.size)
       (fun z => peak z.1.1))
     (ht : Dominated
       (fun z : {z : ρ × α × List α × β // I z.1 (z.2.1 :: z.2.2.1) z.2.2.2} =>
-        t (z.1.2.2.2, z.1.2.1)) (fun z => time z.1.1))
+        t z.1.1 (z.1.2.2.2, z.1.2.1)) (fun z => time z.1.1))
     (hp : Dominated
       (fun z : {z : ρ × α × List α × β // I z.1 (z.2.1 :: z.2.2.1) z.2.2.2} =>
-        p (z.1.2.2.2, z.1.2.1)) (fun z => peak z.1.1)) :
-    Dominated (fun x => foldlTime f t (initial x) (xs x)) (fun x => (xs x).length * time x) ∧
-    Dominated (fun x => max ⌜(initial x, xs x)⌝ₜ.size (foldlPeak f p (initial x) (xs x)))
+        p z.1.1 (z.1.2.2.2, z.1.2.1)) (fun z => peak z.1.1)) :
+    Dominated (fun x => foldlTime (f x) (t x) (initial x) (xs x))
+      (fun x => (xs x).length * time x) ∧
+    Dominated (fun x => max ⌜(initial x, xs x)⌝ₜ.size (foldlPeak (f x) (p x) (initial x) (xs x)))
       peak := by
   obtain ⟨Ct, htime⟩ := dominated_iff.mp ht
   obtain ⟨Cp, hpeak⟩ := dominated_iff.mp hp
   obtain ⟨Cs, hstate⟩ := dominated_iff.mp hsize
-  have bound (x : ρ) := foldl_le_of_invariant (t := t)
+  have bound (x : ρ) := foldl_le_of_invariant (f := f x) (t := t x) (p := p x)
     (I x) (fun rest _ => Ct * (rest.length * time x)) ((Cs + Cp) * peak x)
     (xs x) (initial x) (start x)
     (by
@@ -911,5 +912,133 @@ theorem Dominated.foldl_of_invariant {α β ρ : Type*} [UniqueEncoding Tree α]
   refine ⟨Dominated.of_le_mul Ct fun x => (bound x).2.1, ?_⟩
   exact (hsize.comp (fun x => ⟨(x, xs x, initial x), start x⟩)).max_same
     (Dominated.of_le_mul (Cs + Cp) fun x => (bound x).2.2)
+
+/-- A fold whose stored states and callbacks are polynomial over an invariant family, uniformly in
+a scale of the environment, is polynomial in that scale. -/
+theorem IsPoly.foldl_of_invariant {α β ρ : Type*} [UniqueEncoding Tree α]
+    [UniqueEncoding Tree β] {f : ρ → β → α → β} {t p : ρ → β × α → ℕ}
+    (I : ρ → List α → β → Prop) (xs : ρ → List α) (initial : ρ → β) (S : ρ → ℕ)
+    (start : ∀ x, I x (xs x) (initial x))
+    (next : ∀ x a rest acc, I x (a :: rest) acc → I x rest (f x acc a))
+    (hsize : IsPoly (fun z : {z : ρ × List α × β // I z.1 z.2.1 z.2.2} => S z.1.1)
+      fun z => ⌜(z.1.2.2, z.1.2.1)⌝ₜ.size)
+    (ht : IsPoly (fun z : {z : ρ × α × List α × β // I z.1 (z.2.1 :: z.2.2.1) z.2.2.2} =>
+      S z.1.1) fun z => t z.1.1 (z.1.2.2.2, z.1.2.1))
+    (hp : IsPoly (fun z : {z : ρ × α × List α × β // I z.1 (z.2.1 :: z.2.2.1) z.2.2.2} =>
+      S z.1.1) fun z => p z.1.1 (z.1.2.2.2, z.1.2.1)) :
+    IsPoly S (fun x => foldlTime (f x) (t x) (initial x) (xs x)) ∧
+      IsPoly S (fun x => foldlPeak (f x) (p x) (initial x) (xs x)) := by
+  have hlen : IsPoly S fun x => (xs x).length :=
+    (hsize.comp (h := fun x => ⟨(x, xs x, initial x), start x⟩) IsPoly.refl).of_dominated
+      (Dominated.of_le fun x => (length_le_codeSize _).trans (by
+        simp only [size_encode_prod]; omega))
+  obtain ⟨d₁, h₁⟩ := hsize
+  obtain ⟨d₂, h₂⟩ := ht
+  obtain ⟨d₃, h₃⟩ := hp
+  let D := d₁ + d₂ + d₃
+  have lift {γ : Type _} {s t : γ → ℕ} {d : ℕ} (h : Dominated t fun x => (s x + 1) ^ d)
+      (hd : d ≤ D) : Dominated t fun x => (s x + 1) ^ D :=
+    h.mono_pow hd fun _ => Nat.succ_pos _
+  have h := Dominated.foldl_of_invariant (f := f) (t := t) (p := p) I xs initial
+    (fun x => (S x + 1) ^ D) (fun x => (S x + 1) ^ D) start next
+    (lift h₁ (by omega)) (lift h₂ (by omega)) (lift h₃ (by omega))
+  have hD : IsPoly S fun x => (S x + 1) ^ D := (IsPoly.refl.add (.const 1)).pow D
+  exact ⟨(hlen.mul hD).of_dominated h.1,
+    hD.of_dominated (h.2.mono_left fun _ => le_max_right _ _)⟩
+
+section Prefix
+
+variable {ε α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β] {s : ε → ℕ}
+  {f : ε → β → α → β} {a : ε → β} {xs : ε → List α}
+
+/-- A fold is polynomial in a measure `s` of its input when its callbacks are polynomial in `s` and
+the codes of their arguments, the states it reaches after every prefix of its list are polynomial
+in `s`, and so is its list. The invariant is that the state is the fold of the prefix consumed. -/
+theorem IsPoly.foldl_of_prefix {t p : ε → β × α → ℕ}
+    (ht : IsPoly (fun z : ε × (β × α) => s z.1 + ⌜z.2⌝ₜ.size) fun z => t z.1 z.2)
+    (hp : IsPoly (fun z : ε × (β × α) => s z.1 + ⌜z.2⌝ₜ.size) fun z => p z.1 z.2)
+    (hacc : IsPoly (fun z : {z : ε × List α // z.2 <+: xs z.1} => s z.1.1)
+      fun z => ⌜z.1.2.foldl (f z.1.1) (a z.1.1)⌝ₜ.size)
+    (hxs : IsPoly s fun x => ⌜xs x⌝ₜ.size) :
+    IsPoly s (fun x => foldlTime (f x) (t x) (a x) (xs x)) ∧
+      IsPoly s (fun x => foldlPeak (f x) (p x) (a x) (xs x)) := by
+  let I x rest acc := ∃ ys, ys ++ rest = xs x ∧ ys.foldl (f x) (a x) = acc
+  have hstate : IsPoly (fun z : {z : ε × List α × β // I z.1 z.2.1 z.2.2} => s z.1.1)
+      fun z => ⌜(z.1.2.2, z.1.2.1)⌝ₜ.size := by
+    have hb := hacc.comp (h := fun z : {z : ε × List α × β // I z.1 z.2.1 z.2.2} =>
+      ⟨(z.1.1, z.2.choose), _, z.2.choose_spec.1⟩) IsPoly.refl
+    have hr := (hxs.comp (h := fun z : {z : ε × List α × β // I z.1 z.2.1 z.2.2} => z.1.1)
+      IsPoly.refl).of_dominated (f := fun z => ⌜z.1.2.1⌝ₜ.size) (Dominated.of_le fun z =>
+        (List.suffix_append _ _).sublist.size_encode_le.trans_eq (by rw [z.2.choose_spec.1]))
+    refine (((IsPoly.const 1).add hb).add hr).of_dominated (Dominated.of_le fun z => ?_)
+    simp only [size_encode_prod, z.2.choose_spec.2, le_refl]
+  let step (z : {z : ε × α × List α × β // I z.1 (z.2.1 :: z.2.2.1) z.2.2.2}) :
+      ε × (β × α) := (z.1.1, (z.1.2.2.2, z.1.2.1))
+  have hstep : IsPoly (fun z => s z.1.1) fun z => s (step z).1 + ⌜(step z).2⌝ₜ.size :=
+    IsPoly.refl.add ((hstate.comp (h := fun z : {z : ε × α × List α × β //
+      I z.1 (z.2.1 :: z.2.2.1) z.2.2.2} => ⟨(z.1.1, z.1.2.1 :: z.1.2.2.1, z.1.2.2.2), z.2⟩)
+      IsPoly.refl).of_dominated (Dominated.of_le fun z => by
+        simp only [step, size_encode_prod, encode_list_cons]; omega))
+  exact IsPoly.foldl_of_invariant I xs a s (fun _ => ⟨[], rfl, rfl⟩)
+    (fun x u rest acc ⟨ys, h, hb⟩ => ⟨ys ++ [u], by simp [← h], by simp [hb]⟩) hstate
+    (ht.comp hstep) (hp.comp hstep)
+
+/-- The time of `IsPoly.foldl_of_prefix`, for a goal about the time alone. The premises come in
+the order `dominated` tries them, the states after the prefixes first: they fail when no bound is
+known. -/
+@[dominated_traversal] theorem IsPoly.foldlTime {t : ε → β × α → ℕ}
+    (hacc : IsPoly (fun z : {z : ε × List α // z.2 <+: xs z.1} => s z.1.1)
+      fun z => ⌜z.1.2.foldl (f z.1.1) (a z.1.1)⌝ₜ.size)
+    (hxs : IsPoly s fun x => ⌜xs x⌝ₜ.size)
+    (ht : IsPoly (fun z : ε × (β × α) => s z.1 + ⌜z.2⌝ₜ.size) fun z => t z.1 z.2) :
+    IsPoly s fun x => foldlTime (f x) (t x) (a x) (xs x) :=
+  (IsPoly.foldl_of_prefix (p := fun _ _ => 0) ht (.const 0) hacc hxs).1
+
+/-- The peak of `IsPoly.foldl_of_prefix`, for a goal about the peak alone, with the premises of
+`IsPoly.foldlTime`. -/
+@[dominated_traversal] theorem IsPoly.foldlPeak {p : ε → β × α → ℕ}
+    (hacc : IsPoly (fun z : {z : ε × List α // z.2 <+: xs z.1} => s z.1.1)
+      fun z => ⌜z.1.2.foldl (f z.1.1) (a z.1.1)⌝ₜ.size)
+    (hxs : IsPoly s fun x => ⌜xs x⌝ₜ.size)
+    (hp : IsPoly (fun z : ε × (β × α) => s z.1 + ⌜z.2⌝ₜ.size) fun z => p z.1 z.2) :
+    IsPoly s fun x => foldlPeak (f x) (p x) (a x) (xs x) :=
+  (IsPoly.foldl_of_prefix (t := fun _ _ => 0) (.const 0) hp hacc hxs).2
+
+/-- The peak of a fold is linear in a measure `s` of its input when the peak of its callback is
+linear in `s` and the code of its argument, and the states it reaches after every prefix of its
+list, and the list, are linear in `s`. A peak is a maximum, so nested folds keep it linear. -/
+@[dominated_traversal] theorem Dominated.foldlPeak_of_prefix {p : ε → β × α → ℕ}
+    (hacc : Dominated (fun z : {z : ε × List α // z.2 <+: xs z.1} =>
+      ⌜z.1.2.foldl (f z.1.1) (a z.1.1)⌝ₜ.size) fun z => s z.1.1)
+    (hxs : Dominated (fun x => ⌜xs x⌝ₜ.size) s)
+    (hp : Dominated (fun z : ε × (β × α) => p z.1 z.2) fun z => s z.1 + ⌜z.2⌝ₜ.size) :
+    Dominated (fun x => foldlPeak (f x) (p x) (a x) (xs x)) s := by
+  let I x rest acc := ∃ ys, ys ++ rest = xs x ∧ ys.foldl (f x) (a x) = acc
+  have hstate : Dominated (fun z : {z : ε × List α × β // I z.1 z.2.1 z.2.2} =>
+      ⌜(z.1.2.2, z.1.2.1)⌝ₜ.size) fun z => s z.1.1 := by
+    have hb := hacc.comp fun z : {z : ε × List α × β // I z.1 z.2.1 z.2.2} =>
+      ⟨(z.1.1, z.2.choose), _, z.2.choose_spec.1⟩
+    have hr := hxs.comp fun z : {z : ε × List α × β // I z.1 z.2.1 z.2.2} => z.1.1
+    refine ((hb.add_same hr).add_same hr).mono_left fun z => ?_
+    have hrest := (List.suffix_append z.2.choose z.1.2.1).sublist.size_encode_le
+    rw [z.2.choose_spec.1] at hrest
+    have := Tree.size_pos ⌜xs z.1.1⌝ₜ
+    simp only [Function.comp_apply, size_encode_prod, z.2.choose_spec.2]
+    omega
+  have hstep : Dominated (fun z : {z : ε × α × List α × β //
+      I z.1 (z.2.1 :: z.2.2.1) z.2.2.2} => s z.1.1 + ⌜(z.1.2.2.2, z.1.2.1)⌝ₜ.size)
+      fun z => s z.1.1 :=
+    (Dominated.refl _).add_same ((hstate.comp fun z : {z : ε × α × List α × β //
+      I z.1 (z.2.1 :: z.2.2.1) z.2.2.2} =>
+        ⟨(z.1.1, z.1.2.1 :: z.1.2.2.1, z.1.2.2.2), z.2⟩).mono_left
+      fun z => by simp only [Function.comp_apply, size_encode_prod, encode_list_cons]; omega)
+  exact (Dominated.foldl_of_invariant (t := fun _ _ => 0) I xs a (fun _ => 0) s
+    (fun _ => ⟨[], rfl, rfl⟩)
+    (fun x u rest acc ⟨ys, h, hb⟩ => ⟨ys ++ [u], by simp [← h], by simp [hb]⟩) hstate
+    (Dominated.of_le fun _ => le_rfl)
+    ((hp.comp fun z : {z : ε × α × List α × β // I z.1 (z.2.1 :: z.2.2.1) z.2.2.2} =>
+      (z.1.1, (z.1.2.2.2, z.1.2.1))).trans hstep)).2.mono_left fun _ => le_max_right _ _
+
+end Prefix
 
 end Complexity.TreeProgram.Source
