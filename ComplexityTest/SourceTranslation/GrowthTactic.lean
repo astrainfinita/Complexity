@@ -331,6 +331,13 @@ example : Dominated (fun x : ℕ × ℕ => 2 * max x.1 x.2 + x.1) (fun x => max 
 example : Dominated (fun x : ℕ × ℕ => x.1) (fun x => 2 * max x.1 x.2 - max x.1 x.2) := by
   dominated
 
+-- Guards the code of a value of a subtype written with its proof: it is rewritten to the code of
+-- the value, so a registered size fact about the value applies under the constructor. Here the
+-- fact is the quadratic size of a range.
+example : IsPoly (fun xs : List ℕ => ⌜xs⌝ₜ.size)
+    fun xs => ⌜(⟨List.range xs.length, trivial⟩ : {_l : List ℕ // True})⌝ₜ.size := by
+  dominated
+
 -- A traversal rule is found through an index on the growth it compares, read from the `fun` of
 -- its conclusion when it is registered. Records the requirement: a conclusion about a growth that
 -- is not written as a `fun` cannot be indexed and is rejected.

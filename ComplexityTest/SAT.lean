@@ -170,6 +170,13 @@ example {α : Type*} [UniqueEncoding Tree α] (a : α) :
 -- `CNF.eval` with the assignment as a callback and the view equation of membership.
 example : KSAT.verify 3 ∈ FP .sizeCostTree := KSAT.verify_fp 3
 
+-- Guards that the size of the Tseitin formula is known to `dominated`, also under the constructor
+-- of the `3`-CNF that the reduction returns: no hint is passed.
+open TreeProgram.Source in
+example : IsPoly (fun c : Σ n, Circuit .booleanAlgebra n 1 => ⌜c⌝ₜ.size) fun c =>
+    ⌜(⟨c.2.tseitin, c.2.tseitin_width⟩ : KCNF 3 ℕ)⌝ₜ.size := by
+  dominated
+
 -- Guards the statement of the verifier's program: a polynomial time and a linear peak.
 open TreeProgram.Source in
 example : HasProgramIn (KSAT.verify 3) KSAT.programVerify

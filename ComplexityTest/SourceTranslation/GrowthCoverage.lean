@@ -105,6 +105,18 @@ example : True := by
       fill_hole program in source_fun_prop
   trivial
 
+-- Records a limit: in a `match` on a computed list, the tail bound by the pattern is not related
+-- to the input, so its code is not bounded (plan W87). The head of the computed list is bounded,
+-- and so is the tail in a `match` on the input itself. When this starts to succeed, a function
+-- may read the end of a list by a `match` on the reversed list.
+example : True := by
+  fail_if_success
+    have : Dominated (fun x : List Bool => match x.reverse with
+        | [] => 1
+        | _ :: b => ⌜b⌝ₜ.size) fun x => ⌜x⌝ₜ.size := by
+      dominated
+  trivial
+
 end Branch
 
 section Table
