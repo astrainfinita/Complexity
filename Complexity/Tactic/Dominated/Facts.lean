@@ -31,6 +31,12 @@ attribute [dominated_simp] size_encode_prod Sigma.encode_mk size_encode_unit Lis
   encode_fin_function_codes encode_vector_ofFn Vector.toList_ofFn Vector.length_toList
   List.length_ofFn size_encode_ofFn
 
+/- A value of a subtype written with its proof has the code of the value, so the size facts about
+the value apply. Only this form is rewritten: `UniqueEncoding.encode_subtype` would also turn the
+code of a named value of a subtype into that of its `val`, where the facts about the named value
+no longer match; it is used in the pointwise expansion below. -/
+attribute [dominated_simp] UniqueEncoding.encode_subtype_mk
+
 attribute [dominated_expand] UniqueEncoding.encode_subtype encode_bool_true encode_bool_false
   List.length_cons List.length_nil List.length_append List.length_map
   encode_option_some encode_option_none Fin.val_last

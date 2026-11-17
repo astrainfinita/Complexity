@@ -212,6 +212,10 @@ instance {p : α → Prop} [c : UniqueEncoding R α] : UniqueEncoding R {a // p 
 @[simp] theorem encode_subtype {p : α → Prop} [UniqueEncoding R α] (a : {a // p a}) :
     encode R a = encode R a.val := rfl
 
+/-- A value built with a proof of its property has the code of the value. -/
+theorem encode_subtype_mk {p : α → Prop} [UniqueEncoding R α] (a : α) (h : p a) :
+    encode R (⟨a, h⟩ : {a // p a}) = encode R a := rfl
+
 /-- A value transported along an equation keeps its code. -/
 theorem encode_eqRec {γ : Sort*} {a : γ} {B : (b : γ) → a = b → Type*}
     [∀ b h, UniqueEncoding R (B b h)] (v : B a rfl) {b : γ} (h : a = b) :

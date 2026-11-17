@@ -36,7 +36,7 @@ open FirstOrder
 
 /-- The Tseitin formula has quadratic encoded size in the complete circuit input.
 The pair `(n, c)` has the same encoding as the dependent pair used by `CircuitSAT`. -/
-theorem size_encode_tseitin_le {n : ℕ} (c : Circuit .booleanAlgebra n 1) :
+@[dominated] theorem size_encode_tseitin_le {n : ℕ} (c : Circuit .booleanAlgebra n 1) :
     ⌜c.tseitin⌝ₜ.size ≤ 8 * ⌜(n, c)⌝ₜ.size ^ 2 := by
   cases c with
   | outputs select =>
