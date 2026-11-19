@@ -15,8 +15,8 @@ namespace Complexity.Program
 
 open Std.WP
 
-variable {O A Op S α : Type} {Ret : Op → Type}
-  {p : Program O A Op Ret α} {e : Semantics O A Op Ret S}
+variable {F : Type → Type} {O A Op S α : Type} {Ret : Op → Type}
+  {p : Program F O A Op Ret α} {e : Semantics O A Op Ret S}
   {P : S → Prop} {Q : α → S → Prop} {n m : ℕ}
 
 /-- A component with an exact cost may be called with any larger budget. -/

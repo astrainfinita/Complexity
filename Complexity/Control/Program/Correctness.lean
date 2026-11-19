@@ -20,7 +20,7 @@ namespace Syntax
 
 variable {u : Kind} (e : Semantics O A Op Ret S)
 
-private theorem run_step (o : Op) (k : Ret o → Syntax O A Op Ret α u) (j : Ret o)
+private theorem run_step (o : Op) (k : Ret o → Syntax Id O A Op Ret α u) (j : Ret o)
     {q : (k j).State ⊕ (k j).Exit} {s t : S} {n : ℕ} {x : Kind.Value α u}
     (h : Control.Run (toControl e.eval (k j)) (k j).result e.observe e.act q s n x t) :
     Control.Run (toControl e.eval (.step o k)) (Syntax.step o k).result e.observe e.act
@@ -30,14 +30,14 @@ private theorem run_step (o : Op) (k : Ret o → Syntax O A Op Ret α u) (j : Re
     (by
       intro q v
       simp only [toControl]
-      cases hnext : (toControl e.eval (k j)).next q v with
-      | mk a q => cases q <;> simp only [hnext] <;> rfl)
+      cases (toControl e.eval (k j)).next q v with
+      | mk a q => cases q <;> rfl)
     (fun _ ↦ rfl)
   cases q <;> exact hh
 
 private theorem run_loop_cont {n r : ℕ} (a : A) (i : Fin n)
-    (b : Fin n → Syntax O A Op Ret α (.branch n r))
-    (k : Fin r → Syntax O A Op Ret α u) (j : Fin r)
+    (b : Fin n → Syntax Id O A Op Ret α (.branch n r))
+    (k : Fin r → Syntax Id O A Op Ret α u) (j : Fin r)
     {q : (k j).State ⊕ (k j).Exit} {s t : S} {m : ℕ} {x : Kind.Value α u}
     (h : Control.Run (toControl e.eval (k j)) (k j).result e.observe e.act q s m x t) :
     Control.Run (toControl e.eval (.loop a i b k)) (Syntax.loop a i b k).result e.observe e.act
@@ -48,14 +48,14 @@ private theorem run_loop_cont {n r : ℕ} (a : A) (i : Fin n)
     (by
       intro q v
       simp only [toControl]
-      cases hnext : (toControl e.eval (k j)).next q v with
-      | mk a q => cases q <;> simp only [hnext] <;> rfl)
+      cases (toControl e.eval (k j)).next q v with
+      | mk a q => cases q <;> rfl)
     (fun _ ↦ rfl)
   cases q <;> exact hh
 
 private theorem run_loop_body {n r : ℕ} (a : A) (i : Fin n)
-    (b : Fin n → Syntax O A Op Ret α (.branch n r))
-    (k : Fin r → Syntax O A Op Ret α u) (j : Fin n)
+    (b : Fin n → Syntax Id O A Op Ret α (.branch n r))
+    (k : Fin r → Syntax Id O A Op Ret α u) (j : Fin n)
     {q : (b j).State ⊕ (b j).Exit} {s t z : S} {m l : ℕ}
     {v : Fin n ⊕ Fin r} {x : Kind.Value α u}
     (h : Control.Run (toControl e.eval (b j)) (b j).result e.observe e.act q s m v t)
@@ -69,13 +69,13 @@ private theorem run_loop_body {n r : ℕ} (a : A) (i : Fin n)
     (by
       intro q o
       simp only [toControl]
-      cases hnext : (toControl e.eval (b j)).next q o with
-      | mk a q => cases q <;> simp only [hnext] <;> rfl)
+      cases (toControl e.eval (b j)).next q o with
+      | mk a q => cases q <;> rfl)
     (by intro q hq; simpa only [hq] using ht)
   cases q <;> exact hh
 
-private theorem run_call_cont {c d : ℕ} (b : Control O A (Fin c) (Fin d))
-    (k : Fin d → Syntax O A Op Ret α u) (j : Fin d)
+private theorem run_call_cont {c d : ℕ} (b : Control Id O A (Fin c) (Fin d))
+    (k : Fin d → Syntax Id O A Op Ret α u) (j : Fin d)
     {q : (k j).State ⊕ (k j).Exit} {s t : S} {m : ℕ} {x : Kind.Value α u}
     (h : Control.Run (toControl e.eval (k j)) (k j).result e.observe e.act q s m x t) :
     Control.Run (toControl e.eval (.call b k)) (Syntax.call b k).result e.observe e.act
@@ -86,13 +86,13 @@ private theorem run_call_cont {c d : ℕ} (b : Control O A (Fin c) (Fin d))
     (by
       intro q v
       simp only [toControl]
-      cases hnext : (toControl e.eval (k j)).next q v with
-      | mk a q => cases q <;> simp only [hnext] <;> rfl)
+      cases (toControl e.eval (k j)).next q v with
+      | mk a q => cases q <;> rfl)
     (fun _ ↦ rfl)
   cases q <;> exact hh
 
-private theorem run_call_block {c d : ℕ} (b : Control O A (Fin c) (Fin d))
-    (k : Fin d → Syntax O A Op Ret α u)
+private theorem run_call_block {c d : ℕ} (b : Control Id O A (Fin c) (Fin d))
+    (k : Fin d → Syntax Id O A Op Ret α u)
     {q : Fin c ⊕ Fin d} {s t z : S} {m l : ℕ} {j : Fin d} {x : Kind.Value α u}
     (h : Control.Run b id e.observe e.act q s m j t)
     (ht : Control.Run (toControl e.eval (k j)) (k j).result e.observe e.act
@@ -105,8 +105,8 @@ private theorem run_call_block {c d : ℕ} (b : Control O A (Fin c) (Fin d))
     (by
       intro q v
       simp only [toControl]
-      cases hnext : b.next q v with
-      | mk a q => cases q <;> simp only [hnext] <;> rfl)
+      cases b.next q v with
+      | mk a q => cases q <;> rfl)
     (by intro j' hj; cases hj; exact run_call_cont e b k j' ht)
   cases q <;> exact hh
 
@@ -116,7 +116,7 @@ variable {e}
 
 The execution proof determines the semantics, so the theorem is used as `h.toControl`.
 It applies directly to `Program` as well as general `Syntax`. -/
-theorem Exec.toControl {p : Syntax O A Op Ret α u} {s t : S} {n : ℕ} {x : Kind.Value α u}
+theorem Exec.toControl {p : Syntax Id O A Op Ret α u} {s t : S} {n : ℕ} {x : Kind.Value α u}
     (h : Exec e p s n x t) :
     Control.Run (Syntax.toControl e.eval p) p.result e.observe e.act
       (Syntax.toControl e.eval p).start s n x t := by
@@ -127,11 +127,11 @@ theorem Exec.toControl {p : Syntax O A Op Ret α u} {s t : S} {n : ℕ} {x : Kin
   | step o k s h ih =>
     simp only [Syntax.toControl]
     apply Control.Run.step
-    simpa only [Syntax.toControl] using run_step e o k _ ih
+    simpa only [Syntax.toControl, Id.run_pure] using run_step e o k _ ih
   | loop_done a i b k hb hk ihb ihk =>
     simp only [Syntax.toControl]
     apply Control.Run.step
-    simpa only [Syntax.toControl] using
+    simpa only [Syntax.toControl, Id.run_pure] using
       run_loop_body e a i b k i ihb (run_loop_cont e a i b k _ ihk)
   | loop_next a i b k hb hk ihb ihk =>
     have hloop := ihk.congr_next (d := Syntax.toControl e.eval (.loop a i b k))
@@ -141,7 +141,7 @@ theorem Exec.toControl {p : Syntax O A Op Ret α u} {s t : S} {n : ℕ} {x : Kin
         all_goals simp only [Syntax.toControl, loopLabel, loopRoute, loopCont, State, Exit])
     simp only [Syntax.toControl]
     apply Control.Run.step
-    simpa only [Syntax.toControl] using
+    simpa only [Syntax.toControl, Id.run_pure] using
       run_loop_body e a i b k i ihb
         (by simpa only [Syntax.toControl, loopRoute, result, State, Exit] using hloop)
   | call b k hb hk ih =>
@@ -151,7 +151,7 @@ theorem Exec.toControl {p : Syntax O A Op Ret α u} {s t : S} {n : ℕ} {x : Kin
 execution is a run of the compiled controller: the same number of transitions reaches an exit
 carrying the result, with the same final storage. -/
 theorem Exec.runFrom_compile [Controller.Observe S O] [Controller.Apply S A]
-    {eval : (o : Op) → O → A × Ret o} {p : Syntax O A Op Ret α u} {s t : S} {n : ℕ}
+    {eval : (o : Op) → O → A × Ret o} {p : Syntax Id O A Op Ret α u} {s t : S} {n : ℕ}
     {x : Kind.Value α u} (idle : A)
     (h : Exec ⟨eval, Controller.observe, Controller.apply⟩ p s n x t) :
     ∃ e, p.result e = x ∧

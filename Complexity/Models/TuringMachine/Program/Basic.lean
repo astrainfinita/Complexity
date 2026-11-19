@@ -53,18 +53,19 @@ instance {κ : Type} {Γ : Type} (o : Op κ Γ) : Finite o.Result := by
 
 end Program
 
-/-- Source programs over local multi-tape operations.
+/-- Source programs over local multi-tape operations, with choices under the shape `F`
+(`Id` for deterministic programs).
 
 This specializes `Program` to the TM observations, actions, and operation results. The
 protected name is written `TM.Program`, keeping the generic `Program` interface available
 when the TM namespace is opened. `compile` supplies the fixed TM operation interpreter. -/
-protected abbrev Program (κ : Type) (Γ : Type) :=
-  Program (Γ × (κ → Γ)) (Action κ Γ) (Program.Op κ Γ)
+protected abbrev Program (F : Type → Type) (κ : Type) (Γ : Type) :=
+  Program F (Γ × (κ → Γ)) (Action κ Γ) (Program.Op κ Γ)
     Program.Op.Result
 
 namespace Program
 
-variable {κ : Type} {Γ α : Type}
+variable {F : Type → Type} {κ : Type} {Γ α : Type}
 
 /-- A local action which leaves all storage and heads unchanged. -/
 def idle : Action κ Γ where
@@ -90,27 +91,27 @@ def eval : (o : Op κ Γ) → (Γ × (κ → Γ)) → Action κ Γ × o.Result
   | .observeBits _ f, v => (idle, Vector.ofFn (f v))
 
 /-- Execute a simultaneous local action in one transition. -/
-def act (a : Action κ Γ) : TM.Program κ Γ Unit :=
+def act (a : Action κ Γ) : TM.Program F κ Γ Unit :=
   Program.perform (Op.act a)
 
 /-- Read the current input symbol in one transition. -/
-def readInput [FinEnum Γ] : TM.Program κ Γ Γ :=
+def readInput [FinEnum Γ] : TM.Program F κ Γ Γ :=
   Program.perform (Op.readInput inferInstance)
 
 /-- Read the symbol under one work head in one transition. -/
-def read [FinEnum Γ] (i : κ) : TM.Program κ Γ Γ :=
+def read [FinEnum Γ] (i : κ) : TM.Program F κ Γ Γ :=
   Program.perform (Op.read inferInstance i)
 
 /-- Observe a finite collection of Boolean tests in one transition. -/
 def observeBits {n : ℕ} (f : (Γ × (κ → Γ)) → Fin n → Bool) :
-    TM.Program κ Γ (Vector Bool n) := Program.perform (Op.observeBits n f)
+    TM.Program F κ Γ (Vector Bool n) := Program.perform (Op.observeBits n f)
 
 /-- Write the current work cell without moving its head. -/
-def write [DecidableEq κ] (i : κ) (a : Γ) : TM.Program κ Γ Unit :=
+def write [DecidableEq κ] (i : κ) (a : Γ) : TM.Program F κ Γ Unit :=
   act { idle (κ := κ) with work := fun j ↦ (if j = i then some a else none, 0) }
 
 /-- Move one work head by at most one cell. -/
-def move [DecidableEq κ] (i : κ) (d : SignType) : TM.Program κ Γ Unit :=
+def move [DecidableEq κ] (i : κ) (d : SignType) : TM.Program F κ Γ Unit :=
   act (moveAction i d)
 
 section Movement
@@ -132,23 +133,28 @@ variable [Inhabited Γ] {xs : Array Γ}
 end Movement
 
 /-- Move the read-only input head, using the machine's boundary convention. -/
-def moveInput (d : SignType) : TM.Program κ Γ Unit :=
+def moveInput (d : SignType) : TM.Program F κ Γ Unit :=
   act { idle with inputMove := d }
 
 /-- Append one symbol to the output in one transition. -/
-def emit (a : Γ) : TM.Program κ Γ Unit := act { idle with output := some a }
+def emit (a : Γ) : TM.Program F κ Γ Unit := act { idle with output := some a }
 
 /-- Repeat a body until it returns `true`, with an idle transition before each iteration.
 
 This is `Program.repeatUntilWith idle`: the TM interface fixes the generic dispatch action
 so that it preserves tapes and head positions. The idle dispatch still costs one machine
 transition, including before the first body execution. -/
-def repeatUntil (p : TM.Program κ Γ Bool) : TM.Program κ Γ Unit :=
+def repeatUntil (p : TM.Program F κ Γ Bool) : TM.Program F κ Γ Unit :=
   Program.repeatUntilWith idle p
 
-/-- Compile a program into a deterministic machine with the TM operation interpreter and
-`idle` for the exits. Graph transitions become machine transitions with the same step count. -/
-def compile (p : TM.Program κ Γ α) : TM Id κ Γ (p.State ⊕ p.Exit) :=
+/-- Select a finite value under the choice shape `F`, in one idle transition. -/
+def choose [Functor F] {β : Type} [FinEnum β] (c : F β) : TM.Program F κ Γ β :=
+  Program.chooseWith idle c
+
+/-- Compile a program into a machine with the same choice shape, with the TM operation
+interpreter and `idle` for the exits. Graph transitions become machine transitions with the same
+step count. -/
+def compile [Functor F] [Pure F] (p : TM.Program F κ Γ α) : TM F κ Γ (p.State ⊕ p.Exit) :=
   Program.Syntax.compile eval idle p
 
 end Program

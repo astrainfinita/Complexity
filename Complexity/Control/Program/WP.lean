@@ -24,7 +24,7 @@ namespace Complexity.Program
 
 open Std.WP Lean.Order
 
-variable {O A Op S α β : Type} {Ret : Op → Type}
+variable {F : Type → Type} {O A Op S α β : Type} {Ret : Op → Type}
 
 /-- A predicate family registered for invariant elaboration by `vcgen`.
 The index may be a carried value or the semantic state itself. -/
@@ -32,44 +32,45 @@ The index may be a carried value or the semantic state itself. -/
 def Invariant (ι P : Type) := ι → P
 
 /-- A program with the state interpretation used in a specification. -/
-structure WithSemantics (e : Semantics O A Op Ret S) (α : Type) where
+structure WithSemantics (F : Type → Type) (e : Semantics O A Op Ret S) (α : Type) where
   /-- The same source program which is supplied to the compiler. -/
-  code : Program O A Op Ret α
+  code : Program F O A Op Ret α
 
 /-- Attach a state interpretation for verification, without changing the source program. -/
-def verify (p : Program O A Op Ret α) (e : Semantics O A Op Ret S) : WithSemantics e α := ⟨p⟩
+def verify (p : Program F O A Op Ret α) (e : Semantics O A Op Ret S) : WithSemantics F e α :=
+  ⟨p⟩
 
 @[simp]
-theorem verify_code (p : Program O A Op Ret α) (e : Semantics O A Op Ret S) :
+theorem verify_code (p : Program F O A Op Ret α) (e : Semantics O A Op Ret S) :
     (p.verify e).code = p := rfl
 
 /-- Expose an ordinary conditional to verification-condition generation. -/
 @[spec]
-theorem verify_ite (p : Prop) [Decidable p] (f g : Program O A Op Ret α)
+theorem verify_ite (p : Prop) [Decidable p] (f g : Program F O A Op Ret α)
     (e : Semantics O A Op Ret S) :
     (if p then f else g).verify e = if p then f.verify e else g.verify e := by
   split <;> rfl
 
 /-- Expose a dependent conditional without discarding its branch hypotheses. -/
 @[spec]
-theorem verify_dite (p : Prop) [Decidable p] (f : p → Program O A Op Ret α)
-    (g : ¬p → Program O A Op Ret α) (e : Semantics O A Op Ret S) :
+theorem verify_dite (p : Prop) [Decidable p] (f : p → Program F O A Op Ret α)
+    (g : ¬p → Program F O A Op Ret α) (e : Semantics O A Op Ret S) :
     (dite p f g).verify e = dite p (fun h => (f h).verify e) (fun h => (g h).verify e) := by
   split <;> rfl
 
-/-- Total execution within a remaining time budget. -/
-def Total (p : Program O A Op Ret α) (e : Semantics O A Op Ret S)
+/-- Total execution within a remaining time budget. It passes no choice node. -/
+def Total (p : Program F O A Op Ret α) (e : Semantics O A Op Ret S)
     (Q : α → S → ℕ → Prop) (s : S) (b : ℕ) : Prop :=
   ∃ n a t, n ≤ b ∧ p.Exec e s n a t ∧ Q a t (b - n)
 
-instance (e : Semantics O A Op Ret S) : WP (WithSemantics e α) α (S → ℕ → Prop) Unit where
+instance (e : Semantics O A Op Ret S) : WP (WithSemantics F e α) α (S → ℕ → Prop) Unit where
   wpTrans p := ⟨fun Q _ => p.code.Total e Q⟩
   wp_trans_monotone p := by
     intro Q Q' x x' _ h s b ⟨n,a,t,hn,hr,hq⟩
     exact ⟨n,a,t,hn,hr,h a t (b - n) hq⟩
 
 /-- Extract the finite execution guaranteed by a verified total specification. -/
-theorem exec_of_spec {p : Program O A Op Ret α} {e : Semantics O A Op Ret S}
+theorem exec_of_spec {p : Program F O A Op Ret α} {e : Semantics O A Op Ret S}
     {P : S → ℕ → Prop} {Q : α → S → ℕ → Prop}
     (h : Triple (p.verify e) P Q ()) {s : S} {b : ℕ} (hs : P s b) :
     ∃ n a t, n ≤ b ∧ p.Exec e s n a t ∧ Q a t (b - n) :=
@@ -80,7 +81,7 @@ theorem spec_simulate {T : Type} {e : Semantics O A Op Ret S}
     {e' : Semantics O A Op Ret T} (R : S → T → Prop)
     (ho : ∀ s t, R s t → e'.observe t = e.observe s)
     (ha : ∀ a s t, R s t → R (e.act a s) (e'.act a t))
-    {p : Program O A Op Ret α} {P : S → ℕ → Prop} {Q : α → S → ℕ → Prop}
+    {p : Program F O A Op Ret α} {P : S → ℕ → Prop} {Q : α → S → ℕ → Prop}
     {P' : T → ℕ → Prop} {Q' : α → T → ℕ → Prop}
     (h : Triple (p.verify e) P Q ())
     (hp : ∀ t b, P' t b → ∃ s, P s b ∧ R s t)
@@ -95,7 +96,7 @@ theorem spec_simulate {T : Type} {e : Semantics O A Op Ret S}
   exact ⟨n, a, v, hn, hv, hq a u v (b - n) huv hu⟩
 
 /-- Extra time credits pass through a verified subprogram without changing its execution. -/
-theorem frame_budget {p : Program O A Op Ret α} {e : Semantics O A Op Ret S}
+theorem frame_budget {p : Program F O A Op Ret α} {e : Semantics O A Op Ret S}
     {P : S → ℕ → Prop} {Q : α → S → ℕ → Prop}
     (h : Triple (p.verify e) P Q ()) (r : ℕ) :
     Triple (p.verify e)
@@ -108,7 +109,7 @@ theorem frame_budget {p : Program O A Op Ret α} {e : Semantics O A Op Ret S}
   omega
 
 /-- An exact-budget subprogram may retain the credits reserved for its continuation. -/
-theorem frame_budget_eq {p : Program O A Op Ret α} {e : Semantics O A Op Ret S}
+theorem frame_budget_eq {p : Program F O A Op Ret α} {e : Semantics O A Op Ret S}
     {P : S → Prop} {Q : α → S → Prop} {n : ℕ}
     (h : Triple (p.verify e) (fun s b ↦ P s ∧ b = n)
       (fun a s b ↦ Q a s ∧ b = 0) ()) (r : ℕ) :
@@ -124,14 +125,14 @@ theorem frame_budget_eq {p : Program O A Op Ret α} {e : Semantics O A Op Ret S}
 @[spec]
 theorem spec_pure (a : α) (e : Semantics O A Op Ret S)
     (Q : α → S → ℕ → Prop) (x : Unit) :
-    Triple ((Pure.pure (f := Program O A Op Ret) a).verify e) (Q a) Q x := by
+    Triple ((Pure.pure (f := Program F O A Op Ret) a).verify e) (Q a) Q x := by
   constructor
   intro s b h
   exact ⟨0,a,s,Nat.zero_le _,Exec.pure e a s,by simpa using h⟩
 
 /-- Source binding composes executions without a dispatch transition. -/
 @[spec]
-theorem spec_bind (p : Program O A Op Ret α) (f : α → Program O A Op Ret β)
+theorem spec_bind (p : Program F O A Op Ret α) (f : α → Program F O A Op Ret β)
     (e : Semantics O A Op Ret S)
     (Q : β → S → ℕ → Prop) (x : Unit) :
     Triple ((p >>= f).verify e)
@@ -144,7 +145,7 @@ theorem spec_bind (p : Program O A Op Ret α) (f : α → Program O A Op Ret β)
 
 set_option experimental.vcgen true in
 /-- Compose two total contracts through the first program's postcondition. -/
-theorem spec_bind_of_spec {p : Program O A Op Ret α} {f : α → Program O A Op Ret β}
+theorem spec_bind_of_spec {p : Program F O A Op Ret α} {f : α → Program F O A Op Ret β}
     {e : Semantics O A Op Ret S} {P : S → ℕ → Prop}
     {R : α → S → ℕ → Prop} {Q : β → S → ℕ → Prop} {x : Unit}
     (hp : Triple (p.verify e) P R x)
@@ -153,7 +154,7 @@ theorem spec_bind_of_spec {p : Program O A Op Ret α} {f : α → Program O A Op
   vcgen [hp, hf]
 
 /-- Relabeling a result preserves the state and all remaining time credits. -/
-theorem spec_mapResult (f : α → β) {p : Program O A Op Ret α}
+theorem spec_mapResult (f : α → β) {p : Program F O A Op Ret α}
     {e : Semantics O A Op Ret S} {P : S → ℕ → Prop} {Q : β → S → ℕ → Prop} {x : Unit}
     (h : Triple (p.verify e) P (fun a ↦ Q (f a)) x) :
     Triple (verify (p.mapResult β .value f) e) P Q x := by
@@ -162,11 +163,20 @@ theorem spec_mapResult (f : α → β) {p : Program O A Op Ret α}
   obtain ⟨n, a, t, hn, he, hq⟩ := h.le_wp s b hs
   exact ⟨n, f a, t, hn, by apply he.mapResult, hq⟩
 
+/-- A deterministic program's specification holds for its embedding into a choice shape. -/
+theorem spec_ofId [Pure F] {p : Program Id O A Op Ret α} {e : Semantics O A Op Ret S}
+    {P : S → ℕ → Prop} {Q : α → S → ℕ → Prop} (h : Triple (p.verify e) P Q ()) :
+    Triple (verify (p.ofId (F := F)) e) P Q () := by
+  constructor
+  intro s b hs
+  obtain ⟨n, a, t, hn, he, hq⟩ := h.le_wp s b hs
+  exact ⟨n, a, t, hn, he.ofId, hq⟩
+
 /-- A primitive performs one local action and consumes one unit of budget. -/
 @[spec]
 theorem spec_perform (o : Op) (e : Semantics O A Op Ret S)
     (s : S) (b : ℕ) (h : 0 < b) (x : Unit) :
-    Triple ((perform o).verify e) (fun t c ↦ t = s ∧ c = b)
+    Triple ((perform (F := F) o).verify e) (fun t c ↦ t = s ∧ c = b)
       (fun a t c ↦ a = (e.eval o (e.observe s)).2 ∧
         t = e.act (e.eval o (e.observe s)).1 s ∧ c = b - 1) x := by
   constructor
@@ -177,7 +187,7 @@ theorem spec_perform (o : Op) (e : Semantics O A Op Ret S)
 @[spec]
 theorem spec_step_pure (o : Op) (e : Semantics O A Op Ret S)
     (s : S) (b : ℕ) (h : 0 < b) (x : Unit) :
-    Triple ((step o Pure.pure).verify e)
+    Triple ((step (F := F) o Pure.pure).verify e)
       (fun t c ↦ t = s ∧ c = b)
       (fun a t c ↦ a = (e.eval o (e.observe s)).2 ∧
         t = e.act (e.eval o (e.observe s)).1 s ∧ c = b - 1) x :=
@@ -185,8 +195,8 @@ theorem spec_step_pure (o : Op) (e : Semantics O A Op Ret S)
 
 /-- Compose a block execution with its source continuation. The generic rule is not registered:
 its continuation WP is intended for a caller-supplied contract. -/
-theorem spec_callControl {c d : ℕ} (b : Control O A (Fin c) (Fin d))
-    (k : Fin d → Program O A Op Ret α) (e : Semantics O A Op Ret S)
+theorem spec_callControl {c d : ℕ} (b : Control Id O A (Fin c) (Fin d))
+    (k : Fin d → Program F O A Op Ret α) (e : Semantics O A Op Ret S)
     (Q : α → S → ℕ → Prop) (x : Unit) :
     Triple ((callControl b k).verify e)
       (fun s z ↦ ∃ m j t, m ≤ z ∧ Control.Run b id e.observe e.act b.start s m j t ∧
@@ -199,10 +209,10 @@ theorem spec_callControl {c d : ℕ} (b : Control O A (Fin c) (Fin d))
 
 /-- A block with a return continuation exposes its exact result, state, and unused credits. -/
 @[spec]
-theorem spec_callControl_pure {c d : ℕ} (b : Control O A (Fin c) (Fin d))
+theorem spec_callControl_pure {c d : ℕ} (b : Control Id O A (Fin c) (Fin d))
     (e : Semantics O A Op Ret S) (s t : S) (m z : ℕ) (j : Fin d)
     (hr : Control.Run b id e.observe e.act b.start s m j t) (hz : m ≤ z) (x : Unit) :
-    Triple ((callControl b Pure.pure).verify e)
+    Triple ((callControl (F := F) b Pure.pure).verify e)
       (fun u q ↦ u = s ∧ q = z)
       (fun i u q ↦ i = j ∧ u = t ∧ q = z - m) x := by
   constructor

@@ -13,10 +13,10 @@ public import Complexity.Control.Program.WP
 
 namespace Complexity.Program
 
-variable {O A Op S : Type} {Ret : Op → Type} {k : ℕ}
+variable {F : Type → Type} {O A Op S : Type} {Ret : Op → Type} {k : ℕ}
 
 /-- Execute a fixed finite family in increasing index order, without a dispatch step. -/
-def forFin : {k : ℕ} → (Fin k → Program O A Op Ret Unit) → Program O A Op Ret Unit
+def forFin : {k : ℕ} → (Fin k → Program F O A Op Ret Unit) → Program F O A Op Ret Unit
   | 0, _ => pure ()
   | k + 1, f => do
       forFin (fun i : Fin k ↦ f i.castSucc)
@@ -26,7 +26,7 @@ open Std.WP
 
 /-- The specification of each component suffices to verify the complete finite family. -/
 @[spec]
-theorem spec_forFin (f : Fin k → Program O A Op Ret Unit) (e : Semantics O A Op Ret S)
+theorem spec_forFin (f : Fin k → Program F O A Op Ret Unit) (e : Semantics O A Op Ret S)
     (I : Invariant ℕ (S → ℕ → Prop))
     (h : ∀ i, Triple ((f i).verify e) (I i.val) (fun _ ↦ I (i.val + 1)) ()) :
     Triple ((forFin f).verify e) (I 0) (fun _ ↦ I k) () := by

@@ -45,14 +45,15 @@ instance {κ Γ : Type} (o : Op κ Γ) : Finite o.Result := by
 
 end Program
 
-/-- Each observed result is finite; unbounded stacks stay in the semantic configuration. -/
-protected abbrev Program (κ Γ : Type) :=
-  Program (Option Γ × (κ → Option Γ)) (Action κ Γ) (Program.Op κ Γ)
+/-- Each observed result is finite; unbounded stacks stay in the semantic configuration.
+Choices have the shape `F` (`Id` for deterministic programs). -/
+protected abbrev Program (F : Type → Type) (κ Γ : Type) :=
+  Program F (Option Γ × (κ → Option Γ)) (Action κ Γ) (Program.Op κ Γ)
     Program.Op.Result
 
 namespace Program
 
-variable {κ Γ : Type}
+variable {F : Type → Type} {κ Γ : Type}
 
 /-- A control-only action still consumes one transition. -/
 def idle : Action κ Γ where
@@ -72,39 +73,43 @@ def eval : (o : Op κ Γ) → (Option Γ × (κ → Option Γ)) → Action κ Γ
   | .observeBits _ f, v => (idle, Vector.ofFn (f v))
 
 /-- Execute one simultaneous local action. -/
-def act (a : Action κ Γ) : StackMachine.Program κ Γ Unit :=
+def act (a : Action κ Γ) : StackMachine.Program F κ Γ Unit :=
   Program.perform (Op.act a)
 
 /-- Read the input symbol, or `none` at either boundary. -/
-def readInput [FinEnum Γ] : StackMachine.Program κ Γ (Option Γ) :=
+def readInput [FinEnum Γ] : StackMachine.Program F κ Γ (Option Γ) :=
   Program.perform (Op.readInput inferInstance)
 
 /-- Read one stack top, or `none` for an empty stack. -/
-def read [FinEnum Γ] (i : κ) : StackMachine.Program κ Γ (Option Γ) :=
+def read [FinEnum Γ] (i : κ) : StackMachine.Program F κ Γ (Option Γ) :=
   Program.perform (Op.read inferInstance i)
 
 /-- Observe finitely many Boolean tests in one transition. -/
 def observeBits {n : ℕ} (f : (Option Γ × (κ → Option Γ)) → Fin n → Bool) :
-    StackMachine.Program κ Γ (Vector Bool n) := Program.perform (Op.observeBits n f)
+    StackMachine.Program F κ Γ (Vector Bool n) := Program.perform (Op.observeBits n f)
 
 /-- Push one symbol onto a selected stack. -/
-def push [DecidableEq κ] (i : κ) (a : Γ) : StackMachine.Program κ Γ Unit :=
+def push [DecidableEq κ] (i : κ) (a : Γ) : StackMachine.Program F κ Γ Unit :=
   act { idle (κ := κ) with work := fun j ↦ if j = i then .push a else .nop }
 
 /-- Pop one selected stack, leaving it empty if it already was. -/
-def pop [DecidableEq κ] (i : κ) : StackMachine.Program κ Γ Unit :=
+def pop [DecidableEq κ] (i : κ) : StackMachine.Program F κ Γ Unit :=
   act { idle (κ := κ) with work := fun j ↦ if j = i then .pop else .nop }
 
 /-- Move the input head using the bounded input convention. -/
-def moveInput (d : SignType) : StackMachine.Program κ Γ Unit :=
+def moveInput (d : SignType) : StackMachine.Program F κ Γ Unit :=
   act { idle with inputMove := d }
 
 /-- Append one symbol to the external output. -/
-def emit (a : Γ) : StackMachine.Program κ Γ Unit := act { idle with output := some a }
+def emit (a : Γ) : StackMachine.Program F κ Γ Unit := act { idle with output := some a }
 
 /-- Loop dispatch uses a no-op, which costs one transition per iteration. -/
-def repeatUntil (p : StackMachine.Program κ Γ Bool) : StackMachine.Program κ Γ Unit :=
+def repeatUntil (p : StackMachine.Program F κ Γ Bool) : StackMachine.Program F κ Γ Unit :=
   Program.repeatUntilWith idle p
+
+/-- Select a finite value under the choice shape `F`, in one control-only transition. -/
+def choose [Functor F] {β : Type} [FinEnum β] (c : F β) : StackMachine.Program F κ Γ β :=
+  Program.chooseWith idle c
 
 /-- Interpret instructions directly on complete stack configurations. -/
 @[simps eval observe act]
@@ -119,27 +124,27 @@ open Std.WP
 
 @[spec] theorem spec_act (a : Action κ Γ) (xs : Array Γ)
     (s : Cfg κ Γ xs) (b : ℕ) (h : 0 < b) (x : Unit) :
-    Triple ((act a).verify (semantics xs)) (fun t c ↦ t = s ∧ c = b)
+    Triple ((act (F := F) a).verify (semantics xs)) (fun t c ↦ t = s ∧ c = b)
       (fun r t c ↦ r = () ∧ t = apply a s ∧ c = b - 1) x :=
   Program.spec_perform (Op.act a) (semantics xs) s b h x
 
 @[spec] theorem spec_readInput [FinEnum Γ] (xs : Array Γ)
     (s : Cfg κ Γ xs) (b : ℕ) (h : 0 < b) (x : Unit) :
-    Triple (readInput.verify (semantics xs)) (fun t c ↦ t = s ∧ c = b)
+    Triple ((readInput (F := F)).verify (semantics xs)) (fun t c ↦ t = s ∧ c = b)
       (fun r t c ↦ r = (observe s : Option Γ × (κ → Option Γ)).1 ∧ t = s ∧ c = b - 1) x := by
   simpa [readInput, eval] using
     Program.spec_perform (Op.readInput inferInstance) (semantics xs) s b h x
 
 @[spec] theorem spec_read [FinEnum Γ] (i : κ) (xs : Array Γ)
     (s : Cfg κ Γ xs) (b : ℕ) (h : 0 < b) (x : Unit) :
-    Triple ((read i).verify (semantics xs)) (fun t c ↦ t = s ∧ c = b)
+    Triple ((read (F := F) i).verify (semantics xs)) (fun t c ↦ t = s ∧ c = b)
       (fun r t c ↦ r = (s.stacks i).head? ∧ t = s ∧ c = b - 1) x := by
   simpa [read, eval] using
     Program.spec_perform (Op.read inferInstance i) (semantics xs) s b h x
 
 @[spec] theorem spec_observeBits {n : ℕ} (f : (Option Γ × (κ → Option Γ)) → Fin n → Bool)
     (xs : Array Γ) (s : Cfg κ Γ xs) (b : ℕ) (h : 0 < b) (x : Unit) :
-    Triple ((observeBits f).verify (semantics xs)) (fun t c ↦ t = s ∧ c = b)
+    Triple ((observeBits (F := F) f).verify (semantics xs)) (fun t c ↦ t = s ∧ c = b)
       (fun v t c ↦ v = Vector.ofFn (f (observe s)) ∧ t = s ∧ c = b - 1) x := by
   simpa [observeBits, eval] using
     Program.spec_perform (Op.observeBits n f) (semantics xs) s b h x
@@ -159,19 +164,19 @@ open Std.WP
   split_ifs <;> simp_all [StackMachine.Op.apply]
 
 @[spec] theorem verify_push [DecidableEq κ] (i : κ) (a : Γ) (xs : Array Γ) :
-    (push i a).verify (semantics xs) =
+    (push (F := F) i a).verify (semantics xs) =
       (act { idle (κ := κ) with work := fun j ↦ if j = i then .push a else .nop }).verify
         (semantics xs) := rfl
 
 @[spec] theorem verify_pop [DecidableEq κ] (i : κ) (xs : Array Γ) :
-    (pop i).verify (semantics xs) =
+    (pop (F := F) i).verify (semantics xs) =
       (act { idle (κ := κ) with work := fun j ↦ if j = i then .pop else .nop }).verify
         (semantics xs) := rfl
 
-/-- Compile a stack program to a native machine with the stack operation interpreter and
-`idle` for the exits, with one transition per local action. -/
-def compile {α : Type} (p : StackMachine.Program κ Γ α) :
-    StackMachine Id κ Γ (p.State ⊕ p.Exit) :=
+/-- Compile a stack program to a native machine with the same choice shape, the stack operation
+interpreter and `idle` for the exits, with one transition per local action. -/
+def compile [Functor F] [Pure F] {α : Type} (p : StackMachine.Program F κ Γ α) :
+    StackMachine F κ Γ (p.State ⊕ p.Exit) :=
   Program.Syntax.compile eval idle p
 
 end Program

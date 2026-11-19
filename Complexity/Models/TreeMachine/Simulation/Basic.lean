@@ -68,7 +68,7 @@ def bank (c : StackMachine.Cfg (Work k) Bool xs) (ρ : Fin k → Tree) :
     (ρ ν : Fin k → Tree) : bank (bank c ρ) ν = bank c ν := rfl
 
 /-- Observe all register roots in a single local transition. -/
-def roots : StackMachine.Program (Work k) Bool (Fin k → Bool) := do
+def roots : StackMachine.Program Id (Work k) Bool (Fin k → Bool) := do
   let v ← observeBits fun v i ↦ v.2 (data i) == some true
   pure (fun i ↦ v[i])
 

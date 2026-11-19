@@ -27,7 +27,7 @@ def slots : Expr ν → ℕ
 /-- Return the register containing the value. Atoms use their existing registers;
 compound expressions use `b`, preserving the source layout below it. -/
 def compile (e : Expr ν) (v : ν → Fin k) (z : Fin k) (b : ℕ)
-    (hb : b + e.slots ≤ k) : TreeMachine.Program k (Fin k) :=
+    (hb : b + e.slots ≤ k) : TreeMachine.Program Id k (Fin k) :=
   match e with
   | .nil => pure z
   | .var x => pure (v x)
@@ -124,7 +124,7 @@ theorem exec_compile (e : Expr ν) (v : ν → Fin k) (z : Fin k) (b : ℕ)
 /-- Assignments write their final operation directly to the destination.
 Only assigning an existing variable needs the two-instruction copy macro. -/
 def assign (e : Expr ν) (d : Fin k) (v : ν → Fin k) (z : Fin k) (b : ℕ)
-    (hb : b + e.slots ≤ k) : TreeMachine.Program k Unit :=
+    (hb : b + e.slots ≤ k) : TreeMachine.Program Id k Unit :=
   match e with
   | .nil => TreeMachine.Program.act (.left d z)
   | .var x => TreeMachine.Program.copy z d (v x)

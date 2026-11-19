@@ -117,7 +117,7 @@ variable {k : ℕ} [NeZero k] {Q : Type} [FinEnum Q]
 
 /-- Load a tree, simulate the source, and serialize the selected output register. -/
 def Program.program (M : TreeMachine Id k Q) (i o : Fin k) :
-    StackMachine.Program (Work k) Bool Unit := do
+    StackMachine.Program Id (Work k) Bool Unit := do
   init i
   Program.loopOn idle (body M) M.q₀
   IO.emitStack (data o)

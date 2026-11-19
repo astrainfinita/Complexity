@@ -20,10 +20,10 @@ namespace Complexity.Program
 
 open Std.WP
 
-variable {O A Op S α β : Type} {Ret : Op → Type}
+variable {F : Type → Type} {O A Op S α β : Type} {Ret : Op → Type}
 
 /-- A dispatcher preserving the invariant satisfies the body's precondition. -/
-private theorem spec_dispatch_pre (a : A) {p : Program O A Op Ret α}
+private theorem spec_dispatch_pre (a : A) {p : Program F O A Op Ret α}
     {e : Semantics O A Op Ret S} {I : S → ℕ → Prop} {Q : α → S → ℕ → Prop} {x : Unit}
     (ha : ∀ s b, I s b → I (e.act a s) b)
     (h : Triple (p.verify e) (fun s b ↦ I s (b + 1)) Q x) :
@@ -34,7 +34,7 @@ private theorem spec_dispatch_pre (a : A) {p : Program O A Op Ret α}
 
 /-- A total loop rule. Every entry consumes a budget unit before executing its body. -/
 @[spec]
-theorem spec_loop {n r : ℕ} (a : A) (f : Fin n → Program O A Op Ret (Fin n ⊕ Fin r))
+theorem spec_loop {n r : ℕ} (a : A) (f : Fin n → Program F O A Op Ret (Fin n ⊕ Fin r))
     (i : Fin n) (e : Semantics O A Op Ret S) (I : Invariant (Fin n) (S → ℕ → Prop))
     (Q : Fin r → S → ℕ → Prop) (x : Unit)
     (hpos : ∀ i s b, I i s b → 0 < b)
@@ -62,7 +62,7 @@ theorem spec_loop {n r : ℕ} (a : A) (f : Fin n → Program O A Op Ret (Fin n �
 
 /-- A dispatcher preserving the loop invariant leaves the body precondition unchanged. -/
 theorem spec_loop_of_invariant {n r : ℕ}
-    (a : A) (f : Fin n → Program O A Op Ret (Fin n ⊕ Fin r))
+    (a : A) (f : Fin n → Program F O A Op Ret (Fin n ⊕ Fin r))
     (i : Fin n) (e : Semantics O A Op Ret S) (I : Invariant (Fin n) (S → ℕ → Prop))
     (Q : Fin r → S → ℕ → Prop) (x : Unit)
     (ha : ∀ i s b, I i s b → I i (e.act a s) b)
@@ -76,7 +76,7 @@ theorem spec_loop_of_invariant {n r : ℕ}
   exact spec_dispatch_pre a (ha j) (hstep j)
 
 /-- For a semantic no-op, a loop body starts in the same state with one fewer credit. -/
-theorem spec_loop_nop {n r : ℕ} (a : A) (f : Fin n → Program O A Op Ret (Fin n ⊕ Fin r))
+theorem spec_loop_nop {n r : ℕ} (a : A) (f : Fin n → Program F O A Op Ret (Fin n ⊕ Fin r))
     (i : Fin n) (e : Semantics O A Op Ret S) (I : Invariant (Fin n) (S → ℕ → Prop))
     (Q : Fin r → S → ℕ → Prop) (x : Unit)
     (ha : ∀ s, e.act a s = s)
@@ -89,7 +89,7 @@ theorem spec_loop_nop {n r : ℕ} (a : A) (f : Fin n → Program O A Op Ret (Fin
 
 /-- A total repeat-until rule, including the action executed before each body entry. -/
 @[spec]
-theorem spec_repeatUntilWith (a : A) (p : Program O A Op Ret Bool) (e : Semantics O A Op Ret S)
+theorem spec_repeatUntilWith (a : A) (p : Program F O A Op Ret Bool) (e : Semantics O A Op Ret S)
     (I : Invariant S (ℕ → Prop)) (Q : Unit → S → ℕ → Prop) (x : Unit)
     (hpos : ∀ s b, I s b → 0 < b)
     (hstep : Triple (p.verify e)
@@ -111,7 +111,7 @@ theorem spec_repeatUntilWith (a : A) (p : Program O A Op Ret Bool) (e : Semantic
 
 /-- A repeat dispatcher may update the state while preserving its invariant. -/
 theorem spec_repeatUntilWith_of_invariant
-    (a : A) (p : Program O A Op Ret Bool) (e : Semantics O A Op Ret S)
+    (a : A) (p : Program F O A Op Ret Bool) (e : Semantics O A Op Ret S)
     (I : Invariant S (ℕ → Prop)) (Q : Unit → S → ℕ → Prop) (x : Unit)
     (ha : ∀ s b, I s b → I (e.act a s) b)
     (hpos : ∀ s b, I s b → 0 < b)
@@ -122,8 +122,8 @@ theorem spec_repeatUntilWith_of_invariant
   exact spec_dispatch_pre a ha hstep
 
 /-- A no-op dispatcher changes only the remaining time budget. -/
-theorem spec_repeatUntilWith_nop (a : A) (p : Program O A Op Ret Bool) (e : Semantics O A Op Ret S)
-    (I : Invariant S (ℕ → Prop)) (Q : Unit → S → ℕ → Prop) (x : Unit)
+theorem spec_repeatUntilWith_nop (a : A) (p : Program F O A Op Ret Bool)
+    (e : Semantics O A Op Ret S) (I : Invariant S (ℕ → Prop)) (Q : Unit → S → ℕ → Prop) (x : Unit)
     (ha : ∀ s, e.act a s = s)
     (hpos : ∀ s b, I s b → 0 < b)
     (hstep : Triple (p.verify e) (fun s b => I s (b + 1))
@@ -135,8 +135,8 @@ theorem spec_repeatUntilWith_nop (a : A) (p : Program O A Op Ret Bool) (e : Sema
 variable [FinEnum α] [FinEnum β]
 
 /-- Encode a body's carried result without enumerating its control states. -/
-def loopOnBody (b : α → Program O A Op Ret (α ⊕ β)) (i : Fin (FinEnum.card α)) :
-    Syntax O A Op Ret β (.branch (FinEnum.card α) (FinEnum.card β)) :=
+def loopOnBody (b : α → Program F O A Op Ret (α ⊕ β)) (i : Fin (FinEnum.card α)) :
+    Syntax F O A Op Ret β (.branch (FinEnum.card α) (FinEnum.card β)) :=
   (b (FinEnum.equiv.symm i)).mapResult β (.branch (FinEnum.card α) (FinEnum.card β))
     (Sum.map FinEnum.equiv FinEnum.equiv)
 
@@ -145,13 +145,13 @@ def loopOnBody (b : α → Program O A Op Ret (α ⊕ β)) (i : Fin (FinEnum.car
 As in `loop`, `dispatch` runs before every body entry and costs one transition. The caller
 chooses it because `A` has no assumed no-op. Only carried values need `FinEnum`; the
 compiled control labels remain structural. -/
-def loopOn (dispatch : A) (b : α → Program O A Op Ret (α ⊕ β)) (i : α) :
-    Program O A Op Ret β :=
+def loopOn (dispatch : A) (b : α → Program F O A Op Ret (α ⊕ β)) (i : α) :
+    Program F O A Op Ret β :=
   Syntax.loop dispatch (FinEnum.equiv i) (loopOnBody b)
     (fun j ↦ Syntax.ret ((FinEnum.equiv : β ≃ Fin (FinEnum.card β)).symm j))
 
 /-- Finite carried values are a relabeling of the numbered loop's inputs and results. -/
-theorem loopOn_eq_mapResult_loop (a : A) (b : α → Program O A Op Ret (α ⊕ β)) (i : α) :
+theorem loopOn_eq_mapResult_loop (a : A) (b : α → Program F O A Op Ret (α ⊕ β)) (i : α) :
     loopOn a b i =
       (loop a (fun j ↦ (b (FinEnum.equiv.symm j)).mapResult _ .value
         (Sum.map FinEnum.equiv FinEnum.equiv)) (FinEnum.equiv i)).mapResult β .value
@@ -165,7 +165,7 @@ namespace Exec
 variable {e : Semantics O A Op Ret S}
 
 /-- Finishing a finite-value loop includes its dispatch transition. -/
-theorem loopOn_done (a : A) (b : α → Program O A Op Ret (α ⊕ β))
+theorem loopOn_done (a : A) (b : α → Program F O A Op Ret (α ⊕ β))
     {i : α} {j : β} {s t : S} {n : ℕ}
     (h : (b i).Exec e (e.act a s) n (.inr j) t) :
     (loopOn a b i).Exec e s (n + 1) j t := by
@@ -179,7 +179,7 @@ theorem loopOn_done (a : A) (b : α → Program O A Op Ret (α ⊕ β))
         ((FinEnum.equiv : β ≃ Fin (FinEnum.card β)).symm (FinEnum.equiv j)) t
 
 /-- Continuing routes to the next external carried value without a connecting action. -/
-theorem loopOn_next (a : A) (b : α → Program O A Op Ret (α ⊕ β))
+theorem loopOn_next (a : A) (b : α → Program F O A Op Ret (α ⊕ β))
     {i j : α} {s t u : S} {n m : ℕ} {v : β}
     (h : (b i).Exec e (e.act a s) n (.inl j) t)
     (hc : (loopOn a b j).Exec e t m v u) :
@@ -195,7 +195,7 @@ end Exec
 
 /-- A total rule for finite carried values; budget pays for every traversal of a back edge. -/
 @[spec]
-theorem spec_loopOn (a : A) (b : α → Program O A Op Ret (α ⊕ β)) (i : α)
+theorem spec_loopOn (a : A) (b : α → Program F O A Op Ret (α ⊕ β)) (i : α)
     (e : Semantics O A Op Ret S) (I : Invariant α (S → ℕ → Prop)) (Q : β → S → ℕ → Prop)
     (hp : ∀ i s n, I i s n → 0 < n)
     (hb : ∀ i, Triple ((b i).verify e)
@@ -220,7 +220,7 @@ theorem spec_loopOn (a : A) (b : α → Program O A Op Ret (α ⊕ β)) (i : α)
 
 /-- A finite-value dispatcher may update the state while preserving the carried invariant. -/
 theorem spec_loopOn_of_invariant
-    (a : A) (b : α → Program O A Op Ret (α ⊕ β)) (i : α)
+    (a : A) (b : α → Program F O A Op Ret (α ⊕ β)) (i : α)
     (e : Semantics O A Op Ret S) (I : Invariant α (S → ℕ → Prop)) (Q : β → S → ℕ → Prop)
     (ha : ∀ i s n, I i s n → I i (e.act a s) n)
     (hp : ∀ i s n, I i s n → 0 < n)
@@ -232,7 +232,7 @@ theorem spec_loopOn_of_invariant
   exact spec_dispatch_pre a (ha j) (hb j)
 
 /-- A globally inert finite-value dispatcher specializes the invariant-local rule. -/
-theorem spec_loopOn_nop (a : A) (b : α → Program O A Op Ret (α ⊕ β)) (i : α)
+theorem spec_loopOn_nop (a : A) (b : α → Program F O A Op Ret (α ⊕ β)) (i : α)
     (e : Semantics O A Op Ret S) (I : Invariant α (S → ℕ → Prop)) (Q : β → S → ℕ → Prop)
     (ha : ∀ s, e.act a s = s)
     (hp : ∀ i s n, I i s n → 0 < n)

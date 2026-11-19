@@ -21,7 +21,7 @@ open StackMachine.Program Work Std.WP
 variable {k : ℕ} {Q : Type} {xs : Array Bool}
 
 /-- Read the roots and update just the selected register. -/
-def body (M : TreeMachine Id k Q) (q : Q) : StackMachine.Program (Work k) Bool (Q ⊕ Unit) := do
+def body (M : TreeMachine Id k Q) (q : Q) : StackMachine.Program Id (Work k) Bool (Q ⊕ Unit) := do
   if M.halt q then pure (.inr ())
   else
     let v ← roots

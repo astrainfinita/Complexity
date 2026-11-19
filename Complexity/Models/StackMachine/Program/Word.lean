@@ -25,7 +25,7 @@ def drainAction (i : κ) (targets : κ → Bool) (a : Γ) : Action κ Γ :=
   { idle (κ := κ) with work := fun j ↦ if j = i then .pop else if targets j then .push a else .nop }
 
 /-- Transfer one symbol, or stop when the source is empty. -/
-def drainBody (i : κ) (targets : κ → Bool) : StackMachine.Program κ Γ Bool := do
+def drainBody (i : κ) (targets : κ → Bool) : StackMachine.Program Id κ Γ Bool := do
   let a ← read i
   if h : a.isSome then
     act (drainAction i targets (a.get h))
@@ -34,7 +34,7 @@ def drainBody (i : κ) (targets : κ → Bool) : StackMachine.Program κ Γ Bool
 
 /-- Empty a source stack, reversing its word onto each destination.
 The source takes precedence if it also belongs to `targets`. -/
-def drain (i : κ) (targets : κ → Bool) : StackMachine.Program κ Γ Unit :=
+def drain (i : κ) (targets : κ → Bool) : StackMachine.Program Id κ Γ Unit :=
   repeatUntil (drainBody i targets)
 
 /-- A complete configuration during a word transfer. -/
@@ -85,10 +85,10 @@ private theorem drainAction_drained (c : Cfg κ Γ xs) (i : κ) (targets : κ �
   simpa only [drain, repeatUntil, List.take_zero, List.drop_zero, drained_start] using h
 
 /-- Clearing is a transfer with no destinations. -/
-def clear (i : κ) : StackMachine.Program κ Γ Unit := drain i (fun _ ↦ false)
+def clear (i : κ) : StackMachine.Program Id κ Γ Unit := drain i (fun _ ↦ false)
 
 /-- Copy a word while restoring the source. The temporary stack must start empty. -/
-def copy (source target temp : κ) : StackMachine.Program κ Γ Unit := do
+def copy (source target temp : κ) : StackMachine.Program Id κ Γ Unit := do
   drain source (fun i ↦ i == temp)
   drain temp (fun i ↦ i == source || i == target)
 
@@ -122,7 +122,7 @@ def copy (source target temp : κ) : StackMachine.Program κ Γ Unit := do
   all_goals simp_all [d, Ne.symm hsp] <;> omega
 
 /-- Move a word in its original order, emptying both the source and temporary stack. -/
-def move (source target temp : κ) : StackMachine.Program κ Γ Unit := do
+def move (source target temp : κ) : StackMachine.Program Id κ Γ Unit := do
   drain source (fun i ↦ i == temp)
   drain temp (fun i ↦ i == target)
 

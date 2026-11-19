@@ -31,6 +31,13 @@ instance : Functor BinaryChoice where
 @[simp] theorem map_apply {α β : Type u} (f : α → β) (x : BinaryChoice α) (i : Fin 2) :
     (f <$> x) i = f (x i) := rfl
 
+/-- Duplicate one value across both branch labels, as `Controller.toBinary` does. -/
+instance : Pure BinaryChoice where
+  pure a _ := a
+
+@[simp] theorem pure_apply {α : Type u} (a : α) (i : Fin 2) :
+    (pure a : BinaryChoice α) i = a := rfl
+
 /-- Enumerate both alternatives without ordering them, retaining their multiplicities. -/
 instance : MonadLift BinaryChoice Multiset where
   monadLift f := ↑[f 0, f 1]

@@ -13,14 +13,14 @@ public import Complexity.Control.Program.Semantics
 
 namespace Complexity.Program
 
-variable {O A Op α S T : Type} {Ret : Op → Type}
+variable {F : Type → Type} {O A Op α S T : Type} {Ret : Op → Type}
   {e : Semantics O A Op Ret S} {e' : Semantics O A Op Ret T}
 
 /-- Relations preserving observations and actions transport complete source executions. -/
 theorem Syntax.Exec.simulate (R : S → T → Prop)
     (ho : ∀ s t, R s t → e'.observe t = e.observe s)
     (ha : ∀ a s t, R s t → R (e.act a s) (e'.act a t))
-    {v : Kind} {p : Syntax O A Op Ret α v} {s t : S} {n : ℕ} {a : Kind.Value α v}
+    {v : Kind} {p : Syntax F O A Op Ret α v} {s t : S} {n : ℕ} {a : Kind.Value α v}
     (h : Syntax.Exec e p s n a t) (u : T) (hu : R s u) (he : e'.eval = e.eval) :
     ∃ w, R t w ∧ Syntax.Exec e' p u n a w := by
   induction h generalizing u with
@@ -45,7 +45,7 @@ theorem Syntax.Exec.simulate (R : S → T → Prop)
 /-- The complete source execution respects a semantic-state projection. -/
 theorem Syntax.Exec.map (f : S → T) (ho : ∀ s, e'.observe (f s) = e.observe s)
     (ha : ∀ a s, e'.act a (f s) = f (e.act a s))
-    {v : Kind} {p : Syntax O A Op Ret α v} {s t : S} {n : ℕ} {a : Kind.Value α v}
+    {v : Kind} {p : Syntax F O A Op Ret α v} {s t : S} {n : ℕ} {a : Kind.Value α v}
     (h : Syntax.Exec e p s n a t) (he : e'.eval = e.eval) :
     Syntax.Exec e' p (f s) n a (f t) := by
   obtain ⟨w, rfl, hr⟩ := h.simulate (fun s t ↦ t = f s)
@@ -55,7 +55,7 @@ theorem Syntax.Exec.map (f : S → T) (ho : ∀ s, e'.observe (f s) = e.observe 
 /-- The complete source execution can carry additional ghost information. -/
 theorem Syntax.Exec.lift (f : T → S) (ho : ∀ s, e'.observe s = e.observe (f s))
     (ha : ∀ a s, f (e'.act a s) = e.act a (f s))
-    {v : Kind} {p : Syntax O A Op Ret α v} {s t : S} {n : ℕ} {a : Kind.Value α v}
+    {v : Kind} {p : Syntax F O A Op Ret α v} {s t : S} {n : ℕ} {a : Kind.Value α v}
     (h : Syntax.Exec e p s n a t) (u : T) (hu : f u = s) (he : e'.eval = e.eval) :
     ∃ w, f w = t ∧ Syntax.Exec e' p u n a w :=
   h.simulate (fun s t ↦ f t = s)
@@ -65,22 +65,38 @@ theorem Syntax.Exec.lift (f : T → S) (ho : ∀ s, e'.observe s = e.observe (f 
 theorem Exec.simulate (R : S → T → Prop)
     (ho : ∀ s t, R s t → e'.observe t = e.observe s)
     (ha : ∀ a s t, R s t → R (e.act a s) (e'.act a t))
-    {p : Program O A Op Ret α} {s t : S} {n : ℕ} {a : α} (h : p.Exec e s n a t)
+    {p : Program F O A Op Ret α} {s t : S} {n : ℕ} {a : α} (h : p.Exec e s n a t)
     (u : T) (hu : R s u) (he : e'.eval = e.eval := by rfl) :
     ∃ w, R t w ∧ p.Exec e' u n a w := Syntax.Exec.simulate R ho ha h u hu he
 
 /-- The same program execution is preserved under a semantic-state projection. -/
 theorem Exec.map (f : S → T) (ho : ∀ s, e'.observe (f s) = e.observe s)
     (ha : ∀ a s, e'.act a (f s) = f (e.act a s))
-    {p : Program O A Op Ret α} {s t : S} {n : ℕ} {a : α} (h : p.Exec e s n a t)
+    {p : Program F O A Op Ret α} {s t : S} {n : ℕ} {a : α} (h : p.Exec e s n a t)
     (he : e'.eval = e.eval := by rfl) : p.Exec e' (f s) n a (f t) :=
   Syntax.Exec.map f ho ha h he
 
 /-- Lift an entry-to-exit execution through a semantic-state projection. -/
 theorem Exec.lift (f : T → S) (ho : ∀ s, e'.observe s = e.observe (f s))
     (ha : ∀ a s, f (e'.act a s) = e.act a (f s))
-    {p : Program O A Op Ret α} {s t : S} {n : ℕ} {a : α} (h : p.Exec e s n a t)
+    {p : Program F O A Op Ret α} {s t : S} {n : ℕ} {a : α} (h : p.Exec e s n a t)
     (u : T) (hu : f u = s) (he : e'.eval = e.eval := by rfl) :
     ∃ w, f w = t ∧ p.Exec e' u n a w := Syntax.Exec.lift f ho ha h u hu he
+
+/-- Changing the choice shape preserves every execution, which passes no choice node. -/
+theorem Syntax.Exec.mapChoice {G : Type → Type} (φ : ∀ {β : Type}, F β → G β)
+    {v : Kind} {p : Syntax F O A Op Ret α v} {s t : S} {n : ℕ} {a : Kind.Value α v}
+    (h : Syntax.Exec e p s n a t) : Syntax.Exec e (p.mapChoice φ) s n a t := by
+  induction h with
+  | ret a s => exact .ret a s
+  | step o k s h ih => exact .step o _ s ih
+  | loop_done a i body k hb hk ihb ihk => exact .loop_done a i _ _ ihb ihk
+  | loop_next a i body k hb hk ihb ihk => exact .loop_next a i _ _ ihb ihk
+  | call b k hb hk ih => exact .call b _ hb ih
+
+/-- A deterministic syntax tree and its embedding into a choice shape share their executions. -/
+theorem Syntax.Exec.ofId [Pure F] {v : Kind} {p : Syntax Id O A Op Ret α v} {s t : S} {n : ℕ}
+    {a : Kind.Value α v} (h : Syntax.Exec e p s n a t) :
+    Syntax.Exec e (p.ofId (F := F)) s n a t := h.mapChoice _
 
 end Complexity.Program

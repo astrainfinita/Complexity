@@ -27,7 +27,7 @@ def loadAction (i : κ) (a : Γ) : Action κ Γ :=
     work := fun j ↦ if j = i then .push a else .nop }
 
 /-- Read and push one input symbol, or stop at the input boundary. -/
-def loadBody (i : κ) : StackMachine.Program κ Γ Bool := do
+def loadBody (i : κ) : StackMachine.Program Id κ Γ Bool := do
   let a ← readInput
   if h : a.isSome then
     act (loadAction i (a.get h))
@@ -35,10 +35,10 @@ def loadBody (i : κ) : StackMachine.Program κ Γ Bool := do
   else pure true
 
 /-- Read through the input once, accumulating its reverse on a stack. -/
-def loadReverse (i : κ) : StackMachine.Program κ Γ Unit := repeatUntil (loadBody i)
+def loadReverse (i : κ) : StackMachine.Program Id κ Γ Unit := repeatUntil (loadBody i)
 
 /-- Read the input into scratch, then restore its order while transferring to the target. -/
-def load (target temp : κ) : StackMachine.Program κ Γ Unit := do
+def load (target temp : κ) : StackMachine.Program Id κ Γ Unit := do
   loadReverse temp
   Word.drain temp (fun i ↦ i == target)
 
@@ -129,7 +129,7 @@ def emitAction (i : κ) (a : Γ) : Action κ Γ :=
     output := some a }
 
 /-- Emit one stack symbol, or stop when the stack is empty. -/
-def emitBody (i : κ) : StackMachine.Program κ Γ Bool := do
+def emitBody (i : κ) : StackMachine.Program Id κ Γ Bool := do
   let a ← read i
   if h : a.isSome then
     act (emitAction i (a.get h))
@@ -137,7 +137,7 @@ def emitBody (i : κ) : StackMachine.Program κ Γ Bool := do
   else pure true
 
 /-- Emit a stack from top to bottom, consuming it while preserving every other stack. -/
-def emitStack (i : κ) : StackMachine.Program κ Γ Unit := repeatUntil (emitBody i)
+def emitStack (i : κ) : StackMachine.Program Id κ Γ Unit := repeatUntil (emitBody i)
 
 /-- The configuration after emitting a prefix, with the remaining source word. -/
 @[simps -fullyApplied]

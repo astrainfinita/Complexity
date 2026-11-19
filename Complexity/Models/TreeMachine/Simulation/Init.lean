@@ -27,7 +27,7 @@ def boot (i : Fin k) : StackMachine.Action (Work k) Bool :=
     | _ => .nop }
 
 /-- Initialize the source bank and load the input tree into register `i`. -/
-def init (i : Fin k) : StackMachine.Program (Work k) Bool Unit := do
+def init (i : Fin k) : StackMachine.Program Id (Work k) Bool Unit := do
   act (boot i)
   IO.load (data i) (.scratch .temp)
 

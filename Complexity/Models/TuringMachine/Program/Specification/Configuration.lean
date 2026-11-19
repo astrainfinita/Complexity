@@ -21,7 +21,7 @@ namespace Complexity.TM.Program
 
 open Std.WP
 
-variable {κ : Type} {Γ : Type} [Inhabited Γ] {xs : Array Γ}
+variable {F : Type → Type} {κ : Type} {Γ : Type} [Inhabited Γ] {xs : Array Γ}
 
 /-- Interpret a program on tape configurations, without a visitation ghost. -/
 @[simps eval observe act]
@@ -36,7 +36,7 @@ def cfgSemantics (xs : Array Γ) :
 @[spec]
 theorem cfg_spec_act (a : Action κ Γ) (xs : Array Γ) (s : Cfg κ Γ xs)
     (b : ℕ) (h : 0 < b) (x : Unit) :
-    Triple ((act a).verify (cfgSemantics xs)) (fun t c ↦ t = s ∧ c = b)
+    Triple ((act (F := F) a).verify (cfgSemantics xs)) (fun t c ↦ t = s ∧ c = b)
       (fun r t c ↦ r = () ∧ t = apply a s ∧ c = b - 1) x :=
   Program.spec_perform (Op.act a) (cfgSemantics xs) s b h x
 
@@ -44,7 +44,7 @@ theorem cfg_spec_act (a : Action κ Γ) (xs : Array Γ) (s : Cfg κ Γ xs)
 @[spec]
 theorem cfg_spec_readInput [FinEnum Γ] (xs : Array Γ) (s : Cfg κ Γ xs)
     (b : ℕ) (h : 0 < b) (x : Unit) :
-    Triple (readInput.verify (cfgSemantics xs)) (fun t c ↦ t = s ∧ c = b)
+    Triple ((readInput (F := F)).verify (cfgSemantics xs)) (fun t c ↦ t = s ∧ c = b)
       (fun r t c ↦ r = s.inputSymbol ∧ t = s ∧ c = b - 1) x := by
   simpa [readInput, eval] using
     Program.spec_perform (Op.readInput inferInstance)
@@ -54,14 +54,14 @@ theorem cfg_spec_readInput [FinEnum Γ] (xs : Array Γ) (s : Cfg κ Γ xs)
 @[spec]
 theorem cfg_spec_read [FinEnum Γ] (i : κ) (xs : Array Γ) (s : Cfg κ Γ xs)
     (b : ℕ) (h : 0 < b) (x : Unit) :
-    Triple ((read i).verify (cfgSemantics xs)) (fun t c ↦ t = s ∧ c = b)
+    Triple ((read (F := F) i).verify (cfgSemantics xs)) (fun t c ↦ t = s ∧ c = b)
       (fun r t c ↦ r = s.workSymbols i ∧ t = s ∧ c = b - 1) x := by
   simpa [read, eval] using
     Program.spec_perform (Op.read inferInstance i) (cfgSemantics xs) s b h x
 
 /-- A total loop rule on configurations; the dispatcher consumes one time credit. -/
 @[spec]
-theorem cfg_spec_repeatUntil (p : TM.Program κ Γ Bool)
+theorem cfg_spec_repeatUntil (p : TM.Program F κ Γ Bool)
     (I : Program.Invariant (Cfg κ Γ xs) (ℕ → Prop))
     (Q : Unit → Cfg κ Γ xs → ℕ → Prop)
     (hp : ∀ s b, I s b → 0 < b)

@@ -24,15 +24,18 @@ This classical enumeration is separate from the computable `FinEnum` instances b
 
 namespace Complexity.Program.Syntax
 
-variable {O A Op α : Type} {Ret : Op → Type}
+variable {F : Type → Type} {O A Op α : Type} {Ret : Op → Type}
 
 /-- Number internal labels when importing a compiled program. -/
 @[instance_reducible] def enumState [∀ o, FinEnum (Ret o)] : {u : Kind} →
-    (p : Syntax O A Op Ret α u) → FinEnum p.State
+    (p : Syntax F O A Op Ret α u) → FinEnum p.State
   | _, .ret _ => inferInstanceAs (FinEnum PEmpty)
   | _, .step o k =>
     letI := fun x ↦ enumState (k x)
     inferInstanceAs (FinEnum (PUnit ⊕ ((x : Ret o) × State (k x))))
+  | _, .choice (d := d) _ k =>
+    letI := fun j ↦ enumState (k j)
+    inferInstanceAs (FinEnum (PUnit ⊕ ((j : Fin d) × State (k j))))
   | _, .loop (n := n) (r := r) _ _ body k =>
     letI := fun i ↦ enumState (body i)
     letI := fun j ↦ enumState (k j)
@@ -44,11 +47,14 @@ variable {O A Op α : Type} {Ret : Op → Type}
 
 /-- Number exit labels when importing a compiled program. -/
 @[instance_reducible] def enumExit [∀ o, FinEnum (Ret o)] : {u : Kind} →
-    (p : Syntax O A Op Ret α u) → FinEnum p.Exit
+    (p : Syntax F O A Op Ret α u) → FinEnum p.Exit
   | _, .ret _ => inferInstanceAs (FinEnum PUnit)
   | _, .step o k =>
     letI := fun x ↦ enumExit (k x)
     inferInstanceAs (FinEnum ((x : Ret o) × Exit (k x)))
+  | _, .choice (d := d) _ k =>
+    letI := fun j ↦ enumExit (k j)
+    inferInstanceAs (FinEnum ((j : Fin d) × Exit (k j)))
   | _, .loop (r := r) _ _ _ k =>
     letI := fun j ↦ enumExit (k j)
     inferInstanceAs (FinEnum ((j : Fin r) × Exit (k j)))

@@ -15,12 +15,12 @@ namespace Complexity.Program
 
 open Std.WP
 
-variable {O A Op S : Type} {Ret : Op → Type}
+variable {F : Type → Type} {O A Op S : Type} {Ret : Op → Type}
 
 /-- A counted traversal may carry a different remaining-budget invariant at every index.
 The dispatcher preserves the invariant at the same budget; each body entry then consumes
 one dispatch credit before continuing or stopping. -/
-theorem spec_repeatUntilWith_count_of_invariant (a : A) (p : Program O A Op Ret Bool)
+theorem spec_repeatUntilWith_count_of_invariant (a : A) (p : Program F O A Op Ret Bool)
     (e : Semantics O A Op Ret S) (I : ℕ → S → ℕ → Prop) (Q : S → ℕ → Prop) (n : ℕ)
     (ha : ∀ i ≤ n, ∀ c b, I i c b → I i (e.act a c) b)
     (hp : ∀ i ≤ n, ∀ c b, I i c b → 0 < b)
@@ -53,7 +53,7 @@ theorem spec_repeatUntilWith_count_of_invariant (a : A) (p : Program O A Op Ret 
 
 /-- A traversal advances through `I 0` to `I n`, then executes its final stopping body.
 Each body entry pays one dispatch transition in addition to its specified action cost. -/
-theorem spec_repeatUntilWith_count (a : A) (p : Program O A Op Ret Bool)
+theorem spec_repeatUntilWith_count (a : A) (p : Program F O A Op Ret Bool)
     (e : Semantics O A Op Ret S)
     (I : ℕ → S → Prop) (Q : S → Prop) (n u v q : ℕ)
     (ha : ∀ i ≤ n, ∀ c, I i c → I i (e.act a c))

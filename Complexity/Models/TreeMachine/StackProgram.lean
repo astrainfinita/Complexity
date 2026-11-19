@@ -29,14 +29,14 @@ def scanAction (source saved counter : κ) (b : Bool) : Action κ Bool :=
     else if i = counter then if b then .push true else .pop else .nop }
 
 /-- Process one token and stop when the counter becomes empty. -/
-def scanBody (source saved counter : κ) : StackMachine.Program κ Bool Bool := do
+def scanBody (source saved counter : κ) : StackMachine.Program Id κ Bool Bool := do
   let b ← read source
   act (scanAction source saved counter (b.getD false))
   let n ← read counter
   pure n.isNone
 
 /-- Consume one encoded tree, saving its reversed code. The counter starts with one bit. -/
-def scan (source saved counter : κ) : StackMachine.Program κ Bool Unit :=
+def scan (source saved counter : κ) : StackMachine.Program Id κ Bool Unit :=
   repeatUntil (scanBody source saved counter)
 
 /-- Complete configuration with a pending forest and the reversed processed prefix. -/
@@ -124,7 +124,7 @@ include hc hsc in
   exact ⟨[a], [], by simp, rfl, by simp [forestCode], by simp [forestCode]⟩
 
 /-- Initialize the unary counter and consume the first tree. -/
-def takeTree (source saved counter : κ) : StackMachine.Program κ Bool Unit := do
+def takeTree (source saved counter : κ) : StackMachine.Program Id κ Bool Unit := do
   push counter true
   scan source saved counter
 
@@ -151,7 +151,7 @@ include hs hc hsc in
   all_goals simp_all
 
 /-- Copy the first tree and restore the source, using two empty scratch stacks. -/
-def copyTree (source target saved counter : κ) : StackMachine.Program κ Bool Unit := do
+def copyTree (source target saved counter : κ) : StackMachine.Program Id κ Bool Unit := do
   takeTree source saved counter
   Word.drain saved (fun i ↦ i == source || i == target)
 
@@ -175,7 +175,7 @@ include hs hc hsc in
   all_goals simp_all [d] <;> omega
 
 /-- Copy the right word first, then the left word, and prepend the node token. -/
-def pair (left right target temp : κ) : StackMachine.Program κ Bool Unit := do
+def pair (left right target temp : κ) : StackMachine.Program Id κ Bool Unit := do
   Word.copy right target temp
   Word.copy left target temp
   push target true
@@ -199,7 +199,7 @@ def pair (left right target temp : κ) : StackMachine.Program κ Bool Unit := do
 
 /-- Project one child while preserving the source and every other register. -/
 def project (source target saved temp counter : κ) (right : Bool) :
-    StackMachine.Program κ Bool Unit := do
+    StackMachine.Program Id κ Bool Unit := do
   let b ← read source
   if b.getD false then
     pop source

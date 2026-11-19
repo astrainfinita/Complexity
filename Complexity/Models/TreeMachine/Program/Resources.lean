@@ -23,7 +23,7 @@ namespace Complexity.TreeMachine.Program
 open Controller (History)
 open Std.WP
 
-variable {k : ℕ} {α : Type}
+variable {F : Type → Type} {k : ℕ} {α : Type}
 
 /-- Record register actions independently of the generated control states. -/
 @[simps -fullyApplied eval observe act]
@@ -35,14 +35,14 @@ def historySemantics : Program.Semantics (Fin k → Bool) (TreeMachine.Action k)
 
 theorem exec_act_history (o : TreeMachine.Action k)
     (h : History (Cfg k) (TreeMachine.Action k)) :
-    (act o).Exec historySemantics h 1 () (h.snoc o) :=
+    (act (F := F) o).Exec historySemantics h 1 () (h.snoc o) :=
   Program.Exec.perform historySemantics (.act o) h
 
 /-- An instruction consumes one unit of time and records its resulting register bank. -/
 @[spec]
 theorem spec_act (o : TreeMachine.Action k) (s : History (Cfg k) (TreeMachine.Action k))
     (b : ℕ) (hb : 0 < b) (x : Unit) :
-    Triple ((act o).verify historySemantics) (fun t c ↦ t = s ∧ c = b)
+    Triple ((act (F := F) o).verify historySemantics) (fun t c ↦ t = s ∧ c = b)
       (fun r t c ↦ r = () ∧ t = s.snoc o ∧ c = b - 1) x :=
   Program.spec_perform (Op.act o) historySemantics s b hb x
 
@@ -50,12 +50,12 @@ theorem spec_act (o : TreeMachine.Action k) (s : History (Cfg k) (TreeMachine.Ac
 @[spec]
 theorem spec_root (i : Fin k) (s : History (Cfg k) (TreeMachine.Action k))
     (b : ℕ) (hb : 0 < b) (x : Unit) :
-    Triple ((root i).verify historySemantics) (fun t c ↦ t = s ∧ c = b)
+    Triple ((root (F := F) i).verify historySemantics) (fun t c ↦ t = s ∧ c = b)
       (fun r t c ↦ r = (s.last.regs i).root ∧ t = s.snoc TreeMachine.Action.nop ∧ c = b - 1) x :=
   Program.spec_perform (Op.root i) historySemantics s b hb x
 
 /-- A history specification gives actual unit time and peak space for the compiled machine. -/
-theorem computesWithinUnitTime_of_exec [NeZero k] {p : TreeMachine.Program k α}
+theorem computesWithinUnitTime_of_exec [NeZero k] {p : TreeMachine.Program Id k α}
     {x y : Tree} {n t s : ℕ} {a : α} {v : History (Cfg k) (TreeMachine.Action k)}
     (h : p.Exec historySemantics (History.nil (Cfg.init k x)) n a v)
     (hn : n ≤ t) (ho : v.last.regs 0 = y) (hs : v.configSup Cfg.mass ≤ s) :
@@ -70,7 +70,7 @@ theorem computesWithinUnitTime_of_exec [NeZero k] {p : TreeMachine.Program k α}
     ((congrArg (·.configSup Cfg.mass) hr.2).le.trans hs)
 
 /-- A program contract yields the machine bound without inspecting compiled control states. -/
-theorem computesWithinUnitTime [NeZero k] {p : TreeMachine.Program k α}
+theorem computesWithinUnitTime [NeZero k] {p : TreeMachine.Program Id k α}
     {x y : Tree} {t s : ℕ} {P : History (Cfg k) (TreeMachine.Action k) → ℕ → Prop}
     (h : Triple (p.verify historySemantics) P
       (fun _ v _ ↦ v.last.regs 0 = y ∧ v.configSup Cfg.mass ≤ s) ())

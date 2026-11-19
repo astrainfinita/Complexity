@@ -31,12 +31,12 @@ def blockRoute (M : TM Id κ Γ Q) (q : Q) :
 
 /-- Use the supplied state numbering without constructing a transition table. -/
 def callBlock (M : TM Id κ Γ Q) (q : Q) :
-    Program.Control (Γ × (κ → Γ)) (Action κ Γ)
+    Program.Control Id (Γ × (κ → Γ)) (Action κ Γ)
       (Fin (FinEnum.card Q)) (Fin (FinEnum.card Q)) where
   start := blockRoute M q
   next q v :=
     let a := (M.transition (FinEnum.equiv.symm q) v).run
-    (a.2, blockRoute M a.1)
+    pure (a.2, blockRoute M a.1)
 
 /-- Call a machine from a selected finite control state and return its halting state.
 
@@ -44,7 +44,7 @@ The call uses the caller's current tapes and heads, without initialization or re
 `FinEnum` supplies the numbering needed by `Program.callControl`; the continuation converts
 the numbered exit back to a state of the machine. Each source transition costs one step,
 and an already halted entry returns without taking a step. -/
-@[inline] def callFrom (M : TM Id κ Γ Q) (q : Q) : TM.Program κ Γ Q :=
+@[inline] def callFrom (M : TM Id κ Γ Q) (q : Q) : TM.Program Id κ Γ Q :=
   Program.callControl (callBlock M q) (fun e ↦ Program.pure (FinEnum.equiv.symm e))
 
 /-- Call a machine from its initial control state and return its halting state.
@@ -52,7 +52,7 @@ and an already halted entry returns without taking a step. -/
 This fixes the entry of `callFrom` to `M.q₀`; storage still comes from the caller's current
 configuration. Unlike `Program.callControl`, it accepts a machine and supplies the exit
 continuation itself. The call adds no transitions beyond the source machine's execution. -/
-@[inline] def call (M : TM Id κ Γ Q) : TM.Program κ Γ Q := callFrom M M.q₀
+@[inline] def call (M : TM Id κ Γ Q) : TM.Program Id κ Γ Q := callFrom M M.q₀
 
 /-- Embed a source label in the compiled call, including its pure return continuation. -/
 def callRoute (M : TM Id κ Γ Q) (q : Q) :
@@ -114,7 +114,7 @@ theorem exec_callFrom (M : TM Id κ Γ Q) (q : Q) (s : History (Cfg κ Γ xs) (A
       (M.runFrom (q, s) n).2 := by
   obtain ⟨m, hm, hr⟩ := run_callBlock M q q s n hh
   refine ⟨m, hm, ?_⟩
-  have h := Program.Syntax.Exec.call
+  have h := Program.Syntax.Exec.call (F := Id)
     (callBlock M q) (fun e ↦
       Program.Syntax.ret
         ((FinEnum.equiv : Q ≃ Fin (FinEnum.card Q)).symm e))

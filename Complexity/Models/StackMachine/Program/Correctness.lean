@@ -30,7 +30,7 @@ def historySemantics (xs : Array Γ) :
   act := apply
 
 private theorem run_space_le [Fintype κ]
-    {Q E : Type} {p : Program.Control (Option Γ × (κ → Option Γ)) (Action κ Γ) Q E}
+    {Q E : Type} {p : Program.Control Id (Option Γ × (κ → Option Γ)) (Action κ Γ) Q E}
     {out : E → α} {q : Q ⊕ E} {s t : History (Cfg κ Γ xs) (Action κ Γ)}
     {n : ℕ} {a : α}
     (h : p.Run out (historySemantics xs).observe (historySemantics xs).act q s n a t) :
@@ -38,7 +38,7 @@ private theorem run_space_le [Fintype κ]
   induction h with
   | done e s => exact le_sup_left
   | step q s h ih =>
-    have hm := s.last.mass_apply_le (p.next q (observe s)).1
+    have hm := s.last.mass_apply_le (p.next q (observe s)).run.1
     simp only [historySemantics_act, historySemantics_observe, History.apply_def,
       History.configSup_snoc, History.last_snoc] at ih
     rw [Nat.mul_add, Nat.mul_one]
@@ -46,7 +46,7 @@ private theorem run_space_le [Fintype κ]
 
 /-- A macro's time bound also bounds its temporary space, without inspecting its internals.
 Reserved credits survive, so this rule composes with amortized time arguments. -/
-theorem spec_history [Fintype κ] {p : StackMachine.Program κ Γ α}
+theorem spec_history [Fintype κ] {p : StackMachine.Program Id κ Γ α}
     {c : Cfg κ Γ xs} {n r S : ℕ} {P : α → Cfg κ Γ xs → Prop}
     (h : Triple (p.verify (semantics xs)) (fun s b ↦ s = c ∧ n ≤ b)
       (fun a s b ↦ P a s ∧ r ≤ b) ())
@@ -65,7 +65,7 @@ theorem spec_history [Fintype κ] {p : StackMachine.Program κ Γ α}
   exact sup_le hS (by rw [hc]; exact (Nat.add_le_add_left (Nat.mul_le_mul_left _ hm) _).trans hs)
 
 /-- A history specification supplies independent time and peak-space bounds. -/
-theorem computesWithin_history [Fintype κ] {p : StackMachine.Program κ Γ α}
+theorem computesWithin_history [Fintype κ] {p : StackMachine.Program Id κ Γ α}
     {xs ys : List Γ} {t s : ℕ}
     (h : Triple (p.verify (historySemantics xs.toArray))
       (fun h b ↦ h = History.nil (Cfg.init κ xs) ∧ t ≤ b)
@@ -81,7 +81,7 @@ theorem computesWithin_history [Fintype κ] {p : StackMachine.Program κ Γ α}
     ((congrArg (·.configSup Cfg.mass) hr.2).le.trans hs)
 
 /-- A total stack-program specification yields native computation and resource bounds. -/
-theorem computesWithin [Fintype κ] (p : StackMachine.Program κ Γ α)
+theorem computesWithin [Fintype κ] (p : StackMachine.Program Id κ Γ α)
     {xs ys : List Γ} {t : ℕ}
     (h : Triple (p.verify (semantics xs.toArray))
       (fun c b ↦ c = Cfg.init κ xs ∧ t ≤ b)

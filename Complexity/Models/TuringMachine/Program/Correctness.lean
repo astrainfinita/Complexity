@@ -28,7 +28,7 @@ open Controller (History)
 variable {κ : Type} {Γ α : Type} [Inhabited Γ] {xs : Array Γ}
 
 /-- A source execution proves output, time, and visited-cell space of the compiled machine. -/
-theorem computesWithin_of_exec [Fintype κ] (p : TM.Program κ Γ α) {ys : Array Γ}
+theorem computesWithin_of_exec [Fintype κ] (p : TM.Program Id κ Γ α) {ys : Array Γ}
     {n t s : ℕ} {a : α} {v : History (Cfg κ Γ xs) (Action κ Γ)}
     (h : Program.Syntax.Exec
       (⟨eval, observe, apply⟩ : Program.Semantics _ _ _ _ _)

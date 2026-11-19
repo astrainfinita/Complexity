@@ -25,7 +25,7 @@ namespace Complexity.TM.Program
 open Std.WP
 open Controller (History)
 
-variable {κ : Type} {Γ α : Type} [Inhabited Γ]
+variable {F : Type → Type} {κ : Type} {Γ α : Type} [Inhabited Γ]
 
 /-- Interpret local actions on tape data and visited intervals. -/
 @[simps eval observe act]
@@ -45,7 +45,7 @@ def semantics (xs : Array Γ) :
 
 /-- A total loop rule for assertions about tape data and visited intervals. -/
 @[spec]
-theorem spec_repeatUntil {xs : Array Γ} (p : TM.Program κ Γ Bool)
+theorem spec_repeatUntil {xs : Array Γ} (p : TM.Program F κ Γ Bool)
     (I : Program.Invariant (Cfg κ Γ xs) ((κ → NonemptyInterval ℤ) → ℕ → Prop))
     (Q : Unit → History (Cfg κ Γ xs) (Action κ Γ) → ℕ → Prop)
     (hp : ∀ (s : History (Cfg κ Γ xs) (Action κ Γ)) b,
@@ -61,7 +61,7 @@ theorem spec_repeatUntil {xs : Array Γ} (p : TM.Program κ Γ Bool)
 theorem spec_act (a : Action κ Γ) (xs : Array Γ)
     (s : History (Cfg κ Γ xs) (Action κ Γ))
     (b : ℕ) (h : 0 < b) (x : Unit) :
-    Triple ((act a).verify (semantics xs)) (fun t c => t = s ∧ c = b)
+    Triple ((act (F := F) a).verify (semantics xs)) (fun t c => t = s ∧ c = b)
       (fun r t c => r = () ∧ t = apply a s ∧ c = b - 1) x :=
   Program.spec_perform (Op.act a) (semantics xs) s b h x
 
@@ -70,7 +70,7 @@ theorem spec_act (a : Action κ Γ) (xs : Array Γ)
 theorem spec_readInput [FinEnum Γ] (xs : Array Γ)
     (s : History (Cfg κ Γ xs) (Action κ Γ))
     (b : ℕ) (h : 0 < b) (x : Unit) :
-    Triple (readInput.verify (semantics xs)) (fun t c => t = s ∧ c = b)
+    Triple ((readInput (F := F)).verify (semantics xs)) (fun t c => t = s ∧ c = b)
       (fun r t c => r = s.last.inputSymbol ∧ t = s.snoc idle ∧ c = b - 1) x := by
   simpa [readInput, eval] using
     Program.spec_perform (Op.readInput inferInstance)
@@ -81,14 +81,14 @@ theorem spec_readInput [FinEnum Γ] (xs : Array Γ)
 theorem spec_read [FinEnum Γ] (i : κ) (xs : Array Γ)
     (s : History (Cfg κ Γ xs) (Action κ Γ))
     (b : ℕ) (h : 0 < b) (x : Unit) :
-    Triple ((read i).verify (semantics xs)) (fun t c => t = s ∧ c = b)
+    Triple ((read (F := F) i).verify (semantics xs)) (fun t c => t = s ∧ c = b)
       (fun r t c => r = s.last.workSymbols i ∧ t = s.snoc idle ∧ c = b - 1) x := by
   simpa [read, eval] using
     Program.spec_perform (Op.read inferInstance i)
       (semantics xs) s b h x
 
 /-- A program-level total specification suffices for the compiled machine's resource bound. -/
-theorem computesWithin [Fintype κ] {p : TM.Program κ Γ α} {xs ys : Array Γ} {t s : ℕ}
+theorem computesWithin [Fintype κ] {p : TM.Program Id κ Γ α} {xs ys : Array Γ} {t s : ℕ}
     {P : History (Cfg κ Γ xs) (Action κ Γ) → ℕ → Prop}
     (h : Triple (p.verify (semantics xs)) P
       (fun _ v _ ↦ v.last.output = ys ∧ v.space ≤ s) ())
@@ -102,7 +102,7 @@ section Configuration
 variable {xs : Array Γ}
 
 /-- Forget the history in an already verified total specification. -/
-theorem cfg_of_history {p : TM.Program κ Γ α}
+theorem cfg_of_history {p : TM.Program F κ Γ α}
     {P : History (Cfg κ Γ xs) (Action κ Γ) → ℕ → Prop}
     {Q : α → History (Cfg κ Γ xs) (Action κ Γ) → ℕ → Prop}
     {P' : Cfg κ Γ xs → ℕ → Prop} {Q' : α → Cfg κ Γ xs → ℕ → Prop}
@@ -116,7 +116,7 @@ theorem cfg_of_history {p : TM.Program κ Γ α}
     (by rintro a s _ b rfl hs; exact hq a s b hs)
 
 /-- A total time specification gives the compiled machine's time and coarse space bounds. -/
-theorem cfg_computesWithin [Fintype κ] {p : TM.Program κ Γ α} {ys : Array Γ} {t : ℕ}
+theorem cfg_computesWithin [Fintype κ] {p : TM.Program Id κ Γ α} {ys : Array Γ} {t : ℕ}
     {P : Cfg κ Γ xs → ℕ → Prop}
     (h : Triple (p.verify (cfgSemantics xs)) P (fun _ c _ ↦ c.output = ys) ())
     (hp : P (Cfg.init κ xs.toList) t) :

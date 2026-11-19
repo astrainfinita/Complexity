@@ -23,7 +23,7 @@ open StackMachine.Program.Tree (project spec_project spec_pair projectTime_le)
 variable {k : ℕ} {xs : Array Bool}
 
 /-- Compute before overwriting the destination, including when it aliases a source. -/
-def make : Action k → StackMachine.Program (Work k) Bool Unit
+def make : Action k → StackMachine.Program Id (Work k) Bool Unit
   | .nop => pure ()
   | .left _ j =>
       project (data j) (.scratch .result) (.scratch .saved) (.scratch .temp)
@@ -35,7 +35,7 @@ def make : Action k → StackMachine.Program (Work k) Bool Unit
       StackMachine.Program.Tree.pair (data j) (data l) (.scratch .result) (.scratch .temp)
 
 /-- Replace only the selected register and restore the temporary stacks. -/
-def build (o : Action k) : StackMachine.Program (Work k) Bool Unit := do
+def build (o : Action k) : StackMachine.Program Id (Work k) Bool Unit := do
   match o.dst with
   | none => pure ()
   | some i =>

@@ -25,7 +25,7 @@ variable {ν : Type} {k : ℕ}
 
 /-- Read the result's root, using existing registers directly for atoms. -/
 def Expr.test (e : Expr ν) (v : ν → Fin k) (z : Fin k) (b : ℕ)
-    (hb : b + e.slots ≤ k) : TreeMachine.Program k Bool := do
+    (hb : b + e.slots ≤ k) : TreeMachine.Program Id k Bool := do
   let i ← e.compile v z b hb
   TreeMachine.Program.root i
 
@@ -39,7 +39,7 @@ theorem Expr.exec_test_history (e : Expr ν) (v : ν → Fin k) (z : Fin k) (b :
         s.configSup (fun c ↦ (c.regs j).size) ⊔ e.maxSize (s.last.regs ∘ v) := by
   obtain ⟨t, i, he, hval, _, hf, hpeak⟩ := e.exec_compile_history v z b hb hv hzv s hz
   refine ⟨t.snoc .nop, ?_, ?_, ?_, ?_⟩
-  · have ht := Program.Exec.perform TreeMachine.Program.historySemantics
+  · have ht := Program.Exec.perform (F := Id) TreeMachine.Program.historySemantics
       (TreeMachine.Program.Op.root i) t
     change (TreeMachine.Program.root i).Exec _ _ 1 (t.last.regs i).root _ at ht
     rw [hval] at ht
@@ -69,7 +69,7 @@ def Cmd.slots : Cmd ν → ℕ
 
 /-- Compile assignments and root tests, allocating expression temporaries above `b`. -/
 def Cmd.compile (p : Cmd ν) (v : ν → Fin k) (z : Fin k) (b : ℕ)
-    (hb : b + p.slots ≤ k) : TreeMachine.Program k Unit :=
+    (hb : b + p.slots ≤ k) : TreeMachine.Program Id k Unit :=
   match p with
   | .skip => pure ()
   | .assign x e => e.assign (v x) v z b hb
@@ -208,7 +208,7 @@ private theorem register_ne_empty (p : Procedure ν) (x : ν) : p.register x ≠
   simp [register, empty, Fin.ext_iff, (FinEnum.equiv x).isLt.ne]
 
 /-- The generated register program. User specifications should use `Procedure.Exec`. -/
-def code (p : Procedure ν) : TreeMachine.Program p.registers Unit := do
+def code (p : Procedure ν) : TreeMachine.Program Id p.registers Unit := do
   TreeMachine.Program.copy p.empty (p.register p.input) 0
   p.body.compile p.register p.empty (FinEnum.card ν + 2) (by simp [registers])
   p.result.assign 0 p.register p.empty (FinEnum.card ν + 2) (by simp [registers])
