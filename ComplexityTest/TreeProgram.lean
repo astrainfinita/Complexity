@@ -198,7 +198,7 @@ private def finished (p : Code Value) (x y : Tree) (n : ℕ) : Bool :=
 #guard !(finished (swapMany 6 .input) leafPair leafPair 21)
 
 -- A root test neither copies the input nor creates an intermediate pair.
-private def rootInput : TreeMachine.Program 3 Bool :=
+private def rootInput : TreeMachine.Program Id 3 Bool :=
   (Expr.var ()).test (fun _ ↦ (0 : Fin 3)) 1 2 (by decide)
 
 #guard (rootInput.compile.runHistory leafPair 1).length == 1
@@ -208,7 +208,7 @@ private def rootInput : TreeMachine.Program 3 Bool :=
   TreeMachine.Cfg.mass == leafPair.size + 2
 
 -- Direct assignment preserves sources until the final write, including aliases.
-private def assign (e : Expr Unit) (hb : 2 + e.slots ≤ 4) : TreeMachine.Program 4 Unit :=
+private def assign (e : Expr Unit) (hb : 2 + e.slots ≤ 4) : TreeMachine.Program Id 4 Unit :=
   e.assign 0 (fun _ ↦ 0) 1 2 hb
 
 private def checkAssign (e : Expr Unit) (hb : 2 + e.slots ≤ 4) (x y : Tree) (n : ℕ) : Bool :=

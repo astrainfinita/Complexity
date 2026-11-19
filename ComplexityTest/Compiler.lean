@@ -71,7 +71,7 @@ def check {k : ℕ} {Q : Type} [FinEnum Q] (M : TreeMachine Id k Q) (i : Fin k) 
 
 -- A no-op takes three loop transitions regardless of the untouched input tree's size.
 def checkNopLoop (x : Tree) : Bool :=
-  let p : StackMachine.Program (Work 2) Bool Unit :=
+  let p : StackMachine.Program Id (Work 2) Bool Unit :=
     Program.loopOn StackMachine.Program.idle (Simulation.Program.body (once .nop)) false
   let M := p.compile
   let c := (M.q₀, Simulation.Program.loadedCfg (0 : Fin 2) x)

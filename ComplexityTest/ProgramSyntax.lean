@@ -5,8 +5,10 @@ Authors: Yuyang Zhao
 -/
 module
 
+import Complexity.Control.BinaryChoice.Basic
 import Complexity.Control.Program.Loop
 import Complexity.Models.TuringMachine.Program.Basic
+meta import Complexity.Control.BinaryChoice.Basic
 meta import Complexity.Control.Program.Compiler
 meta import Complexity.Control.Program.Syntax
 meta import Complexity.Control.Program.Loop
@@ -18,12 +20,12 @@ meta import Complexity.Models.TuringMachine.Program.Basic
 meta import Complexity.Models.TuringMachine.Basic
 meta import Complexity.Models.TuringMachine.Configuration
 
-open Complexity (TM Program)
+open Complexity (TM Program BinaryChoice)
 open Complexity.TM
 
 namespace ProgramSyntaxTest
 
-abbrev Code := Program Unit Unit Unit (fun _ : Unit ↦ Unit)
+abbrev Code := Program Id Unit Unit Unit (fun _ : Unit ↦ Unit)
 
 -- Program can be stored and returned as ordinary data in Type.
 structure Box : Type where
@@ -33,13 +35,13 @@ example : Type := Array (Code Unit)
 example : Code (Code Unit) := pure (pure ())
 
 -- Compile with the public backend and check the first halting time, not padded execution.
-def check {k : ℕ} (p : TM.Program (Fin k) (Fin 2) Unit) (xs ys : Array (Fin 2)) (n : ℕ) : Bool :=
+def check {k : ℕ} (p : TM.Program Id (Fin k) (Fin 2) Unit) (xs ys : Array (Fin 2)) (n : ℕ) : Bool :=
   let M := p.compile
   let c := M.run xs.toList n
   M.halt c.1 && c.2.output == ys && (n == 0 || !M.halt (M.run xs.toList (n - 1)).1)
 
 -- One continuation is pure; the other has two internal actions and a different state type.
-def branch : TM.Program (Fin 0) (Fin 2) Unit := do
+def branch : TM.Program Id (Fin 0) (Fin 2) Unit := do
   let i ← Program.readInput
   if i == 0 then pure () else do
     Program.emit 1
@@ -50,7 +52,7 @@ def branch : TM.Program (Fin 0) (Fin 2) Unit := do
 #guard check branch #[1] #[1, 0, 1] 4
 
 -- Snapshot the bank, recover a function of its components, and inspect that result.
-def bank (a : Fin 2) : TM.Program (Fin 3) (Fin 2) Unit := do
+def bank (a : Fin 2) : TM.Program Id (Fin 3) (Fin 2) Unit := do
   Program.write 0 1
   Program.write 2 a
   let v ← Program.observeBits fun v (i : Fin 3) ↦ v.2 i == 1
@@ -61,15 +63,35 @@ def bank (a : Fin 2) : TM.Program (Fin 3) (Fin 2) Unit := do
 #guard check (bank 1) #[] #[1] 4
 
 -- Different finite types index dispatchers and final exits. The returned exit value is used.
-def body (i : Fin 3) : TM.Program (Fin 0) (Fin 2) (Fin 3 ⊕ Fin 2) := do
+def body (i : Fin 3) : TM.Program Id (Fin 0) (Fin 2) (Fin 3 ⊕ Fin 2) := do
   Program.emit (Fin.ofNat 2 i.val)
   pure (if i == 2 then .inr 1 else .inl (i + 1))
 
-def loop : TM.Program (Fin 0) (Fin 2) Unit := do
+def loop : TM.Program Id (Fin 0) (Fin 2) Unit := do
   let i ← Program.loopOn Program.idle body 0
   Program.emit i
 
 -- Three dispatches, three body emissions, and one emission after the loop.
 #guard check loop #[] #[0, 1, 0, 1] 7
+
+-- Guards that a program with binary choices still lives in `Type`.
+example : Type := Array (TM.Program BinaryChoice (Fin 0) (Fin 2) Unit)
+
+-- Guards the compilation of a choice step and of an embedded deterministic program: the loop
+-- above takes seven steps, the choice one idle step and the emission one more, so each of the
+-- two branch labels halts exactly after nine steps with its own output. Records that the
+-- multiset counts branch labels: a deterministic step of `ofId` is the constant choice `pure`,
+-- whose two equal alternatives both remain, so each output occurs `2 ^ 8` times.
+def guess : TM.Program BinaryChoice (Fin 0) (Fin 2) Unit := do
+  loop.ofId
+  let i ← Program.choose fun i : Fin 2 ↦ i
+  Program.emit i
+
+#guard
+  let M := guess.compile
+  (∀ c ∈ M.runWith Multiset ([] : List (Fin 2)) 8, M.halt c.1 = false) ∧
+    (∀ c ∈ M.runWith Multiset ([] : List (Fin 2)) 9, M.halt c.1) ∧
+    (M.runWith Multiset ([] : List (Fin 2)) 9).map (·.2.output) =
+      2 ^ 8 • ↑[#[0, 1, 0, 1, 0], #[0, 1, 0, 1, (1 : Fin 2)]]
 
 end ProgramSyntaxTest

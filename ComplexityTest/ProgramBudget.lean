@@ -11,7 +11,7 @@ open Complexity
 
 namespace ProgramBudgetTest
 
-abbrev Code := Program Unit Unit Unit (fun _ : Unit ↦ Unit)
+abbrev Code := Program Id Unit Unit Unit (fun _ : Unit ↦ Unit)
 
 def model : Program.Semantics Unit Unit Unit (fun _ : Unit ↦ Unit) Unit where
   eval _ _ := ((), ())
@@ -20,7 +20,7 @@ def model : Program.Semantics Unit Unit Unit (fun _ : Unit ↦ Unit) Unit where
 
 -- A successful primitive cannot be verified with a zero time budget.
 example (Q : Unit → Unit → ℕ → Prop) :
-    ¬(Program.perform ()).Total model Q () 0 := by
+    ¬(Program.perform (F := Id) ()).Total model Q () 0 := by
   rintro ⟨n, a, t, hn, h, _⟩
   have : n = 0 := by omega
   subst n

@@ -14,7 +14,7 @@ open Complexity.TM Std.WP
 
 namespace ProgramConfigurationTest
 
-def once : TM.Program (Fin 0) Bool Unit := Program.repeatUntil (pure true)
+def once : TM.Program Id (Fin 0) Bool Unit := Program.repeatUntil (pure true)
 
 -- A named invariant works for both interpretations of the same compiled program.
 theorem once_cfg :
@@ -33,7 +33,7 @@ theorem once_history :
   | inv1 => fun _ _ n ↦ n = 1
   all_goals simp_all
 
-def echo : TM.Program (Fin 0) Bool Unit := do
+def echo : TM.Program Id (Fin 0) Bool Unit := do
   let a ← Program.readInput
   Program.emit a
 

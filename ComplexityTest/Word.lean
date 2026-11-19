@@ -45,7 +45,7 @@ def stackMatches (m : IntMemory (Option Bool)) (cached : Option Bool) (word : Li
 
 def checkLoad (word : List Bool) (suffix : List Bool := []) : Bool :=
   let xs := word.toArray.map some
-  let p : StackMachine.Program (Fin 3) Bool Unit := StackMachine.Program.IO.load 0 1
+  let p : StackMachine.Program Id (Fin 3) Bool Unit := StackMachine.Program.IO.load 0 1
   let M := p.compile.toTM
   let c₀ := M.init xs.toList
   let c : Cfg (Fin 3) (Option Bool) xs :=
@@ -91,7 +91,7 @@ def checkStackAction : Bool :=
 #guard checkStackAction
 
 -- Shared checks retain partial external I/O and inspect every stack, including erased cells.
-def checkStacks (p : StackMachine.Program (Fin 3) Bool Unit)
+def checkStacks (p : StackMachine.Program Id (Fin 3) Bool Unit)
     (before after : Fin 3 → List Bool) (steps : ℕ) : Bool :=
   let M := p.compile.toTM
   let c : StackMachine.Cfg (Fin 3) Bool #[true, false, true] :=
@@ -124,7 +124,7 @@ def checkStackClear (word : List Bool) : Bool :=
 #guard checkStackClear [false, true, false, true]
 
 -- Reuse storage repeatedly, then write a shorter result without leaving stale cells.
-def reuse : StackMachine.Program (Fin 3) Bool Unit := do
+def reuse : StackMachine.Program Id (Fin 3) Bool Unit := do
   Program.forFin fun _ : Fin 3 ↦ do
     StackMachine.Program.Word.clear 0
     StackMachine.Program.Word.copy 1 0 2

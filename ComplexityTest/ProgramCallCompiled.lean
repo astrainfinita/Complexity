@@ -26,10 +26,10 @@ open Complexity Complexity.TM
 namespace ProgramCallCompiledTest
 
 -- Arbitrary compiled control admits a finite numbering for calls.
-example {k : ℕ} {Γ α : Type} (p : TM.Program (Fin k) Γ α) :
-    TM.Program (Fin k) Γ (p.State ⊕ p.Exit) := Program.call (Program.compile p)
+example {k : ℕ} {Γ α : Type} (p : TM.Program Id (Fin k) Γ α) :
+    TM.Program Id (Fin k) Γ (p.State ⊕ p.Exit) := Program.call (Program.compile p)
 
-def producer : TM.Program (Fin 0) (Option Bool) Unit := do
+def producer : TM.Program Id (Fin 0) (Option Bool) Unit := do
   Program.emit (some false)
   Program.emit (some true)
 

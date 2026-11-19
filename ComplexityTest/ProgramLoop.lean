@@ -13,7 +13,7 @@ open Complexity Std.WP
 
 namespace ProgramLoopTest
 
-abbrev Code := Program Unit Unit Unit (fun _ : Unit ↦ Unit)
+abbrev Code := Program Id Unit Unit Unit (fun _ : Unit ↦ Unit)
 
 def model : Program.Semantics Unit Unit Unit (fun _ : Unit ↦ Unit) Unit where
   eval _ _ := ((), ())

@@ -17,7 +17,7 @@ open Std.WP
 namespace ProgramTest
 
 -- The read result chooses a finite continuation. The program contains no input-length counter.
-def eraseAfterRead : TM.Program (Fin 1) Bool Unit := do
+def eraseAfterRead : TM.Program Id (Fin 1) Bool Unit := do
   Program.write 0 true
   let a ← Program.read 0
   Program.emit a

@@ -21,7 +21,7 @@ abbrev Symbol := Option Bool
 
 def input (xs : List Bool) : Array Symbol := (xs.map some).toArray
 
-def body : TM.Program (Fin 0) Symbol Bool := do
+def body : TM.Program Id (Fin 0) Symbol Bool := do
   let a ← Program.readInput
   if a = none then
     pure true
@@ -30,7 +30,7 @@ def body : TM.Program (Fin 0) Symbol Bool := do
     Program.moveInput 1
     pure false
 
-def copyInput : TM.Program (Fin 0) Symbol Unit := Program.repeatUntil body
+def copyInput : TM.Program Id (Fin 0) Symbol Unit := Program.repeatUntil body
 
 example : Finite (copyInput.State ⊕ copyInput.Exit) := inferInstance
 

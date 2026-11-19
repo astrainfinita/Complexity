@@ -45,7 +45,7 @@ private theorem machine_run_one :
           workPos := fun _ ↦ 1, output := #[false] }) := rfl
 
 -- A returned machine state and its stored result are usable by the continuation.
-def demo : TM.Program (Fin 1) Bool Bool := do
+def demo : TM.Program Id (Fin 1) Bool Bool := do
   let q ← Program.call machine
   Program.move 0 (-1)
   let a ← Program.read 0

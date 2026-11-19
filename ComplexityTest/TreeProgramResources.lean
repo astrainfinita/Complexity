@@ -15,7 +15,7 @@ open Controller (History)
 namespace Complexity.TreeProgramResourcesTest
 
 -- Copying restores the input, but its temporary pair is larger than both endpoints.
-private def copyInput : TreeMachine.Program 1 Unit := TreeMachine.Program.copy 0 0 0
+private def copyInput : TreeMachine.Program Id 1 Unit := TreeMachine.Program.copy 0 0 0
 
 private theorem copyInput_unit (x : Tree) :
     copyInput.compile.ComputesWithinUnitTime x x 2 (2 * x.size + 1) := by
@@ -32,7 +32,7 @@ example (x : Tree) :
 
 -- A program that returns immediately still accounts for the initial input tree.
 example (x : Tree) :
-    (pure () : TreeMachine.Program 1 Unit).compile.ComputesWithinUnitTime x x 0 x.size := by
+    (pure () : TreeMachine.Program Id 1 Unit).compile.ComputesWithinUnitTime x x 0 x.size := by
   apply TreeMachine.Program.computesWithinUnitTime_of_exec
     (Program.Exec.pure TreeMachine.Program.historySemantics () (History.nil ⟨input 0 x⟩))
     le_rfl
@@ -50,7 +50,7 @@ example (x : Tree) :
 -- A discarded subtree still contributes to the source bound and the compiled peak.
 private def projectPair : TreeProgram.Expr Unit := .left (.pair (.var ()) (.var ()))
 
-private def projectPairCode : TreeMachine.Program 3 Unit :=
+private def projectPairCode : TreeMachine.Program Id 3 Unit :=
   projectPair.assign 0 (fun _ ↦ 0) 1 2 (by decide)
 
 example (x : Tree) :
