@@ -36,14 +36,6 @@ theorem twice_spec :
   all_goals simp_all [model]
   split <;> omega
 
-theorem twice_exec : twice.Exec model () 2 () () := by
-  obtain ⟨n, a, s, hn, he, hb⟩ := Program.exec_of_spec twice_spec rfl
-  have h : n = 2 := by omega
-  subst n
-  cases a
-  cases s
-  exact he
-
 -- Carrying a finite value does not make an endlessly continuing loop terminate.
 def spin : Code Unit :=
   Program.loopOn () (fun b : Bool ↦ pure (Sum.inl b)) false
@@ -58,10 +50,6 @@ theorem spin_not_execWithin (x : Bool) (s : Unit) (b : ℕ) (Q : Unit → Unit �
     intro h
     obtain ⟨hb, h⟩ := Program.Syntax.execWithinWith_loop_iff.1 h
     exact ih (b - 1) (by omega) _ s (Program.Syntax.execWithinWith_ret_iff.1 h)
-
-theorem spin_no_exec (n : ℕ) (s t : Unit) (a : Unit) :
-    ¬spin.Exec model s n a t :=
-  spin_not_execWithin false s n _
 
 example (Q : Unit → Unit → ℕ → Prop) (b : ℕ) : ¬spin.ExecWithin model () b Q :=
   spin_not_execWithin false () b Q

@@ -33,11 +33,10 @@ example (x : Tree) :
 -- A program that returns immediately still accounts for the initial input tree.
 example (x : Tree) :
     (pure () : TreeMachine.Program Id 1 Unit).compile.ComputesWithinUnitTime x x 0 x.size := by
-  apply TreeMachine.Program.computesWithinUnitTime_of_exec
-    (Program.Exec.pure TreeMachine.Program.historySemantics () (History.nil ⟨input 0 x⟩))
-    le_rfl
-  · simp
-  · simp [Cfg.mass]
+  apply TreeMachine.Program.computesWithinUnitTime
+    (P := fun h b ↦ h = History.nil ⟨input 0 x⟩ ∧ b = 0) (hp := ⟨rfl, rfl⟩)
+  vcgen
+  simp_all [Cfg.mass]
 
 -- Reading a root consumes a unit even though it does not change any register.
 example (x : Tree) :
@@ -55,18 +54,18 @@ private def projectPairCode : TreeMachine.Program Id 3 Unit :=
 
 example (x : Tree) :
     projectPairCode.compile.ComputesWithinUnitTime x x 2 (3 * (2 * x.size + 3)) := by
-  obtain ⟨h, hr, hout, hpeak⟩ := projectPair.exec_assign_history (0 : Fin 3) (fun _ ↦ 0) 1 2
-    (by decide) (by intro; decide) (by decide)
-    (History.nil ⟨input 0 x⟩) (by simp)
-  apply TreeMachine.Program.computesWithinUnitTime_of_exec hr (by decide)
-  · simpa [projectPair] using hout 0 (by decide)
-  · apply (TreeMachine.configSup_mass_le_sum h).trans
-    calc
-      _ ≤ ∑ _ : Fin 3, (2 * x.size + 3) := Finset.sum_le_sum fun i _ ↦ by
-        have hi := hpeak i
-        have hx := Tree.size_pos x
-        by_cases h0 : i = 0 <;> simp [projectPair, h0, input_get_of_ne, Tree.size_pair] at hi ⊢ <;>
-          omega
-      _ = _ := by simp
+  refine TreeMachine.Program.computesWithinUnitTime_of_execWithin
+    ((projectPair.execWithin_assign (0 : Fin 3) (fun _ ↦ 0) 1 2 (by decide)
+      (History.nil ⟨input 0 x⟩) (by intro; decide) (by decide) (by simp)).mono ?_)
+  rintro _ h _ ⟨hout, hpeak⟩
+  refine ⟨by simpa [projectPair] using hout 0 (by decide), ?_⟩
+  apply (TreeMachine.configSup_mass_le_sum h).trans
+  calc
+    _ ≤ ∑ _ : Fin 3, (2 * x.size + 3) := Finset.sum_le_sum fun i _ ↦ by
+      have hi := hpeak i
+      have hx := Tree.size_pos x
+      by_cases h0 : i = 0 <;> simp [projectPair, h0, input_get_of_ne, Tree.size_pair] at hi ⊢ <;>
+        omega
+    _ = _ := by simp
 
 end Complexity.TreeProgramResourcesTest

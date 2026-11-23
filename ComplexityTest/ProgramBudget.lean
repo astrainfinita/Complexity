@@ -37,10 +37,6 @@ theorem spin_not_execWithin (s : Unit) (b : ℕ) (Q : Fin 1 → Unit → ℕ →
     obtain ⟨hb, h⟩ := Program.Syntax.execWithinWith_loop_iff.1 h
     exact ih (b - 1) (by omega) s (Program.Syntax.execWithinWith_ret_iff.1 h)
 
-theorem spin_no_exec (n : ℕ) (s t : Unit) (a : Fin 1) :
-    ¬spin.Exec model s n a t :=
-  spin_not_execWithin s n _
-
 -- Total WP rejects the nonterminating program at every finite budget.
 example (Q : Fin 1 → Unit → ℕ → Prop) (b : ℕ) : ¬spin.ExecWithin model () b Q :=
   spin_not_execWithin () b Q
