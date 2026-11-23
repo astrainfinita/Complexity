@@ -13,7 +13,9 @@ public import Mathlib.Algebra.Order.BigOperators.Group.Finset
 
 `ComputesWithinWith` is the specification of this model for every choice shape and every
 interpretation: `Controller.ComputesWithinCostWith` with the number of transitions as time and the
-peak total work-stack length as space. The deterministic `ComputesWithin` is its instance on `Id`.
+peak total work-stack length as space. In every interpretation, it follows from a step at which
+every result has halted with its output, with the space bounded by the time
+(`ComputesWithinWith.of_forall_halted`). The deterministic `ComputesWithin` is its instance on `Id`.
 Build that one with `ComputesWithinWith.of_halted` and take it apart with
 `ComputesWithinWith.exists_halted`; both are attached to the general specification, so dot notation
 finds them on a `ComputesWithin` and also on a `ComputesWithinWith Id` that was not stated through
@@ -73,6 +75,24 @@ theorem ComputesWithinWith.mono {F : Type u → Type*} {m : Type u → Type*} [M
     (ht : t ≤ t') (hs : s ≤ s') : M.ComputesWithinWith m xs outs t' s' :=
   Controller.computesWithinCostWith_mono h ht hs
 
+/-- When every configuration that the run can return after `t` steps has halted with the output
+`out` of that configuration, the machine computes the image of the run under `out`, within `t`
+transitions and `Fintype.card κ * t` work-stack symbols. -/
+theorem ComputesWithinWith.of_forall_halted {F : Type u → Type*} {m : Type u → Type*} [Monad m]
+    [LawfulMonad m] [MonadLiftT F m] [MonadReturns m] (M : StackMachine F κ Γ Q) (xs : List Γ)
+    {t : ℕ} (out : Q × Cfg κ Γ xs.toArray → List Γ)
+    (h : ∀ c ∈ returns (M.runWith m xs t), M.Halted c ∧ c.2.output = (out c).toArray) :
+    M.ComputesWithinWith m xs (out <$> M.runWith m xs t) t (Fintype.card κ * t) := by
+  have hlen := M.length_le_of_forall_halted m xs fun c hc ↦ (h c hc).1
+  refine ⟨fun p hp ↦ ⟨(Controller.History.length_snd p).trans_le (hlen p hp), ?_⟩, t, ?_⟩
+  · refine (configSup_mass_le p.snd).trans ?_
+    rw [Controller.History.first_snd, Controller.first_eq_of_mem_histories hp, Controller.init_snd,
+      hasConfig_init, Cfg.mass_init, Nat.zero_add, Controller.History.length_snd]
+    exact Nat.mul_le_mul_left _ (hlen p hp)
+  · have hr := LiftRel.map_map (M.runWith m xs t) (R := fun c y ↦ y = out c) (f := id) fun _ ↦ rfl
+    rw [id_map] at hr
+    exact hr.mono_of_mem fun c hc y hy ↦ hy ▸ h c hc
+
 /-- The run halts with the output, and its transitions and peak total work-stack length stay
 within budget at every depth. -/
 def ComputesWithin (M : StackMachine Id κ Γ Q) (xs ys : List Γ) (t s : ℕ) : Prop :=
@@ -99,12 +119,9 @@ theorem ComputesWithin.of_run {M : StackMachine Id κ Γ Q}
     {xs ys : List Γ} {n t : ℕ}
     (hh : M.Halted (M.run xs n))
     (ho : (M.run xs n).2.output = ys.toArray) (hn : n ≤ t) :
-    M.ComputesWithin xs ys t (Fintype.card κ * t) := by
-  have ht := (M.length_runHistory_le xs n).trans hn
-  refine .of_halted n hh ho ((Controller.History.length_snd _).trans_le ht)
-    ((configSup_mass_le _).trans ?_)
-  simpa [Controller.runHistory, Controller.History.first_snd,
-      Controller.History.length_snd] using Nat.mul_le_mul_left (Fintype.card κ) ht
+    M.ComputesWithin xs ys t (Fintype.card κ * t) :=
+  (ComputesWithinWith.of_forall_halted M xs (fun _ ↦ ys) fun _ hc ↦
+    Id.mem_returns.1 hc ▸ ⟨hh, ho⟩).mono hn (Nat.mul_le_mul_left _ hn)
 
 /-- Read the halted result at the advertised transition budget. -/
 theorem ComputesWithin.run_spec {M : StackMachine Id κ Γ Q}

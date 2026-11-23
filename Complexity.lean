@@ -144,6 +144,7 @@ public import Complexity.Resources.Circuit.Unroll
 public import Complexity.Resources.Nondeterministic.Basic
 public import Complexity.Resources.Nondeterministic.Deterministic
 public import Complexity.Resources.StackMachine.Basic
+public import Complexity.Resources.StackMachine.Program
 public import Complexity.Resources.StackMachine.TuringMachine
 public import Complexity.Resources.TimeSpaceModel.Basic
 public import Complexity.Resources.TimeSpaceModel.Nondeterministic

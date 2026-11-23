@@ -211,6 +211,13 @@ theorem forall_mem_histories_iff {P : History (Q × Config input) (Q × Action) 
 
 variable [LawfulMonad m]
 
+variable {m M input} in
+/-- Every history of a run on the standard input starts at the initial configuration. -/
+theorem first_eq_of_mem_histories {h : History (Q × Config input) (Q × Action)}
+    (hh : h ∈ M.histories m input) : h.first = M.init input := by
+  obtain ⟨n, hn⟩ := (M.mem_histories_iff m input).1 hh
+  exact (M.runHistoryFromWith_spec m _ n h hn).first_eq
+
 /-- A step invariant holds for every history. -/
 theorem forall_mem_histories {P : History (Q × Config input) (Q × Action) → Prop}
     (hinit : P (History.nil (M.init input)))
