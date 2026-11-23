@@ -155,7 +155,7 @@ theorem Program.spec_program (M : TreeMachine Id k Q)
     hh.1 hh.2 (fun j _ ↦ h.mass_le j)
   rw [Controller.init_fst] at hl
   have he := Program.spec_exact_budget_le (fun q ↦ IO.spec_emitStack d (data 0) q)
-    (m := 3 * a.size + 2) (by simp [d, ha]) 0
+    (k := 3 * a.size + 2) (by simp [d, ha]) 0
   simp only [Nat.add_zero] at he
   have hs := h.output_size_le_space
   have ho := spec_history he (macro_space_le d hd (by omega)) 0

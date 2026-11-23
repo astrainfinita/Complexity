@@ -24,12 +24,13 @@ def forFin : {k : ℕ} → (Fin k → Program F O A Op Ret Unit) → Program F O
 
 open Std.WP
 
+variable {m : Type → Type} [Monad m] {Q : MonadQuant m} [MonadLiftT F m] in
 /-- The specification of each component suffices to verify the complete finite family. -/
 @[spec]
 theorem spec_forFin (f : Fin k → Program F O A Op Ret Unit) (e : Semantics O A Op Ret S)
     (I : Invariant ℕ (S → ℕ → Prop))
-    (h : ∀ i, Triple ((f i).verify e) (I i.val) (fun _ ↦ I (i.val + 1)) ()) :
-    Triple ((forFin f).verify e) (I 0) (fun _ ↦ I k) () := by
+    (h : ∀ i, Triple ((f i).verifyWith m Q e) (I i.val) (fun _ ↦ I (i.val + 1)) ()) :
+    Triple ((forFin f).verifyWith m Q e) (I 0) (fun _ ↦ I k) () := by
   induction k with
   | zero => exact spec_pure () e (fun _ ↦ I 0) ()
   | succ k ih =>

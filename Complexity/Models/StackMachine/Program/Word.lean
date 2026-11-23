@@ -62,7 +62,8 @@ private theorem drainAction_drained (c : Cfg κ Γ xs) (i : κ) (targets : κ �
     Triple ((drain i targets).verify (semantics xs))
       (fun s b ↦ s = c ∧ b = 3 * (c.stacks i).length + 2 + q)
       (fun _ s b ↦ s = drained c i targets (c.stacks i) [] ∧ b = q) () := by
-  have h := Program.spec_repeatUntilWith_count idle (drainBody i targets) (semantics xs)
+  have h := Program.spec_repeatUntilWith_count (m := Id) (Q := .all) idle (drainBody i targets)
+    (semantics xs)
     (fun j s ↦ s = drained c i targets ((c.stacks i).take j) ((c.stacks i).drop j))
     (fun s ↦ s = drained c i targets (c.stacks i) []) (c.stacks i).length 2 1 q
     (by intro j hj s hs; simpa only [semantics_act, idle_apply] using hs)

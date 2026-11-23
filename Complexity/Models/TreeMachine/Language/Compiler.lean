@@ -39,7 +39,7 @@ theorem Expr.exec_test_history (e : Expr ν) (v : ν → Fin k) (z : Fin k) (b :
         s.configSup (fun c ↦ (c.regs j).size) ⊔ e.maxSize (s.last.regs ∘ v) := by
   obtain ⟨t, i, he, hval, _, hf, hpeak⟩ := e.exec_compile_history v z b hb hv hzv s hz
   refine ⟨t.snoc .nop, ?_, ?_, ?_, ?_⟩
-  · have ht := Program.Exec.perform (F := Id) TreeMachine.Program.historySemantics
+  · have ht := Program.Exec.perform TreeMachine.Program.historySemantics
       (TreeMachine.Program.Op.root i) t
     change (TreeMachine.Program.root i).Exec _ _ 1 (t.last.regs i).root _ at ht
     rw [hval] at ht

@@ -71,11 +71,11 @@ def semantics :
   act := Controller.apply
 
 theorem exec_act (o : TreeMachine.Action k) (c : Cfg k) :
-    (act (F := F) o).Exec semantics c 1 () (apply o c) :=
+    (act (F := Id) o).Exec semantics c 1 () (apply o c) :=
   Program.Exec.perform semantics (.act o) c
 
 theorem exec_root (i : Fin k) (c : Cfg k) :
-    (root (F := F) i).Exec semantics c 1 (c.regs i).root c :=
+    (root (F := Id) i).Exec semantics c 1 (c.regs i).root c :=
   Program.Exec.perform semantics (.root i) c
 
 /-- Copy a tree through a temporary pair; the auxiliary register need not be empty. -/
@@ -85,7 +85,7 @@ def copy (aux dst src : Fin k) : TreeMachine.Program Id k Unit := do
 
 theorem exec_copy (aux dst src : Fin k) (c : Cfg k) :
     (copy aux dst src).Exec semantics c 2 () ⟨Function.update c.regs dst (c.regs src)⟩ := by
-  have h := (exec_act (F := Id) (.pair dst src aux) c).bind (f := fun _ ↦ act (.left dst dst))
+  have h := (exec_act (.pair dst src aux) c).bind (f := fun _ ↦ act (.left dst dst))
     (exec_act (.left dst dst) (apply (TreeMachine.Action.pair dst src aux) c))
   simpa [copy, Bind.bind, Cfg.apply_def] using h
 

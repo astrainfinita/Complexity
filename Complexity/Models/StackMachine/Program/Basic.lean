@@ -122,33 +122,6 @@ def semantics (xs : Array Γ) :
 
 open Std.WP
 
-@[spec] theorem spec_act (a : Action κ Γ) (xs : Array Γ)
-    (s : Cfg κ Γ xs) (b : ℕ) (h : 0 < b) (x : Unit) :
-    Triple ((act (F := F) a).verify (semantics xs)) (fun t c ↦ t = s ∧ c = b)
-      (fun r t c ↦ r = () ∧ t = apply a s ∧ c = b - 1) x :=
-  Program.spec_perform (Op.act a) (semantics xs) s b h x
-
-@[spec] theorem spec_readInput [FinEnum Γ] (xs : Array Γ)
-    (s : Cfg κ Γ xs) (b : ℕ) (h : 0 < b) (x : Unit) :
-    Triple ((readInput (F := F)).verify (semantics xs)) (fun t c ↦ t = s ∧ c = b)
-      (fun r t c ↦ r = (observe s : Option Γ × (κ → Option Γ)).1 ∧ t = s ∧ c = b - 1) x := by
-  simpa [readInput, eval] using
-    Program.spec_perform (Op.readInput inferInstance) (semantics xs) s b h x
-
-@[spec] theorem spec_read [FinEnum Γ] (i : κ) (xs : Array Γ)
-    (s : Cfg κ Γ xs) (b : ℕ) (h : 0 < b) (x : Unit) :
-    Triple ((read (F := F) i).verify (semantics xs)) (fun t c ↦ t = s ∧ c = b)
-      (fun r t c ↦ r = (s.stacks i).head? ∧ t = s ∧ c = b - 1) x := by
-  simpa [read, eval] using
-    Program.spec_perform (Op.read inferInstance i) (semantics xs) s b h x
-
-@[spec] theorem spec_observeBits {n : ℕ} (f : (Option Γ × (κ → Option Γ)) → Fin n → Bool)
-    (xs : Array Γ) (s : Cfg κ Γ xs) (b : ℕ) (h : 0 < b) (x : Unit) :
-    Triple ((observeBits (F := F) f).verify (semantics xs)) (fun t c ↦ t = s ∧ c = b)
-      (fun v t c ↦ v = Vector.ofFn (f (observe s)) ∧ t = s ∧ c = b - 1) x := by
-  simpa [observeBits, eval] using
-    Program.spec_perform (Op.observeBits n f) (semantics xs) s b h x
-
 @[simp] theorem pushAction_apply [DecidableEq κ] {xs : Array Γ}
     (c : Cfg κ Γ xs) (i : κ) (a : Γ) :
     apply { idle (κ := κ) with work := fun j ↦ if j = i then .push a else .nop } c =
@@ -163,15 +136,81 @@ open Std.WP
   ext j <;> simp [idle, Function.update_apply]
   split_ifs <;> simp_all [StackMachine.Op.apply]
 
-@[spec] theorem verify_push [DecidableEq κ] (i : κ) (a : Γ) (xs : Array Γ) :
-    (push (F := F) i a).verify (semantics xs) =
-      (act { idle (κ := κ) with work := fun j ↦ if j = i then .push a else .nop }).verify
-        (semantics xs) := rfl
+section Verify
 
-@[spec] theorem verify_pop [DecidableEq κ] (i : κ) (xs : Array Γ) :
-    (pop (F := F) i).verify (semantics xs) =
-      (act { idle (κ := κ) with work := fun j ↦ if j = i then .pop else .nop }).verify
-        (semantics xs) := rfl
+variable {m : Type → Type} [Monad m] {Q : MonadQuant m}
+
+@[spec] theorem verifyWith_push [DecidableEq κ] (i : κ) (a : Γ) (xs : Array Γ) :
+    (push (F := F) i a).verifyWith m Q (semantics xs) =
+      (act { idle (κ := κ) with work := fun j ↦ if j = i then .push a else .nop }).verifyWith
+        m Q (semantics xs) := rfl
+
+@[spec] theorem verifyWith_pop [DecidableEq κ] (i : κ) (xs : Array Γ) :
+    (pop (F := F) i).verifyWith m Q (semantics xs) =
+      (act { idle (κ := κ) with work := fun j ↦ if j = i then .pop else .nop }).verifyWith
+        m Q (semantics xs) := rfl
+
+variable [MonadLiftT F m]
+
+@[spec] theorem spec_act (a : Action κ Γ) (xs : Array Γ)
+    (s : Cfg κ Γ xs) (b : ℕ) (h : 0 < b) (x : Unit) :
+    Triple ((act (F := F) a).verifyWith m Q (semantics xs)) (fun t c ↦ t = s ∧ c = b)
+      (fun r t c ↦ r = () ∧ t = apply a s ∧ c = b - 1) x :=
+  Program.spec_perform (Op.act a) (semantics xs) s b h x
+
+@[spec] theorem spec_readInput [FinEnum Γ] (xs : Array Γ)
+    (s : Cfg κ Γ xs) (b : ℕ) (h : 0 < b) (x : Unit) :
+    Triple ((readInput (F := F)).verifyWith m Q (semantics xs)) (fun t c ↦ t = s ∧ c = b)
+      (fun r t c ↦ r = (observe s : Option Γ × (κ → Option Γ)).1 ∧ t = s ∧ c = b - 1) x := by
+  simpa [readInput, eval] using
+    Program.spec_perform (Op.readInput inferInstance) (semantics xs) s b h x
+
+@[spec] theorem spec_read [FinEnum Γ] (i : κ) (xs : Array Γ)
+    (s : Cfg κ Γ xs) (b : ℕ) (h : 0 < b) (x : Unit) :
+    Triple ((read (F := F) i).verifyWith m Q (semantics xs)) (fun t c ↦ t = s ∧ c = b)
+      (fun r t c ↦ r = (s.stacks i).head? ∧ t = s ∧ c = b - 1) x := by
+  simpa [read, eval] using Program.spec_perform (Op.read inferInstance i) (semantics xs) s b h x
+
+@[spec] theorem spec_observeBits {n : ℕ} (f : (Option Γ × (κ → Option Γ)) → Fin n → Bool)
+    (xs : Array Γ) (s : Cfg κ Γ xs) (b : ℕ) (h : 0 < b) (x : Unit) :
+    Triple ((observeBits (F := F) f).verifyWith m Q (semantics xs)) (fun t c ↦ t = s ∧ c = b)
+      (fun v t c ↦ v = Vector.ofFn (f (observe s)) ∧ t = s ∧ c = b - 1) x := by
+  simpa [observeBits, eval] using Program.spec_perform (Op.observeBits n f) (semantics xs) s b h x
+
+section Choose
+
+variable [Functor F] [LawfulMonad m] [LawfulFunctorLiftT F m] {β : Type} [FinEnum β]
+
+/-- A choice of a finite value consumes one unit of budget, and the quantifier reads the
+continuation over the values. Not registered. -/
+theorem spec_choose (c : F β) (xs : Array Γ)
+    (R : β → Cfg κ Γ xs → ℕ → Prop) (x : Unit) :
+    Triple ((choose (κ := κ) (Γ := Γ) c).verifyWith m Q (semantics xs))
+      (fun s b ↦ 0 < b ∧ Q (fun r ↦ R r s (b - 1)) (monadLift c : m β)) R x := by
+  simpa [choose] using Program.spec_chooseWith idle c (semantics xs) R x
+
+variable [MonadReturns m]
+
+/-- Under `MonadQuant.all`, the continuation runs from every choice, which the postcondition
+records. -/
+@[spec] theorem spec_choose_all (c : F β) (xs : Array Γ)
+    (s : Cfg κ Γ xs) (b : ℕ) (h : 0 < b) (x : Unit) :
+    Triple ((choose (κ := κ) (Γ := Γ) c).verifyWith m .all (semantics xs))
+      (fun t q ↦ t = s ∧ q = b)
+      (fun r t q ↦ r ∈ returns (monadLift c : m β) ∧ t = s ∧ q = b - 1) x := by
+  simpa [choose] using Program.spec_chooseWith_all idle c (semantics xs) s b h x
+
+/-- Under `MonadQuant.any`, the continuation runs from a supplied choice `v`. Not registered. -/
+theorem spec_choose_any (c : F β) (v : β)
+    (hv : v ∈ returns (monadLift c : m β)) (xs : Array Γ) (s : Cfg κ Γ xs) (b : ℕ) (h : 0 < b)
+    (x : Unit) :
+    Triple ((choose (κ := κ) (Γ := Γ) c).verifyWith m .any (semantics xs))
+      (fun t q ↦ t = s ∧ q = b) (fun r t q ↦ r = v ∧ t = s ∧ q = b - 1) x := by
+  simpa [choose] using Program.spec_chooseWith_any idle c (semantics xs) v hv s b h x
+
+end Choose
+
+end Verify
 
 /-- Compile a stack program to a native machine with the same choice shape, the stack operation
 interpreter and `idle` for the exits, with one transition per local action. -/

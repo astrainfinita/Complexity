@@ -32,11 +32,15 @@ def cfgSemantics (xs : Array Γ) :
   observe := Controller.observe
   act := apply
 
+section Verify
+
+variable {m : Type → Type} [Monad m] {Q : MonadQuant m} [MonadLiftT F m]
+
 /-- A local action consumes one transition. -/
 @[spec]
 theorem cfg_spec_act (a : Action κ Γ) (xs : Array Γ) (s : Cfg κ Γ xs)
     (b : ℕ) (h : 0 < b) (x : Unit) :
-    Triple ((act (F := F) a).verify (cfgSemantics xs)) (fun t c ↦ t = s ∧ c = b)
+    Triple ((act (F := F) a).verifyWith m Q (cfgSemantics xs)) (fun t c ↦ t = s ∧ c = b)
       (fun r t c ↦ r = () ∧ t = apply a s ∧ c = b - 1) x :=
   Program.spec_perform (Op.act a) (cfgSemantics xs) s b h x
 
@@ -44,30 +48,30 @@ theorem cfg_spec_act (a : Action κ Γ) (xs : Array Γ) (s : Cfg κ Γ xs)
 @[spec]
 theorem cfg_spec_readInput [FinEnum Γ] (xs : Array Γ) (s : Cfg κ Γ xs)
     (b : ℕ) (h : 0 < b) (x : Unit) :
-    Triple ((readInput (F := F)).verify (cfgSemantics xs)) (fun t c ↦ t = s ∧ c = b)
+    Triple ((readInput (F := F)).verifyWith m Q (cfgSemantics xs)) (fun t c ↦ t = s ∧ c = b)
       (fun r t c ↦ r = s.inputSymbol ∧ t = s ∧ c = b - 1) x := by
   simpa [readInput, eval] using
-    Program.spec_perform (Op.readInput inferInstance)
-      (cfgSemantics xs) s b h x
+    Program.spec_perform (Op.readInput inferInstance) (cfgSemantics xs) s b h x
 
 /-- Reading a work symbol preserves the tape configuration. -/
 @[spec]
 theorem cfg_spec_read [FinEnum Γ] (i : κ) (xs : Array Γ) (s : Cfg κ Γ xs)
     (b : ℕ) (h : 0 < b) (x : Unit) :
-    Triple ((read (F := F) i).verify (cfgSemantics xs)) (fun t c ↦ t = s ∧ c = b)
+    Triple ((read (F := F) i).verifyWith m Q (cfgSemantics xs)) (fun t c ↦ t = s ∧ c = b)
       (fun r t c ↦ r = s.workSymbols i ∧ t = s ∧ c = b - 1) x := by
-  simpa [read, eval] using
-    Program.spec_perform (Op.read inferInstance i) (cfgSemantics xs) s b h x
+  simpa [read, eval] using Program.spec_perform (Op.read inferInstance i) (cfgSemantics xs) s b h x
 
 /-- A total loop rule on configurations; the dispatcher consumes one time credit. -/
 @[spec]
 theorem cfg_spec_repeatUntil (p : TM.Program F κ Γ Bool)
     (I : Program.Invariant (Cfg κ Γ xs) (ℕ → Prop))
-    (Q : Unit → Cfg κ Γ xs → ℕ → Prop)
+    (R : Unit → Cfg κ Γ xs → ℕ → Prop)
     (hp : ∀ s b, I s b → 0 < b)
-    (hb : Triple (p.verify (cfgSemantics xs)) (fun s b ↦ I s (b + 1))
-      (fun r s b ↦ if r then Q () s b else I s b) ()) :
-    Triple ((repeatUntil p).verify (cfgSemantics xs)) (fun s b ↦ I s b) Q () :=
-  Program.spec_repeatUntilWith_nop idle p (cfgSemantics xs) I Q () idle_apply hp hb
+    (hb : Triple (p.verifyWith m Q (cfgSemantics xs)) (fun s b ↦ I s (b + 1))
+      (fun r s b ↦ if r then R () s b else I s b) ()) :
+    Triple ((repeatUntil p).verifyWith m Q (cfgSemantics xs)) (fun s b ↦ I s b) R () :=
+  Program.spec_repeatUntilWith_nop idle p (cfgSemantics xs) I R () idle_apply hp hb
+
+end Verify
 
 end Complexity.TM.Program

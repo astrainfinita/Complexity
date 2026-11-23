@@ -54,7 +54,7 @@ def build (o : Action k) : StackMachine.Program Id (Work k) Bool Unit := do
     (fun z ↦ spec_project c (data j) (.scratch .result)
       (.scratch .saved) (.scratch .temp) (.scratch .counter) (ρ j) [] right z
       (by simp) (by simp [hw]) (by simp [hw]) (by simp [hw]) (by simp [hw]))
-    (m := 16 * (ρ j).size)
+    (k := 16 * (ρ j).size)
     (by have := projectTime_le (ρ j) right; have := (ρ j).size_pos; omega) q
   cases o with
   | nop => simp at hd
@@ -70,7 +70,7 @@ def build (o : Action k) : StackMachine.Program Id (Work k) Bool Unit := do
       (.scratch .result) (.scratch .temp) (BitList.encodeTree (ρ j)) (BitList.encodeTree (ρ m)) z
       (by simp) (by simp) (by simp) (by simp) (by simp)
       (by simp [hw]) (by simp [hw]) (by simp [hw]))
-      (m := 16 * (Complexity.Tree.pair (ρ j) (ρ m)).size)
+      (k := 16 * (Complexity.Tree.pair (ρ j) (ρ m)).size)
       (by simp only [BitList.length_encodeTree, Complexity.Tree.size_pair]; omega) q
     simpa [make, hw, Action.sizeCost, BitList.encodeTree] using h
 

@@ -79,7 +79,8 @@ private theorem loadAction_loaded {xs : List Γ} (c : Cfg κ Γ xs.toArray) (i :
     Triple ((loadReverse i).verify (semantics xs.toArray))
       (fun s b ↦ s = c ∧ b = 3 * xs.length + 2 + q)
       (fun _ s b ↦ s = loaded c i xs ∧ b = q) () := by
-  have h := Program.spec_repeatUntilWith_count idle (loadBody i) (semantics xs.toArray)
+  have h := Program.spec_repeatUntilWith_count (m := Id) (Q := .all) idle (loadBody i)
+    (semantics xs.toArray)
     (fun j s ↦ s = loaded c i (xs.take j)) (fun s ↦ s = loaded c i xs)
     xs.length 2 1 q
     (by intro j hj s hs; simpa only [semantics_act, idle_apply] using hs)
@@ -162,7 +163,8 @@ omit [FinEnum Γ] in
       (fun s b ↦ s = c ∧ b = 3 * (c.stacks i).length + 2 + q)
       (fun _ s b ↦ s = { c.setStack i [] with output := c.output ++ (c.stacks i).toArray }
         ∧ b = q) () := by
-  have h := Program.spec_repeatUntilWith_count idle (emitBody i) (semantics xs)
+  have h := Program.spec_repeatUntilWith_count (m := Id) (Q := .all) idle (emitBody i)
+    (semantics xs)
     (fun j s ↦ s = emitted c i ((c.stacks i).take j) ((c.stacks i).drop j))
     (fun s ↦ s = emitted c i (c.stacks i) []) (c.stacks i).length 2 1 q
     (by intro j hj s hs; simpa only [semantics_act, idle_apply] using hs)

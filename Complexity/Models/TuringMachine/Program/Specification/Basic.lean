@@ -14,34 +14,34 @@ public import Complexity.Models.TuringMachine.Program.Basic
 
 namespace Complexity.TM.Program
 
-variable {F : Type → Type} {κ : Type} {Γ S : Type}
+variable {F : Type → Type} {κ : Type} {Γ S : Type} {m : Type → Type} [Monad m] {Q : MonadQuant m}
   (e : Program.Semantics (Γ × (κ → Γ)) (Action κ Γ)
     (Op κ Γ) Op.Result S)
 
 /-- Expose a work write as its one local action. -/
 @[spec]
-theorem verify_write [DecidableEq κ] (i : κ) (a : Γ) :
-    (write (F := F) i a).verify e =
-      (act { idle (κ := κ) with work := fun j ↦ (if j = i then some a else none, 0) }).verify
-        e := rfl
+theorem verifyWith_write [DecidableEq κ] (i : κ) (a : Γ) :
+    (write (F := F) i a).verifyWith m Q e =
+      (act { idle (κ := κ) with work := fun j ↦ (if j = i then some a else none, 0) }).verifyWith
+        m Q e := rfl
 
 /-- Expose a work-head move as its one local action. -/
 @[spec]
-theorem verify_move [DecidableEq κ] (i : κ) (d : SignType) :
-    (move (F := F) i d).verify e =
-      (act { idle (κ := κ) with work := fun j ↦ (none, if j = i then d else 0) }).verify
-        e := rfl
+theorem verifyWith_move [DecidableEq κ] (i : κ) (d : SignType) :
+    (move (F := F) i d).verifyWith m Q e =
+      (act { idle (κ := κ) with work := fun j ↦ (none, if j = i then d else 0) }).verifyWith
+        m Q e := rfl
 
 /-- Expose an input-head move as its one local action. -/
 @[spec]
-theorem verify_moveInput (d : SignType) :
-    (moveInput (F := F) d).verify e =
-      (act { idle with inputMove := d }).verify e := rfl
+theorem verifyWith_moveInput (d : SignType) :
+    (moveInput (F := F) d).verifyWith m Q e =
+      (act { idle with inputMove := d }).verifyWith m Q e := rfl
 
 /-- Expose output as the local action which appends its symbol. -/
 @[spec]
-theorem verify_emit (a : Γ) :
-    (emit (F := F) a).verify e =
-      (act { idle with output := some a }).verify e := rfl
+theorem verifyWith_emit (a : Γ) :
+    (emit (F := F) a).verifyWith m Q e =
+      (act { idle with output := some a }).verifyWith m Q e := rfl
 
 end Complexity.TM.Program

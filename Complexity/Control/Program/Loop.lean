@@ -20,14 +20,19 @@ namespace Complexity.Program
 
 open Std.WP
 
-variable {F : Type → Type} {O A Op S α β : Type} {Ret : Op → Type}
+variable {F : Type → Type} {O A Op S α β : Type} {Ret : Op → Type} {m : Type → Type} [Monad m]
+  {Q : MonadQuant m}
+
+section Rules
+
+variable [MonadLiftT F m]
 
 /-- A dispatcher preserving the invariant satisfies the body's precondition. -/
 private theorem spec_dispatch_pre (a : A) {p : Program F O A Op Ret α}
-    {e : Semantics O A Op Ret S} {I : S → ℕ → Prop} {Q : α → S → ℕ → Prop} {x : Unit}
+    {e : Semantics O A Op Ret S} {I : S → ℕ → Prop} {R : α → S → ℕ → Prop} {x : Unit}
     (ha : ∀ s b, I s b → I (e.act a s) b)
-    (h : Triple (p.verify e) (fun s b ↦ I s (b + 1)) Q x) :
-    Triple (p.verify e) (fun s b ↦ ∃ t, I t (b + 1) ∧ s = e.act a t) Q x := by
+    (h : Triple (p.verifyWith m Q e) (fun s b ↦ I s (b + 1)) R x) :
+    Triple (p.verifyWith m Q e) (fun s b ↦ ∃ t, I t (b + 1) ∧ s = e.act a t) R x := by
   constructor
   rintro s b ⟨t, ht, rfl⟩
   exact h.le_wp (e.act a t) b (ha t (b + 1) ht)
@@ -36,69 +41,61 @@ private theorem spec_dispatch_pre (a : A) {p : Program F O A Op Ret α}
 @[spec]
 theorem spec_loop {n r : ℕ} (a : A) (f : Fin n → Program F O A Op Ret (Fin n ⊕ Fin r))
     (i : Fin n) (e : Semantics O A Op Ret S) (I : Invariant (Fin n) (S → ℕ → Prop))
-    (Q : Fin r → S → ℕ → Prop) (x : Unit)
+    (R : Fin r → S → ℕ → Prop) (x : Unit)
     (hpos : ∀ i s b, I i s b → 0 < b)
-    (hstep : ∀ i, Triple ((f i).verify e)
+    (hstep : ∀ i, Triple ((f i).verifyWith m Q e)
       (fun s b => ∃ t, I i t (b + 1) ∧ s = e.act a t)
-      (fun j s b => match j with | .inl k => I k s b | .inr k => Q k s b) x) :
-    Triple ((loop a f i).verify e) (I i) Q x := by
+      (fun j s b => match j with | .inl k => I k s b | .inr k => R k s b) x) :
+    Triple ((loop a f i).verifyWith m Q e) (I i) R x := by
   constructor
   intro s b hs
   induction b using Nat.strong_induction_on generalizing i s with
   | h b ih =>
-    have hb := hpos i s b hs
-    have hr := (hstep i).le_wp (e.act a s) (b - 1) ⟨s,by simpa [Nat.sub_add_cancel hb] using hs,rfl⟩
-    obtain ⟨m,j,t,hm,hr,hq⟩ := hr
-    cases j with
-    | inl j =>
-      obtain ⟨l,k,u,hl,hj,hq⟩ := ih ((b - 1) - m) (by omega) j t hq
-      refine ⟨m + l + 1,k,u,by omega,Exec.loop_next a f hr hj,?_⟩
-      convert hq using 1
-      omega
-    | inr j =>
-      refine ⟨m + 1,j,t,by omega,Exec.loop_done a f hr,?_⟩
-      convert hq using 1
-      omega
+    obtain ⟨b, rfl⟩ := Nat.exists_eq_add_one.mpr (hpos i s b hs)
+    have hb := ((hstep i).le_wp (e.act a s) b ⟨s, hs, rfl⟩).with_le
+    exact Syntax.ExecWithinWith.loop a i _ _ s b (hb.mapResult (w := .branch n r) id)
+      (fun j t c ⟨_, rfl, hc, hI⟩ ↦ ih c (by omega) j t hI)
+      (fun j t c ⟨_, rfl, _, hQ⟩ ↦ .ret (v := .value) j t c hQ)
 
 /-- A dispatcher preserving the loop invariant leaves the body precondition unchanged. -/
 theorem spec_loop_of_invariant {n r : ℕ}
     (a : A) (f : Fin n → Program F O A Op Ret (Fin n ⊕ Fin r))
     (i : Fin n) (e : Semantics O A Op Ret S) (I : Invariant (Fin n) (S → ℕ → Prop))
-    (Q : Fin r → S → ℕ → Prop) (x : Unit)
+    (R : Fin r → S → ℕ → Prop) (x : Unit)
     (ha : ∀ i s b, I i s b → I i (e.act a s) b)
     (hpos : ∀ i s b, I i s b → 0 < b)
-    (hstep : ∀ i, Triple ((f i).verify e)
+    (hstep : ∀ i, Triple ((f i).verifyWith m Q e)
       (fun s b => I i s (b + 1))
-      (fun j s b => match j with | .inl k => I k s b | .inr k => Q k s b) x) :
-    Triple ((loop a f i).verify e) (I i) Q x := by
-  apply spec_loop a f i e I Q x hpos
+      (fun j s b => match j with | .inl k => I k s b | .inr k => R k s b) x) :
+    Triple ((loop a f i).verifyWith m Q e) (I i) R x := by
+  apply spec_loop a f i e I R x hpos
   intro j
   exact spec_dispatch_pre a (ha j) (hstep j)
 
 /-- For a semantic no-op, a loop body starts in the same state with one fewer credit. -/
 theorem spec_loop_nop {n r : ℕ} (a : A) (f : Fin n → Program F O A Op Ret (Fin n ⊕ Fin r))
     (i : Fin n) (e : Semantics O A Op Ret S) (I : Invariant (Fin n) (S → ℕ → Prop))
-    (Q : Fin r → S → ℕ → Prop) (x : Unit)
+    (R : Fin r → S → ℕ → Prop) (x : Unit)
     (ha : ∀ s, e.act a s = s)
     (hpos : ∀ i s b, I i s b → 0 < b)
-    (hstep : ∀ i, Triple ((f i).verify e)
+    (hstep : ∀ i, Triple ((f i).verifyWith m Q e)
       (fun s b => I i s (b + 1))
-      (fun j s b => match j with | .inl k => I k s b | .inr k => Q k s b) x) :
-    Triple ((loop a f i).verify e) (I i) Q x :=
-  spec_loop_of_invariant a f i e I Q x (fun _ s _ hs ↦ by simpa only [ha s] using hs) hpos hstep
+      (fun j s b => match j with | .inl k => I k s b | .inr k => R k s b) x) :
+    Triple ((loop a f i).verifyWith m Q e) (I i) R x :=
+  spec_loop_of_invariant a f i e I R x (fun _ s _ hs ↦ by simpa only [ha s] using hs) hpos hstep
 
 /-- A total repeat-until rule, including the action executed before each body entry. -/
 @[spec]
 theorem spec_repeatUntilWith (a : A) (p : Program F O A Op Ret Bool) (e : Semantics O A Op Ret S)
-    (I : Invariant S (ℕ → Prop)) (Q : Unit → S → ℕ → Prop) (x : Unit)
+    (I : Invariant S (ℕ → Prop)) (R : Unit → S → ℕ → Prop) (x : Unit)
     (hpos : ∀ s b, I s b → 0 < b)
-    (hstep : Triple (p.verify e)
+    (hstep : Triple (p.verifyWith m Q e)
       (fun s b => ∃ t, I t (b + 1) ∧ s = e.act a t)
-      (fun r s b => if r then Q () s b else I s b) x) :
-    Triple ((repeatUntilWith a p).verify e) (fun s b => I s b) Q x := by
+      (fun r s b => if r then R () s b else I s b) x) :
+    Triple ((repeatUntilWith a p).verifyWith m Q e) (fun s b => I s b) R x := by
   unfold repeatUntilWith
   apply spec_bind_of_spec
-  · apply spec_loop a _ 0 e (fun _ ↦ I) (fun _ ↦ Q ()) x (fun _ ↦ hpos)
+  · apply spec_loop a _ 0 e (fun _ ↦ I) (fun _ ↦ R ()) x (fun _ ↦ hpos)
     intro _
     apply spec_bind_of_spec hstep
     intro r
@@ -107,30 +104,34 @@ theorem spec_repeatUntilWith (a : A) (p : Program F O A Op Ret Bool) (e : Semant
     apply (spec_pure _ e _ x).le_wp s b
     cases r <;> simpa using hs
   · intro _
-    exact spec_pure () e Q x
+    exact spec_pure () e R x
 
 /-- A repeat dispatcher may update the state while preserving its invariant. -/
 theorem spec_repeatUntilWith_of_invariant
     (a : A) (p : Program F O A Op Ret Bool) (e : Semantics O A Op Ret S)
-    (I : Invariant S (ℕ → Prop)) (Q : Unit → S → ℕ → Prop) (x : Unit)
+    (I : Invariant S (ℕ → Prop)) (R : Unit → S → ℕ → Prop) (x : Unit)
     (ha : ∀ s b, I s b → I (e.act a s) b)
     (hpos : ∀ s b, I s b → 0 < b)
-    (hstep : Triple (p.verify e) (fun s b => I s (b + 1))
-      (fun r s b => if r then Q () s b else I s b) x) :
-    Triple ((repeatUntilWith a p).verify e) (fun s b => I s b) Q x := by
-  apply spec_repeatUntilWith a p e I Q x hpos
+    (hstep : Triple (p.verifyWith m Q e) (fun s b => I s (b + 1))
+      (fun r s b => if r then R () s b else I s b) x) :
+    Triple ((repeatUntilWith a p).verifyWith m Q e) (fun s b => I s b) R x := by
+  apply spec_repeatUntilWith a p e I R x hpos
   exact spec_dispatch_pre a ha hstep
 
 /-- A no-op dispatcher changes only the remaining time budget. -/
 theorem spec_repeatUntilWith_nop (a : A) (p : Program F O A Op Ret Bool)
-    (e : Semantics O A Op Ret S) (I : Invariant S (ℕ → Prop)) (Q : Unit → S → ℕ → Prop) (x : Unit)
+    (e : Semantics O A Op Ret S) (I : Invariant S (ℕ → Prop)) (R : Unit → S → ℕ → Prop) (x : Unit)
     (ha : ∀ s, e.act a s = s)
     (hpos : ∀ s b, I s b → 0 < b)
-    (hstep : Triple (p.verify e) (fun s b => I s (b + 1))
-      (fun r s b => if r then Q () s b else I s b) x) :
-    Triple ((repeatUntilWith a p).verify e) (fun s b => I s b) Q x :=
-  spec_repeatUntilWith_of_invariant a p e I Q x
+    (hstep : Triple (p.verifyWith m Q e) (fun s b => I s (b + 1))
+      (fun r s b => if r then R () s b else I s b) x) :
+    Triple ((repeatUntilWith a p).verifyWith m Q e) (fun s b => I s b) R x :=
+  spec_repeatUntilWith_of_invariant a p e I R x
     (fun s _ hs ↦ by simpa only [ha s] using hs) hpos hstep
+
+end Rules
+
+section LoopOn
 
 variable [FinEnum α] [FinEnum β]
 
@@ -165,7 +166,7 @@ namespace Exec
 variable {e : Semantics O A Op Ret S}
 
 /-- Finishing a finite-value loop includes its dispatch transition. -/
-theorem loopOn_done (a : A) (b : α → Program F O A Op Ret (α ⊕ β))
+theorem loopOn_done (a : A) (b : α → Program Id O A Op Ret (α ⊕ β))
     {i : α} {j : β} {s t : S} {n : ℕ}
     (h : (b i).Exec e (e.act a s) n (.inr j) t) :
     (loopOn a b i).Exec e s (n + 1) j t := by
@@ -179,7 +180,7 @@ theorem loopOn_done (a : A) (b : α → Program F O A Op Ret (α ⊕ β))
         ((FinEnum.equiv : β ≃ Fin (FinEnum.card β)).symm (FinEnum.equiv j)) t
 
 /-- Continuing routes to the next external carried value without a connecting action. -/
-theorem loopOn_next (a : A) (b : α → Program F O A Op Ret (α ⊕ β))
+theorem loopOn_next (a : A) (b : α → Program Id O A Op Ret (α ⊕ β))
     {i j : α} {s t u : S} {n m : ℕ} {v : β}
     (h : (b i).Exec e (e.act a s) n (.inl j) t)
     (hc : (loopOn a b j).Exec e t m v u) :
@@ -193,22 +194,24 @@ theorem loopOn_next (a : A) (b : α → Program F O A Op Ret (α ⊕ β))
 
 end Exec
 
+variable [MonadLiftT F m]
+
 /-- A total rule for finite carried values; budget pays for every traversal of a back edge. -/
 @[spec]
 theorem spec_loopOn (a : A) (b : α → Program F O A Op Ret (α ⊕ β)) (i : α)
-    (e : Semantics O A Op Ret S) (I : Invariant α (S → ℕ → Prop)) (Q : β → S → ℕ → Prop)
+    (e : Semantics O A Op Ret S) (I : Invariant α (S → ℕ → Prop)) (R : β → S → ℕ → Prop)
     (hp : ∀ i s n, I i s n → 0 < n)
-    (hb : ∀ i, Triple ((b i).verify e)
+    (hb : ∀ i, Triple ((b i).verifyWith m Q e)
       (fun s n ↦ ∃ t, I i t (n + 1) ∧ s = e.act a t)
-      (fun j s n ↦ match j with | .inl j => I j s n | .inr j => Q j s n) ()) :
-    Triple ((loopOn a b i).verify e) (I i) Q () := by
+      (fun j s n ↦ match j with | .inl j => I j s n | .inr j => R j s n) ()) :
+    Triple ((loopOn a b i).verifyWith m Q e) (I i) R () := by
   rw [loopOn_eq_mapResult_loop]
   apply spec_mapResult
-  have h := spec_loop a
+  have h := spec_loop (Q := Q) a
     (fun j ↦ (b (FinEnum.equiv.symm j)).mapResult _ .value
       (Sum.map FinEnum.equiv FinEnum.equiv))
     (FinEnum.equiv i) e (fun j ↦ I (FinEnum.equiv.symm j))
-    (fun j ↦ Q (FinEnum.equiv.symm j)) () (fun j ↦ hp (FinEnum.equiv.symm j))
+    (fun j ↦ R (FinEnum.equiv.symm j)) () (fun j ↦ hp (FinEnum.equiv.symm j))
   simp only [Equiv.symm_apply_apply] at h
   apply h
   intro j
@@ -221,24 +224,26 @@ theorem spec_loopOn (a : A) (b : α → Program F O A Op Ret (α ⊕ β)) (i : �
 /-- A finite-value dispatcher may update the state while preserving the carried invariant. -/
 theorem spec_loopOn_of_invariant
     (a : A) (b : α → Program F O A Op Ret (α ⊕ β)) (i : α)
-    (e : Semantics O A Op Ret S) (I : Invariant α (S → ℕ → Prop)) (Q : β → S → ℕ → Prop)
+    (e : Semantics O A Op Ret S) (I : Invariant α (S → ℕ → Prop)) (R : β → S → ℕ → Prop)
     (ha : ∀ i s n, I i s n → I i (e.act a s) n)
     (hp : ∀ i s n, I i s n → 0 < n)
-    (hb : ∀ i, Triple ((b i).verify e) (fun s n ↦ I i s (n + 1))
-      (fun j s n ↦ match j with | .inl j => I j s n | .inr j => Q j s n) ()) :
-    Triple ((loopOn a b i).verify e) (I i) Q () := by
-  apply spec_loopOn a b i e I Q hp
+    (hb : ∀ i, Triple ((b i).verifyWith m Q e) (fun s n ↦ I i s (n + 1))
+      (fun j s n ↦ match j with | .inl j => I j s n | .inr j => R j s n) ()) :
+    Triple ((loopOn a b i).verifyWith m Q e) (I i) R () := by
+  apply spec_loopOn a b i e I R hp
   intro j
   exact spec_dispatch_pre a (ha j) (hb j)
 
 /-- A globally inert finite-value dispatcher specializes the invariant-local rule. -/
 theorem spec_loopOn_nop (a : A) (b : α → Program F O A Op Ret (α ⊕ β)) (i : α)
-    (e : Semantics O A Op Ret S) (I : Invariant α (S → ℕ → Prop)) (Q : β → S → ℕ → Prop)
+    (e : Semantics O A Op Ret S) (I : Invariant α (S → ℕ → Prop)) (R : β → S → ℕ → Prop)
     (ha : ∀ s, e.act a s = s)
     (hp : ∀ i s n, I i s n → 0 < n)
-    (hb : ∀ i, Triple ((b i).verify e) (fun s n ↦ I i s (n + 1))
-      (fun j s n ↦ match j with | .inl j => I j s n | .inr j => Q j s n) ()) :
-    Triple ((loopOn a b i).verify e) (I i) Q () :=
-  spec_loopOn_of_invariant a b i e I Q (fun _ s _ hs ↦ by simpa only [ha s] using hs) hp hb
+    (hb : ∀ i, Triple ((b i).verifyWith m Q e) (fun s n ↦ I i s (n + 1))
+      (fun j s n ↦ match j with | .inl j => I j s n | .inr j => R j s n) ()) :
+    Triple ((loopOn a b i).verifyWith m Q e) (I i) R () :=
+  spec_loopOn_of_invariant a b i e I R (fun _ s _ hs ↦ by simpa only [ha s] using hs) hp hb
+
+end LoopOn
 
 end Complexity.Program

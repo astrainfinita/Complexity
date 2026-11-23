@@ -86,26 +86,29 @@ variable [Inhabited Γ] {xs : Array Γ}
 
 private theorem run_callBlock (M : TM Id κ Γ Q) (q r : Q)
     (s : History (Cfg κ Γ xs) (Action κ Γ)) (n : ℕ) (hh : M.Halted (M.runFrom (r, s) n)) :
-    ∃ m ≤ n, Program.Control.Run (callBlock M q) id
-      (semantics xs).observe (semantics xs).act (blockRoute M r) s m
-      (FinEnum.equiv (M.runFrom (r, s) n).1) (M.runFrom (r, s) n).2 := by
+    ∃ m ≤ n, (callBlock M q).RunWithin (semantics xs).observe (semantics xs).act
+      (fun j t b ↦ j = FinEnum.equiv (M.runFrom (r, s) n).1 ∧ t = (M.runFrom (r, s) n).2 ∧ b = 0)
+      (blockRoute M r) s m := by
   induction n generalizing r s with
   | zero =>
     have hc : M.halt r = true := hh
     refine ⟨0, le_rfl, ?_⟩
     simp only [blockRoute, hc, ↓reduceIte, Controller.runFrom_zero]
-    exact Program.Control.Run.done _ _
+    exact ⟨rfl, rfl, rfl⟩
   | succ n ih =>
     by_cases hc : M.halt r
     · rw [M.runFrom_of_halted (r, s) hc (n + 1)]
       refine ⟨0, Nat.zero_le _, ?_⟩
       simp only [blockRoute, hc, ↓reduceIte]
-      exact Program.Control.Run.done _ _
+      exact ⟨rfl, rfl, rfl⟩
     · rw [Controller.runFrom_succ, M.step_of_not_halted (r, s) hc] at hh ⊢
       obtain ⟨m, hm, hr⟩ := ih _ _ hh
       refine ⟨m + 1, by omega, ?_⟩
       simp only [blockRoute, hc, Bool.false_eq_true, ↓reduceIte]
-      exact Program.Control.Run.step _ _ (by simpa [callBlock] using hr)
+      exact Program.Control.runWithin_inl_succ_iff.2 (by
+        simpa only [callBlock, Controller.state_prod, Controller.observe_prod, History.observe_def,
+          Cfg.observe_def, Controller.apply_prod, History.apply_def, semantics_observe,
+          Equiv.symm_apply_apply, Id.run_pure, semantics_act] using hr)
 
 /-- A bounded halting run gives an actual call execution of at most the same length. -/
 theorem exec_callFrom (M : TM Id κ Γ Q) (q : Q) (s : History (Cfg κ Γ xs) (Action κ Γ))
@@ -114,7 +117,7 @@ theorem exec_callFrom (M : TM Id κ Γ Q) (q : Q) (s : History (Cfg κ Γ xs) (A
       (M.runFrom (q, s) n).2 := by
   obtain ⟨m, hm, hr⟩ := run_callBlock M q q s n hh
   refine ⟨m, hm, ?_⟩
-  have h := Program.Syntax.Exec.call (F := Id)
+  have h := Program.Syntax.Exec.call
     (callBlock M q) (fun e ↦
       Program.Syntax.ret
         ((FinEnum.equiv : Q ≃ Fin (FinEnum.card Q)).symm e))
@@ -133,7 +136,7 @@ theorem spec_callFrom (M : TM Id κ Γ Q) (q : Q) (s : History (Cfg κ Γ xs) (A
   constructor
   rintro s' b ⟨rfl, hb⟩
   obtain ⟨m, hm, hr⟩ := exec_callFrom M q s' n hh
-  exact ⟨m, _, _, by omega, hr, rfl, rfl, by omega⟩
+  exact hr.execWithin (by omega) ⟨rfl, rfl, by omega⟩
 
 /-- Start at the machine's initial control state without resetting storage or visit history. -/
 @[spec]

@@ -23,4 +23,11 @@ noncomputable instance : MonadLift BinaryChoice PMF where
 @[simp] theorem monadLift_pmf {α : Type*} (f : BinaryChoice α) :
     (monadLift f : PMF α) = (PMF.uniformOfFintype (Fin 2)).map f := rfl
 
+instance : LawfulFunctorLift BinaryChoice PMF where
+  monadLift_map f x := (PMF.map_comp x _ f).symm
+
+/-- Two equal alternatives of weight `1/2` each are the point mass. -/
+instance : LawfulPureLift BinaryChoice PMF where
+  monadLift_pure a := PMF.map_const _ a
+
 end Complexity.BinaryChoice

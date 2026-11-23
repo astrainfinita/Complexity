@@ -35,14 +35,18 @@ def historySemantics : Program.Semantics (Fin k → Bool) (TreeMachine.Action k)
 
 theorem exec_act_history (o : TreeMachine.Action k)
     (h : History (Cfg k) (TreeMachine.Action k)) :
-    (act (F := F) o).Exec historySemantics h 1 () (h.snoc o) :=
+    (act (F := Id) o).Exec historySemantics h 1 () (h.snoc o) :=
   Program.Exec.perform historySemantics (.act o) h
+
+section Verify
+
+variable {m : Type → Type} [Monad m] {Q : MonadQuant m} [MonadLiftT F m]
 
 /-- An instruction consumes one unit of time and records its resulting register bank. -/
 @[spec]
 theorem spec_act (o : TreeMachine.Action k) (s : History (Cfg k) (TreeMachine.Action k))
     (b : ℕ) (hb : 0 < b) (x : Unit) :
-    Triple ((act (F := F) o).verify historySemantics) (fun t c ↦ t = s ∧ c = b)
+    Triple ((act (F := F) o).verifyWith m Q historySemantics) (fun t c ↦ t = s ∧ c = b)
       (fun r t c ↦ r = () ∧ t = s.snoc o ∧ c = b - 1) x :=
   Program.spec_perform (Op.act o) historySemantics s b hb x
 
@@ -50,9 +54,11 @@ theorem spec_act (o : TreeMachine.Action k) (s : History (Cfg k) (TreeMachine.Ac
 @[spec]
 theorem spec_root (i : Fin k) (s : History (Cfg k) (TreeMachine.Action k))
     (b : ℕ) (hb : 0 < b) (x : Unit) :
-    Triple ((root (F := F) i).verify historySemantics) (fun t c ↦ t = s ∧ c = b)
+    Triple ((root (F := F) i).verifyWith m Q historySemantics) (fun t c ↦ t = s ∧ c = b)
       (fun r t c ↦ r = (s.last.regs i).root ∧ t = s.snoc TreeMachine.Action.nop ∧ c = b - 1) x :=
   Program.spec_perform (Op.root i) historySemantics s b hb x
+
+end Verify
 
 /-- A history specification gives actual unit time and peak space for the compiled machine. -/
 theorem computesWithinUnitTime_of_exec [NeZero k] {p : TreeMachine.Program Id k α}

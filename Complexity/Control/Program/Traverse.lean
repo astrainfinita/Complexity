@@ -15,22 +15,23 @@ namespace Complexity.Program
 
 open Std.WP
 
-variable {F : Type → Type} {O A Op S : Type} {Ret : Op → Type}
+variable {F : Type → Type} {O A Op S : Type} {Ret : Op → Type} {m : Type → Type}
+  [Monad m] {Q : MonadQuant m} [MonadLiftT F m]
 
 /-- A counted traversal may carry a different remaining-budget invariant at every index.
 The dispatcher preserves the invariant at the same budget; each body entry then consumes
 one dispatch credit before continuing or stopping. -/
 theorem spec_repeatUntilWith_count_of_invariant (a : A) (p : Program F O A Op Ret Bool)
-    (e : Semantics O A Op Ret S) (I : ℕ → S → ℕ → Prop) (Q : S → ℕ → Prop) (n : ℕ)
+    (e : Semantics O A Op Ret S) (I : ℕ → S → ℕ → Prop) (R : S → ℕ → Prop) (n : ℕ)
     (ha : ∀ i ≤ n, ∀ c b, I i c b → I i (e.act a c) b)
     (hp : ∀ i ≤ n, ∀ c b, I i c b → 0 < b)
-    (hs : ∀ i < n, Triple (p.verify e) (fun c b ↦ I i c (b + 1))
+    (hs : ∀ i < n, Triple (p.verifyWith m Q e) (fun c b ↦ I i c (b + 1))
       (fun r c b ↦ r = false ∧ I (i + 1) c b) ())
-    (ht : Triple (p.verify e) (fun c b ↦ I n c (b + 1))
-      (fun r c b ↦ r = true ∧ Q c b) ()) :
-    Triple ((repeatUntilWith a p).verify e) (I 0) (fun _ ↦ Q) () := by
+    (ht : Triple (p.verifyWith m Q e) (fun c b ↦ I n c (b + 1))
+      (fun r c b ↦ r = true ∧ R c b) ()) :
+    Triple ((repeatUntilWith a p).verifyWith m Q e) (I 0) (fun _ ↦ R) () := by
   let J : S → ℕ → Prop := fun c b ↦ ∃ i ≤ n, I i c b
-  have h : Triple ((repeatUntilWith a p).verify e) J (fun _ ↦ Q) () := by
+  have h : Triple ((repeatUntilWith a p).verifyWith m Q e) J (fun _ ↦ R) () := by
     apply spec_repeatUntilWith_of_invariant a p e J _ ()
     · rintro c b ⟨i, hi, hc⟩
       exact ⟨i, hi, ha i hi c b hc⟩
@@ -55,15 +56,15 @@ theorem spec_repeatUntilWith_count_of_invariant (a : A) (p : Program F O A Op Re
 Each body entry pays one dispatch transition in addition to its specified action cost. -/
 theorem spec_repeatUntilWith_count (a : A) (p : Program F O A Op Ret Bool)
     (e : Semantics O A Op Ret S)
-    (I : ℕ → S → Prop) (Q : S → Prop) (n u v q : ℕ)
+    (I : ℕ → S → Prop) (R : S → Prop) (n u v q : ℕ)
     (ha : ∀ i ≤ n, ∀ c, I i c → I i (e.act a c))
-    (hs : ∀ i < n, ∀ q, Triple (p.verify e) (fun c b ↦ I i c ∧ b = u + q)
+    (hs : ∀ i < n, ∀ q, Triple (p.verifyWith m Q e) (fun c b ↦ I i c ∧ b = u + q)
       (fun r c b ↦ r = false ∧ I (i + 1) c ∧ b = q) ())
-    (ht : ∀ q, Triple (p.verify e) (fun c b ↦ I n c ∧ b = v + q)
-      (fun r c b ↦ r = true ∧ Q c ∧ b = q) ()) :
-    Triple ((repeatUntilWith a p).verify e)
+    (ht : ∀ q, Triple (p.verifyWith m Q e) (fun c b ↦ I n c ∧ b = v + q)
+      (fun r c b ↦ r = true ∧ R c ∧ b = q) ()) :
+    Triple ((repeatUntilWith a p).verifyWith m Q e)
       (fun c b ↦ I 0 c ∧ b = (u + 1) * n + (v + 1) + q)
-      (fun _ c b ↦ Q c ∧ b = q) () := by
+      (fun _ c b ↦ R c ∧ b = q) () := by
   apply spec_repeatUntilWith_count_of_invariant a p e
     (fun i c b ↦ I i c ∧ b = (u + 1) * (n - i) + (v + 1) + q) _ n
   · intro i hi c b hc

@@ -57,7 +57,7 @@ private theorem loaded_boot (i : Fin k) (x : Complexity.Tree) :
   let c := apply (boot i) (StackMachine.Cfg.init (Work k) (BitList.encodeTree x))
   have h := Program.spec_exact_budget_le (fun z ↦ IO.spec_load c (data i) (.scratch .temp) z
     (by simp) (by simp [c, boot, idle, StackMachine.Op.apply])
-    (by simp [c, boot, idle])) (m := 6 * x.size + 4) (by simp) q
+    (by simp [c, boot, idle])) (k := 6 * x.size + 4) (by simp) q
   simp only [c, loaded_boot] at h
   unfold init
   vcgen [h]

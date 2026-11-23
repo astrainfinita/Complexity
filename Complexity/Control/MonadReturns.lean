@@ -6,6 +6,7 @@ Authors: Yuyang Zhao
 module
 
 public import Mathlib.Data.Multiset.Functor
+public import Complexity.Control.MonadQuant
 
 /-!
 # The values a computation can return
@@ -27,6 +28,9 @@ set is a principal taut monad, and a collection monad when the sets are finite. 
 (`attach`, `map_attach`); it serves termination proofs, and its instances are not ours to choose.
 `bind_congr` alone is weaker than `attach`: it does not give a computation valued in an empty type
 from a computation that returns nothing.
+
+`MonadQuant.all` and `MonadQuant.any` are the quantifiers over the values a computation can
+return.
 
 Current state: a lemma stated with `returns` applies to a plain statement about the members of a
 multiset by definition, but the unifier unfolds the membership of `Multiset` before it unfolds
@@ -66,6 +70,35 @@ theorem MonadReturns.bind_congr [LawfulMonad m] {x : m α} {f g : α → m β}
 theorem mem_returns_map_iff [LawfulMonad m] {f : α → β} {x : m α} {b : β} :
     b ∈ returns (f <$> x) ↔ ∃ a ∈ returns x, f a = b := by
   simp only [← bind_pure_comp, mem_returns_bind_iff, mem_returns_pure_iff, eq_comm]
+
+namespace MonadQuant
+
+/-- Every value the computation can return satisfies the predicate. -/
+def all : MonadQuant m where
+  toFun _ P x := ∀ a ∈ returns x, P a
+  mono h hx a ha := h a (hx a ha)
+  pure_iff := ⟨fun h ↦ h _ (mem_returns_pure_iff.2 rfl),
+    fun h _ hb ↦ mem_returns_pure_iff.1 hb ▸ h⟩
+  bind_iff := ⟨fun h a ha b hb ↦ h b (mem_returns_bind_iff.2 ⟨a, ha, hb⟩),
+    fun h b hb ↦ let ⟨a, ha, hb⟩ := mem_returns_bind_iff.1 hb; h a ha b hb⟩
+
+/-- Some value the computation can return satisfies the predicate. -/
+def any : MonadQuant m where
+  toFun _ P x := ∃ a ∈ returns x, P a
+  mono h := fun ⟨a, ha, hP⟩ ↦ ⟨a, ha, h a hP⟩
+  pure_iff := ⟨fun ⟨_, hb, hP⟩ ↦ mem_returns_pure_iff.1 hb ▸ hP,
+    fun h ↦ ⟨_, mem_returns_pure_iff.2 rfl, h⟩⟩
+  bind_iff := ⟨fun ⟨b, hb, hP⟩ ↦
+      let ⟨a, ha, hb⟩ := mem_returns_bind_iff.1 hb; ⟨a, ha, b, hb, hP⟩,
+    fun ⟨a, ha, b, hb, hP⟩ ↦ ⟨b, mem_returns_bind_iff.2 ⟨a, ha, hb⟩, hP⟩⟩
+
+theorem all_iff {P : α → Prop} {x : m α} : (all : MonadQuant m) P x ↔ ∀ a ∈ returns x, P a :=
+  Iff.rfl
+
+theorem any_iff {P : α → Prop} {x : m α} : (any : MonadQuant m) P x ↔ ∃ a ∈ returns x, P a :=
+  Iff.rfl
+
+end MonadQuant
 
 instance : MonadReturns Id where
   returns x := {x.run}

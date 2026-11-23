@@ -54,4 +54,28 @@ instance [Monad n] [Monad o] [LawfulMonad n] [LawfulMonad o] [MonadLift n o]
     rw [← bind_pure_comp, ← bind_pure_comp, LawfulMonadLift.monadLift_bind]
     simp only [LawfulMonadLift.monadLift_pure]
 
+/-- The one-step lift `MonadLift n o` sends `Pure.pure a` to `pure a`. This is the `Pure` part of
+core's `LawfulMonadLift`, for a source that only has `Pure`, such as a shape of choices. Instances
+are declared for this class. -/
+class LawfulPureLift (n : semiOutParam (Type u → Type*)) (o : Type u → Type*) [Pure n] [Pure o]
+    [inst : MonadLift n o] : Prop where
+  monadLift_pure {α : Type u} (a : α) : inst.monadLift (Pure.pure a : n α) = (pure a : o α)
+
+/-- The transitive lift `MonadLiftT m n` sends `Pure.pure a` to `pure a`. Definitions and lemmas
+request this class; its instances follow the chain of lifts. -/
+class LawfulPureLiftT (m : Type u → Type*) (n : Type u → Type*) [Pure m] [Pure n]
+    [inst : MonadLiftT m n] : Prop where
+  monadLift_pure {α : Type u} (a : α) : inst.monadLift (Pure.pure a : m α) = (pure a : n α)
+
+instance [Pure m] [Pure n] [Pure o] [MonadLift n o] [MonadLiftT m n] [LawfulPureLift n o]
+    [LawfulPureLiftT m n] : LawfulPureLiftT m o where
+  monadLift_pure a := (congrArg MonadLift.monadLift (LawfulPureLiftT.monadLift_pure a)).trans
+    (LawfulPureLift.monadLift_pure a)
+
+instance [Pure m] : LawfulPureLiftT m m where
+  monadLift_pure _ := rfl
+
+instance [Monad n] [Monad o] [MonadLift n o] [LawfulMonadLift n o] : LawfulPureLift n o where
+  monadLift_pure := LawfulMonadLift.monadLift_pure
+
 end Complexity

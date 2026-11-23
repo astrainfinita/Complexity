@@ -8,12 +8,19 @@ module
 public import Mathlib.Control.Monad.Basic
 public import Mathlib.Data.Nat.Notation
 public import Complexity.Control.Controller.Basic
+public import Complexity.Control.LawfulFunctorLift
 
 /-! # Controllers with internal states and exits
 
 A control graph selects actions without a control state of its own in the configuration. Run
 as a `Controller`, its internal states and exits become the control states, so a configuration
 of the graph is the storage of the controller.
+
+`Control.RunWithinWith Q` says that the runs of a graph within a budget of transitions, its
+choices interpreted in a monad `m` and read by a quantifier `Q : MonadQuant m`, reach exits
+satisfying a postcondition. It is a predicate defined by recursion on the budget, with no
+outcome type: a run that has not reached an exit when the budget is spent satisfies nothing.
+`Control.RunWithin` is its deterministic case.
 -/
 
 @[expose] public section
@@ -22,128 +29,212 @@ namespace Complexity.Program
 
 /-- A controller with separate internal states and exits, whose transitions choose under the
 shape `F`; deterministic control graphs use `F = Id`. -/
-structure Control (F : Type → Type) (O A Q E : Type) where
+structure Control (F : Type → Type) (O A St E : Type) where
   /-- The initial internal state or immediate exit. -/
-  start : Q ⊕ E
+  start : St ⊕ E
   /-- One local action and the next internal state or exit, under the permitted choice shape. -/
-  next : Q → O → F (A × (Q ⊕ E))
+  next : St → O → F (A × (St ⊕ E))
 
 namespace Control
 
-variable {O A Q E Q' E' S α β : Type}
-
-/-- Exact execution of a controller, with one unit charged per transition. -/
-inductive Run (c : Control Id O A Q E) (out : E → α)
-    (observe : S → O) (act : A → S → S) : Q ⊕ E → S → ℕ → α → S → Prop where
-  | done (e : E) (s : S) : Run c out observe act (.inr e) s 0 (out e) s
-  | step (q : Q) (s : S) {n : ℕ} {a : α} {t : S}
-      (h : Run c out observe act (c.next q (observe s)).run.2
-        (act (c.next q (observe s)).run.1 s) n a t) :
-      Run c out observe act (.inl q) s (n + 1) a t
-
-/-- Embed a controller and attach computations at its exits without charging a step. -/
-theorem Run.link {c : Control Id O A Q E} {d : Control Id O A Q' E'}
-    {out : E → α} {out' : E' → β} {observe : S → O} {act : A → S → S}
-    (f : Q → Q') (g : E → Q' ⊕ E')
-    (hn : ∀ q o, (d.next (f q) o).run =
-      ((c.next q o).run.1, Sum.elim (fun q ↦ Sum.inl (f q)) g (c.next q o).run.2))
-    {q : Q ⊕ E} {s t u : S} {n m : ℕ} {a : α} {b : β}
-    (h : Run c out observe act q s n a t)
-    (he : ∀ e, out e = a → Run d out' observe act (g e) t m b u) :
-    Run d out' observe act (Sum.elim (fun q ↦ Sum.inl (f q)) g q) s (n + m) b u := by
-  induction h with
-  | done e s => simpa using he e rfl
-  | step q s h ih =>
-      have hh := Run.step (c := d) (f q) s
-        (by simpa only [hn, Prod.fst, Prod.snd] using ih he)
-      simpa only [Sum.elim_inl, Nat.add_right_comm] using hh
-
-/-- Relabel a controller while preserving its actions and returned values. -/
-theorem Run.relabel {c : Control Id O A Q E} {d : Control Id O A Q' E'}
-    {out : E → α} {out' : E' → α} {observe : S → O} {act : A → S → S}
-    (f : Q → Q') (g : E → E')
-    (hn : ∀ q o, (d.next (f q) o).run = ((c.next q o).run.1, Sum.map f g (c.next q o).run.2))
-    (he : ∀ e, out' (g e) = out e)
-    {q : Q ⊕ E} {s t : S} {n : ℕ} {a : α}
-    (h : Run c out observe act q s n a t) :
-    Run d out' observe act (Sum.map f g q) s n a t := by
-  have hh := h.link f (Sum.inr ∘ g) (by
-    intro q o
-    rw [hn]
-    cases (c.next q o).run.2 <;> rfl) (by
-      intro e ha
-      simpa only [Function.comp_apply, he, ha] using
-        Run.done (out := out') (g e) t)
-  cases q <;> simpa only [Sum.map_inl, Sum.map_inr, Sum.elim_inl, Sum.elim_inr,
-    Function.comp_apply, Nat.add_zero] using hh
-
-/-- Execution depends on the transition function, not the controller's entry label. -/
-theorem Run.congr_next {c d : Control Id O A Q E}
-    {out : E → α} {observe : S → O} {act : A → S → S}
-    {q : Q ⊕ E} {s t : S} {n : ℕ} {a : α}
-    (h : Run c out observe act q s n a t) (hn : c.next = d.next) :
-    Run d out observe act q s n a t := by
-  simpa only [Sum.map_id_id, id_eq] using h.relabel id id
-    (by intro q o; rw [← hn]; simp only [id_eq, Sum.map_id_id]) (fun _ ↦ rfl)
-
-variable {T : Type} {c : Control Id O A Q E} {out : E → α}
-  {o : S → O} {act : A → S → S} {o' : T → O} {act' : A → T → T}
-
-/-- A relation preserving observations and actions transports an exact execution. -/
-theorem Run.simulate (R : S → T → Prop)
-    (ho : ∀ s t, R s t → o' t = o s)
-    (ha : ∀ a s t, R s t → R (act a s) (act' a t))
-    {q : Q ⊕ E} {s t : S} {n : ℕ} {v : α}
-    (h : c.Run out o act q s n v t) (u : T) (hu : R s u) :
-    ∃ w, R t w ∧ c.Run out o' act' q u n v w := by
-  induction h generalizing u with
-  | done e s => exact ⟨u, hu, Run.done e u⟩
-  | step q s h ih =>
-    have he := ho s u hu
-    obtain ⟨w, hw, hr⟩ := ih (act' (c.next q (o s)).run.1 u) (ha _ s u hu)
-    exact ⟨w, hw, Run.step q u (by simpa only [he] using hr)⟩
-
-variable {a : A → S → S} {a' : A → T → T}
-
-/-- Forget semantic information which does not affect observations or actions. -/
-theorem Run.map (f : S → T) (ho : ∀ s, o' (f s) = o s)
-    (ha : ∀ v s, a' v (f s) = f (a v s))
-    {q : Q ⊕ E} {s t : S} {n : ℕ} {v : α}
-    (h : c.Run out o a q s n v t) : c.Run out o' a' q (f s) n v (f t) := by
-  obtain ⟨w, rfl, hr⟩ := h.simulate (fun s t ↦ t = f s)
-    (by rintro s _ rfl; exact ho s) (by rintro v s _ rfl; exact ha v s) (f s) rfl
-  exact hr
-
-/-- Add ghost information while preserving the control labels and exact cost. -/
-theorem Run.lift (f : T → S) (ho : ∀ s, o' s = o (f s))
-    (ha : ∀ v s, f (a' v s) = a v (f s))
-    {q : Q ⊕ E} {s t : S} {n : ℕ} {v : α}
-    (h : c.Run out o a q s n v t) (u : T) (hu : f u = s) :
-    ∃ w, f w = t ∧ c.Run out o' a' q u n v w :=
-  h.simulate (fun s t ↦ f t = s)
-    (by rintro _ t rfl; exact ho t) (by rintro v _ t rfl; exact ha v t) u hu
+variable {O A St E St' E' S : Type}
 
 /-- Run a control graph as a controller with the same choice shape. Its internal states and exits
 are the control states, every exit halts, and each transition of the graph is one transition of
 the controller. Exits never move, so `idle` only fills their transition. -/
 @[simps q₀ halt]
-def toController {F : Type → Type} [Functor F] [Pure F] (c : Control F O A Q E) (idle : A) :
-    Controller F O A (Q ⊕ E) where
+def toController {F : Type → Type} [Functor F] [Pure F] (c : Control F O A St E) (idle : A) :
+    Controller F O A (St ⊕ E) where
   q₀ := c.start
   halt := Sum.elim (fun _ ↦ false) (fun _ ↦ true)
   transition q v := match q with
     | .inl q => Prod.swap <$> c.next q v
     | .inr e => pure (.inr e, idle)
 
-/-- The controller of a control graph follows its executions on every configuration, one
-transition per step, and stops at the exit they reach. -/
-theorem Run.runFrom_toController {C : Type} [Controller.Observe C O] [Controller.Apply C A]
-    {c : Control Id O A Q E} {out : E → α} {q : Q ⊕ E} {s t : C} {n : ℕ} {a : α} (idle : A)
-    (h : c.Run out Controller.observe Controller.apply q s n a t) :
-    ∃ e, out e = a ∧ (c.toController idle).runFrom (q, s) n = (.inr e, t) := by
-  induction h with
-  | done e s => exact ⟨e, rfl, rfl⟩
-  | step q s h ih => exact ih
+section Within
+
+variable {F : Type → Type} {m : Type → Type} [Monad m] [MonadLiftT F m]
+
+/-- The runs of a control graph within a budget of transitions, its choices interpreted in `m`,
+that the quantifier `Q` reads reach an exit, where the exit, the storage and the remaining budget
+satisfy `R`. Each transition charges one unit; a run at an internal state when the budget is
+spent satisfies nothing. -/
+def RunWithinWith (Q : MonadQuant m) (c : Control F O A St E) (observe : S → O)
+    (act : A → S → S) (R : E → S → ℕ → Prop) : St ⊕ E → S → ℕ → Prop
+  | .inr e, s, b => R e s b
+  | .inl _, _, 0 => False
+  | .inl q, s, b + 1 =>
+      Q (fun r ↦ RunWithinWith Q c observe act R r.2 (act r.1 s) b)
+        (monadLift (c.next q (observe s)) : m (A × (St ⊕ E)))
+
+/-- Deterministic runs within a budget: the run reaches an exit within the budget, where the
+exit, the storage and the remaining budget satisfy `R`. -/
+abbrev RunWithin (c : Control Id O A St E) (observe : S → O) (act : A → S → S)
+    (R : E → S → ℕ → Prop) : St ⊕ E → S → ℕ → Prop :=
+  c.RunWithinWith (MonadQuant.all (m := Id)) observe act R
+
+variable {Q : MonadQuant m} {c : Control F O A St E} {observe : S → O} {act : A → S → S}
+  {R : E → S → ℕ → Prop} {q : St ⊕ E} {s : S} {b : ℕ}
+
+@[simp] theorem runWithinWith_inr_iff {e : E} :
+    c.RunWithinWith Q observe act R (.inr e) s b ↔ R e s b := by
+  cases b <;> rfl
+
+@[simp] theorem not_runWithinWith_inl_zero {q : St} :
+    ¬ c.RunWithinWith Q observe act R (.inl q) s 0 :=
+  id
+
+theorem runWithinWith_inl_succ_iff {q : St} :
+    c.RunWithinWith Q observe act R (.inl q) s (b + 1) ↔
+      Q (fun r ↦ c.RunWithinWith Q observe act R r.2 (act r.1 s) b)
+        (monadLift (c.next q (observe s)) : m (A × (St ⊕ E))) :=
+  Iff.rfl
+
+/-- A deterministic transition passes to the next label. -/
+theorem runWithin_inl_succ_iff {c : Control Id O A St E} {q : St} :
+    c.RunWithin observe act R (.inl q) s (b + 1) ↔
+      c.RunWithin observe act R (c.next q (observe s)).run.2
+        (act (c.next q (observe s)).run.1 s) b :=
+  ⟨fun h ↦ h _ rfl, fun h _ hr ↦ hr ▸ h⟩
+
+/-- A weaker postcondition holds of the same runs. -/
+theorem RunWithinWith.mono {R' : E → S → ℕ → Prop} (h : c.RunWithinWith Q observe act R q s b)
+    (hR : ∀ e t b', R e t b' → R' e t b') : c.RunWithinWith Q observe act R' q s b := by
+  induction b generalizing q s with
+  | zero => rcases q with q | e; exacts [h, hR _ _ _ h]
+  | succ b ih =>
+    rcases q with q | e
+    · exact Q.mono (fun r hr ↦ ih hr) h
+    · exact hR _ _ _ h
+
+/-- An invariant indexed by the remaining budget, preserved by every action that costs one unit,
+holds at the exit. -/
+theorem RunWithinWith.inv {I : S → ℕ → Prop} (hI : ∀ a s b, I s (b + 1) → I (act a s) b)
+    (h : c.RunWithinWith Q observe act R q s b) (hs : I s b) :
+    c.RunWithinWith Q observe act (fun e t b' ↦ R e t b' ∧ I t b') q s b := by
+  induction b generalizing q s with
+  | zero => rcases q with q | e; exacts [h, ⟨h, hs⟩]
+  | succ b ih =>
+    rcases q with q | e
+    · exact Q.mono (fun r hr ↦ ih hr (hI r.1 s b hs)) h
+    · exact ⟨h, hs⟩
+
+/-- Extra budget passes through a run unused. -/
+theorem RunWithinWith.add_budget (h : c.RunWithinWith Q observe act R q s b) (r : ℕ) :
+    c.RunWithinWith Q observe act (fun e t b' ↦ ∃ n, R e t n ∧ b' = n + r) q s (b + r) := by
+  induction b generalizing q s with
+  | zero =>
+    rcases q with q | e
+    · exact h.elim
+    · exact runWithinWith_inr_iff.2 ⟨0, h, rfl⟩
+  | succ b ih =>
+    rcases q with q | e
+    · rw [Nat.add_right_comm]
+      exact Q.mono (fun r hr ↦ ih hr) h
+    · exact runWithinWith_inr_iff.2 ⟨b + 1, h, rfl⟩
+
+/-- A relation preserving observations and actions transports runs within a budget. -/
+theorem RunWithinWith.simulate {T : Type} {observe' : T → O} {act' : A → T → T}
+    (Rel : S → T → Prop) (ho : ∀ s t, Rel s t → observe' t = observe s)
+    (ha : ∀ a s t, Rel s t → Rel (act a s) (act' a t))
+    (h : c.RunWithinWith Q observe act R q s b) (u : T) (hu : Rel s u) :
+    c.RunWithinWith Q observe' act' (fun e t' b' ↦ ∃ t, Rel t t' ∧ R e t b') q u b := by
+  induction b generalizing q s u with
+  | zero => rcases q with q | e; exacts [h, ⟨s, hu, h⟩]
+  | succ b ih =>
+    rcases q with q | e
+    · rw [runWithinWith_inl_succ_iff, ho s u hu]
+      exact Q.mono (fun r hr ↦ ih hr _ (ha r.1 s u hu)) h
+    · exact ⟨s, hu, h⟩
+
+/-- A deterministic run within a budget is an exact run, using up its own budget, followed by the
+unused rest of the budget. -/
+theorem RunWithin.exists_exact {c : Control Id O A St E}
+    (h : c.RunWithin observe act R q s b) :
+    ∃ n e t, n ≤ b ∧ c.RunWithin observe act (fun e' t' b' ↦ e' = e ∧ t' = t ∧ b' = 0) q s n ∧
+      R e t (b - n) := by
+  induction b generalizing q s with
+  | zero =>
+    rcases q with q | e
+    · exact h.elim
+    · exact ⟨0, e, s, le_rfl, ⟨rfl, rfl, rfl⟩, h⟩
+  | succ b ih =>
+    rcases q with q | e
+    · obtain ⟨n, e, t, hn, he, hR⟩ := ih (runWithin_inl_succ_iff.1 h)
+      exact ⟨n + 1, e, t, by omega, runWithin_inl_succ_iff.2 he, by rwa [Nat.add_sub_add_right]⟩
+    · exact ⟨0, e, s, Nat.zero_le _, ⟨rfl, rfl, rfl⟩, h⟩
+
+/-- Runs depend on the transition function, not on the graph's entry label. -/
+theorem runWithinWith_congr_next {d : Control F O A St E} (hn : c.next = d.next) :
+    c.RunWithinWith Q observe act R q s b ↔ d.RunWithinWith Q observe act R q s b := by
+  induction b generalizing q s with
+  | zero => rcases q with q | e <;> exact Iff.rfl
+  | succ b ih =>
+    rcases q with q | e
+    · simp only [runWithinWith_inl_succ_iff, hn, ih]
+    · exact Iff.rfl
+
+variable [LawfulMonad m]
+
+/-- Embedding a control graph and continuing at its exits substitutes the postcondition. -/
+theorem runWithinWith_link_iff [Functor F] [LawfulFunctorLiftT F m] {d : Control F O A St' E'}
+    (f : St → St') (g : E → St' ⊕ E')
+    (hn : ∀ q o, d.next (f q) o =
+      (fun r ↦ (r.1, Sum.elim (fun q ↦ Sum.inl (f q)) g r.2)) <$> c.next q o)
+    {R : E' → S → ℕ → Prop} :
+    d.RunWithinWith Q observe act R (Sum.elim (fun q ↦ Sum.inl (f q)) g q) s b ↔
+      c.RunWithinWith Q observe act (fun e t b' ↦ d.RunWithinWith Q observe act R (g e) t b')
+        q s b := by
+  induction b generalizing q s with
+  | zero => rcases q with q | e <;> exact Iff.rfl
+  | succ b ih =>
+    rcases q with q | e
+    · simp only [Sum.elim_inl, runWithinWith_inl_succ_iff, hn, LawfulFunctorLiftT.monadLift_map,
+        Q.map_iff, ih]
+    · exact Iff.rfl
+
+/-- Relabeling a control graph relabels the exits its postcondition receives. -/
+theorem runWithinWith_relabel_iff [Functor F] [LawfulFunctorLiftT F m] {d : Control F O A St' E'}
+    (f : St → St') (g : E → E')
+    (hn : ∀ q o, d.next (f q) o = (fun r ↦ (r.1, Sum.map f g r.2)) <$> c.next q o)
+    {R : E' → S → ℕ → Prop} :
+    d.RunWithinWith Q observe act R (Sum.map f g q) s b ↔
+      c.RunWithinWith Q observe act (fun e ↦ R (g e)) q s b := by
+  have h := runWithinWith_link_iff (Q := Q) (observe := observe) (act := act) (q := q) (s := s)
+    (b := b) (d := d) f (Sum.inr ∘ g)
+    (fun q o ↦ by rw [hn]; exact congrArg (· <$> _) (funext fun r ↦ by cases r.2 <;> rfl))
+    (R := R)
+  rcases q with q | e
+  · simpa using h
+  · simp
+
+/-- The controller of a control graph runs it within the budget: the quantifier holds of the
+configurations it reaches after `b` steps, each at an exit satisfying `P`, exactly when the runs
+of the graph within the budget reach such exits. -/
+theorem runWithinWith_iff_runFromWith_toController [Functor F] [Pure F] [LawfulFunctorLiftT F m]
+    {C : Type} [Controller.Observe C O] [Controller.Apply C A] (idle : A) {P : E → C → Prop}
+    {q : St ⊕ E} {s : C} :
+    c.RunWithinWith Q Controller.observe Controller.apply (fun e t _ ↦ P e t) q s b ↔
+      Q (fun cfg ↦ ∃ e t, cfg = (.inr e, t) ∧ P e t)
+        ((c.toController idle).runFromWith m (q, s) b) := by
+  induction b generalizing q s with
+  | zero =>
+    rw [Controller.runFromWith_zero, Q.pure_iff]
+    rcases q with q | e
+    · exact iff_of_false id fun ⟨_, _, h, _⟩ ↦ by cases h
+    · exact ⟨fun h ↦ ⟨e, s, rfl, h⟩, fun ⟨_, _, h, hP⟩ ↦ by cases h; exact hP⟩
+  | succ b ih =>
+    rcases q with q | e
+    · rw [Controller.runFromWith_succ,
+        Controller.stepWith_of_not_halted _ _ _ (by simp [Controller.Halted])]
+      simp only [Controller.state_prod, Controller.observe_prod, toController,
+        runWithinWith_inl_succ_iff]
+      rw [LawfulFunctorLiftT.monadLift_map, Functor.map_map, bind_map_left, Q.bind_iff]
+      exact ⟨Q.mono fun r hr ↦ ih.1 hr, Q.mono fun r hr ↦ ih.2 hr⟩
+    · rw [(c.toController idle).runFromWith_of_halted m _ rfl, Q.pure_iff]
+      exact ⟨fun h ↦ ⟨e, s, rfl, h⟩, fun ⟨_, _, h, hP⟩ ↦ by cases h; exact hP⟩
+
+end Within
 
 end Control
 

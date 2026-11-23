@@ -8,6 +8,7 @@ module
 public import Mathlib.Control.Monad.Basic
 public import Mathlib.Data.Multiset.Functor
 public import Complexity.Control.LawfulFunctorLift
+public import Complexity.Control.MonadReturns
 
 /-!
 # Binary choices and their multiset interpretation
@@ -46,6 +47,19 @@ instance : MonadLift BinaryChoice Multiset where
     (monadLift f : Multiset α) = ↑[f 0, f 1] := rfl
 
 instance : LawfulFunctorLift BinaryChoice Multiset := ⟨fun _ _ ↦ rfl⟩
+
+/-- `Pure.pure a` has two equal alternatives, which both remain in the multiset, so it is not sent
+to `pure a`; every value it can return is `a`. -/
+instance : MonadQuant.PureLift BinaryChoice Multiset .all where
+  monadLift_pure_iff {_ _ a} := ⟨fun h ↦ h a (Multiset.mem_coe.2 (by simp)),
+    fun h b hb ↦ (by simpa using Multiset.mem_coe.1 hb : b = a) ▸ h⟩
+
+/-- `Pure.pure a` has two equal alternatives, which both remain in the multiset; some value it can
+return is `a`. -/
+instance : MonadQuant.PureLift BinaryChoice Multiset .any where
+  monadLift_pure_iff {_ _ a} :=
+    ⟨fun ⟨b, hb, h⟩ ↦ (by simpa using Multiset.mem_coe.1 hb : b = a) ▸ h,
+      fun h ↦ ⟨a, Multiset.mem_coe.2 (by simp), h⟩⟩
 
 end BinaryChoice
 end Complexity

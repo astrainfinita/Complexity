@@ -29,21 +29,6 @@ def historySemantics (xs : Array Γ) :
   observe := observe
   act := apply
 
-private theorem run_space_le [Fintype κ]
-    {Q E : Type} {p : Program.Control Id (Option Γ × (κ → Option Γ)) (Action κ Γ) Q E}
-    {out : E → α} {q : Q ⊕ E} {s t : History (Cfg κ Γ xs) (Action κ Γ)}
-    {n : ℕ} {a : α}
-    (h : p.Run out (historySemantics xs).observe (historySemantics xs).act q s n a t) :
-    t.configSup Cfg.mass ≤ s.configSup Cfg.mass ⊔ (s.last.mass + Fintype.card κ * n) := by
-  induction h with
-  | done e s => exact le_sup_left
-  | step q s h ih =>
-    have hm := s.last.mass_apply_le (p.next q (observe s)).run.1
-    simp only [historySemantics_act, historySemantics_observe, History.apply_def,
-      History.configSup_snoc, History.last_snoc] at ih
-    rw [Nat.mul_add, Nat.mul_one]
-    omega
-
 /-- A macro's time bound also bounds its temporary space, without inspecting its internals.
 Reserved credits survive, so this rule composes with amortized time arguments. -/
 theorem spec_history [Fintype κ] {p : StackMachine.Program Id κ Γ α}
@@ -54,15 +39,33 @@ theorem spec_history [Fintype κ] {p : StackMachine.Program Id κ Γ α}
     Triple (p.verify (historySemantics xs))
       (fun s b ↦ s.last = c ∧ s.configSup Cfg.mass ≤ S ∧ n + q ≤ b)
       (fun a s b ↦ P a s.last ∧ s.configSup Cfg.mass ≤ S ∧ r + q ≤ b) () := by
-  obtain ⟨m, a, d, hm, he, hd, hr⟩ := Program.exec_of_spec h ⟨rfl, le_rfl⟩
   constructor
   rintro s b ⟨hc, hS, hb⟩
-  obtain ⟨t, ht, hx⟩ := Program.Exec.lift (e := semantics xs) (e' := historySemantics xs)
-    History.last (fun _ ↦ rfl)
-    (fun _ _ ↦ History.last_snoc _ _) he s hc
-  refine ⟨m, a, t, by omega, hx, ht ▸ hd, ?_, by omega⟩
-  apply (run_space_le hx.toControl).trans
-  exact sup_le hS (by rw [hc]; exact (Nat.add_le_add_left (Nat.mul_le_mul_left _ hm) _).trans hs)
+  obtain ⟨d, rfl⟩ := Nat.exists_eq_add_of_le (Nat.le_of_add_right_le hb)
+  have he := (Program.execWithinWith_of_spec h (s := c) (b := n) ⟨rfl, le_rfl⟩).add_budget d
+  -- Each transition adds at most `Fintype.card κ` to the mass, so the `u` steps taken bound it.
+  have hi := (he.simulate (e' := historySemantics xs) (fun x y ↦ y.last = x)
+    (fun _ _ h ↦ h ▸ rfl) (fun _ _ _ h ↦ h ▸ History.last_snoc _ _) s hc rfl).inv
+    (I := fun (t : History (Cfg κ Γ xs) (Action κ Γ)) b' ↦
+      ∃ u, b' + u = n + d ∧ t.last.mass ≤ c.mass + Fintype.card κ * u ∧
+        t.configSup Cfg.mass ≤ s.configSup Cfg.mass ⊔ (c.mass + Fintype.card κ * u))
+    (by
+      rintro a t b' ⟨u, hu, hm, hsup⟩
+      have hm' : (apply a t.last).mass ≤ c.mass + Fintype.card κ * (u + 1) := by
+        rw [Nat.mul_add_one, ← Nat.add_assoc]
+        exact (t.last.mass_apply_le a).trans (Nat.add_le_add_right hm _)
+      simp only [historySemantics_act, History.apply_def, History.configSup_snoc,
+        History.last_snoc]
+      exact ⟨u + 1, by rwa [Nat.add_assoc, Nat.add_comm 1 u] at hu, hm',
+        sup_le (hsup.trans (sup_le_sup_left
+          (Nat.add_le_add_left (Nat.mul_le_mul_left _ (Nat.le_succ u)) _) _))
+          (le_sup_of_le_right hm')⟩)
+    ⟨0, rfl, hc ▸ Nat.le_add_right _ _, le_sup_left⟩
+  refine hi.mono ?_
+  rintro a t b' ⟨⟨_, rfl, c', ⟨hP, hr⟩, rfl⟩, u, hu, -, hsup⟩
+  have hun : u ≤ n := by clear * - hu; omega
+  exact ⟨hP, hsup.trans (sup_le hS ((Nat.add_le_add_left (Nat.mul_le_mul_left _ hun) _).trans hs)),
+    Nat.add_le_add hr (Nat.le_of_add_le_add_left hb)⟩
 
 /-- A history specification supplies independent time and peak-space bounds. -/
 theorem computesWithin_history [Fintype κ] {p : StackMachine.Program Id κ Γ α}
