@@ -7,12 +7,13 @@ module
 
 public import Complexity.Models.TreeMachine.Language.Expression
 public import Complexity.Models.TreeMachine.Language.Bounds
+public import Complexity.Control.Program.Loop
 
 /-! # Compiling structured tree programs
 
 Source variables have fixed slots. Expression temporaries are reused across statements and
 loop iterations; the number of registers depends only on the program. Source runs
-transport their value, exact unit time and bounds on every intermediate register tree.
+transport their value, a unit-time bound and bounds on every intermediate register tree.
 -/
 
 @[expose] public section
@@ -29,35 +30,21 @@ def Expr.test (e : Expr ν) (v : ν → Fin k) (z : Fin k) (b : ℕ)
   let i ← e.compile v z b hb
   TreeMachine.Program.root i
 
-theorem Expr.exec_test_history (e : Expr ν) (v : ν → Fin k) (z : Fin k) (b : ℕ)
-    (hb : b + e.slots ≤ k) (hv : ∀ x, (v x).val < b) (hzv : z.val < b)
-    (s : History (TreeMachine.Cfg k) (TreeMachine.Action k))
-    (hz : s.last.regs z = .nil) :
-    ∃ t, (e.test v z b hb).Exec TreeMachine.Program.historySemantics s (e.steps + 1)
-      (e.eval (s.last.regs ∘ v)).root t ∧ t.last.regs ∘ v = s.last.regs ∘ v ∧
-      t.last.regs z = .nil ∧ ∀ j, t.configSup (fun c ↦ (c.regs j).size) ≤
-        s.configSup (fun c ↦ (c.regs j).size) ⊔ e.maxSize (s.last.regs ∘ v) := by
-  obtain ⟨t, i, he, hval, _, hf, hpeak⟩ := e.exec_compile_history v z b hb hv hzv s hz
-  refine ⟨t.snoc .nop, ?_, ?_, ?_, ?_⟩
-  · have ht := Program.Exec.perform TreeMachine.Program.historySemantics
-      (TreeMachine.Program.Op.root i) t
-    change (TreeMachine.Program.root i).Exec _ _ 1 (t.last.regs i).root _ at ht
-    rw [hval] at ht
-    exact he.bind ht
+theorem Expr.execWithin_test (e : Expr ν) (v : ν → Fin k) (z : Fin k) (b : ℕ)
+    (hb : b + e.slots ≤ k) (s : History (TreeMachine.Cfg k) (TreeMachine.Action k))
+    (hv : ∀ x, (v x).val < b) (hzv : z.val < b) (hz : s.last.regs z = .nil) :
+    (e.test v z b hb).ExecWithin TreeMachine.Program.historySemantics s (e.steps + 1)
+      fun r t _ ↦ r = (e.eval (s.last.regs ∘ v)).root ∧ t.last.regs ∘ v = s.last.regs ∘ v ∧
+        t.last.regs z = .nil ∧ ∀ j, t.configSup (fun c ↦ (c.regs j).size) ≤
+          s.configSup (fun c ↦ (c.regs j).size) ⊔ e.maxSize (s.last.regs ∘ v) := by
+  refine (e.execWithin_compile v z b hb s hv hzv hz).bindTo_add ?_
+  rintro i t ⟨hval, -, hf, hpeak⟩
+  refine TreeMachine.Program.execWithinWith_root
+    ⟨by rw [hval], ?_, by simpa using (hf z hzv).trans hz, fun j ↦ ?_⟩
   · simpa only [History.last_snoc, TreeMachine.Action.apply_nop, Function.comp_def]
       using funext (fun x ↦ hf (v x) (hv x))
-  · simpa using (hf z hzv).trans hz
-  · intro j
-    rw [TreeMachine.configSup_snoc_nop t (fun c ↦ (c.regs j).size)]
+  · rw [TreeMachine.configSup_snoc_nop t (fun c ↦ (c.regs j).size)]
     exact hpeak j
-
-theorem Expr.exec_test (e : Expr ν) (v : ν → Fin k) (z : Fin k) (b : ℕ)
-    (hb : b + e.slots ≤ k) (hv : ∀ x, (v x).val < b) (hzv : z.val < b)
-    (c : TreeMachine.Cfg k) (hz : c.regs z = .nil) :
-    ∃ σ, (e.test v z b hb).Exec TreeMachine.Program.semantics c (e.steps + 1)
-      (e.eval (c.regs ∘ v)).root σ ∧ σ.regs ∘ v = c.regs ∘ v ∧ σ.regs z = .nil := by
-  obtain ⟨t, ht, hf, hz, _⟩ := e.exec_test_history v z b hb hv hzv (History.nil c) hz
-  exact ⟨t.last, ht.map (fun h ↦ h.last) (fun _ ↦ rfl) (by intro a h; simp), hf, hz⟩
 
 /-- Scratch space shared by all executions of a statement. -/
 def Cmd.slots : Cmd ν → ℕ
@@ -87,92 +74,69 @@ def Cmd.compile (p : Cmd ν) (v : ν → Fin k) (z : Fin k) (b : ℕ)
         pure false
       else pure true
 
-/-- Source runs transport their value, exact unit time and independent peak-size bound. -/
-theorem Cmd.Run.compile_history [DecidableEq ν] {p : Cmd ν} {s t : ν → Tree} {n a : ℕ}
-    (h : p.Run s n t a) (v : ν → Fin k) (hi : Function.Injective v) (z : Fin k) (b : ℕ)
-    (hb : b + p.slots ≤ k) (hv : ∀ x, (v x).val < b) (hzv : z.val < b)
-    (hvz : ∀ x, v x ≠ z)
+/-- Source runs transport their value within their step count, and an independent peak-size
+bound. -/
+theorem Cmd.Run.execWithin_compile [DecidableEq ν] {p : Cmd ν} {s t : ν → Tree} {n a : ℕ}
+    (h : p.Run s n t a) (v : ν → Fin k) (z : Fin k) (b : ℕ) (hb : b + p.slots ≤ k)
     (ρ : History (TreeMachine.Cfg k) (TreeMachine.Action k))
-    (hρ : ρ.last.regs ∘ v = s) (hz : ρ.last.regs z = .nil) :
-    ∃ σ, (p.compile v z b hb).Exec TreeMachine.Program.historySemantics ρ n () σ ∧
-      σ.last.regs ∘ v = t ∧ σ.last.regs z = .nil ∧ ∀ j,
-      σ.configSup (fun c ↦ (c.regs j).size) ≤
-        ρ.configSup (fun c ↦ (c.regs j).size) ⊔ (a + 2) := by
+    (hi : Function.Injective v) (hv : ∀ x, (v x).val < b) (hzv : z.val < b)
+    (hvz : ∀ x, v x ≠ z) (hρ : ρ.last.regs ∘ v = s) (hz : ρ.last.regs z = .nil) :
+    (p.compile v z b hb).ExecWithin TreeMachine.Program.historySemantics ρ n
+      fun _ σ _ ↦ σ.last.regs ∘ v = t ∧ σ.last.regs z = .nil ∧
+        ∀ j, σ.configSup (fun c ↦ (c.regs j).size) ≤
+          ρ.configSup (fun c ↦ (c.regs j).size) ⊔ (a + 2) := by
   induction h generalizing ρ with
-  | skip s => exact ⟨ρ, Program.Exec.pure _ _ _, hρ, hz, fun _ ↦ le_sup_left⟩
+  | skip s => exact .ret _ _ _ ⟨hρ, hz, fun _ ↦ le_sup_left⟩
   | assign x e s =>
-    obtain ⟨σ, he, hf, hpeak⟩ := e.exec_assign_history (v x) v z b hb hv hzv ρ hz
-    refine ⟨σ, he, ?_, ?_, ?_⟩
-    · rw [← hρ, ← Function.update_comp_eq_of_injective ρ.last.regs hi]
-      exact funext fun y ↦ hf (v y) (hv y)
-    · simpa [Ne.symm (hvz x), hz] using hf z hzv
-    · simpa only [hρ] using hpeak
-  | seq hp hq ihp ihq =>
-    obtain ⟨σ, hp', hσ, hzσ, hs⟩ := ihp (by simp only [Cmd.slots] at hb; omega) ρ hρ hz
-    obtain ⟨τ, hq', hτ, hzτ, ht⟩ := ihq (by simp only [Cmd.slots] at hb; omega) σ hσ hzσ
-    exact ⟨τ, hp'.bind hq', hτ, hzτ, fun j ↦ by have := hs j; have := ht j; omega⟩
-  | @branch_true e p q s t n a he hp ih | @branch_false e p q s t n a he hp ih =>
-    obtain ⟨σ, ht, hσ, hzσ, hs⟩ := Expr.exec_test_history e v z b
-      (by simp only [Cmd.slots] at hb; omega) hv hzv ρ hz
-    obtain ⟨τ, hp', hτ, hzτ, hp⟩ := ih (by simp only [Cmd.slots] at hb; omega)
-      σ (hσ.trans hρ) hzσ
-    refine ⟨τ, ht.bind ?_, hτ, hzτ, ?_⟩
-    · simpa only [hρ, he, Bool.true_eq, Bool.false_eq_true, ite_true, ite_false] using hp'
-    · intro j
-      have := hs j
-      have := hp j
-      simp only [hρ] at *
-      omega
+    refine (e.execWithin_assign (v x) v z b hb ρ hv hzv hz).mono ?_
+    rintro _ σ _ ⟨hf, hpeak⟩
+    refine ⟨?_, by simpa [Ne.symm (hvz x), hz] using hf z hzv, by simpa only [hρ] using hpeak⟩
+    rw [← hρ, ← Function.update_comp_eq_of_injective ρ.last.regs hi]
+    exact funext fun y ↦ hf (v y) (hv y)
+  | @seq p₁ p₂ s t u n m a₁ a₂ hp hq ihp ihq =>
+    refine (ihp _ ρ hρ hz).bindTo_add fun _ σ ⟨hσ, hzσ, hs⟩ ↦ (ihq _ σ hσ hzσ).mono ?_
+    rintro _ τ _ ⟨hτ, hzτ, ht⟩
+    exact ⟨hτ, hzτ, fun j ↦ by have := hs j; have := ht j; omega⟩
+  | @branch_true e p₁ p₂ s t n a he hp ih | @branch_false e p₁ p₂ s t n a he hp ih =>
+    refine (e.execWithin_test v z b _ ρ hv hzv hz).bindTo_add ?_
+    rintro _ σ ⟨rfl, hσ, hzσ, hs⟩
+    simp only [hρ, he, Bool.false_eq_true, ite_true, ite_false]
+    refine (ih _ σ (hσ.trans hρ) hzσ).mono ?_
+    rintro _ τ _ ⟨hτ, hzτ, hp⟩
+    refine ⟨hτ, hzτ, fun j ↦ ?_⟩
+    have := hs j
+    have := hp j
+    simp only [hρ] at *
+    omega
   | @while_false e p s he =>
-    let ρ' := ρ.snoc .nop
-    obtain ⟨σ, ht, hσ, hzσ, hs⟩ := Expr.exec_test_history e v z b
-      (by simp only [Cmd.slots] at hb; omega) hv hzv ρ' (by simpa [ρ'] using hz)
-    refine ⟨σ, ?_, ?_, hzσ, ?_⟩
-    · rw [show e.steps + 2 = e.steps + 1 + 0 + 1 by omega]
-      apply Program.Exec.repeatUntilWith_done TreeMachine.Action.nop
-      apply ht.bind (n := 0)
-      simp only [ρ', History.last_snoc, TreeMachine.Action.apply_nop, hρ, he,
-        Bool.false_eq_true, ite_false]
-      exact Program.Exec.pure TreeMachine.Program.historySemantics true σ
-    · simpa [ρ', hρ] using hσ
-    · intro j
-      have := hs j
-      simp only [ρ', TreeMachine.configSup_snoc_nop ρ (fun c ↦ (c.regs j).size),
-        History.last_snoc,
-        TreeMachine.Action.apply_nop, hρ] at this
-      omega
+    refine Program.execWithinWith_repeatUntilWith_done
+      ((e.execWithin_test v z b _ (ρ.snoc .nop) hv hzv (by simpa using hz)).bindTo ?_)
+    rintro _ σ _ ⟨rfl, hσ, hzσ, hs⟩
+    simp only [History.last_snoc, TreeMachine.Action.apply_nop, hρ, he, Bool.false_eq_true,
+      ite_false]
+    refine .ret _ _ _ ⟨rfl, by simpa [hρ] using hσ, hzσ, fun j ↦ ?_⟩
+    have := hs j
+    simp only [TreeMachine.configSup_snoc_nop ρ (fun c ↦ (c.regs j).size), History.last_snoc,
+      TreeMachine.Action.apply_nop, hρ] at this
+    omega
   | @while_true e p s t u n m a c he hp hr ihp ihr =>
-    let ρ' := ρ.snoc .nop
-    obtain ⟨σ, ht, hσ, hzσ, hs⟩ := Expr.exec_test_history e v z b
-      (by simp only [Cmd.slots] at hb; omega) hv hzv ρ' (by simpa [ρ'] using hz)
-    obtain ⟨τ, hp', hτ, hzτ, hp⟩ := ihp (by simp only [Cmd.slots] at hb; omega)
-      σ (by simpa [ρ', hρ] using hσ) hzσ
-    obtain ⟨υ, hr', hυ, hzυ, hr⟩ := ihr hb τ hτ hzτ
-    refine ⟨υ, ?_, hυ, hzυ, ?_⟩
-    · rw [show e.steps + 2 + n + m = e.steps + 1 + (n + 0) + m + 1 by omega]
-      apply Program.Exec.repeatUntilWith_next TreeMachine.Action.nop _ (ht.bind ?_) hr'
-      simp only [ρ', History.last_snoc, TreeMachine.Action.apply_nop, hρ, he, ite_true]
-      exact hp'.bind (Program.Exec.pure TreeMachine.Program.historySemantics false τ)
-    · intro j
-      have := hs j
-      have := hp j
-      have := hr j
-      simp only [ρ', TreeMachine.configSup_snoc_nop ρ (fun c ↦ (c.regs j).size),
-        History.last_snoc,
-        TreeMachine.Action.apply_nop, hρ] at *
-      omega
-
-/-- Functional correctness is the projection of the same resource-preserving compilation. -/
-theorem Cmd.Exec.compile [DecidableEq ν] {p : Cmd ν} {s t : ν → Tree}
-    (h : p.Exec s t) (v : ν → Fin k) (hi : Function.Injective v) (z : Fin k) (b : ℕ)
-    (hb : b + p.slots ≤ k) (hv : ∀ x, (v x).val < b) (hzv : z.val < b)
-    (hvz : ∀ x, v x ≠ z) (c : TreeMachine.Cfg k) (hc : c.regs ∘ v = s) (hz : c.regs z = .nil) :
-    ∃ n σ, (p.compile v z b hb).Exec TreeMachine.Program.semantics c n () σ ∧
-      σ.regs ∘ v = t ∧ σ.regs z = .nil := by
-  obtain ⟨n, a, h⟩ := h
-  obtain ⟨σ, hr, ht, hz, _⟩ := h.compile_history v hi z b hb hv hzv hvz
-    (History.nil c) hc hz
-  exact ⟨n, σ.last, hr.map (fun h ↦ h.last) (fun _ ↦ rfl) (by intro a h; simp), ht, hz⟩
+    refine .mono_budget (Program.execWithinWith_repeatUntilWith_next
+      (P := fun τ ↦ τ.last.regs ∘ v = t ∧ τ.last.regs z = .nil ∧
+        ∀ j, τ.configSup (fun c ↦ (c.regs j).size) ≤
+          ρ.configSup (fun c ↦ (c.regs j).size) ⊔ (max (e.maxSize s) a + 2))
+      ((e.execWithin_test v z b _ (ρ.snoc .nop) hv hzv (by simpa using hz)).bindTo_add
+        (c := n) ?_) fun τ ⟨hτ, hzτ, hτp⟩ ↦
+        (ihr hb τ hτ hzτ).mono fun _ υ _ ⟨hυ, hzυ, hr⟩ ↦
+          ⟨hυ, hzυ, fun j ↦ by have := hτp j; have := hr j; omega⟩) (by omega)
+    rintro _ σ ⟨rfl, hσ, hzσ, hs⟩
+    simp only [History.last_snoc, TreeMachine.Action.apply_nop, hρ, he, ite_true]
+    refine (ihp _ σ (by simpa [hρ] using hσ) hzσ).bindTo fun _ τ _ ⟨hτ, hzτ, hp⟩ ↦
+      .ret _ _ _ ⟨rfl, hτ, hzτ, fun j ↦ ?_⟩
+    have := hs j
+    have := hp j
+    simp only [TreeMachine.configSup_snoc_nop ρ (fun c ↦ (c.regs j).size), History.last_snoc,
+      TreeMachine.Action.apply_nop, hρ] at *
+    omega
 
 namespace Procedure
 
@@ -227,10 +191,10 @@ theorem Bounded.compile {p : Procedure ν} {x y : Tree} {time space : ℕ}
     History.nil (TreeMachine.Cfg.init p.registers x)
   have hzero (a : ν) : p.register a ≠ 0 := by simp [register, Fin.ext_iff]
   have hempty : p.empty ≠ 0 := by simp [empty, Fin.ext_iff]
-  obtain ⟨σ, hcopy, hf, hσ⟩ := (Expr.var ()).exec_assign_history (p.register p.input)
-    (fun _ ↦ (0 : Fin p.registers)) p.empty (FinEnum.card ν + 2)
-    (by simp [registers, Expr.slots]) (by simp) (by simp [empty]) ρ
-    (by simp [ρ, TreeMachine.input_get_of_ne, hempty])
+  refine TreeMachine.Program.computesWithinUnitTime_of_execWithin (p := p.code) (.mono_budget
+    (((Expr.var ()).execWithin_assign (p.register p.input) (fun _ ↦ (0 : Fin p.registers)) p.empty
+      (FinEnum.card ν + 2) (by simp [registers, Expr.slots]) ρ (by simp) (by simp [empty])
+      (by simp [ρ, TreeMachine.input_get_of_ne, hempty])).bindTo_add fun _ σ ⟨hf, hσ⟩ ↦ ?_) ht)
   have hinit : σ.last.regs ∘ p.register = Function.update (fun _ ↦ Tree.nil) p.input x := by
     funext j
     simpa [ρ, Function.update_apply, p.register_injective.eq_iff,
@@ -238,30 +202,28 @@ theorem Bounded.compile {p : Procedure ν} {x y : Tree} {time space : ℕ}
   have hz : σ.last.regs p.empty = .nil := by
     simpa [ρ, Ne.symm (p.register_ne_empty p.input), TreeMachine.input_get_of_ne x hempty]
       using hf p.empty (by simp [empty])
-  obtain ⟨τ, hb, hτ, hzτ, hpeak⟩ := hr.compile_history p.register p.register_injective p.empty
-    (FinEnum.card ν + 2) (by simp [registers]) p.register_lt (by simp [empty])
-    p.register_ne_empty σ hinit hz
-  obtain ⟨υ, he, hυ, hout⟩ := p.result.exec_assign_history 0 p.register p.empty
-    (FinEnum.card ν + 2) (by simp [registers]) p.register_lt (by simp [empty]) τ hzτ
-  apply TreeMachine.Program.computesWithinUnitTime_of_exec
-    (p := p.code) (hcopy.bind (hb.bind he)) ht
-  · simpa [hτ, hy] using hυ 0 (by simp)
-  · apply (TreeMachine.configSup_mass_le_sum υ).trans
-    calc
-      _ ≤ ∑ _ : Fin p.registers, (space + 2) := Finset.sum_le_sum fun j _ ↦ by
-        have h₁ := hσ j
-        have h₂ := hpeak j
-        have h₃ := hout j
-        simp only [hτ] at h₃
-        have hi : (ρ.last.regs j).size ≤ space := by
-          by_cases hj : j = 0
-          · simpa [ρ, hj] using hx
-          · simpa [ρ, TreeMachine.input_get_of_ne x hj] using
-              Nat.succ_le_of_lt ((Tree.size_pos x).trans_le hx)
-        simp only [ρ, History.configSup_nil, History.last_nil, Expr.maxSize,
-          Function.comp_apply, TreeMachine.Cfg.init_regs, TreeMachine.input_get] at h₁ hi
-        omega
-      _ = _ := by simp
+  refine (hr.execWithin_compile p.register p.empty (FinEnum.card ν + 2) _ σ p.register_injective
+    p.register_lt (by simp [empty]) p.register_ne_empty hinit hz).bindTo_add
+    fun _ τ ⟨hτ, hzτ, hpeak⟩ ↦ (p.result.execWithin_assign 0 p.register p.empty
+      (FinEnum.card ν + 2) _ τ p.register_lt (by simp [empty]) hzτ).mono ?_
+  rintro _ υ _ ⟨hυ, hout⟩
+  refine ⟨by simpa [hτ, hy] using hυ 0 (by simp), ?_⟩
+  apply (TreeMachine.configSup_mass_le_sum υ).trans
+  calc
+    _ ≤ ∑ _ : Fin p.registers, (space + 2) := Finset.sum_le_sum fun j _ ↦ by
+      have h₁ := hσ j
+      have h₂ := hpeak j
+      have h₃ := hout j
+      simp only [hτ] at h₃
+      have hi : (ρ.last.regs j).size ≤ space := by
+        by_cases hj : j = 0
+        · simpa [ρ, hj] using hx
+        · simpa [ρ, TreeMachine.input_get_of_ne x hj] using
+            Nat.succ_le_of_lt ((Tree.size_pos x).trans_le hx)
+      simp only [ρ, History.configSup_nil, History.last_nil, Expr.maxSize,
+        Function.comp_apply, TreeMachine.Cfg.init_regs, TreeMachine.input_get] at h₁ hi
+      omega
+    _ = _ := by simp
 
 /-- Prove the readable source program once; its generated machine computes the same output. -/
 theorem compile_correct {p : Procedure ν} {x y : Tree} (h : p.Exec x y) :

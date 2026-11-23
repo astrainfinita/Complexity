@@ -15,8 +15,8 @@ with its choices interpreted in `m` and read by the same quantifier, reaches exi
 meet the postcondition (`Syntax.execWithinWith_iff_runWithinWith`). This needs the quantifier to
 read the lift of `Pure.pure a` as `a`: a deterministic transition of the compiled graph is a lifted
 `Pure.pure`. Hence the compiled controller reaches, within the budget, the outcomes that a
-specification describes (`Syntax.ExecWithinWith.runFromWith_compile`), and an exact deterministic
-execution is a run of the compiled controller (`Syntax.Exec.runFrom_compile`).
+specification describes (`Syntax.ExecWithinWith.runFromWith_compile`); a deterministic one is,
+after the budget, at an exit satisfying the postcondition (`Syntax.ExecWithin.runFrom_compile`).
 -/
 
 @[expose] public section
@@ -255,17 +255,16 @@ theorem ExecWithinWith.runFromWith_compile [Controller.Observe S O] [Controller.
   exact (Control.runWithinWith_iff_runFromWith_toController idle).1
     ((execWithinWith_iff_runWithinWith.1 h.with_le).mono fun x t b ⟨hb, hR⟩ ↦ ⟨b, hb, hR⟩)
 
-/-- When the semantics observes and acts through the storage's controller instances, an exact
-deterministic execution is a run of the compiled controller: the same number of transitions
-reaches an exit carrying the result, with the same final storage. -/
-theorem Exec.runFrom_compile [Controller.Observe S O] [Controller.Apply S A]
-    {eval : (o : Op) → O → A × Ret o} {p : Syntax Id O A Op Ret α u} {s t : S} {n : ℕ}
-    {x : Kind.Value α u} (idle : A)
-    (h : Exec ⟨eval, Controller.observe, Controller.apply⟩ p s n x t) :
-    ∃ e, p.result e = x ∧
-      (compile eval idle p).runFrom ((compile eval idle p).q₀, s) n = (.inr e, t) := by
-  obtain ⟨e, t', he, _, _, hx, ht, -⟩ := ExecWithinWith.runFromWith_compile eval idle h _ rfl
-  exact ⟨e, hx, ht ▸ he⟩
+/-- When the semantics observes and acts through the storage's controller instances, a
+deterministic execution within a budget describes the compiled controller: after the budget it is
+at an exit carrying a result that satisfies the postcondition with some remaining budget. -/
+theorem ExecWithin.runFrom_compile [Controller.Observe S O] [Controller.Apply S A]
+    {eval : (o : Op) → O → A × Ret o} {p : Syntax Id O A Op Ret α u} {s : S} {b : ℕ}
+    {R : Kind.Value α u → S → ℕ → Prop} (idle : A)
+    (h : p.ExecWithin ⟨eval, Controller.observe, Controller.apply⟩ s b R) :
+    ∃ x t, (compile eval idle p).runFrom ((compile eval idle p).q₀, s) b = (.inr x, t) ∧
+      ∃ b' ≤ b, R (p.result x) t b' :=
+  ExecWithinWith.runFromWith_compile eval idle h _ rfl
 
 end Syntax
 

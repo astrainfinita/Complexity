@@ -10,8 +10,11 @@ public import Complexity.Control.Program.WP
 /-! # Total specifications for loops
 
 Numbered loops share one total-correctness rule. Repeat-until and finite-value loops derive
-their specifications from it, preserving exact dispatch costs. Only the carried input and
-output values use `FinEnum`; each body's control labels remain structural.
+their specifications from it, preserving exact dispatch costs. For proofs by induction on the
+iterations, `execWithinWith_repeatUntilWith_add` unfolds one iteration of a repeat-until loop with
+the budgets added; `execWithinWith_repeatUntilWith_done` and `execWithinWith_repeatUntilWith_next`
+are its cases for a body that returns `true` or `false`. Only the carried input and output values
+use `FinEnum`; each body's control labels remain structural.
 -/
 
 @[expose] public section
@@ -129,6 +132,50 @@ theorem spec_repeatUntilWith_nop (a : A) (p : Program F O A Op Ret Bool)
   spec_repeatUntilWith_of_invariant a p e I R x
     (fun s _ hs ↦ by simpa only [ha s] using hs) hpos hstep
 
+/-- One iteration of a repeat-until loop takes the dispatch and the body: where the body returns
+`true` the loop has finished, and where it returns `false` the loop runs again. Budgets add; the
+postconditions do not read the remaining budget. -/
+theorem execWithinWith_repeatUntilWith_add {a : A} {p : Program F O A Op Ret Bool}
+    {e : Semantics O A Op Ret S} {s : S} {n k : ℕ} {P : Bool → S → Prop} {R : S → Prop}
+    (hp : Syntax.ExecWithinWith m Q e p (e.act a s) n fun r t _ ↦ P r t)
+    (hdone : ∀ t, P true t → R t)
+    (hnext : ∀ t, P false t →
+      Syntax.ExecWithinWith m Q e (repeatUntilWith a p) t k fun _ u _ ↦ R u) :
+    Syntax.ExecWithinWith m Q e (repeatUntilWith a p) s (n + k + 1) fun _ u _ ↦ R u := by
+  let P' (r : Fin 1 ⊕ Fin 1) (t : S) (c : ℕ) : Prop :=
+    r.elim (fun _ ↦ Syntax.ExecWithinWith m Q e (repeatUntilWith a p) t c fun _ u _ ↦ R u)
+      fun _ ↦ R t
+  have hp' : p.ExecWithinWith m Q e (e.act a s) (n + k) fun r ↦
+      P' (if r then .inr 0 else .inl 0) := by
+    refine (hp.add_budget k).mono ?_
+    rintro r t _ ⟨d, hP, rfl⟩
+    cases r
+    · exact (hnext t hP).mono_budget (Nat.le_add_left k d)
+    · exact hdone t hP
+  refine Syntax.ExecWithinWith.loop a 0 _ _ s (n + k) (P := P') ?_ (fun j t c hr ↦ ?_)
+    fun _ t c hr ↦ .ret (v := .value) () t c hr
+  · refine (((hp'.bindTo fun r t c hr ↦ .ret (v := .value) _ t c hr).mapResult
+      (β := Fin 1) (w := .branch 1 1) id).mapResult (β := Unit) (w := .branch 1 1) id).mono ?_
+    rintro _ _ _ ⟨_, rfl, _, rfl, hr⟩
+    exact hr
+  · obtain rfl := Subsingleton.elim j 0
+    exact hr
+
+/-- A body returning `true` finishes a repeat-until loop after one dispatch. -/
+theorem execWithinWith_repeatUntilWith_done {a : A} {p : Program F O A Op Ret Bool}
+    {e : Semantics O A Op Ret S} {s : S} {n : ℕ} {R : S → Prop}
+    (hp : Syntax.ExecWithinWith m Q e p (e.act a s) n fun r t _ ↦ r = true ∧ R t) :
+    Syntax.ExecWithinWith m Q e (repeatUntilWith a p) s (n + 1) fun _ u _ ↦ R u :=
+  execWithinWith_repeatUntilWith_add (k := 0) hp (fun _ h ↦ h.2) fun _ h ↦ nomatch h.1
+
+/-- After a body returning `false`, a repeat-until loop dispatches and runs again. -/
+theorem execWithinWith_repeatUntilWith_next {a : A} {p : Program F O A Op Ret Bool}
+    {e : Semantics O A Op Ret S} {s : S} {n k : ℕ} {P R : S → Prop}
+    (hp : Syntax.ExecWithinWith m Q e p (e.act a s) n fun r t _ ↦ r = false ∧ P t)
+    (hnext : ∀ t, P t → Syntax.ExecWithinWith m Q e (repeatUntilWith a p) t k fun _ u _ ↦ R u) :
+    Syntax.ExecWithinWith m Q e (repeatUntilWith a p) s (n + k + 1) fun _ u _ ↦ R u :=
+  execWithinWith_repeatUntilWith_add hp (fun _ h ↦ nomatch h.1) fun t h ↦ hnext t h.2
+
 end Rules
 
 section LoopOn
@@ -160,39 +207,6 @@ theorem loopOn_eq_mapResult_loop (a : A) (b : α → Program F O A Op Ret (α �
   simp only [loopOn, loop, Syntax.mapResult, Syntax.mapResult_comp,
     Function.id_comp]
   rfl
-
-namespace Exec
-
-variable {e : Semantics O A Op Ret S}
-
-/-- Finishing a finite-value loop includes its dispatch transition. -/
-theorem loopOn_done (a : A) (b : α → Program Id O A Op Ret (α ⊕ β))
-    {i : α} {j : β} {s t : S} {n : ℕ}
-    (h : (b i).Exec e (e.act a s) n (.inr j) t) :
-    (loopOn a b i).Exec e s (n + 1) j t := by
-  have hb := h.mapResult (β := β) (w := .branch (FinEnum.card α) (FinEnum.card β))
-    (Sum.map FinEnum.equiv FinEnum.equiv)
-  apply Syntax.Exec.loop_done (l := 0) a (FinEnum.equiv i) (loopOnBody b)
-    (fun j ↦ Syntax.ret (u := .value) ((FinEnum.equiv : β ≃ Fin (FinEnum.card β)).symm j))
-  · simpa only [loopOnBody, Equiv.symm_apply_apply, Sum.map_inr] using hb
-  · simpa only [Equiv.symm_apply_apply] using
-      Syntax.Exec.ret (v := .value)
-        ((FinEnum.equiv : β ≃ Fin (FinEnum.card β)).symm (FinEnum.equiv j)) t
-
-/-- Continuing routes to the next external carried value without a connecting action. -/
-theorem loopOn_next (a : A) (b : α → Program Id O A Op Ret (α ⊕ β))
-    {i j : α} {s t u : S} {n m : ℕ} {v : β}
-    (h : (b i).Exec e (e.act a s) n (.inl j) t)
-    (hc : (loopOn a b j).Exec e t m v u) :
-    (loopOn a b i).Exec e s (n + m + 1) v u := by
-  have hb := h.mapResult (β := β) (w := .branch (FinEnum.card α) (FinEnum.card β))
-    (Sum.map FinEnum.equiv FinEnum.equiv)
-  apply Syntax.Exec.loop_next a (FinEnum.equiv i) (loopOnBody b)
-    (fun j ↦ Syntax.ret (u := .value) ((FinEnum.equiv : β ≃ Fin (FinEnum.card β)).symm j))
-  · simpa only [loopOnBody, Equiv.symm_apply_apply, Sum.map_inl] using hb
-  · exact hc
-
-end Exec
 
 variable [MonadLiftT F m]
 

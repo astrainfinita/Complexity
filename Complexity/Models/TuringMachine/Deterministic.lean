@@ -51,11 +51,11 @@ theorem ComputesWithinWith.exists_halted [Fintype κ] {M : TM Id κ Γ Q} {xs ys
       (M.runHistory xs n).snd.length ≤ t ∧ (M.runHistory xs n).snd.space ≤ s :=
   Controller.ComputesWithinCost.exists_halted h
 
-/-- Unit-time computation visits at most one new cell per tape per transition. -/
-theorem ComputesWithin.space_of_time [Fintype κ] {M : TM Id κ Γ Q}
-    {xs ys : List Γ} {t s : ℕ} (h : M.ComputesWithin xs ys t s) :
+/-- A run visits at most one new cell per tape per transition. -/
+theorem ComputesWithin.of_run [Fintype κ] {M : TM Id κ Γ Q} {xs ys : List Γ} {n t : ℕ}
+    (hh : M.Halted (M.run xs n)) (ho : (M.run xs n).2.output = ys.toArray) (hn : n ≤ t) :
     M.ComputesWithin xs ys t (Fintype.card κ * (t + 1)) := by
-  obtain ⟨n, hh, ho, ht, _⟩ := h.exists_halted
+  have ht := (Controller.History.length_snd _).trans_le ((M.length_runHistory_le xs n).trans hn)
   exact .of_halted n hh ho ht
     ((Controller.History.space_le_length _).trans (Nat.mul_le_mul_left _ (Nat.succ_le_succ ht)))
 
@@ -65,6 +65,12 @@ theorem ComputesWithin.run_spec [Fintype κ] {M : TM Id κ Γ Q}
     M.Halted (M.run xs t) ∧ (M.run xs t).2.output = ys.toArray := by
   have ⟨hh, ho, _⟩ := Controller.computesWithinCost_unit_iff.mp h
   simpa only [hasOutput_isOutput] using And.intro hh ho
+
+/-- Unit-time computation visits at most one new cell per tape per transition. -/
+theorem ComputesWithin.space_of_time [Fintype κ] {M : TM Id κ Γ Q}
+    {xs ys : List Γ} {t s : ℕ} (h : M.ComputesWithin xs ys t s) :
+    M.ComputesWithin xs ys t (Fintype.card κ * (t + 1)) :=
+  .of_run h.run_spec.1 h.run_spec.2 le_rfl
 
 theorem ComputesWithin.terminates [Fintype κ] {M : TM Id κ Γ Q}
     {xs ys : List Γ} {t s : ℕ}

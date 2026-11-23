@@ -122,8 +122,9 @@ namespace Cmd
 
 variable {ν : Type} [DecidableEq ν]
 
-/-- A source execution records its exact compiled unit time and the largest evaluated
-subexpression. Initial values and the compiler's copy overhead are added at the boundary. -/
+/-- A source execution records the unit time charged for its compiled code, a bound on the
+transitions of the compiled program, and the largest evaluated subexpression. Initial values and
+the compiler's copy overhead are added at the boundary. -/
 inductive Run : Cmd ν → (ν → Tree) → ℕ → (ν → Tree) → ℕ → Prop where
   | skip (s : ν → Tree) : Run .skip s 0 s 0
   | assign (x : ν) (e : Expr ν) (s : ν → Tree) :

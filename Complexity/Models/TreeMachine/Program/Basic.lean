@@ -62,32 +62,10 @@ def repeatUntil (p : TreeMachine.Program F k Bool) : TreeMachine.Program F k Uni
 def choose [Functor F] {β : Type} [FinEnum β] (c : F β) : TreeMachine.Program F k β :=
   Program.chooseWith .nop c
 
-/-- Interpret a program on the machine's register bank, without machine control states. -/
-@[simps eval observe act]
-def semantics :
-    Program.Semantics (Fin k → Bool) (TreeMachine.Action k) (Op k) Op.Result (Cfg k) where
-  eval := eval
-  observe := Controller.observe
-  act := Controller.apply
-
-theorem exec_act (o : TreeMachine.Action k) (c : Cfg k) :
-    (act (F := Id) o).Exec semantics c 1 () (apply o c) :=
-  Program.Exec.perform semantics (.act o) c
-
-theorem exec_root (i : Fin k) (c : Cfg k) :
-    (root (F := Id) i).Exec semantics c 1 (c.regs i).root c :=
-  Program.Exec.perform semantics (.root i) c
-
 /-- Copy a tree through a temporary pair; the auxiliary register need not be empty. -/
 def copy (aux dst src : Fin k) : TreeMachine.Program Id k Unit := do
   act (.pair dst src aux)
   act (.left dst dst)
-
-theorem exec_copy (aux dst src : Fin k) (c : Cfg k) :
-    (copy aux dst src).Exec semantics c 2 () ⟨Function.update c.regs dst (c.regs src)⟩ := by
-  have h := (exec_act (.pair dst src aux) c).bind (f := fun _ ↦ act (.left dst dst))
-    (exec_act (.left dst dst) (apply (TreeMachine.Action.pair dst src aux) c))
-  simpa [copy, Bind.bind, Cfg.apply_def] using h
 
 /-- Compile a program to a machine with the same choice shape, the tree operation interpreter and
 `nop` for the exits. Each action takes one step. -/

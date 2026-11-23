@@ -108,7 +108,6 @@ public import Complexity.Models.TreeMachine.Language.Nat
 public import Complexity.Models.TreeMachine.Language.Semantics
 public import Complexity.Models.TreeMachine.Language.Verification
 public import Complexity.Models.TreeMachine.Program.Basic
-public import Complexity.Models.TreeMachine.Program.Correctness
 public import Complexity.Models.TreeMachine.Program.Resources
 public import Complexity.Models.TreeMachine.Simulation.Bank
 public import Complexity.Models.TreeMachine.Simulation.Basic

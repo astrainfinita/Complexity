@@ -5,8 +5,9 @@ Authors: Yuyang Zhao
 -/
 module
 
-public import Complexity.Models.TreeMachine.Program.Correctness
+public import Complexity.Models.TreeMachine.Program.Basic
 public import Complexity.Models.TreeMachine.Deterministic
+public import Complexity.Control.Program.Correctness
 public import Complexity.Control.Program.WP
 
 /-! # Resource bounds for tree-register programs
@@ -33,11 +34,6 @@ def historySemantics : Program.Semantics (Fin k → Bool) (TreeMachine.Action k)
   observe := observe
   act o h := h.snoc o
 
-theorem exec_act_history (o : TreeMachine.Action k)
-    (h : History (Cfg k) (TreeMachine.Action k)) :
-    (act (F := Id) o).Exec historySemantics h 1 () (h.snoc o) :=
-  Program.Exec.perform historySemantics (.act o) h
-
 section Verify
 
 variable {m : Type → Type} [Monad m] {Q : MonadQuant m} [MonadLiftT F m]
@@ -58,21 +54,46 @@ theorem spec_root (i : Fin k) (s : History (Cfg k) (TreeMachine.Action k))
       (fun r t c ↦ r = (s.last.regs i).root ∧ t = s.snoc TreeMachine.Action.nop ∧ c = b - 1) x :=
   Program.spec_perform (Op.root i) historySemantics s b hb x
 
+variable {s : History (Cfg k) (TreeMachine.Action k)}
+
+/-- An instruction takes one step and records its resulting register bank. -/
+theorem execWithinWith_act {o : TreeMachine.Action k}
+    {P : Unit → History (Cfg k) (TreeMachine.Action k) → Prop} (h : P () (s.snoc o)) :
+    (act (F := F) o).ExecWithinWith m Q historySemantics s 1 fun r t _ ↦ P r t :=
+  .step _ _ _ 0 (.ret _ _ _ h)
+
+/-- An instruction followed by a continuation takes one step more than the continuation run on
+the resulting register bank. -/
+theorem execWithinWith_act_bind {o : TreeMachine.Action k}
+    {f : Unit → TreeMachine.Program F k α} {b : ℕ}
+    {R : α → History (Cfg k) (TreeMachine.Action k) → ℕ → Prop}
+    (h : (f ()).ExecWithinWith m Q historySemantics (s.snoc o) b R) :
+    (act o >>= f).ExecWithinWith m Q historySemantics s (b + 1) R :=
+  .step _ _ _ _ h
+
+/-- A root test takes one no-op step and returns the root of the register. -/
+theorem execWithinWith_root {i : Fin k}
+    {P : Bool → History (Cfg k) (TreeMachine.Action k) → Prop}
+    (h : P (s.last.regs i).root (s.snoc .nop)) :
+    (root (F := F) i).ExecWithinWith m Q historySemantics s 1 fun r t _ ↦ P r t :=
+  .step _ _ _ 0 (.ret _ _ _ h)
+
 end Verify
 
-/-- A history specification gives actual unit time and peak space for the compiled machine. -/
-theorem computesWithinUnitTime_of_exec [NeZero k] {p : TreeMachine.Program Id k α}
-    {x y : Tree} {n t s : ℕ} {a : α} {v : History (Cfg k) (TreeMachine.Action k)}
-    (h : p.Exec historySemantics (History.nil (Cfg.init k x)) n a v)
-    (hn : n ≤ t) (ho : v.last.regs 0 = y) (hs : v.configSup Cfg.mass ≤ s) :
+/-- A history execution within the time budget gives actual unit time and peak space for the
+compiled machine. -/
+theorem computesWithinUnitTime_of_execWithin [NeZero k] {p : TreeMachine.Program Id k α}
+    {x y : Tree} {t s : ℕ}
+    (h : p.ExecWithin historySemantics (History.nil (Cfg.init k x)) t
+      (fun _ v _ ↦ v.last.regs 0 = y ∧ v.configSup Cfg.mass ≤ s)) :
     p.compile.ComputesWithinUnitTime x y t s := by
-  obtain ⟨e, _, hr⟩ := h.runFrom_compile .nop
+  obtain ⟨e, v, hr, -, -, ho, hs⟩ := Program.Syntax.ExecWithin.runFrom_compile .nop h
   rw [Controller.runFrom_prod_nil, Prod.mk.injEq] at hr
   have hl := congrArg History.last hr.2
   rw [History.last_snd, Controller.last_runHistoryFrom] at hl
-  exact .of_halted n ((congrArg p.compile.halt hr.1).trans rfl)
+  exact .of_halted t ((congrArg p.compile.halt hr.1).trans rfl)
     ((congrArg (fun c ↦ c.regs 0) hl).trans ho)
-    ((History.length_snd _).trans_le ((p.compile.length_runHistory_le x n).trans hn))
+    ((History.length_snd _).trans_le (p.compile.length_runHistory_le x t))
     ((congrArg (·.configSup Cfg.mass) hr.2).le.trans hs)
 
 /-- A program contract yields the machine bound without inspecting compiled control states. -/
@@ -81,8 +102,7 @@ theorem computesWithinUnitTime [NeZero k] {p : TreeMachine.Program Id k α}
     (h : Triple (p.verify historySemantics) P
       (fun _ v _ ↦ v.last.regs 0 = y ∧ v.configSup Cfg.mass ≤ s) ())
     (hp : P (History.nil (Cfg.init k x)) t) :
-    p.compile.ComputesWithinUnitTime x y t s := by
-  obtain ⟨n, a, v, hn, he, ho, hs⟩ := Program.exec_of_spec h hp
-  exact computesWithinUnitTime_of_exec he hn ho hs
+    p.compile.ComputesWithinUnitTime x y t s :=
+  computesWithinUnitTime_of_execWithin (Program.execWithinWith_of_spec h hp)
 
 end Complexity.TreeMachine.Program

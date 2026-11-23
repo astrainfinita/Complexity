@@ -97,9 +97,8 @@ theorem computesWithin [Fintype κ] {p : TM.Program Id κ Γ α} {xs ys : Array 
     (h : Triple (p.verify (semantics xs)) P
       (fun _ v _ ↦ v.last.output = ys ∧ v.space ≤ s) ())
     (hp : P (History.nil (Cfg.init κ xs.toList)) t) :
-    (compile p).ComputesWithin xs.toList ys.toList t s := by
-  obtain ⟨n, a, v, hn, he, ho, hs⟩ := Program.exec_of_spec h hp
-  exact computesWithin_of_exec p he hn ho hs
+    (compile p).ComputesWithin xs.toList ys.toList t s :=
+  computesWithin_of_execWithin p (Program.execWithinWith_of_spec h hp)
 
 section Configuration
 
@@ -126,11 +125,10 @@ theorem cfg_computesWithin [Fintype κ] {p : TM.Program Id κ Γ α} {ys : Array
     (h : Triple (p.verify (cfgSemantics xs)) P (fun _ c _ ↦ c.output = ys) ())
     (hp : P (Cfg.init κ xs.toList) t) :
     (compile p).ComputesWithin xs.toList ys.toList t (Fintype.card κ * (t + 1)) := by
-  obtain ⟨n, a, c, hn, he, ho⟩ := Program.exec_of_spec h hp
-  obtain ⟨v, hv, hr⟩ := Program.Exec.lift History.last
-    (e' := semantics xs)
-    (fun _ ↦ rfl) (fun _ _ ↦ by simp) he (History.nil (Cfg.init κ xs.toList)) rfl
-  exact (computesWithin_of_exec p hr hn (by rw [hv]; exact ho) le_rfl).space_of_time
+  obtain ⟨e, c, hr, -, -, ho⟩ := Program.Syntax.ExecWithin.runFrom_compile idle
+    (Program.execWithinWith_of_spec h hp)
+  exact .of_run (n := t) (congrArg (compile p).halt (congrArg Prod.fst hr))
+    ((congrArg (fun r ↦ r.2.output) hr).trans ho) le_rfl
 
 end Configuration
 

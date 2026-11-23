@@ -106,13 +106,6 @@ theorem execWithinWith_of_spec {p : Program F O A Op Ret α} {e : Semantics O A 
     p.ExecWithinWith m Q e s b R :=
   h.le_wp s b hs
 
-/-- Extract the finite execution guaranteed by a verified deterministic specification. -/
-theorem exec_of_spec {p : Program Id O A Op Ret α} {e : Semantics O A Op Ret S}
-    {P : S → ℕ → Prop} {R : α → S → ℕ → Prop}
-    (h : Triple (p.verify e) P R ()) {s : S} {b : ℕ} (hs : P s b) :
-    ∃ n a t, n ≤ b ∧ p.Exec e s n a t ∧ R a t (b - n) :=
-  Syntax.ExecWithin.exists_exec (h.le_wp s b hs)
-
 /-- Transport a specification along a semantic relation, preserving its time budget. -/
 theorem spec_simulate {T : Type} {e : Semantics O A Op Ret S}
     {e' : Semantics O A Op Ret T} (R : S → T → Prop)
@@ -226,22 +219,6 @@ theorem spec_callControl {c d : ℕ} (b : Control Id O A (Fin c) (Fin d))
       (fun s z ↦ b.RunWithin e.observe e.act (fun j t z' ↦ wp ((k j).verifyWith m Q e) R x t z')
         b.start s z) R x :=
   ⟨fun _ _ h ↦ Syntax.ExecWithinWith.call b k h⟩
-
-/-- A block with a return continuation exposes its exact result, state, and unused credits. -/
-@[spec]
-theorem spec_callControl_pure {c d : ℕ} (b : Control Id O A (Fin c) (Fin d))
-    (e : Semantics O A Op Ret S) (s t : S) (l z : ℕ) (j : Fin d)
-    (hr : b.RunWithin e.observe e.act (fun i u q ↦ i = j ∧ u = t ∧ q = 0) b.start s l)
-    (hz : l ≤ z) (x : Unit) :
-    Triple ((callControl (F := F) b Pure.pure).verifyWith m Q e)
-      (fun u q ↦ u = s ∧ q = z)
-      (fun i u q ↦ i = j ∧ u = t ∧ q = z - l) x := by
-  constructor
-  rintro u q ⟨rfl, rfl⟩
-  obtain ⟨r, rfl⟩ := Nat.exists_eq_add_of_le hz
-  exact Syntax.ExecWithinWith.call b _ ((Control.RunWithinWith.add_budget hr r).mono
-    fun _ _ _ ⟨_, ⟨hi, hu, hc⟩, hq⟩ ↦ .ret (v := .value) _ _ _
-      ⟨hi, hu, by rw [hq, hc, Nat.zero_add, Nat.add_sub_cancel_left]⟩)
 
 /-- A choice of an action and a continuation consumes one unit of budget, and the quantifier
 reads the continuation over the choices. Not registered. -/

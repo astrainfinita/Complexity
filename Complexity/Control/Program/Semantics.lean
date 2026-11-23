@@ -18,8 +18,7 @@ results of a loop body continue at the next dispatch or after the loop, and a ca
 within the budget (`Control.RunWithin`). For `MonadQuant.all`, every run finishes
 within the budget and returns a value satisfying the postcondition; for `MonadQuant.any`, some run
 does. A run that has not finished when the budget is spent satisfies nothing.
-`Syntax.ExecWithin` is the deterministic case, and an exact deterministic execution `Syntax.Exec`
-is one whose budget is used up at its return.
+`Syntax.ExecWithin` is the deterministic case.
 -/
 
 @[expose] public section
@@ -246,118 +245,33 @@ theorem ExecWithinWith.add_budget {p : Syntax F O A Op Ret α v} {s : S} {b : �
     rintro j t _ ⟨c, h, rfl⟩
     exact ih j t c h
 
+/-- A larger budget allows the same execution, when the postcondition does not read the remaining
+budget. -/
+theorem ExecWithinWith.mono_budget {p : Syntax F O A Op Ret α v} {s : S} {b b' : ℕ}
+    {P : Kind.Value α v → S → Prop} (hp : p.ExecWithinWith m Q e s b fun a t _ ↦ P a t)
+    (hb : b ≤ b') : p.ExecWithinWith m Q e s b' fun a t _ ↦ P a t := by
+  obtain ⟨r, rfl⟩ := Nat.exists_eq_add_of_le hb
+  exact (hp.add_budget r).mono fun _ _ _ ⟨_, h, _⟩ ↦ h
+
+/-- Budgets add along a continuation. -/
+theorem ExecWithinWith.bindTo_add {p : Syntax F O A Op Ret α v}
+    {f : Kind.Value α v → Syntax F O A Op Ret β w} {s : S} {b c : ℕ}
+    {P : Kind.Value α v → S → Prop} {R : Kind.Value β w → S → Prop}
+    (hp : p.ExecWithinWith m Q e s b fun a t _ ↦ P a t)
+    (hf : ∀ a t, P a t → (f a).ExecWithinWith m Q e t c fun x u _ ↦ R x u) :
+    (p.bindTo f).ExecWithinWith m Q e s (b + c) fun x u _ ↦ R x u :=
+  (hp.add_budget c).bindTo fun a t _ ⟨d, hP, hd⟩ ↦
+    hd ▸ (hf a t hP).mono_budget (Nat.le_add_left c d)
+
 end Within
 
-variable {e : Semantics O A Op Ret S} {v w : Kind}
+variable {e : Semantics O A Op Ret S} {v : Kind}
 
 /-- Deterministic source executions within a budget: the run finishes within the budget and
 returns a value satisfying the postcondition. -/
 abbrev ExecWithin (e : Semantics O A Op Ret S) (p : Syntax Id O A Op Ret α v) (s : S) (b : ℕ)
     (R : Kind.Value α v → S → ℕ → Prop) : Prop :=
   p.ExecWithinWith Id .all e s b R
-
-/-- Exact deterministic source execution: the run takes `n` transitions and returns `a` in the
-state `t`. It is an execution within the budget `n` that uses up the budget at its return. -/
-def Exec (e : Semantics O A Op Ret S) (p : Syntax Id O A Op Ret α v) (s : S) (n : ℕ)
-    (a : Kind.Value α v) (t : S) : Prop :=
-  p.ExecWithin e s n fun a' t' b ↦ a' = a ∧ t' = t ∧ b = 0
-
-theorem Exec.ret (a : Kind.Value α v) (s : S) :
-    Exec e (.ret a : Syntax Id O A Op Ret α v) s 0 a s :=
-  ExecWithinWith.ret a s 0 ⟨rfl, rfl, rfl⟩
-
-theorem Exec.step (o : Op) (k : Ret o → Syntax Id O A Op Ret α v) (s : S) {n : ℕ}
-    {a : Kind.Value α v} {t : S}
-    (h : Exec e (k (e.eval o (e.observe s)).2) (e.act (e.eval o (e.observe s)).1 s) n a t) :
-    Exec e (.step o k) s (n + 1) a t :=
-  ExecWithinWith.step o k s n h
-
-/-- A deterministic choice node continues with its unique alternative, and charges one unit. -/
-theorem Exec.choice {d : ℕ} (x : Id (A × Fin d)) (k : Fin d → Syntax Id O A Op Ret α v) (s : S)
-    {n : ℕ} {a : Kind.Value α v} {t : S} (h : Exec e (k x.run.2) (e.act x.run.1 s) n a t) :
-    Exec e (.choice x k) s (n + 1) a t :=
-  ExecWithinWith.choice x k s n fun _ hr ↦ hr ▸ h
-
-/-- Finishing a loop includes the charged dispatch before its last body. -/
-theorem Exec.loop_done {n r : ℕ} (a : A) (i : Fin n)
-    (body : Fin n → Syntax Id O A Op Ret α (.branch n r)) (k : Fin r → Syntax Id O A Op Ret α v)
-    {s t u : S} {m l : ℕ} {j : Fin r} {x : Kind.Value α v}
-    (hb : Exec e (body i) (e.act a s) m (.inr j) t) (hk : Exec e (k j) t l x u) :
-    Exec e (.loop a i body k) s (m + l + 1) x u :=
-  ExecWithinWith.loop a i body k s (m + l) (P := fun y t' b ↦ y = .inr j ∧ t' = t ∧ b = l)
-    ((ExecWithinWith.add_budget hb l).mono fun _ _ _ ⟨_, ⟨hy, ht, hc⟩, hb⟩ ↦ ⟨hy, ht, by omega⟩)
-    (fun _ _ _ h ↦ nomatch h.1) fun _ _ _ ⟨hy, ht, hb⟩ ↦ by cases hy; exact ht ▸ hb ▸ hk
-
-/-- A continuing body routes directly to the next charged loop entry. -/
-theorem Exec.loop_next {n r : ℕ} (a : A) (i : Fin n)
-    (body : Fin n → Syntax Id O A Op Ret α (.branch n r)) (k : Fin r → Syntax Id O A Op Ret α v)
-    {s t u : S} {m l : ℕ} {j : Fin n} {x : Kind.Value α v}
-    (hb : Exec e (body i) (e.act a s) m (.inl j) t) (hk : Exec e (.loop a j body k) t l x u) :
-    Exec e (.loop a i body k) s (m + l + 1) x u :=
-  ExecWithinWith.loop a i body k s (m + l) (P := fun y t' b ↦ y = .inl j ∧ t' = t ∧ b = l)
-    ((ExecWithinWith.add_budget hb l).mono fun _ _ _ ⟨_, ⟨hy, ht, hc⟩, hb⟩ ↦ ⟨hy, ht, by omega⟩)
-    (fun _ _ _ ⟨hy, ht, hb⟩ ↦ by cases hy; exact ht ▸ hb ▸ hk) fun _ _ _ h ↦ nomatch h.1
-
-/-- A call adds the exact cost of its block to that of its continuation. -/
-theorem Exec.call {c d : ℕ} (blk : Control Id O A (Fin c) (Fin d))
-    (k : Fin d → Syntax Id O A Op Ret α v) {s t u : S} {m l : ℕ} {j : Fin d}
-    {x : Kind.Value α v}
-    (hb : blk.RunWithin e.observe e.act (fun j' t' b ↦ j' = j ∧ t' = t ∧ b = 0) blk.start s m)
-    (hk : Exec e (k j) t l x u) : Exec e (.call blk k) s (m + l) x u :=
-  ExecWithinWith.call blk k <| (Control.RunWithinWith.add_budget hb l).mono
-    fun _ _ _ ⟨_, ⟨hj, ht, hc⟩, hb⟩ ↦ by
-      subst hj ht hc
-      rw [hb, Nat.zero_add]
-      exact hk
-
-/-- Changing the outer return type leaves all actions and their costs unchanged. -/
-theorem Exec.mapResult {p : Syntax Id O A Op Ret α v} {s t : S} {n : ℕ} {a : Kind.Value α v}
-    (hp : Exec e p s n a t) (f : Kind.Value α v → Kind.Value β w) :
-    Exec e (p.mapResult β w f) s n (f a) t :=
-  (ExecWithinWith.mapResult hp f).mono fun _ _ _ ⟨_, hy, ha, ht, hb⟩ ↦ ⟨hy ▸ ha ▸ rfl, ht, hb⟩
-
-/-- Substituting a continuation adds the two exact costs, with no connecting transition. -/
-theorem Exec.bindTo {p : Syntax Id O A Op Ret α v} {f : Kind.Value α v → Syntax Id O A Op Ret β w}
-    {s t u : S} {m n : ℕ} {a : Kind.Value α v} {b : Kind.Value β w}
-    (hp : Exec e p s m a t) (hf : Exec e (f a) t n b u) : Exec e (p.bindTo f) s (m + n) b u :=
-  (ExecWithinWith.add_budget hp n).bindTo fun _ _ _ ⟨_, ⟨ha, ht, hc⟩, hb⟩ ↦ by
-    subst ha ht hc
-    rw [hb, Nat.zero_add]
-    exact hf
-
-/-- An exact execution is an execution within any larger budget. -/
-theorem Exec.execWithin {p : Syntax Id O A Op Ret α v} {s t : S} {n b : ℕ} {a : Kind.Value α v}
-    {Q : Kind.Value α v → S → ℕ → Prop} (h : Exec e p s n a t) (hn : n ≤ b)
-    (hQ : Q a t (b - n)) : p.ExecWithin e s b Q := by
-  obtain ⟨r, rfl⟩ := Nat.exists_eq_add_of_le hn
-  exact (ExecWithinWith.add_budget h r).mono fun _ _ _ ⟨_, ⟨ha, ht, hc⟩, hb⟩ ↦ by
-    subst ha ht hc hb
-    simpa using hQ
-
-/-- A deterministic execution within a budget contains an exact execution. -/
-theorem ExecWithin.exists_exec {p : Syntax Id O A Op Ret α v} {s : S} {b : ℕ}
-    {R : Kind.Value α v → S → ℕ → Prop} (h : p.ExecWithin e s b R) :
-    ∃ n a t, n ≤ b ∧ Exec e p s n a t ∧ R a t (b - n) := by
-  induction h with
-  | ret a s b h => exact ⟨0, a, s, Nat.zero_le _, .ret a s, h⟩
-  | step o k s b _ ih =>
-    obtain ⟨n, a, t, hn, he, hR⟩ := ih
-    exact ⟨n + 1, a, t, by omega, .step o k s he, by rwa [Nat.add_sub_add_right]⟩
-  | choiceOn x k s b P hP _ ih =>
-    obtain ⟨n, a, t, hn, he, hR⟩ := ih _ (hP _ rfl)
-    exact ⟨n + 1, a, t, by omega, .choice x k s he, by rwa [Nat.add_sub_add_right]⟩
-  | «loop» a i body k s b _ _ _ ihb ihn ihd =>
-    obtain ⟨n₁, j | j, t₁, hn₁, he₁, hP⟩ := ihb
-    · obtain ⟨n₂, a', u, hn₂, he₂, hR⟩ := ihn j t₁ _ hP
-      exact ⟨n₁ + n₂ + 1, a', u, by omega, .loop_next a i body k he₁ he₂,
-        by rwa [Nat.add_sub_add_right, ← Nat.sub_sub]⟩
-    · obtain ⟨n₂, a', u, hn₂, he₂, hR⟩ := ihd j t₁ _ hP
-      exact ⟨n₁ + n₂ + 1, a', u, by omega, .loop_done a i body k he₁ he₂,
-        by rwa [Nat.add_sub_add_right, ← Nat.sub_sub]⟩
-  | callOn blk k s b P hb _ ih =>
-    obtain ⟨n₁, j, t, hn₁, hb, hk⟩ := Control.RunWithin.exists_exact hb
-    obtain ⟨n₂, a, u, hn₂, he, hR⟩ := ih j t _ hk
-    exact ⟨n₁ + n₂, a, u, by omega, .call blk k hb he, by rwa [Nat.sub_sub] at hR⟩
 
 /-- A deterministic execution within a budget is one of the embedding by `ofId` into any choice
 shape, under any interpretation of the choices and any quantifier reading the lift of
@@ -375,78 +289,4 @@ theorem ExecWithin.ofId [Pure F] {m : Type → Type} [Monad m] [MonadLiftT F m]
 
 end Syntax
 
-/-- Execute the source syntax with the chosen observation and action interpretation. -/
-abbrev Exec (p : Program Id O A Op Ret α) (e : Semantics O A Op Ret S)
-    (s : S) (n : ℕ) (a : α) (t : S) : Prop := Syntax.Exec e p s n a t
-
-namespace Exec
-
-variable {e : Semantics O A Op Ret S}
-
-/-- Returning takes no action. -/
-theorem pure (e : Semantics O A Op Ret S) (a : α) (s : S) :
-    (Program.pure a : Program Id O A Op Ret α).Exec e s 0 a s := Syntax.Exec.ret (v := .value) a s
-
-/-- A primitive performs exactly one action. -/
-theorem perform (e : Semantics O A Op Ret S) (o : Op) (s : S) :
-    (Program.perform (F := Id) o).Exec e s 1 (e.eval o (e.observe s)).2
-      (e.act (e.eval o (e.observe s)).1 s) :=
-  Syntax.Exec.step o (fun a ↦ Program.pure a) s (Syntax.Exec.ret _ _)
-
-/-- Sequential composition adds costs without a connecting transition. -/
-theorem bind {p : Program Id O A Op Ret α} {f : α → Program Id O A Op Ret β}
-    {s t u : S} {m n : ℕ} {a : α} {b : β}
-    (hp : p.Exec e s m a t) (hf : (f a).Exec e t n b u) :
-    (p.bind f).Exec e s (m + n) b u := Syntax.Exec.bindTo hp hf
-
-/-- Finishing a loop includes the charged dispatch before its last body. -/
-theorem loop_done {n r : ℕ} (a : A)
-    (body : Fin n → Program Id O A Op Ret (Fin n ⊕ Fin r))
-    {i : Fin n} {j : Fin r} {s t : S} {m : ℕ}
-    (h : (body i).Exec e (e.act a s) m (.inr j) t) :
-    (loop a body i).Exec e s (m + 1) j t := by
-  exact Syntax.Exec.loop_done a i _ _
-    (by apply h.mapResult)
-    (Syntax.Exec.ret (v := .value) j t)
-
-/-- A continuing body routes directly to the next charged loop entry. -/
-theorem loop_next {n r : ℕ} (a : A)
-    (body : Fin n → Program Id O A Op Ret (Fin n ⊕ Fin r))
-    {i j : Fin n} {s t u : S} {m l : ℕ} {v : Fin r}
-    (h : (body i).Exec e (e.act a s) m (.inl j) t)
-    (hc : (loop a body j).Exec e t l v u) :
-    (loop a body i).Exec e s (m + l + 1) v u := by
-  exact Syntax.Exec.loop_next a i _ _
-    (by apply h.mapResult) hc
-
-/-- A successful test terminates `repeatUntilWith` after its charged dispatch. -/
-theorem repeatUntilWith_done (a : A) (p : Program Id O A Op Ret Bool) {s t : S} {m : ℕ}
-    (h : p.Exec e (e.act a s) m true t) :
-    (repeatUntilWith a p).Exec e s (m + 1) () t := by
-  have hb := h.bind (f := fun b ↦ Program.pure
-    (if b then Sum.inr (0 : Fin 1) else Sum.inl (0 : Fin 1))) (Exec.pure e
-    (if true then Sum.inr (0 : Fin 1) else Sum.inl (0 : Fin 1)) t)
-  have hl := loop_done a
-    (fun _ : Fin 1 ↦ p.bind fun b ↦ Program.pure
-      (if b then Sum.inr (0 : Fin 1) else Sum.inl (0 : Fin 1))) (i := 0) hb
-  simpa only [repeatUntilWith, Bind.bind, Pure.pure, Nat.add_zero] using
-    hl.bind (f := fun _ ↦ Program.pure ())
-    (Exec.pure e () t)
-
-/-- An unsuccessful test continues at the next charged dispatch. -/
-theorem repeatUntilWith_next (a : A) (p : Program Id O A Op Ret Bool)
-    {s t u : S} {m n : ℕ}
-    (h : p.Exec e (e.act a s) m false t)
-    (hc : (repeatUntilWith a p).Exec e t n () u) :
-    (repeatUntilWith a p).Exec e s (m + n + 1) () u := by
-  have hb := h.bind (f := fun b ↦ Program.pure
-    (if b then Sum.inr (0 : Fin 1) else Sum.inl (0 : Fin 1)))
-    (Exec.pure e (Sum.inl (0 : Fin 1)) t)
-  apply Syntax.Exec.loop_next a 0 _ _
-  · simpa only [repeatUntilWith, Bind.bind, Pure.pure, loop, bind, Syntax.bindTo,
-      Syntax.mapResult_comp, Function.id_comp, Nat.add_zero, id_eq] using
-      hb.mapResult (w := .branch 1 1) id
-  · exact hc
-
-end Exec
 end Complexity.Program

@@ -74,13 +74,13 @@ theorem computesWithin_history [Fintype κ] {p : StackMachine.Program Id κ Γ �
       (fun h b ↦ h = History.nil (Cfg.init κ xs) ∧ t ≤ b)
       (fun _ h _ ↦ h.last.output = ys.toArray ∧ h.configSup Cfg.mass ≤ s) ()) :
     p.compile.ComputesWithin xs ys t s := by
-  obtain ⟨n, a, v, hn, he, ho, hs⟩ := Program.exec_of_spec h ⟨rfl, le_rfl⟩
-  obtain ⟨e, _, hr⟩ := he.runFrom_compile idle
+  obtain ⟨e, v, hr, -, -, ho, hs⟩ := Program.Syntax.ExecWithin.runFrom_compile idle
+    (Program.execWithinWith_of_spec h ⟨rfl, le_rfl⟩)
   rw [Controller.runFrom_prod_nil, Prod.mk.injEq] at hr
   have hl := congrArg History.last hr.2
   rw [History.last_snd, Controller.last_runHistoryFrom] at hl
-  exact .of_halted n ((congrArg p.compile.halt hr.1).trans rfl) ((congrArg Cfg.output hl).trans ho)
-    ((History.length_snd _).trans_le ((p.compile.length_runHistory_le _ n).trans hn))
+  exact .of_halted t ((congrArg p.compile.halt hr.1).trans rfl) ((congrArg Cfg.output hl).trans ho)
+    ((History.length_snd _).trans_le (p.compile.length_runHistory_le _ t))
     ((congrArg (·.configSup Cfg.mass) hr.2).le.trans hs)
 
 /-- A total stack-program specification yields native computation and resource bounds. -/
@@ -90,11 +90,9 @@ theorem computesWithin [Fintype κ] (p : StackMachine.Program Id κ Γ α)
       (fun c b ↦ c = Cfg.init κ xs ∧ t ≤ b)
       (fun _ c _ ↦ c.output = ys.toArray) ()) :
     (compile p).ComputesWithin xs ys t (Fintype.card κ * t) := by
-  apply computesWithin_history
-  have hh := spec_history (r := 0)
-    (by simpa using h) (S := Fintype.card κ * t) (by simp [Cfg.mass]) 0
-  constructor
-  rintro s b ⟨rfl, hb⟩
-  simpa using hh.le_wp _ b ⟨rfl, by simp [Cfg.mass], by simpa using hb⟩
+  obtain ⟨e, c, hr, -, -, ho⟩ := Program.Syntax.ExecWithin.runFrom_compile idle
+    (Program.execWithinWith_of_spec h ⟨rfl, le_rfl⟩)
+  exact .of_run (n := t) (congrArg (compile p).halt (congrArg Prod.fst hr))
+    ((congrArg (fun r ↦ r.2.output) hr).trans ho) le_rfl
 
 end Complexity.StackMachine.Program

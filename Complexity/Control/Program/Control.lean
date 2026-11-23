@@ -147,23 +147,6 @@ theorem RunWithinWith.simulate {T : Type} {observe' : T → O} {act' : A → T �
       exact Q.mono (fun r hr ↦ ih hr _ (ha r.1 s u hu)) h
     · exact ⟨s, hu, h⟩
 
-/-- A deterministic run within a budget is an exact run, using up its own budget, followed by the
-unused rest of the budget. -/
-theorem RunWithin.exists_exact {c : Control Id O A St E}
-    (h : c.RunWithin observe act R q s b) :
-    ∃ n e t, n ≤ b ∧ c.RunWithin observe act (fun e' t' b' ↦ e' = e ∧ t' = t ∧ b' = 0) q s n ∧
-      R e t (b - n) := by
-  induction b generalizing q s with
-  | zero =>
-    rcases q with q | e
-    · exact h.elim
-    · exact ⟨0, e, s, le_rfl, ⟨rfl, rfl, rfl⟩, h⟩
-  | succ b ih =>
-    rcases q with q | e
-    · obtain ⟨n, e, t, hn, he, hR⟩ := ih (runWithin_inl_succ_iff.1 h)
-      exact ⟨n + 1, e, t, by omega, runWithin_inl_succ_iff.2 he, by rwa [Nat.add_sub_add_right]⟩
-    · exact ⟨0, e, s, Nat.zero_le _, ⟨rfl, rfl, rfl⟩, h⟩
-
 /-- Runs depend on the transition function, not on the graph's entry label. -/
 theorem runWithinWith_congr_next {d : Control F O A St E} (hn : c.next = d.next) :
     c.RunWithinWith Q observe act R q s b ↔ d.RunWithinWith Q observe act R q s b := by
