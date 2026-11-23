@@ -48,24 +48,22 @@ theorem twice_exec : twice.Exec model () 2 () () := by
 def spin : Code Unit :=
   Program.loopOn () (fun b : Bool ↦ pure (Sum.inl b)) false
 
-theorem spin_no_exec (n : ℕ) (s t : Unit) (a : Unit) :
-    ¬spin.Exec model s n a t := by
-  induction n using Nat.strong_induction_on generalizing s with
-  | h n ih =>
+-- Guards that the loop never returns: from any carried value, no execution within a budget
+-- reaches a return, at any budget.
+theorem spin_not_execWithin (x : Bool) (s : Unit) (b : ℕ) (Q : Unit → Unit → ℕ → Prop) :
+    ¬(Program.loopOn () (fun b : Bool ↦ pure (Sum.inl b)) x : Code Unit).ExecWithin
+      model s b Q := by
+  induction b using Nat.strong_induction_on generalizing x s with
+  | h b ih =>
     intro h
-    simp only [spin, Program.loopOn] at h
-    cases h with
-    | loop_done a i body k hb hk =>
-      simp only [Program.loopOnBody] at hb
-      cases hb
-    | loop_next a i body k hb hk =>
-      simp only [Program.loopOnBody] at hb
-      cases hb
-      exact ih _ (Nat.lt_succ_self _) s (by
-        simpa only [spin, Program.loopOn, Equiv.apply_symm_apply, Nat.zero_add, model] using hk)
+    obtain ⟨hb, h⟩ := Program.Syntax.execWithinWith_loop_iff.1 h
+    exact ih (b - 1) (by omega) _ s (Program.Syntax.execWithinWith_ret_iff.1 h)
 
-example (Q : Unit → Unit → ℕ → Prop) (b : ℕ) : ¬spin.Total model Q () b := by
-  rintro ⟨n, a, t, _, h, _⟩
-  exact spin_no_exec n () t a h
+theorem spin_no_exec (n : ℕ) (s t : Unit) (a : Unit) :
+    ¬spin.Exec model s n a t :=
+  spin_not_execWithin false s n _
+
+example (Q : Unit → Unit → ℕ → Prop) (b : ℕ) : ¬spin.ExecWithin model () b Q :=
+  spin_not_execWithin false () b Q
 
 end ProgramLoopTest

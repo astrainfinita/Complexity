@@ -20,33 +20,30 @@ def model : Program.Semantics Unit Unit Unit (fun _ : Unit ↦ Unit) Unit where
 
 -- A successful primitive cannot be verified with a zero time budget.
 example (Q : Unit → Unit → ℕ → Prop) :
-    ¬(Program.perform (F := Id) ()).Total model Q () 0 := by
-  rintro ⟨n, a, t, hn, h, _⟩
-  have : n = 0 := by omega
-  subst n
-  cases h
+    ¬(Program.perform (F := Id) ()).ExecWithin model () 0 Q := fun h ↦
+  Nat.lt_irrefl 0 (Program.Syntax.execWithinWith_step_iff.1 h).1
 
 -- The body does no work, but each iteration still takes one real control step.
 def spin : Code (Fin 1) :=
   Program.loop () (fun i : Fin 1 ↦ pure (Sum.inl i)) 0
 
-theorem spin_no_exec (n : ℕ) (s t : Unit) (a : Fin 1) :
-    ¬spin.Exec model s n a t := by
-  induction n using Nat.strong_induction_on generalizing s with
-  | h n ih =>
+-- Guards that the loop never returns: no execution within a budget reaches a return, at any
+-- budget.
+theorem spin_not_execWithin (s : Unit) (b : ℕ) (Q : Fin 1 → Unit → ℕ → Prop) :
+    ¬spin.ExecWithin model s b Q := by
+  induction b using Nat.strong_induction_on generalizing s with
+  | h b ih =>
     intro h
-    simp only [spin, Program.loop] at h
-    cases h with
-    | loop_done a i body k hb hk => cases hb
-    | loop_next a i body k hb hk =>
-      cases hb
-      exact ih _ (Nat.lt_succ_self _) s (by
-        simpa only [spin, Program.loop, Nat.zero_add, model] using hk)
+    obtain ⟨hb, h⟩ := Program.Syntax.execWithinWith_loop_iff.1 h
+    exact ih (b - 1) (by omega) s (Program.Syntax.execWithinWith_ret_iff.1 h)
+
+theorem spin_no_exec (n : ℕ) (s t : Unit) (a : Fin 1) :
+    ¬spin.Exec model s n a t :=
+  spin_not_execWithin s n _
 
 -- Total WP rejects the nonterminating program at every finite budget.
-example (Q : Fin 1 → Unit → ℕ → Prop) (b : ℕ) : ¬spin.Total model Q () b := by
-  rintro ⟨n, a, t, _, h, _⟩
-  exact spin_no_exec n () t a h
+example (Q : Fin 1 → Unit → ℕ → Prop) (b : ℕ) : ¬spin.ExecWithin model () b Q :=
+  spin_not_execWithin () b Q
 
 -- Infinite return types are allowed, but their labels are not written to a tape.
 def label : Code (List ℕ) := pure [1, 2, 3]

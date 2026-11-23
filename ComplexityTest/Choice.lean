@@ -53,6 +53,19 @@ example : LawfulFunctorLiftT BinaryChoice Multiset := inferInstance
 example : LawfulFunctorLiftT BinaryChoice (StateT ℕ Multiset) := inferInstance
 example : LawfulFunctorLiftT Id Id := inferInstance
 
+-- Guards the two laws for lifting `Pure.pure`: `PMF` merges the two equal alternatives into
+-- `pure a`, whereas `Multiset` keeps both, which both quantifiers over its values read as `a`.
+example : LawfulPureLiftT BinaryChoice PMF := inferInstance
+example : LawfulPureLiftT BinaryChoice (StateT ℕ PMF) := inferInstance
+example : MonadQuant.PureLiftT BinaryChoice Multiset .all := inferInstance
+example : MonadQuant.PureLiftT BinaryChoice Multiset .any := inferInstance
+example : ¬LawfulPureLift (BinaryChoice : Type → Type) Multiset :=
+  fun h ↦ absurd (congrArg Multiset.card (h.monadLift_pure ())) (by decide)
+
+-- Guards that the stronger law gives the reading by every quantifier, also through `StateT`.
+example (Q : MonadQuant (StateT ℕ PMF)) : MonadQuant.PureLiftT BinaryChoice (StateT ℕ PMF) Q :=
+  inferInstance
+
 -- Guards what `returns` is on the two interpretations, by definition: the result on `Id`, the
 -- members on `Multiset`. A generic fact about every value a computation can return is then the
 -- plain statement about every branch, with no conversion.
