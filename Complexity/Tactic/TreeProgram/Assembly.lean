@@ -15,7 +15,7 @@ A field of a field of the input, a closed value, and a constructor of such value
 assembled from subtrees of the input's code and constant trees. An `Assembly` describes such a
 code; one assignment builds it, so `HasProgramInO.assemble` is proved once and each use only proves
 the equation of the trees. An assembled tree has at most `Assembly.weight` nodes per node of the
-input, so `HasProgramInO.assemble_input` bounds the peak by the input's code size alone.
+input, so `HasProgramInO.assemble` bounds the peak by the input's code size alone.
 -/
 
 @[expose] public section
@@ -127,11 +127,12 @@ open Internal (HasProgramInO)
 variable {α : Type*} {β : α → Type*} [UniqueEncoding Tree α] [∀ x, UniqueEncoding Tree (β x)]
 
 /-- A value whose code is assembled from subtrees of the input's code and constant trees, such as
-a constructor of fields of the input, is built in one assignment. -/
+a constructor of fields of the input, is built in one assignment. The assembled tree has at most
+`A.weight` nodes per node of the input, so the peak is counted against the input. -/
 theorem Internal.HasProgramInO.assemble {f : (x : α) → β x} (A : Assembly)
     (h : ∀ x, A.eval ⌜x⌝ₜ = ⌜f x⌝ₜ) :
     HasProgramInO f (fun v => Code.eval (A.expr v.expression)) (fun _ => 1)
-      (fun x => max ⌜x⌝ₜ.size ⌜f x⌝ₜ.size) :=
+      (fun x => ⌜x⌝ₜ.size) :=
   (HasProgramInO.of_implements ⟨fun _ => A.steps + 2, fun x => max ⌜x⌝ₜ.size ⌜f x⌝ₜ.size⟩
     ⟨fun v n hv => by change n ≤ n + 1 ∧ n + 1 ≤ n + 1; omega,
       fun v n s x hv hx => by
@@ -140,18 +141,11 @@ theorem Internal.HasProgramInO.assemble {f : (x : α) → β x} (A : Assembly)
         simp only [Code.bounded_eval_iff]
         exact ⟨(Expr.assignSteps_le_steps _).trans (by rw [A.steps_expr]), hs,
           by simp [hx, h], fun j hj => by simp [Nat.ne_of_lt hj]⟩⟩).mono
-    (Dominated.const _) (.refl _)
-
-/-- An assembly built in one assignment, with its peak counted against the input. -/
-theorem Internal.HasProgramInO.assemble_input {f : (x : α) → β x} (A : Assembly)
-    (h : ∀ x, A.eval ⌜x⌝ₜ = ⌜f x⌝ₜ) :
-    HasProgramInO f (fun v => Code.eval (A.expr v.expression)) (fun _ => 1)
-      (fun x => ⌜x⌝ₜ.size) :=
-  (HasProgramInO.assemble A h).mono (.refl _) (Dominated.of_le_mul (1 + A.weight) fun x => by
-    have := A.size_eval_le ⌜x⌝ₜ
-    rw [h] at this
-    simp only [max_le_iff, Nat.add_mul, Nat.one_mul]
-    omega)
+    (Dominated.const _) (Dominated.of_le_mul (1 + A.weight) fun x => by
+      have := A.size_eval_le ⌜x⌝ₜ
+      rw [h] at this
+      exact max_le (Nat.le_mul_of_pos_left _ (by omega))
+        (this.trans (Nat.mul_le_mul_right _ (Nat.le_add_left _ _))))
 
 /-- Read the subtree of the input's code at a path, such as a field of a field, whose code is a
 subtree by the structures' `T.encode_field`: one step for every path. -/
@@ -159,7 +153,7 @@ theorem Internal.HasProgramInO.subtree {f : (x : α) → β x} (path : List Bool
     (h : ∀ x, ⌜f x⌝ₜ = ⌜x⌝ₜ.subtree path) :
     HasProgramInO f (fun v => Code.eval (v.expression.subtree path)) (fun _ => 1)
       (fun x => ⌜x⌝ₜ.size) :=
-  HasProgramInO.assemble_input (.read path) fun x => (h x).symm
+  HasProgramInO.assemble (.read path) fun x => (h x).symm
 
 /-- A closed value is written as its code in one step. -/
 theorem Internal.HasProgramInO.const {γ : Type*} [UniqueEncoding Tree γ] (c : γ) :

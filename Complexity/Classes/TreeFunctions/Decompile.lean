@@ -17,7 +17,7 @@ subtrees of the current one in one assignment, so a round costs a constant depen
 machine. The loop domain is restricted to configurations from which the machine halts, and the
 number of steps until it halts is the loop measure. The root tests are
 `Source.exists_hasProgramInO_dispatch` and the builds
-`Source.Internal.HasProgramInO.assemble_input`.
+`Source.Internal.HasProgramInO.assemble`.
 
 The one-hot code of control states and the list code of register banks are the current choices,
 not decisions; the names are provisional.
@@ -167,7 +167,7 @@ theorem exists_hasProgramInO_leafStep (q : Q) (o : Fin k → Bool) :
   by_cases h : M.halt q
   · refine ⟨_, (Internal.HasProgramInO.identity.congr ?_).mono Dominated.zero Dominated.zero⟩
     funext x; simp [leafStep, h]
-  · refine ⟨_, .assemble_input (.pair (.const ⌜(M.transition q o).run.1⌝ₜ)
+  · refine ⟨_, .assemble (.pair (.const ⌜(M.transition q o).run.1⌝ₜ)
       (Assembly.list (List.ofFn (assembly (M.transition q o).run.2)))) fun x => ?_⟩
     simp only [leafStep, h, Bool.false_eq_true, ↓reduceIte, Assembly.eval_pair, Assembly.eval_const,
       Assembly.eval_list, Controller.apply_prod, encode_prod, encode_cfg, Cfg.apply_regs,
@@ -350,7 +350,7 @@ theorem exists_hasProgramIn_of_mem_fp {α β : Type*} [UniqueEncoding Tree α]
     UniqueEncoding.ofInjective inferInstance (stateBits e) (stateBits_injective e)
   obtain ⟨ql, hl⟩ := exists_hasProgramInO_output M e fun _ => rfl
   let init (a : α) : HaltingCfg M := ⟨M.init ⌜a⌝ₜ, (hM a).terminates⟩
-  have hi := Internal.HasProgramInO.assemble_input (f := init) (.pair (.const ⌜M.q₀⌝ₜ)
+  have hi := Internal.HasProgramInO.assemble (f := init) (.pair (.const ⌜M.q₀⌝ₜ)
     (.list (List.ofFn fun i : Fin k => if i = 0 then .read [] else .const .nil))) fun a => by
     have hreg (i : Fin k) :
         (if i = 0 then Assembly.read [] else .const .nil).eval ⌜a⌝ₜ = input 0 ⌜a⌝ₜ i := by
