@@ -324,4 +324,30 @@ run_elab do
       (`ComplexityTest.SourceTranslation.Guidance.unsupportedChoice.sourceProgram).isPrefixOf name) then
     throwError "a failed source registration left a partial implementation"
 
+-- Records a limit (plan W88): a free variable used as a constant has no implementation, though its
+-- program only writes its code (`HasProgramInO.const`); the translation asks for a local one. If
+-- this starts to succeed, the local function `c : Unit → γ` in `TreeMachine.fp_option_elim` is no
+-- longer needed.
+/-- error: source translation: `b` needs an implementation (a `HasProgramIn` hypothesis) -/
+#guard_msgs (substring := true) in
+example {γ : Type*} [UniqueEncoding Tree γ] (b : γ) :=
+  (by source_fun_prop : HasProgramInO (fun _ : Bool => b) _ _ _)
+
+-- Records a limit (plan W89): `Option.elim` has no selected implementation, also when the function
+-- applied to the value has a local one, so `TreeMachine.fp_option_elim` translates a `match` given
+-- with `via`. If this starts to succeed, the `via` is no longer needed.
+/-- error: source translation: `Option.elim` needs a selected implementation -/
+#guard_msgs (substring := true) in
+example {α : Type*} [UniqueEncoding Tree α] {f : α → Bool}
+    {program : TreeProgram.Value → TreeProgram.Code TreeProgram.Value}
+    (_hf : HasProgramIn f program (IsPoly fun x => ⌜x⌝ₜ.size) (IsPoly fun x => ⌜x⌝ₜ.size)) :=
+  (by source_fun_prop : HasProgramInO (fun o : Option α ↦ o.elim false f) _ _ _)
+
+-- Records a limit (plan W90): `bif` (`cond`) has no selected implementation, unlike `if`. If this
+-- starts to succeed, `cond` is translated as `if` is.
+/-- error: source translation: `cond` needs a selected implementation -/
+#guard_msgs (substring := true) in
+example {α : Type*} [UniqueEncoding Tree α] :=
+  (by source_fun_prop : HasProgramInO (fun y : α × Bool ↦ bif y.2 then some y.1 else none) _ _ _)
+
 end ComplexityTest.SourceTranslation.Guidance

@@ -51,26 +51,4 @@ example {g : β → γ} (hg : g ∈ FP .sizeCostTree) :
   have := hpg.hasProgramInO.size_encode.comp (fun x : α × β => x.2)
   model_fun_prop
 
--- Records a limit: a free variable used as a constant has no implementation for the translation,
--- which asks for a `HasProgramIn` hypothesis. If this starts to succeed, the local function
--- `c : Unit → γ` in `TreeMachine.fp_option_elim` is no longer needed.
-example (b : γ) : (fun _ : Bool => b) ∈ FP .sizeCostTree := by
-  fail_if_success model_fun_prop
-  exact (Internal.HasProgramInO.const b).mem_fp_sizeCost (by dominated) (by dominated)
-
--- Records a limit: `Option.elim` has no selected implementation, so `TreeMachine.fp_option_elim`
--- translates a `match` given with `via`. If this starts to succeed, the `via` is no longer needed.
-example (f : α → Bool) (hf : f ∈ FP .sizeCostTree) :
-    (fun o : Option α ↦ o.elim false f) ∈ FP .sizeCostTree := by
-  obtain ⟨pf, hpf⟩ := TreeMachine.exists_hasProgramIn_of_mem_fp hf
-  fail_if_success model_fun_prop
-  exact TreeMachine.fp_option_elim hf false
-
--- Records a limit: `bif` (`cond`) has no selected implementation, unlike `if`. If this starts to
--- succeed, `cond` is translated as `if` is.
-example : (fun y : α × Bool ↦ bif y.2 then some y.1 else none) ∈ FP .sizeCostTree := by
-  fail_if_success model_fun_prop
-  model_fun_prop via (fun y : α × Bool ↦ if y.2 then some y.1 else none)
-  case source_eq => funext y; cases y.2 <;> rfl
-
 end Complexity.DecompileTest
