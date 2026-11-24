@@ -14,7 +14,8 @@ public meta import Complexity.Tactic.TreeProgram.Search
 A field of a field of the input, a closed value, and a constructor of such values have codes
 assembled from subtrees of the input's code and constant trees. An `Assembly` describes such a
 code; one assignment builds it, so `HasProgramInO.assemble` is proved once and each use only proves
-the equation of the trees.
+the equation of the trees. An assembled tree has at most `Assembly.weight` nodes per node of the
+input, so `exists_hasProgramInO_assemble` bounds the peak by the input's code size alone.
 -/
 
 @[expose] public section
@@ -80,6 +81,34 @@ theorem maxSize_expr_le (A : Assembly) (v : Value) (s : ℕ → Tree) :
       max_le_iff] at iha ihb ⊢
     omega
 
+/-- An upper bound on the nodes of an assembled tree per node of the input. -/
+def weight : Assembly → ℕ
+  | read _ => 1
+  | const T => T.size
+  | pair a b => 1 + a.weight + b.weight
+
+/-- An assembled tree has at most `A.weight` nodes per node of the input. -/
+theorem size_eval_le (A : Assembly) (t : Tree) : (A.eval t).size ≤ A.weight * t.size := by
+  have ht := Tree.size_pos t
+  induction A with
+  | read path => simpa [eval, weight] using Tree.size_subtree_le t path
+  | const T => simpa [eval, weight] using Nat.le_mul_of_pos_right T.size ht
+  | pair a b iha ihb =>
+    simp only [eval, Tree.size_pair, weight, Nat.add_mul, Nat.one_mul]
+    omega
+
+/-- The code of a list assembled from assemblies of its entries. -/
+def list : List Assembly → Assembly
+  | [] => const .nil
+  | a :: as => pair a (list as)
+
+/-- The assembly of a list builds the code of the list of the assembled entries. -/
+theorem eval_list (t : Tree) (as : List Assembly) :
+    (list as).eval t = ⌜as.map (·.eval t)⌝ₜ := by
+  induction as with
+  | nil => rfl
+  | cons a as ih => simp [list, eval, ih, encode_prod]
+
 end Assembly
 
 end Complexity.TreeProgram
@@ -125,6 +154,16 @@ theorem Internal.HasProgramInO.const {γ : Type*} [UniqueEncoding Tree γ] (c : 
         simp only [Code.bounded_eval_iff, Expr.maxSize_ofTree]
         exact ⟨le_rfl, le_rfl, by simp, fun j hj => by simp [Nat.ne_of_lt hj]⟩⟩).mono
     (Dominated.const _) (Dominated.const _)
+
+/-- An assembly built in one assignment, with its peak counted against the input. -/
+theorem exists_hasProgramInO_assemble {α β : Type*} [UniqueEncoding Tree α]
+    [UniqueEncoding Tree β] {f : α → β} (A : Assembly) (h : ∀ x, A.eval ⌜x⌝ₜ = ⌜f x⌝ₜ) :
+    ∃ q, HasProgramInO f q (fun _ => 1) (fun x => ⌜x⌝ₜ.size) :=
+  ⟨_, (HasProgramInO.assemble A h).mono (.refl _) (Dominated.of_le_mul (1 + A.weight) fun x => by
+    have := A.size_eval_le ⌜x⌝ₜ
+    rw [h] at this
+    simp only [max_le_iff, Nat.add_mul, Nat.one_mul]
+    omega)⟩
 
 end Complexity.TreeProgram.Source
 

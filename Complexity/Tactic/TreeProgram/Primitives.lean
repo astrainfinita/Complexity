@@ -11,6 +11,10 @@ public import Complexity.Tactic.TreeProgram.Translation
 
 A translation unfolds only the definitions it translates. These core operations are referenced
 by other definitions, so their implementations are selected here once.
+
+Testing a tree's root is built from the emptiness test (`exists_hasProgramInO_root`), and root
+tests at fixed paths of the input's code select one of several programs
+(`exists_hasProgramInO_dispatch`).
 -/
 
 @[expose] public section
@@ -85,5 +89,42 @@ theorem _root_.List.hasProgramIn_isEmpty {α : Type*} [UniqueEncoding Tree α] :
 
 attribute [scoped program] Bool.hasProgramIn_not hasProgramIn_boolAnd hasProgramIn_boolOr
   hasProgramIn_boolXor hasProgramIn_boolBeq List.hasProgramIn_isEmpty
+
+/-- Testing a tree's root is testing the list of its spine for emptiness. -/
+theorem exists_hasProgramInO_root :
+    ∃ q, HasProgramInO Tree.root q (fun _ => 1) (fun t => ⌜t⌝ₜ.size) := by
+  have h := (List.hasProgramIn_isEmpty (α := Tree)).toHasProgramInO.map_input Tree.spine
+    Tree.encode_spine
+  exact ⟨_, ((h.comp Bool.hasProgramIn_not.toHasProgramInO).congr
+    (funext fun t => (Tree.root_eq_not_isEmpty_spine t).symm)).mono
+    (Dominated.const_of_pos 2 fun _ => Nat.one_pos)
+    ((Dominated.of_le fun t => by rw [Tree.encode_spine]).max_same
+      (Dominated.one fun t => Tree.size_pos _))⟩
+
+/-- Root tests at fixed paths of the input's code select one of the given programs. -/
+theorem exists_hasProgramInO_dispatch {α β : Type*} [UniqueEncoding Tree α]
+    [UniqueEncoding Tree β] (paths : List (List Bool)) (G : List Bool → α → β)
+    (hG : ∀ l, ∃ q, HasProgramInO (G l) q (fun _ => 1) (fun x => ⌜x⌝ₜ.size)) :
+    ∃ q, HasProgramInO (fun x => G (paths.map fun p => (⌜x⌝ₜ.subtree p).root) x) q
+      (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
+  induction paths generalizing G with
+  | nil => exact hG []
+  | cons p ps ih =>
+    obtain ⟨qt, ht⟩ := ih (fun l => G (true :: l)) (fun l => hG _)
+    obtain ⟨qf, hf⟩ := ih (fun l => G (false :: l)) (fun l => hG _)
+    obtain ⟨qr, hr⟩ := exists_hasProgramInO_root
+    have hc := (HasProgramInO.subtree (α := α) (f := fun x => ⌜x⌝ₜ.subtree p) p
+      (fun _ => rfl)).comp hr
+    refine ⟨_, ((hc.ite ht hf).congr ?_).mono ?_ ?_⟩
+    · funext x
+      simp only [Function.comp_apply, List.map_cons]
+      by_cases h : (⌜x⌝ₜ.subtree p).root = true
+      · rw [ite_eq_left h, h]
+      · rw [ite_eq_right h, Bool.eq_false_of_ne_true h]
+    · exact Dominated.of_le_mul 4 fun x => by split <;> simp
+    · refine Dominated.of_le fun x => ?_
+      have := Tree.size_subtree_le ⌜x⌝ₜ p
+      simp only [Tree.encode_self, Function.comp_apply]
+      split <;> omega
 
 end Complexity.TreeProgram.Source

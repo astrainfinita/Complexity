@@ -64,4 +64,13 @@ theorem size_reverseAppend (xs ys : Tree) :
     simpa only [encodeList_cons, reverseAppend, List.reverse_cons, List.append_assoc,
       List.singleton_append] using ih (x :: ys)
 
+/-- The left children along the right spine of a tree; its code is the tree itself. -/
+def spine : Tree → List Tree
+  | .nil => []
+  | .node _ a b => a :: spine b
+
+/-- A tree is a node exactly when its spine list is nonempty. -/
+theorem root_eq_not_isEmpty_spine (t : Tree) : t.root = !t.spine.isEmpty := by
+  cases t <;> rfl
+
 end Complexity.Tree

@@ -29,6 +29,12 @@ theorem Tree.encode_encode {α : Type*} [UniqueEncoding Tree α] (a : α) : ⌜�
 
 @[simp] theorem Tree.decode_self (a : Tree) : decode Tree a = Part.some a := rfl
 
+/-- The code of the spine list is the tree itself. -/
+theorem Tree.encode_spine (t : Tree) : ⌜t.spine⌝ₜ = ⌜t⌝ₜ := by
+  induction t with
+  | nil => rfl
+  | node u a b _ hb => cases u; simp only [Tree.spine, encode_list_cons, encode_prod]; simp_all
+
 namespace BitList
 
 /-- Parse one tree and reject any unconsumed suffix. -/
