@@ -109,6 +109,15 @@ jobs:
           test: false
           lint: false
 
+      - name: Allow memory overcommit
+        # Provisional workaround. Lean starts processes with `fork`, every Lean thread has a 1 GiB
+        # stack, and the documentation build blocks hundreds of Lake jobs at once, each holding a
+        # thread. With glibc 2.42 or later (ubuntu-26.04) adjacent thread stacks form a single
+        # mapping, larger than RAM plus swap, so the default overcommit heuristic refuses Lake's
+        # `fork` of `git` (ENOMEM) although little memory is in use. Remove this step once Lean or
+        # doc-gen4 no longer needs it.
+        run: sudo sysctl -w vm.overcommit_memory=1
+
       - name: Build documentation
         run: bash scripts/build-docs.sh
 
