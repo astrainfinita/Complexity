@@ -15,7 +15,7 @@ A field of a field of the input, a closed value, and a constructor of such value
 assembled from subtrees of the input's code and constant trees. An `Assembly` describes such a
 code; one assignment builds it, so `HasProgramInO.assemble` is proved once and each use only proves
 the equation of the trees. An assembled tree has at most `Assembly.weight` nodes per node of the
-input, so `exists_hasProgramInO_assemble` bounds the peak by the input's code size alone.
+input, so `HasProgramInO.assemble_input` bounds the peak by the input's code size alone.
 -/
 
 @[expose] public section
@@ -44,6 +44,13 @@ def eval (t : Tree) : Assembly → Tree
   | read path => t.subtree path
   | const T => T
   | pair a b => .pair (a.eval t) (b.eval t)
+
+theorem eval_read (t : Tree) (path : List Bool) : (read path).eval t = t.subtree path := rfl
+
+theorem eval_const (t T : Tree) : (const T).eval t = T := rfl
+
+theorem eval_pair (t : Tree) (a b : Assembly) :
+    (pair a b).eval t = .pair (a.eval t) (b.eval t) := rfl
 
 /-- The expression assembling the tree from the input's expression. -/
 def expr (i : Expr ℕ) : Assembly → Expr ℕ
@@ -135,14 +142,24 @@ theorem Internal.HasProgramInO.assemble {f : (x : α) → β x} (A : Assembly)
           by simp [hx, h], fun j hj => by simp [Nat.ne_of_lt hj]⟩⟩).mono
     (Dominated.const _) (.refl _)
 
+/-- An assembly built in one assignment, with its peak counted against the input. -/
+theorem Internal.HasProgramInO.assemble_input {f : (x : α) → β x} (A : Assembly)
+    (h : ∀ x, A.eval ⌜x⌝ₜ = ⌜f x⌝ₜ) :
+    HasProgramInO f (fun v => Code.eval (A.expr v.expression)) (fun _ => 1)
+      (fun x => ⌜x⌝ₜ.size) :=
+  (HasProgramInO.assemble A h).mono (.refl _) (Dominated.of_le_mul (1 + A.weight) fun x => by
+    have := A.size_eval_le ⌜x⌝ₜ
+    rw [h] at this
+    simp only [max_le_iff, Nat.add_mul, Nat.one_mul]
+    omega)
+
 /-- Read the subtree of the input's code at a path, such as a field of a field, whose code is a
 subtree by the structures' `T.encode_field`: one step for every path. -/
 theorem Internal.HasProgramInO.subtree {f : (x : α) → β x} (path : List Bool)
     (h : ∀ x, ⌜f x⌝ₜ = ⌜x⌝ₜ.subtree path) :
     HasProgramInO f (fun v => Code.eval (v.expression.subtree path)) (fun _ => 1)
       (fun x => ⌜x⌝ₜ.size) :=
-  (HasProgramInO.assemble (.read path) fun x => (h x).symm).mono (.refl _)
-    (Dominated.of_le fun x => by simp [h, Tree.size_subtree_le])
+  HasProgramInO.assemble_input (.read path) fun x => (h x).symm
 
 /-- A closed value is written as its code in one step. -/
 theorem Internal.HasProgramInO.const {γ : Type*} [UniqueEncoding Tree γ] (c : γ) :
@@ -154,16 +171,6 @@ theorem Internal.HasProgramInO.const {γ : Type*} [UniqueEncoding Tree γ] (c : 
         simp only [Code.bounded_eval_iff, Expr.maxSize_ofTree]
         exact ⟨le_rfl, le_rfl, by simp, fun j hj => by simp [Nat.ne_of_lt hj]⟩⟩).mono
     (Dominated.const _) (Dominated.const _)
-
-/-- An assembly built in one assignment, with its peak counted against the input. -/
-theorem exists_hasProgramInO_assemble {α β : Type*} [UniqueEncoding Tree α]
-    [UniqueEncoding Tree β] {f : α → β} (A : Assembly) (h : ∀ x, A.eval ⌜x⌝ₜ = ⌜f x⌝ₜ) :
-    ∃ q, HasProgramInO f q (fun _ => 1) (fun x => ⌜x⌝ₜ.size) :=
-  ⟨_, (HasProgramInO.assemble A h).mono (.refl _) (Dominated.of_le_mul (1 + A.weight) fun x => by
-    have := A.size_eval_le ⌜x⌝ₜ
-    rw [h] at this
-    simp only [max_le_iff, Nat.add_mul, Nat.one_mul]
-    omega)⟩
 
 end Complexity.TreeProgram.Source
 

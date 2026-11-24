@@ -45,4 +45,10 @@ instance {α : Type*} [UniqueEncoding Tree α] : UniqueEncoding Tree (Option α)
 @[simp] theorem encode_option_some {α : Type*} [UniqueEncoding Tree α] (a : α) :
     ⌜some a⌝ₜ = ⌜((), a)⌝ₜ := rfl
 
+/-- The code of a present value has two more nodes than the value's code. -/
+theorem size_encode_option_some {α : Type*} [UniqueEncoding Tree α] (a : α) :
+    ⌜some a⌝ₜ.size = ⌜a⌝ₜ.size + 2 := by
+  rw [encode_option_some, size_encode_prod, size_encode_unit]
+  omega
+
 end Complexity

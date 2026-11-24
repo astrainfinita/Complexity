@@ -16,7 +16,8 @@ transition observes at fixed paths of this code, then builds the next configurat
 subtrees of the current one in one assignment, so a round costs a constant depending only on the
 machine. The loop domain is restricted to configurations from which the machine halts, and the
 number of steps until it halts is the loop measure. The root tests are
-`Source.exists_hasProgramInO_dispatch` and the builds `Source.exists_hasProgramInO_assemble`.
+`Source.exists_hasProgramInO_dispatch` and the builds
+`Source.Internal.HasProgramInO.assemble_input`.
 
 The one-hot code of control states and the list code of register banks are the current choices,
 not decisions; the names are provisional.
@@ -42,35 +43,14 @@ theorem encode_cfg (c : Cfg k) : ⌜c⌝ₜ = ⌜List.ofFn c.regs⌝ₜ := rfl
 
 /-- A configuration's code stores its registers with one node per register and a final leaf. -/
 theorem size_encode_cfg (c : Cfg k) : ⌜c⌝ₜ.size = c.mass + k + 1 := by
-  rw [encode_cfg, size_encode_list]
-  simp [Cfg.mass, List.sum_ofFn]
-
-/-- The path to entry `j` of a list's code. -/
-def listPath (j : ℕ) : List Bool := List.replicate j true ++ [false]
-
-/-- The subtree at `listPath j` of a list's code is the code of entry `j`. -/
-theorem subtree_listPath {γ : Type*} [UniqueEncoding Tree γ] (l : List γ) (j : ℕ)
-    (hj : j < l.length) : ⌜l⌝ₜ.subtree (listPath j) = ⌜l[j]⌝ₜ := by
-  induction l generalizing j with
-  | nil => simp at hj
-  | cons a l ih =>
-    cases j with
-    | zero => simp [listPath, Tree.subtree, encode_prod]
-    | succ j =>
-      have := ih j (by simpa using hj)
-      simp only [listPath, List.replicate_succ, List.cons_append] at this ⊢
-      simpa [Tree.subtree, encode_prod] using this
-
-/-- `subtree_listPath` for a list of all values of a function on `Fin m`. -/
-theorem subtree_listPath_ofFn {γ : Type*} [UniqueEncoding Tree γ] {m : ℕ} (g : Fin m → γ)
-    (j : Fin m) : ⌜List.ofFn g⌝ₜ.subtree (listPath j) = ⌜g j⌝ₜ := by
-  simpa using subtree_listPath (List.ofFn g) j (by simp)
+  rw [encode_cfg, size_encode_list, List.map_ofFn, List.sum_ofFn, List.length_ofFn, Cfg.mass]
+  simp only [Function.comp_apply, Tree.encode_self]
 
 /-- The path to register `i` in a configuration's code. -/
-abbrev regPath (i : ℕ) : List Bool := true :: listPath i
+def regPath (i : ℕ) : List Bool := true :: (List.replicate i true ++ [false])
 
 /-- The path to the bit `j` of the control state in a configuration's code. -/
-abbrev statePath (j : ℕ) : List Bool := false :: listPath j
+def statePath (j : ℕ) : List Bool := false :: (List.replicate j true ++ [false])
 
 /-- The paths whose roots a step inspects: the state bits and the register roots. -/
 def rootPaths (n k : ℕ) : List (List Bool) :=
@@ -90,28 +70,21 @@ theorem stateBits_injective : Function.Injective (stateBits e) := by
   simpa [stateBits] using this
 
 /-- The code of the bits of a control state has at most `4 * n + 1` nodes. -/
-theorem size_encode_stateBits (q : Q) : ⌜stateBits e q⌝ₜ.size ≤ 4 * n + 1 := by
-  rw [encode_fin_function, size_encode_list, List.map_ofFn, List.sum_ofFn, List.length_ofFn]
-  have : ∑ j, ⌜stateBits e q j⌝ₜ.size ≤ ∑ _j : Fin n, 3 :=
-    Finset.sum_le_sum fun j _ => size_encode_bool_le _
-  simp only [Finset.sum_const, Finset.card_univ, Fintype.card_fin, smul_eq_mul] at this
-  simp only [Function.comp_apply]
-  omega
+theorem size_encode_stateBits (q : Q) : ⌜stateBits e q⌝ₜ.size ≤ 4 * n + 1 :=
+  (size_encode_fin_function_le _ 3 fun _ => size_encode_bool_le _).trans_eq (by ring)
 
-/-- The control state whose bits begin a list of bits, or `q₀`. -/
+/-- The control state whose bits begin a list of bits; any state if there is none, `q₀` showing
+that one exists. -/
 noncomputable def decodeState (q₀ : Q) (l : List Bool) : Q :=
-  open Classical in
-  if h : ∃ q, List.ofFn (stateBits e q) = l.take n then h.choose else q₀
+  haveI : Nonempty Q := ⟨q₀⟩
+  Function.invFun (fun q => List.ofFn (stateBits e q)) (l.take n)
 
 /-- The bits of a control state, followed by any bits, decode to that state. -/
 theorem decodeState_append (q₀ q : Q) (l : List Bool) :
     decodeState e q₀ (List.ofFn (stateBits e q) ++ l) = q := by
-  have hq : ∃ q', List.ofFn (stateBits e q') = (List.ofFn (stateBits e q) ++ l).take n :=
-    ⟨q, by simp⟩
-  simp only [decodeState, hq, ↓reduceDIte]
-  apply stateBits_injective e
-  apply List.ofFn_injective
-  simpa using hq.choose_spec
+  rw [decodeState, List.take_left' List.length_ofFn]
+  have : Nonempty Q := ⟨q₀⟩
+  exact Function.leftInverse_invFun (List.ofFn_injective.comp (stateBits_injective e)) q
 
 variable {e}
 
@@ -123,31 +96,29 @@ def decodeObs (l : List Bool) : Fin k → Bool := fun i => l.getD (n + i) false
 theorem decodeObs_append (q : Q) (o : Fin k → Bool) :
     decodeObs n (List.ofFn (stateBits e q) ++ List.ofFn o) = o := by
   funext i
-  simp [decodeObs, List.getD_eq_getElem?_getD]
+  rw [decodeObs, List.getD_eq_getElem?_getD, List.getElem?_append_right (by simp),
+    List.length_ofFn, Nat.add_sub_cancel_left, List.getElem?_ofFn]
+  simp only [Fin.is_lt, ↓reduceDIte, Option.getD_some]
 
 variable [UniqueEncoding Tree Q]
 
 /-- The subtree at `regPath i` of a configuration's code is register `i`. -/
 theorem subtree_regPath (x : Q × Cfg k) (i : Fin k) : ⌜x⌝ₜ.subtree (regPath i) = x.2.regs i := by
-  obtain ⟨q, c⟩ := x
-  simpa [Tree.subtree, encode_cfg] using subtree_listPath_ofFn c.regs i
+  rw [regPath, ← List.singleton_append, Tree.subtree_append, ← Prod.encode_snd, encode_cfg,
+    ← encode_fin_function, ← encode_fin_apply, Tree.encode_self]
 
 /-- The root at `statePath j` of a configuration's code is bit `j` of its state. -/
 theorem root_statePath (hQ : ∀ q, ⌜q⌝ₜ = ⌜stateBits e q⌝ₜ) (x : Q × Cfg k) (j : Fin n) :
     (⌜x⌝ₜ.subtree (statePath j)).root = stateBits e x.1 j := by
-  obtain ⟨q, c⟩ := x
-  have := subtree_listPath_ofFn (stateBits e q) j
-  simp only [encode_fin_function] at hQ
-  simp [Tree.subtree, hQ, this]
+  rw [statePath, ← List.singleton_append, Tree.subtree_append, ← Prod.encode_fst, hQ,
+    ← encode_fin_apply, root_encode_bool]
 
 /-- The roots at `rootPaths` are the state bits followed by the observation. -/
 theorem map_rootPaths (hQ : ∀ q, ⌜q⌝ₜ = ⌜stateBits e q⌝ₜ) (x : Q × Cfg k) :
     (rootPaths n k).map (fun p => (⌜x⌝ₜ.subtree p).root) =
       List.ofFn (stateBits e x.1) ++ List.ofFn (observe x.2 : Fin k → Bool) := by
-  simp only [rootPaths, List.map_append, List.map_ofFn]
-  congr 1
-  · congr 1; funext j; exact root_statePath hQ x j
-  · congr 1; funext i; simp only [Function.comp_apply, subtree_regPath]; rfl
+  simp only [rootPaths, List.map_append, List.map_ofFn, Function.comp_def, root_statePath hQ,
+    subtree_regPath, ← Cfg.observe_def]
 
 /-- The assembly of register `i` after an action, from the code of the configuration before. -/
 def assembly : Action k → Fin k → Assembly
@@ -162,23 +133,26 @@ theorem eval_assembly (a : Action k) (x : Q × Cfg k) (i : Fin k) :
     (assembly a i).eval ⌜x⌝ₜ = a.eval x.2.regs i := by
   have hr (j : Fin k) (p : List Bool) :
       (Assembly.read (regPath j ++ p)).eval ⌜x⌝ₜ = (x.2.regs j).subtree p := by
-    simp only [Assembly.eval, Tree.subtree_append, subtree_regPath]
+    rw [Assembly.eval_read, Tree.subtree_append, subtree_regPath]
   have hr' (j : Fin k) : (Assembly.read (regPath j)).eval ⌜x⌝ₜ = x.2.regs j := by
-    simpa [Tree.subtree] using hr j []
+    rw [Assembly.eval_read, subtree_regPath]
   cases a with
   | nop => exact hr' i
   | left d j =>
-    by_cases h : i = d
-    · subst h; simpa [assembly, Tree.subtree] using hr j [false]
-    · simpa [assembly, h] using hr' i
+    rcases eq_or_ne i d with rfl | h
+    · simpa only [assembly, ↓reduceIte, Action.eval_left, Function.update_self,
+        Tree.subtree_cons, Tree.subtree_nil, Bool.false_eq_true] using hr j [false]
+    · simpa only [assembly, h, ↓reduceIte, Action.eval_left, Function.update_of_ne h] using hr' i
   | right d j =>
-    by_cases h : i = d
-    · subst h; simpa [assembly, Tree.subtree] using hr j [true]
-    · simpa [assembly, h] using hr' i
+    rcases eq_or_ne i d with rfl | h
+    · simpa only [assembly, ↓reduceIte, Action.eval_right, Function.update_self,
+        Tree.subtree_cons, Tree.subtree_nil] using hr j [true]
+    · simpa only [assembly, h, ↓reduceIte, Action.eval_right, Function.update_of_ne h] using hr' i
   | pair d j l =>
-    by_cases h : i = d
-    · subst h; simp [assembly, Assembly.eval, subtree_regPath]
-    · simpa [assembly, h] using hr' i
+    rcases eq_or_ne i d with rfl | h
+    · simp only [assembly, ↓reduceIte, Assembly.eval_pair, hr', Action.eval_pair,
+        Function.update_self]
+    · simpa only [assembly, h, ↓reduceIte, Action.eval_pair, Function.update_of_ne h] using hr' i
 
 variable (M : TreeMachine Id k Q)
 
@@ -193,16 +167,11 @@ theorem exists_hasProgramInO_leafStep (q : Q) (o : Fin k → Bool) :
   by_cases h : M.halt q
   · refine ⟨_, (Internal.HasProgramInO.identity.congr ?_).mono Dominated.zero Dominated.zero⟩
     funext x; simp [leafStep, h]
-  · apply exists_hasProgramInO_assemble (.pair (.const ⌜(M.transition q o).run.1⌝ₜ)
-      (Assembly.list (List.ofFn (assembly (M.transition q o).run.2))))
-    intro x
-    simp only [leafStep, h, Bool.false_eq_true, ↓reduceIte, Assembly.eval, Assembly.eval_list,
-      Controller.apply_prod, encode_prod, encode_cfg, Cfg.apply_regs, List.map_ofFn]
-    congr 3
-    funext i
-    exact eval_assembly _ x i
-
-variable {M}
+  · refine ⟨_, .assemble_input (.pair (.const ⌜(M.transition q o).run.1⌝ₜ)
+      (Assembly.list (List.ofFn (assembly (M.transition q o).run.2)))) fun x => ?_⟩
+    simp only [leafStep, h, Bool.false_eq_true, ↓reduceIte, Assembly.eval_pair, Assembly.eval_const,
+      Assembly.eval_list, Controller.apply_prod, encode_prod, encode_cfg, Cfg.apply_regs,
+      List.map_ofFn, Function.comp_def, eval_assembly]
 
 /-- A step tests the state bits and the register roots, then runs the selected leaf. -/
 theorem exists_hasProgramInO_step (hQ : ∀ q, ⌜q⌝ₜ = ⌜stateBits e q⌝ₜ) :
@@ -225,8 +194,9 @@ theorem exists_hasProgramInO_running (hQ : ∀ q, ⌜q⌝ₜ = ⌜stateBits e q�
   refine ⟨p, hp.congr (funext fun x => ?_)⟩
   simp only [map_rootPaths hQ, decodeState_append]
 
-/-- The output register is a subtree of a configuration's code. -/
-theorem hasProgramInO_output [NeZero k] :
+variable (Q) in
+/-- Register `0` is read as a subtree of a configuration's code. -/
+theorem hasProgramInO_regs_zero [NeZero k] :
     Internal.HasProgramInO (fun x : Q × Cfg k => x.2.regs 0)
       (fun v => Code.eval (v.expression.subtree (regPath 0))) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) :=
   Internal.HasProgramInO.subtree (regPath 0) fun x => (subtree_regPath x 0).symm
@@ -242,18 +212,17 @@ abbrev HaltingCfg := {x : Q × Cfg k // ∃ i, M.Halted (M.runFrom x i)}
 
 variable {M}
 
-open Classical in
 /-- The number of steps until the run from a configuration halts. -/
 noncomputable def haltTime (y : HaltingCfg M) : ℕ := Nat.find y.2
 
 /-- The run halts at `haltTime`. -/
-theorem halted_runFrom_haltTime (y : HaltingCfg M) : M.Halted (M.runFrom y.1 (haltTime y)) := by
-  classical exact Nat.find_spec y.2
+theorem halted_runFrom_haltTime (y : HaltingCfg M) : M.Halted (M.runFrom y.1 (haltTime y)) :=
+  Nat.find_spec y.2
 
 /-- `haltTime` is the first step at which the run halts. -/
 theorem haltTime_le (y : HaltingCfg M) {m : ℕ} (h : M.Halted (M.runFrom y.1 m)) :
-    haltTime y ≤ m := by
-  classical exact Nat.find_min' y.2 h
+    haltTime y ≤ m :=
+  Nat.find_min' y.2 h
 
 /-- Every halted configuration of the run is the one at `haltTime`. -/
 theorem runFrom_eq_runFrom_haltTime (y : HaltingCfg M) {m : ℕ} (h : M.Halted (M.runFrom y.1 m)) :
@@ -266,6 +235,9 @@ def HaltingCfg.step (y : HaltingCfg M) : HaltingCfg M :=
     rw [← M.runFrom_succ, M.runFrom_eq_of_halted _ (halted_runFrom_haltTime y) (Nat.le_succ _)]
     exact halted_runFrom_haltTime y⟩
 
+/-- A step of a configuration from which `M` halts is a step of `M`. -/
+theorem HaltingCfg.val_step (y : HaltingCfg M) : y.step.1 = M.step y.1 := rfl
+
 /-- A step of a running machine brings the halting step closer. -/
 theorem haltTime_step_lt (y : HaltingCfg M) (h : (!M.halt y.1.1) = true) :
     haltTime y.step < haltTime y := by
@@ -275,7 +247,7 @@ theorem haltTime_step_lt (y : HaltingCfg M) (h : (!M.halt y.1.1) = true) :
     rw [h0, Controller.runFrom_zero] at this
     simp_all [Controller.Halted]
   have : M.Halted (M.runFrom y.step.1 (haltTime y - 1)) := by
-    rw [HaltingCfg.step, ← M.runFrom_succ, Nat.sub_add_cancel (Nat.pos_of_ne_zero h0)]
+    rw [HaltingCfg.val_step, ← M.runFrom_succ, Nat.sub_add_cancel (Nat.pos_of_ne_zero h0)]
     exact halted_runFrom_haltTime y
   have := haltTime_le y.step this
   omega
@@ -288,9 +260,9 @@ noncomputable def peakSize [UniqueEncoding Tree Q] (y : HaltingCfg M) : ℕ :=
 theorem size_le_peakSize [UniqueEncoding Tree Q] (y : HaltingCfg M) (i : ℕ) :
     ⌜M.runFrom y.1 i⌝ₜ.size ≤ peakSize y := by
   rcases le_or_gt i (haltTime y) with hi | hi
-  · exact Finset.le_sup (f := fun i => ⌜M.runFrom y.1 i⌝ₜ.size) (by simp; omega)
+  · exact Finset.le_sup (f := fun i => ⌜M.runFrom y.1 i⌝ₜ.size) (Finset.mem_range_succ_iff.2 hi)
   · rw [M.runFrom_eq_of_halted _ (halted_runFrom_haltTime y) hi.le]
-    exact Finset.le_sup (f := fun i => ⌜M.runFrom y.1 i⌝ₜ.size) (by simp)
+    exact Finset.le_sup (f := fun i => ⌜M.runFrom y.1 i⌝ₜ.size) (Finset.self_mem_range_succ _)
 
 variable [NeZero k]
 
@@ -298,7 +270,7 @@ variable [NeZero k]
 noncomputable def output (y : HaltingCfg M) : Tree := (M.runFrom y.1 (haltTime y)).2.regs 0
 
 /-- The output can be read at any step at which the run has halted. -/
-theorem output_eq (y : HaltingCfg M) {m : ℕ} (h : M.Halted (M.runFrom y.1 m)) :
+theorem output_eq_of_halted (y : HaltingCfg M) {m : ℕ} (h : M.Halted (M.runFrom y.1 m)) :
     output y = (M.runFrom y.1 m).2.regs 0 := by
   rw [output, runFrom_eq_runFrom_haltTime y h]
 
@@ -307,26 +279,30 @@ theorem output_equation (y : HaltingCfg M) :
     output y = if (!M.halt y.1.1) then output y.step else y.1.2.regs 0 := by
   cases hy : M.halt y.1.1
   · simp only [Bool.not_false, ↓reduceIte]
-    rw [output_eq y (m := haltTime y.step + 1)]
-    · rw [M.runFrom_succ]; rfl
-    · rw [M.runFrom_succ]; exact halted_runFrom_haltTime y.step
+    rw [output_eq_of_halted y (m := haltTime y.step + 1)]
+    · rw [M.runFrom_succ, ← HaltingCfg.val_step]; rfl
+    · rw [M.runFrom_succ, ← HaltingCfg.val_step]; exact halted_runFrom_haltTime y.step
   · simp only [Bool.not_true, Bool.false_eq_true, ↓reduceIte]
-    exact output_eq y (m := 0) hy
+    exact output_eq_of_halted y (m := 0) hy
 
 variable [UniqueEncoding Tree Q] {n : ℕ} {e : Q ≃ Fin n}
 
+variable (M e) in
 /-- The halting run, step by step, with one round per step of `M`. -/
 theorem exists_hasProgramInO_output (hQ : ∀ q, ⌜q⌝ₜ = ⌜stateBits e q⌝ₜ) :
-    ∃ p, Internal.HasProgramInO (output : HaltingCfg M → Tree) p
-      (fun y => 1 + (haltTime y * 1 + 1) + 1) peakSize := by
-  obtain ⟨qc, hc⟩ := exists_hasProgramInO_running (M := M) hQ
-  obtain ⟨qs, hs⟩ := exists_hasProgramInO_step (M := M) hQ
-  have hc' := hc.map_input (Subtype.val : HaltingCfg M → Q × Cfg k) (fun _ => rfl)
+    ∃ p, Internal.HasProgramInO (output : HaltingCfg M → Tree) p (fun y => haltTime y + 1)
+      peakSize := by
+  obtain ⟨qc, hc⟩ := exists_hasProgramInO_running M hQ
+  obtain ⟨qs, hs⟩ := exists_hasProgramInO_step M hQ
+  have hc' := hc.map_input (Subtype.val : HaltingCfg M → Q × Cfg k)
+    (fun x => (UniqueEncoding.encode_subtype x).symm)
   have hs' : Internal.HasProgramInO (HaltingCfg.step : HaltingCfg M → HaltingCfg M) qs _ _ :=
-    Internal.HasProgramInO.of_encode (g := fun y : HaltingCfg M => M.step y.1) (fun _ => rfl)
-      (hs.map_input (Subtype.val : HaltingCfg M → Q × Cfg k) (fun _ => rfl))
-  have hd' := (hasProgramInO_output (Q := Q)).map_input
-    (Subtype.val : HaltingCfg M → Q × Cfg k) (fun _ => rfl)
+    Internal.HasProgramInO.of_encode (g := fun y : HaltingCfg M => M.step y.1)
+      (fun y => by rw [UniqueEncoding.encode_subtype, HaltingCfg.val_step])
+      (hs.map_input (Subtype.val : HaltingCfg M → Q × Cfg k)
+        (fun x => (UniqueEncoding.encode_subtype x).symm))
+  have hd' := (hasProgramInO_regs_zero Q).map_input
+    (Subtype.val : HaltingCfg M → Q × Cfg k) (fun x => (UniqueEncoding.encode_subtype x).symm)
   have hpeak : Dominated
       (fun z : {p : HaltingCfg M × HaltingCfg M // ∃ i, p.2.1 = M.runFrom p.1.1 i} =>
         ⌜z.1.2.1⌝ₜ.size) (fun z => peakSize z.1.1) := by
@@ -335,7 +311,7 @@ theorem exists_hasProgramInO_output (hQ : ∀ q, ⌜q⌝ₜ = ⌜stateBits e q�
     rw [hi]
     exact size_le_peakSize z.1.1 i
   exact ⟨_, by
-    source_fun_prop using loop (test := fun y : HaltingCfg M => !M.halt y.1.1)
+    source_fun_prop (disch := skip) using loop (test := fun y : HaltingCfg M => !M.halt y.1.1)
       (next := HaltingCfg.step) (finish := fun y : HaltingCfg M => y.1.2.regs 0)
       (invariant := fun x y => ∃ i, y.1 = M.runFrom x.1 i) (measure := haltTime)
       (step := fun _ => 1) (stop := fun _ => 1) (space := peakSize)
@@ -343,9 +319,11 @@ theorem exists_hasProgramInO_output (hQ : ∀ q, ⌜q⌝ₜ = ⌜stateBits e q�
     case initial => exact fun x => ⟨0, rfl⟩
     case next_state =>
       rintro x y ⟨i, hi⟩ -
-      exact ⟨i + 1, by rw [M.runFrom_succ', ← hi]; rfl⟩
+      exact ⟨i + 1, by rw [M.runFrom_succ', ← hi, HaltingCfg.val_step]⟩
     case decreases => exact fun x y _ h => haltTime_step_lt y h
     case step_pos | stop_pos => exact fun _ => Nat.one_pos
+    case time => exact Dominated.of_le_mul 3 fun _ => by omega
+    case step_time | check_time | stop_time => exact .refl _
     all_goals exact hpeak⟩
 
 end Loop
@@ -370,25 +348,24 @@ theorem exists_hasProgramIn_of_mem_fp {α β : Type*} [UniqueEncoding Tree α]
   obtain ⟨n, ⟨e⟩⟩ := Finite.exists_equiv_fin Q
   let _ : UniqueEncoding Tree Q :=
     UniqueEncoding.ofInjective inferInstance (stateBits e) (stateBits_injective e)
-  obtain ⟨ql, hl⟩ := exists_hasProgramInO_output (M := M) (e := e) fun _ => rfl
+  obtain ⟨ql, hl⟩ := exists_hasProgramInO_output M e fun _ => rfl
   let init (a : α) : HaltingCfg M := ⟨M.init ⌜a⌝ₜ, (hM a).terminates⟩
-  obtain ⟨qi, hi⟩ := exists_hasProgramInO_assemble (f := init) (.pair (.const ⌜M.q₀⌝ₜ)
-    (Assembly.list (List.ofFn fun i : Fin k => if i = 0 then .read [] else .const .nil))) <| by
-    intro a
-    simp only [Assembly.eval, Assembly.eval_list, List.map_ofFn, init,
-      UniqueEncoding.encode_subtype, Controller.init, hasConfig_init, encode_prod, encode_cfg,
-      Cfg.init_regs]
-    congr 3
-    funext i
-    by_cases hi : i = 0
-    · subst hi; simp [Assembly.eval, Tree.subtree]
-    · simp [Assembly.eval, hi]
+  have hi := Internal.HasProgramInO.assemble_input (f := init) (.pair (.const ⌜M.q₀⌝ₜ)
+    (.list (List.ofFn fun i : Fin k => if i = 0 then .read [] else .const .nil))) fun a => by
+    have hreg (i : Fin k) :
+        (if i = 0 then Assembly.read [] else .const .nil).eval ⌜a⌝ₜ = input 0 ⌜a⌝ₜ i := by
+      split_ifs with h
+      · rw [h, Assembly.eval_read, Tree.subtree_nil, input_get]
+      · rw [Assembly.eval_const, input_get_of_ne _ h]
+    simp only [Assembly.eval_pair, Assembly.eval_const, Assembly.eval_list, List.map_ofFn,
+      Function.comp_def, hreg, init, UniqueEncoding.encode_subtype, Prod.encode_eq,
+      Controller.init_fst, Controller.init_snd, hasConfig_init, encode_cfg, Cfg.init_regs]
   have hfeq (a : α) : ⌜f a⌝ₜ = ⌜output (init a)⌝ₜ := by
     obtain ⟨m, -, hm, ho, -, -⟩ := (hM a).exists_haltsAt
-    rw [Tree.encode_self, output_eq (init a) hm.1]
+    rw [Tree.encode_self, output_eq_of_halted (init a) hm.1]
     exact ho.symm
   refine ⟨_, ((hi.comp hl).of_encode hfeq).hasProgramIn ?_ ?_⟩
-  · refine ((ht.comp IsPoly.refl).add (IsPoly.const 4)).of_dominated
+  · refine ((ht.comp IsPoly.refl).add (IsPoly.const 2)).of_dominated
       (Dominated.of_le fun a => ?_)
     obtain ⟨m, hmt, hm, -⟩ := (hM a).exists_haltsAt
     have := haltTime_le (init a) hm.1

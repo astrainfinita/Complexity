@@ -18,8 +18,8 @@ codes of `W`.
 The abstract members of `FP .sizeCostTree` are decompiled into tree programs
 (`exists_hasProgramIn_of_mem_fp`) and composed by the source translation (`model_fun_prop`). The
 retyping of a guarded input from `α × Tree` to `α × W` reads the codes of the guard's outputs at
-another type. This is the current way to compose with an abstract member of `FP`, not a decision;
-the names are provisional.
+another type, by `choose`; this retyping, the two workarounds in `fp_option_elim` and the names
+are the current state, not decisions.
 -/
 
 @[expose] public section
@@ -30,19 +30,19 @@ open TreeProgram TreeProgram.Source
 
 variable {α β γ : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β] [UniqueEncoding Tree γ]
 
-/-- `o ↦ o.elim b f`: the decompiled program of `f` on the value of the option, by translation.
-
-The translation takes no free constant, so the default `b` is passed to it as a local function
-`c : Unit → γ` with the program writing `⌜b⌝ₜ`; the growths are proved by hand, since `dominated`
-compares them only pointwise in the branches of the `match`. Both are the current workarounds,
-not decisions. -/
+/-- `o ↦ o.elim b f` is in `FP .sizeCostTree` when `f` is. -/
 theorem fp_option_elim {f : β → γ} (hf : f ∈ FP .sizeCostTree) (b : γ) :
     (fun o : Option β ↦ o.elim b f) ∈ FP .sizeCostTree := by
   obtain ⟨pf, hpf⟩ := exists_hasProgramIn_of_mem_fp hf
+  -- The translation takes no free constant, so the default `b` is passed to it as a local function
+  -- `c : Unit → γ` with the program writing `⌜b⌝ₜ` (W88); the growths are proved by hand, since
+  -- `dominated` compares them only pointwise in the branches of the `match` (W2). Both are the
+  -- current workarounds, not decisions.
   obtain ⟨c, hc, hpc⟩ : ∃ c : Unit → γ, c = (fun _ => b) ∧
       HasProgramIn c (fun _ => Code.eval (.ofTree ⌜b⌝ₜ)) IsO(fun _ => 1) IsO(fun _ => 1) :=
     ⟨_, rfl, (Internal.HasProgramInO.const b).toHasProgramIn⟩
-  model_fun_prop via (fun o : Option β => match o with | none => c () | some z => f z)
+  model_fun_prop (disch := skip) via
+    (fun o : Option β => match o with | none => c () | some z => f z)
   case source_eq => funext o; cases o <;> simp [hc]
   case time =>
     obtain ⟨T, hT, hTp, hle⟩ := hpf.time_spec.exists_monotone
@@ -50,8 +50,7 @@ theorem fp_option_elim {f : β → γ} (hf : f ∈ FP .sizeCostTree) (b : γ) :
       (Dominated.of_le fun o => ?_)
     rcases o with _ | z
     · dsimp only; omega
-    · have hs : ⌜z⌝ₜ.size + 2 = ⌜some z⌝ₜ.size := by
-        simp only [encode_option_some, size_encode_prod, size_encode_unit]; omega
+    · have hs := size_encode_option_some z
       have := hT (show ⌜z⌝ₜ.size ≤ ⌜some z⌝ₜ.size by omega)
       have := hle z
       dsimp only; omega
@@ -61,8 +60,7 @@ theorem fp_option_elim {f : β → γ} (hf : f ∈ FP .sizeCostTree) (b : γ) :
       (by dominated) (Dominated.of_le fun o => ?_)
     rcases o with _ | z
     · simp only [max_le_iff]; omega
-    · have hs : ⌜z⌝ₜ.size + 2 = ⌜some z⌝ₜ.size := by
-        simp only [encode_option_some, size_encode_prod, size_encode_unit]; omega
+    · have hs := size_encode_option_some z
       have := hT (show ⌜z⌝ₜ.size ≤ ⌜some z⌝ₜ.size by omega)
       have := hle z
       simp only [max_le_iff]; omega

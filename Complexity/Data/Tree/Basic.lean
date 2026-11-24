@@ -51,6 +51,11 @@ def subtree (t : Tree) : List Bool → Tree
   | [] => t
   | r :: path => (if r then t.right else t.left).subtree path
 
+theorem subtree_nil (t : Tree) : t.subtree [] = t := rfl
+
+theorem subtree_cons (t : Tree) (r : Bool) (p : List Bool) :
+    t.subtree (r :: p) = (if r then t.right else t.left).subtree p := rfl
+
 theorem subtree_append (t : Tree) (p q : List Bool) :
     t.subtree (p ++ q) = (t.subtree p).subtree q := by
   induction p generalizing t with

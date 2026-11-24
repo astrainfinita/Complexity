@@ -12,9 +12,10 @@ public import Complexity.Tactic.TreeProgram.Translation
 A translation unfolds only the definitions it translates. These core operations are referenced
 by other definitions, so their implementations are selected here once.
 
-Testing a tree's root is built from the emptiness test (`exists_hasProgramInO_root`), and root
-tests at fixed paths of the input's code select one of several programs
-(`exists_hasProgramInO_dispatch`).
+Two further facts are not selected implementations. Testing a tree's root is built from the
+emptiness test (`Tree.hasProgramIn_root`) but is not registered with `program`; this is the current
+state, not a decision. Root tests at fixed paths of the input's code select one of several programs
+(`exists_hasProgramInO_dispatch`), a rule rather than an implementation of a function.
 -/
 
 @[expose] public section
@@ -91,15 +92,17 @@ attribute [scoped program] Bool.hasProgramIn_not hasProgramIn_boolAnd hasProgram
   hasProgramIn_boolXor hasProgramIn_boolBeq List.hasProgramIn_isEmpty
 
 /-- Testing a tree's root is testing the list of its spine for emptiness. -/
-theorem exists_hasProgramInO_root :
-    ∃ q, HasProgramInO Tree.root q (fun _ => 1) (fun t => ⌜t⌝ₜ.size) := by
-  have h := (List.hasProgramIn_isEmpty (α := Tree)).toHasProgramInO.map_input Tree.spine
-    Tree.encode_spine
-  exact ⟨_, ((h.comp Bool.hasProgramIn_not.toHasProgramInO).congr
-    (funext fun t => (Tree.root_eq_not_isEmpty_spine t).symm)).mono
-    (Dominated.const_of_pos 2 fun _ => Nat.one_pos)
-    ((Dominated.of_le fun t => by rw [Tree.encode_spine]).max_same
-      (Dominated.one fun t => Tree.size_pos _))⟩
+theorem _root_.Complexity.Tree.hasProgramIn_root :
+    HasProgramIn Tree.root hole(⊢ program) IsO(fun _ => 1) IsO(fun t => ⌜t⌝ₜ.size) := by
+  abstract_hole program using programRoot
+  refine HasProgramInO.toHasProgramIn ?_
+  fill_hole program in
+    exact ((List.hasProgramIn_isEmpty (α := Tree)).toHasProgramInO.map_input Tree.spine
+      Tree.encode_spine |>.comp Bool.hasProgramIn_not.toHasProgramInO |>.congr
+      (funext fun t => (Tree.root_eq_not_isEmpty_spine t).symm)).mono
+      (Dominated.const_of_pos 2 fun _ => Nat.one_pos)
+      ((Dominated.of_le fun t => by rw [Tree.encode_spine]).max_same
+        (Dominated.one fun t => Tree.size_pos _))
 
 /-- Root tests at fixed paths of the input's code select one of the given programs. -/
 theorem exists_hasProgramInO_dispatch {α β : Type*} [UniqueEncoding Tree α]
@@ -112,9 +115,8 @@ theorem exists_hasProgramInO_dispatch {α β : Type*} [UniqueEncoding Tree α]
   | cons p ps ih =>
     obtain ⟨qt, ht⟩ := ih (fun l => G (true :: l)) (fun l => hG _)
     obtain ⟨qf, hf⟩ := ih (fun l => G (false :: l)) (fun l => hG _)
-    obtain ⟨qr, hr⟩ := exists_hasProgramInO_root
     have hc := (HasProgramInO.subtree (α := α) (f := fun x => ⌜x⌝ₜ.subtree p) p
-      (fun _ => rfl)).comp hr
+      (fun _ => rfl)).comp Tree.hasProgramIn_root.toHasProgramInO
     refine ⟨_, ((hc.ite ht hf).congr ?_).mono ?_ ?_⟩
     · funext x
       simp only [Function.comp_apply, List.map_cons]
