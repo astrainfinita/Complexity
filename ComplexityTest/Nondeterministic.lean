@@ -106,9 +106,8 @@ private theorem guess_size_spec : TimeSpaceModel.ntm.NDecidableWithinBySize
 example : (fun _ : List Bool => True) ∈ NTISP .ntm (fun _ => 3) (fun _ => 0) :=
   guess_size_spec.mem_ntisp
 
-example : (fun _ : List Bool => True) ∈ NP .ntm := by
-  apply NP.of_time_le guess_size_spec.mem_ntime 3 0
-  simp
+example : (fun _ : List Bool => True) ∈ NP .ntm :=
+  NP.of_isPoly guess_size_spec.mem_ntime (.const 3)
 
 example : (fun _ : List Bool => True) ∈ NSPACE .ntm (fun _ => 0) :=
   guess_size_spec.mem_nspace

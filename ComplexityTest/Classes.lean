@@ -25,9 +25,9 @@ private theorem bit_spec : TM.Computes bit (id : Bool → Bool) (fun _ => 4) (fu
   cases b <;> apply Controller.computesWithinCost_unit_iff.mpr <;>
     exact ⟨rfl, rfl, fun _ ↦ by simp [Controller.History.space]⟩
 
-private theorem bit_fp : (id : Bool → Bool) ∈ FP .tm := by
-  exact FP.of_time_le (FDTISP.subset_time (bit_spec.computableWithin.mem_fdtisp (T := fun _ => 4) (S := fun _ => 0)))
-    4 0 (by intro n; simp)
+private theorem bit_fp : (id : Bool → Bool) ∈ FP .tm :=
+  FP.of_isPoly (FDTISP.subset_time
+    (bit_spec.computableWithin.mem_fdtisp (T := fun _ => 4) (S := fun _ => 0))) (.const 4)
 
 -- The same function covers both acceptance and rejection, with no work tapes.
 example : (fun b : Bool => b = true) ∈ P .tm := by
@@ -102,9 +102,9 @@ private theorem tree_spec :
   · exact TreeMachine.input_get (0 : Fin 1) _
   · simp [TreeMachine.Cfg.mass]
 
-private theorem tree_fp : (id : Bool → Bool) ∈ FP .sizeCostTree := by
-  exact FP.of_time_le (FDTISP.subset_time (tree_spec.computableWithin.mem_fdtisp (T := fun _ => 0) (S := id)))
-    0 0 (by intro n; simp)
+private theorem tree_fp : (id : Bool → Bool) ∈ FP .sizeCostTree :=
+  FP.of_isPoly (FDTISP.subset_time
+    (tree_spec.computableWithin.mem_fdtisp (T := fun _ => 0) (S := id))) (.const 0)
 
 example : (fun b : Bool => b = true) ∈ P .sizeCostTree := by
   apply P.of_decides tree_fp
