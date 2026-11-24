@@ -21,8 +21,7 @@ attribute [local program] hasProgramIn_duplicate
 -- A shared let computes the reversal once; the unshared source reverses twice.
 example : HasProgramInO sharePlain hole(⊢ program)
     (fun xs => ⌜xs⌝ₜ.size + (0 + (0 + 1) + (xs.reverse.length + 1)))
-    (fun xs => max ⌜xs⌝ₜ.size (max (max ⌜xs.reverse⌝ₜ.size ⌜(xs.reverse, xs.reverse)⌝ₜ.size)
-      ⌜(xs.reverse, xs.reverse)⌝ₜ.size)) := by
+    (fun xs => max ⌜xs⌝ₜ.size (max ⌜xs.reverse⌝ₜ.size ⌜(xs.reverse, xs.reverse)⌝ₜ.size)) := by
   fill_hole program in source_fun_prop
 
 example : HasProgramInO unshared hole(⊢ program)

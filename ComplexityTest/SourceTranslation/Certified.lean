@@ -138,7 +138,7 @@ def singletonIndexed (x : Σ n, List (Fin n)) : Σ n, List (List (Fin n)) := ⟨
 
 theorem hasProgramIn_singletonIndexed :
     HasProgramIn singletonIndexed hole(⊢ program) IsO(fun _ => 1)
-    IsO(fun x => max ⌜x⌝ₜ.size ⌜singletonIndexed x⌝ₜ.size) := by
+    IsO(fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programSingletonIndexed
   fill_hole program in source_fun_prop
 
