@@ -462,6 +462,17 @@ theorem comp {β : Type*} {r T : β → ℕ} {h : α → β} (hT : IsPoly r T)
     hh.add_same (Dominated.const_of_pos 1 fun _ => Nat.pow_pos (Nat.succ_pos _))
   exact ⟨e * d, (hT.comp h).trans ((h1.pow d).mono fun a => (pow_mul (s a + 1) e d).ge)⟩
 
+/-- A function polynomial in a measure lies below a monotone polynomial of the measure: a bound
+stated on values becomes a budget indexed by the measure, which may then be compared at a larger
+value of the measure. -/
+theorem exists_monotone (h : IsPoly s f) :
+    ∃ T : ℕ → ℕ, Monotone T ∧ IsPoly (fun n => n) T ∧ ∀ a, f a ≤ T (s a) := by
+  obtain ⟨d, C, h⟩ := h
+  exact ⟨fun n => C * (n + 1) ^ d,
+    fun m n hmn => Nat.mul_le_mul_left _ (Nat.pow_le_pow_left (Nat.succ_le_succ hmn) d),
+    ⟨d, C, fun n => by simp only [Nat.nsmul_eq_mul, le_refl]⟩,
+    fun a => by simpa only [Nat.nsmul_eq_mul] using h a⟩
+
 end IsPoly
 
 end Complexity

@@ -112,17 +112,32 @@ theorem mem_iff_exists_fdtime :
     f ∈ FP model ↔ ∃ d : ℕ, f ∈ FDTIME model (fun n => n ^ d) :=
   Set.mem_iUnion
 
-/-- Polynomial time admits a polynomial bound valid at every input size. -/
-theorem exists_polynomial_bound (h : f ∈ FP model) :
-    ∃ (p : Polynomial ℕ) (s : ℕ → ℕ), model.ComputableWithinBySize f p.eval s := by
-  obtain ⟨d, t, ⟨s, h⟩, ht⟩ := mem_iff_exists_fdtime.mp h
-  obtain ⟨p, hp⟩ := ht.exists_polynomial_bound
-  exact ⟨p, s, h.mono hp (fun _ => le_rfl)⟩
+/-- Polynomial time in the vocabulary of the program layer: some behavior computes `f` within a
+time budget that is polynomial in the code size at every size. -/
+theorem mem_iff_isPoly :
+    f ∈ FP model ↔ ∃ t s, model.ComputableWithinBySize f t s ∧ IsPoly (fun n => n) t := by
+  rw [mem_iff_exists_fdtime]
+  constructor
+  · rintro ⟨d, t, ⟨s, h⟩, ht⟩
+    exact ⟨t, s, h, isPoly_iff_exists_dominatedAtTop_pow.2 ⟨d, ht⟩⟩
+  · rintro ⟨t, s, h, ht⟩
+    obtain ⟨d, hd⟩ := isPoly_iff_exists_dominatedAtTop_pow.1 ht
+    exact ⟨d, t, ⟨s, h⟩, hd⟩
 
-/-- A pointwise comparison with a polynomial preserves polynomial time. -/
-theorem of_time_le {t : ℕ → ℕ} (h : f ∈ FDTIME model t)
-    (c d : ℕ) (ht : ∀ n, t n ≤ c * (n + 1) ^ d) : f ∈ FP model :=
-  mem_iff_exists_fdtime.mpr ⟨d, FDTIME.mono (DominatedAtTop.of_le_mul_add_one_pow c d ht) h⟩
+/-- A time bound polynomial in the code size gives polynomial time. -/
+theorem of_isPoly {t : ℕ → ℕ} (h : f ∈ FDTIME model t) (ht : IsPoly (fun n => n) t) :
+    f ∈ FP model := by
+  obtain ⟨d, hd⟩ := isPoly_iff_exists_dominatedAtTop_pow.1 ht
+  exact mem_iff_exists_fdtime.mpr ⟨d, FDTIME.mono hd h⟩
+
+/-- Polynomial time admits a monotone polynomial time budget valid at every input size, so the
+budget of a later computation can be compared at the bound on the size of an intermediate
+result. -/
+theorem exists_monotone_isPoly (h : f ∈ FP model) :
+    ∃ t s, Monotone t ∧ IsPoly (fun n => n) t ∧ model.ComputableWithinBySize f t s := by
+  obtain ⟨t, s, h, ht⟩ := mem_iff_isPoly.1 h
+  obtain ⟨T, hmono, hT, hle⟩ := ht.exists_monotone
+  exact ⟨T, s, hmono, hT, h.mono hle fun _ => le_rfl⟩
 
 theorem fdtime_subset (d : ℕ) :
     FDTIME (α := α) (β := β) model (fun n => n ^ d) ⊆ FP model :=

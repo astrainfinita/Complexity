@@ -23,22 +23,18 @@ variable {α β γ : Type*} [Encoding Tree α] [Encoding Tree β] [Encoding Tree
 valid codes are not unique. -/
 theorem fp_comp (hg : g ∈ FP .sizeCostTree) (hf : f ∈ FP .sizeCostTree) :
     g ∘ f ∈ FP .sizeCostTree := by
-  obtain ⟨p, s, R, ⟨k, hk, Q, hQ, M, rfl⟩, hf⟩ := FP.exists_polynomial_bound hf
-  obtain ⟨q, v, R', ⟨l, hl, Q', hQ', N, rfl⟩, hg⟩ := FP.exists_polynomial_bound hg
-  let a : Polynomial ℕ := Polynomial.X + Polynomial.C k + p
-  let b : Polynomial ℕ := p + Polynomial.C (max k l) + q.comp a
-  obtain ⟨d, hb⟩ := Polynomial.exists_dominatedAtTop_pow b
-  apply FP.fdtime_subset d
-  refine ⟨b.eval, ⟨fun n => n + (max k l + 1) + b.eval n, _,
-    ⟨max k l + 1, inferInstance, _, inferInstance, M.comp N, rfl⟩, ?_⟩, hb⟩
+  obtain ⟨p, s, -, hp, R, ⟨k, hk, Q, hQ, M, rfl⟩, hf⟩ := FP.exists_monotone_isPoly hf
+  obtain ⟨q, v, hmono, hq, R', ⟨l, hl, Q', hQ', N, rfl⟩, hg⟩ := FP.exists_monotone_isPoly hg
+  let b (n : ℕ) : ℕ := p n + max k l + q (n + k + p n)
+  have hb : IsPoly (fun n => n) b := (hp.add (.const _)).add
+    (hq.comp (h := fun n => n + k + p n) ((IsPoly.refl.add (.const k)).add hp))
+  refine FP.mem_iff_isPoly.2 ⟨b, fun n => n + (max k l + 1) + b n,
+    ⟨_, ⟨max k l + 1, inferInstance, _, inferInstance, M.comp N, rfl⟩, ?_⟩, hb⟩
   intro x r hx
   obtain ⟨y, hy, hm⟩ := hf x r hx
   obtain ⟨z, hz, hn⟩ := hg (f x) y hy
-  have ht : p.eval r.size + max k l + q.eval y.size ≤ b.eval r.size := by
-    have hy := q.monotone_eval_nat hm.output_size_le
-    simp only [b, a, Polynomial.eval_add, Polynomial.eval_C, Polynomial.eval_comp,
-      Polynomial.eval_X]
-    exact Nat.add_le_add_left hy _
+  have ht : p r.size + max k l + q y.size ≤ b r.size :=
+    Nat.add_le_add_left (hmono hm.output_size_le) _
   have hcomp := comp_computesWithin M N hm hn
   exact ⟨z, hz, hcomp.space_of_time.mono ht (Nat.add_le_add_left ht _)⟩
 
@@ -49,9 +45,8 @@ private def identity : TreeMachine Id 1 Unit where
 
 /-- Leaving the input register unchanged computes the identity at zero time cost. -/
 theorem fp_id : (id : α → α) ∈ FP .sizeCostTree := by
-  apply FP.of_time_le (t := fun _ => 0) _ 0 0 (by simp)
-  refine ⟨fun _ => 0, ⟨fun n => n, _,
-    ⟨1, inferInstance, Unit, inferInstance, identity, rfl⟩, ?_⟩, DominatedAtTop.refl _⟩
+  refine FP.mem_iff_isPoly.2 ⟨fun _ => 0, fun n => n,
+    ⟨_, ⟨1, inferInstance, Unit, inferInstance, identity, rfl⟩, ?_⟩, .const 0⟩
   intro x a hx
   refine ⟨a, hx, .of_halted 0 rfl ?_ ?_ ?_⟩
   · exact TreeMachine.input_get (0 : Fin 1) a

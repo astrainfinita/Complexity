@@ -137,7 +137,7 @@ theorem mem_fp (hf : HasProgramInO f program t p) (ht : IsPoly (fun x => ⌜x⌝
     (S := sizeEnvelope fun x => max ⌜x⌝ₜ.size (p x) + 2)
     (ht.add_same (Dominated.const_of_pos 4 fun _ => Nat.pow_pos (Nat.succ_pos _)))
     (Dominated.of_le (le_sizeEnvelope _))
-  exact FP.of_time_le (FDTISP.subset_time h) 1 d fun n => by simp
+  exact FP.of_isPoly (FDTISP.subset_time h) ⟨d, .refl _⟩
 
 /-- Time and peak growths polynomial in the input code size give polynomial time in the size-cost
 model, which charges each step by the size of its trees, with no degree written. -/
@@ -153,9 +153,8 @@ theorem mem_fp_sizeCost (hf : HasProgramInO f program t p) (ht : IsPoly (fun x =
     (ht.add_same (Dominated.const_of_pos 4 fun _ => Nat.pow_pos (Nat.succ_pos _)))
     ((hs.max_same (hp.mono_pow (Nat.le_succ e) hpos)).add_same
       (Dominated.const_of_pos 2 fun _ => Nat.pow_pos (Nat.succ_pos _)))
-  exact FP.of_time_le
-    (FDTISP.subset_time (TreeMachine.fdtisp_unitTime_subset_sizeCost _ _ h)) 1 (d + (e + 1))
-    fun n => by simp [pow_add]
+  exact FP.of_isPoly
+    (FDTISP.subset_time (TreeMachine.fdtisp_unitTime_subset_sizeCost _ _ h)) (by dominated)
 
 end TreeProgram.Source.Internal.HasProgramInO
 

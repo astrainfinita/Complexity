@@ -36,6 +36,28 @@ theorem DominatedAtTop.of_le_mul_add_one_pow {f : ℕ → ℕ} (c d : ℕ)
       Nat.mul_le_mul_left c (Nat.pow_le_pow_left (by omega) d)
     _ = c * 2 ^ d * n ^ d := by simp [Nat.mul_pow, Nat.mul_assoc]
 
+/-- A budget indexed by the input size is polynomial at every size exactly when it is eventually
+bounded by a power: the constant absorbs the finitely many initial sizes. So polynomial budgets
+need no separate eventual notion. -/
+theorem isPoly_iff_exists_dominatedAtTop_pow {t : ℕ → ℕ} :
+    IsPoly (fun n => n) t ↔ ∃ d, DominatedAtTop t (fun n => n ^ d) := by
+  constructor
+  · rintro ⟨d, C, h⟩
+    exact ⟨d, .of_le_mul_add_one_pow C d fun n => by simpa only [Nat.nsmul_eq_mul] using h n⟩
+  · rintro ⟨d, h⟩
+    obtain ⟨c, n₀, h⟩ := dominatedAtTop_iff.1 h
+    refine ⟨d, c + ∑ n ∈ Finset.range n₀, t n, fun n => ?_⟩
+    simp only [Nat.nsmul_eq_mul]
+    by_cases hn : n₀ ≤ n
+    · calc t n ≤ c * n ^ d := h n hn
+        _ ≤ c * (n + 1) ^ d := Nat.mul_le_mul_left _ (Nat.pow_le_pow_left (Nat.le_succ n) d)
+        _ ≤ _ := Nat.mul_le_mul_right _ (Nat.le_add_right _ _)
+    · calc t n ≤ ∑ n ∈ Finset.range n₀, t n :=
+            Finset.single_le_sum (f := t) (fun _ _ => Nat.zero_le _)
+              (Finset.mem_range.2 (Nat.lt_of_not_ge hn))
+        _ ≤ (c + ∑ n ∈ Finset.range n₀, t n) * 1 := by omega
+        _ ≤ _ := Nat.mul_le_mul_left _ (Nat.one_le_pow _ _ (Nat.succ_pos n))
+
 /-- A natural polynomial is asymptotically bounded by a power. -/
 theorem _root_.Polynomial.exists_dominatedAtTop_pow (p : Polynomial ℕ) :
     ∃ d, DominatedAtTop (fun n => p.eval n) (fun n => n ^ d) := by

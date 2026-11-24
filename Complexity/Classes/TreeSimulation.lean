@@ -34,13 +34,9 @@ theorem fdtisp_subset_stack (T S : ℕ → ℕ) :
 /-- Default raw codes serialize the chosen tree encodings, so the simulation
 applies uniformly to all represented data types. -/
 theorem fp_subset_stack : FP (α := α) (β := β) .sizeCostTree ⊆ FP .stack := by
-  refine Set.iUnion_subset fun d _ ⟨t, ⟨s, h⟩, ht⟩ => ?_
-  refine FP.of_time_le (FDTISP.subset_time (fdtisp_subset_stack _ _ ⟨t, s, h, ht, .refl s⟩))
-    2 (d + 1) fun n => ?_
-  have : n ^ d ≤ (n + 1) ^ (d + 1) := (Nat.pow_le_pow_left (Nat.le_add_right n 1) d).trans
-    (Nat.pow_le_pow_right n.add_one_pos (Nat.le_add_right d 1))
-  have : n ≤ (n + 1) ^ (d + 1) := (Nat.le_add_right n 1).trans (Nat.le_self_pow d.add_one_ne_zero _)
-  omega
+  intro f hf
+  obtain ⟨t, s, h, ht⟩ := FP.mem_iff_isPoly.1 hf
+  exact FP.of_isPoly (FDTISP.subset_time (fdtisp_subset_stack t s h.mem_fdtisp)) (ht.add .refl)
 
 end TreeMachine
 

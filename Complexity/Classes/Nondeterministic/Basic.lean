@@ -99,10 +99,11 @@ namespace NP
 theorem mem_iff_exists_ntime : p ∈ NP model ↔ ∃ d : ℕ, p ∈ NTIME model (fun n => n ^ d) :=
   Set.mem_iUnion
 
-/-- A pointwise comparison with a polynomial preserves nondeterministic polynomial time. -/
-theorem of_time_le {t : ℕ → ℕ} (h : p ∈ NTIME model t)
-    (c d : ℕ) (ht : ∀ n, t n ≤ c * (n + 1) ^ d) : p ∈ NP model :=
-  mem_iff_exists_ntime.mpr ⟨d, NTIME.mono (DominatedAtTop.of_le_mul_add_one_pow c d ht) h⟩
+/-- A time bound polynomial in the code size gives nondeterministic polynomial time. -/
+theorem of_isPoly {t : ℕ → ℕ} (h : p ∈ NTIME model t) (ht : IsPoly (fun n => n) t) :
+    p ∈ NP model := by
+  obtain ⟨d, hd⟩ := isPoly_iff_exists_dominatedAtTop_pow.1 ht
+  exact mem_iff_exists_ntime.mpr ⟨d, NTIME.mono hd h⟩
 
 theorem ntime_subset (d : ℕ) : NTIME (α := α) model (fun n => n ^ d) ⊆ NP model :=
   fun _ h => mem_iff_exists_ntime.mpr ⟨d, h⟩
