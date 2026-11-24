@@ -77,7 +77,7 @@ jobs:
     name: Lint style
     runs-on: ubuntu-latest
     steps:
-      - uses: leanprover-community/lint-style-action@a7e7428fa44f9635d6eb8e01919d16fd498d387a # 2025-08-18
+      - uses: leanprover-community/lint-style-action@a5e3ef275cc682ba79c1f8ba34ae2ade5d8d2101 # 2026-10-28
         with:
           mode: check
           ref: ${{ github.sha }}
