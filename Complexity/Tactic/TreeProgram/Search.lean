@@ -27,13 +27,17 @@ register_option source.maxSteps : Nat := {
 namespace Complexity.TreeProgram.Source.Search
 open Lean Meta Mathlib.Meta.FunProp
 
+/-- The diagnostic for a recursive definition `name` that the search meets without a registered
+implementation. -/
 def recursionMessage (name : Name) : MessageData :=
   m!"source translation: `{privateToUserName name}` needs a registered implementation \
     (choose replacement source with `via`, or register a function equality with `[program]`)"
 
 /-- A rejected candidate retains its source path independently of message formatting. -/
 structure Failure where
+  /-- The source functions of the goals from the request down to the rejected subgoal. -/
   sourcePath : Array MessageData
+  /-- The reason the subgoal was rejected. -/
   message : MessageData
 
 /-- One user request shares fuel, diagnostics and its closed results. -/

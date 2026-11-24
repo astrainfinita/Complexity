@@ -22,9 +22,12 @@ namespace Complexity.TreeProgram.Source
 
 open Internal (HasProgramInO)
 
+/-- The loop state of `Circuit.unroll`: the width `n`, the number `t` of layers so far, the step
+circuit, and the unfolding by `t` layers. -/
 abbrev UnrollState :=
   Σ n, Σ t, Circuit .booleanAlgebra (n + 1) n × Circuit .booleanAlgebra (n + t) n
 
+/-- Add one layer by `Circuit.unrollLayer`, counting it. -/
 def unrollStep (x : UnrollState) : UnrollState :=
   ⟨x.1, x.2.1 + 1, x.2.2.1, x.2.2.1.unrollLayer x.2.2.2⟩
 
@@ -34,6 +37,8 @@ theorem iterate_unrollStep (n : ℕ) (step : Circuit .booleanAlgebra (n + 1) n) 
   | zero => rfl
   | succ t ih => rw [Function.iterate_succ_apply', ih]; rfl
 
+/-- The numeric scale of the growth of one layer: the width, the layer count and the gate counts of
+both circuits. -/
 def unrollStepScale (x : UnrollState) :=
   2 * x.1 + x.2.1 + x.2.2.1.size + x.2.2.2.size + 2
 
@@ -47,11 +52,16 @@ theorem hasProgramIn_unrollStep : HasProgramIn unrollStep hole(⊢ program)
     source_fun_prop (disch := dominated [unrollStepScale, relabelScale, keepScale, compScale,
       Circuit.size_relabel, Circuit.size_keepInputs, Circuit.size_comp]) using tabulate
 
+/-- The arguments of `Circuit.unroll`: the width, the step circuit and the number of layers. -/
 abbrev UnrollInput := Σ n, Circuit .booleanAlgebra (n + 1) n × ℕ
 
+/-- Start the unfolding loop: the number of layers to add, and the state with no layer, holding the
+identity circuit. -/
 def unrollInitial (x : UnrollInput) : ℕ × UnrollState :=
   (x.2.2, ⟨x.1, 0, x.2.1, Circuit.id _ x.1⟩)
 
+/-- The numeric scale of the growth of `Circuit.unroll`: the width, the number `t` of layers and
+`t + 1` times the gate count of the step. -/
 def unrollScale (x : UnrollInput) :=
   2 * x.1 + x.2.2 + (x.2.2 + 1) * x.2.1.size + 2
 

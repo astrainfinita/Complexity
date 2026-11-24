@@ -26,9 +26,12 @@ theorem _root_.List.hasProgramIn_tail {α : Type*} [UniqueEncoding Tree α] :
 
 attribute [scoped program] List.hasProgramIn_tail
 
+/-- Whether the indexed lookup continues: the list is nonempty and the index, read through its
+binary digits, is nonzero. -/
 def lookupContinues {α : Type*} (x : ℕ × List α) : Bool :=
   match x.2 with | [] => false | _ :: _ => !x.1.bits.isEmpty
 
+/-- Decrease the index by one and drop the head of the list. -/
 def lookupStep {α : Type*} (x : ℕ × List α) := (x.1.pred, x.2.tail)
 
 theorem hasProgramIn_lookupContinues {α : Type*} [UniqueEncoding Tree α] :
@@ -50,6 +53,8 @@ theorem hasProgramIn_lookupFinish {α : Type*} [UniqueEncoding Tree α] :
   abstract_hole program using programLookupFinish
   fill_hole program in source_fun_prop
 
+/-- The invariant of the indexed lookup: a reached state has an index with no more binary digits, a
+list code no larger than the input's, and the same looked-up entry. -/
 def lookupInvariant {α : Type*} [UniqueEncoding Tree α] (x y : ℕ × List α) :=
   y.1.bits.length ≤ x.1.bits.length ∧ ⌜y.2⌝ₜ.size ≤ ⌜x.2⌝ₜ.size ∧ y.2[y.1]? = x.2[x.1]?
 
@@ -176,8 +181,10 @@ attribute [source_view] Vector.ofFn_fin_snoc Vector.ofFn_fin_append Vector.ofFn_
 -- After the views, which compute an entry without reading the table.
 attribute [source_view low] encode_apply_eq_someValue
 
+/-- Whether the counter of the range loop, read through its binary digits, is nonzero. -/
 def rangeContinues (x : ℕ × List ℕ) : Bool := !x.1.bits.isEmpty
 
+/-- Decrease the counter by one and push the new counter onto the accumulated list. -/
 def rangeStep (x : ℕ × List ℕ) : ℕ × List ℕ :=
   let n := x.1.pred
   (n, n :: x.2)
@@ -193,8 +200,12 @@ theorem hasProgramIn_rangeStep :
   have := Nat.hasProgramIn_pred.toHasProgramInO.size_encode.comp (fun x : ℕ × List ℕ => x.1)
   fill_hole program in source_fun_prop
 
+/-- The range loop as a source function: `List.range` of the counter followed by the accumulated
+list; `List.range` is the case of an empty list. -/
 def rangeLoop (x : ℕ × List ℕ) := List.range x.1 ++ x.2
 
+/-- The invariant of the range loop: a reached state has a counter no larger than the input's and
+the same range of the counter followed by the accumulated list. -/
 def rangeInvariant (x y : ℕ × List ℕ) :=
   y.1 ≤ x.1 ∧ List.range y.1 ++ y.2 = List.range x.1 ++ x.2
 
@@ -427,6 +438,8 @@ namespace Complexity.TreeProgram.Source
 
 open Internal (HasProgramInO)
 
+/-- The arguments of table composition: three sizes and the tables `Fin n → Fin k` and
+`Fin k → Fin m`. -/
 abbrev FinCompInput := Σ n, Σ k, Σ m, (Fin n → Fin k) × (Fin k → Fin m)
 
 theorem hasProgramIn_finCompStep :

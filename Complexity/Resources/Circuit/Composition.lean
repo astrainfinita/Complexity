@@ -76,26 +76,33 @@ structure RelabelInput where
   /-- The substitution of available wires. -/
   wires : Fin n → Fin k
 
+/-- `Circuit.relabel` on its packed arguments. -/
 def relabelFn (x : RelabelInput) := x.circuit.relabel x.wires
 
+/-- Whether the circuit still has a gate to relabel. -/
 def relabelTest (x : RelabelInput) :=
   match x.circuit with | .outputs _ => false | .gate _ _ _ => true
 
+/-- Pass the first gate, extending the substitution across the wire it computes. -/
 def relabelNextFn (x : RelabelInput) : RelabelInput :=
   match x.circuit with
   | .outputs _ => x
   | .gate _ _ next => ⟨x.n + 1, x.m, x.k + 1, next, Circuit.liftInputs x.wires⟩
 
+/-- An outputs circuit reads its outputs through the substitution. -/
 def relabelFinishFn : (x : {x // relabelTest x = false}) → Circuit .booleanAlgebra x.1.k x.1.m
   | ⟨⟨_, _, _, .outputs select, wires⟩, _⟩ => .outputs (wires ∘ select)
   | ⟨⟨_, _, _, .gate _ _ _, _⟩, h⟩ => False.elim (by cases h)
 
+/-- Put the passed gate, with its arguments substituted, in front of the result for its
+continuation. -/
 def relabelResumeFn : (x : {x // relabelTest x = true}) →
     Circuit .booleanAlgebra (relabelNextFn x.1).k (relabelNextFn x.1).m →
     Circuit .booleanAlgebra x.1.k x.1.m
   | ⟨⟨_, _, _, .outputs _, _⟩, h⟩, _ => False.elim (by cases h)
   | ⟨⟨_, _, _, .gate op args _, wires⟩, _⟩, result => .gate op (wires ∘ args) result
 
+/-- The structural recursion of `relabel` over the gates. -/
 def relabelRecursion : Recursion relabelFn where
   test := relabelTest
   next := relabelNextFn
@@ -112,6 +119,7 @@ def relabelRecursion : Recursion relabelFn where
     rintro ⟨n, m, k, c, wires⟩ h
     cases c <;> simp_all [relabelTest, relabelNextFn]
 
+/-- The numeric scale of the growth of `relabel`: the dimensions and twice the gate count. -/
 def relabelScale (x : RelabelInput) : ℕ := x.n + x.m + x.k + 2 * x.circuit.size + 1
 
 theorem relabelScale_next_le (x : RelabelInput) :
@@ -190,11 +198,14 @@ structure CompInput where
   /-- The circuit fed by its outputs. -/
   second : Circuit .booleanAlgebra m k
 
+/-- `Circuit.comp` on its packed arguments. -/
 def compFn (x : CompInput) := x.first.comp x.second
 
+/-- Whether the first circuit still has a gate to pass. -/
 def compTest (x : CompInput) :=
   match x.first with | .outputs _ => false | .gate _ _ _ => true
 
+/-- Pass the first gate of the first circuit, keeping the second circuit. -/
 def compNextFn (x : CompInput) : CompInput :=
   match x.first with
   | .outputs _ => x
@@ -211,12 +222,14 @@ def compOutputs : (x : {x // compTest x = false}) → Fin x.1.m → Fin x.1.n
 def compFinishFn (x : {x // compTest x = false}) : Circuit .booleanAlgebra x.1.n x.1.k :=
   relabelFn ⟨x.1.m, x.1.k, x.1.n, x.1.second, compOutputs x⟩
 
+/-- Put the passed gate in front of the result for its continuation. -/
 def compResumeFn : (x : {x // compTest x = true}) →
     Circuit .booleanAlgebra (compNextFn x.1).n (compNextFn x.1).k →
     Circuit .booleanAlgebra x.1.n x.1.k
   | ⟨⟨_, _, _, .outputs _, _⟩, h⟩, _ => False.elim (by cases h)
   | ⟨⟨_, _, _, .gate op args _, _⟩, _⟩, result => .gate op args result
 
+/-- The structural recursion of `comp` over the gates of the first circuit. -/
 def compRecursion : Recursion compFn where
   test := compTest
   next := compNextFn
@@ -233,6 +246,8 @@ def compRecursion : Recursion compFn where
     rintro ⟨n, m, k, c, d⟩ h
     cases c <;> simp_all [compTest, compNextFn]
 
+/-- The numeric scale of the growth of `comp`: the dimensions and twice the gate counts of both
+circuits. -/
 def compScale (x : CompInput) : ℕ :=
   x.n + x.m + x.k + 2 * (x.first.size + x.second.size) + 1
 
@@ -440,8 +455,10 @@ structure KeepInput where
   /-- The circuit whose inputs are kept. -/
   circuit : Circuit .booleanAlgebra n m
 
+/-- `Circuit.keepInputs` on its packed argument. -/
 def keepFn (x : KeepInput) := x.circuit.keepInputs
 
+/-- The numeric scale of the growth of `keepInputs`: the dimensions and twice the gate count. -/
 def keepScale (x : KeepInput) : ℕ := x.n + x.m + 2 * x.circuit.size + 1
 
 /-- The program for `keepWires` on the identity table, polynomial in `keepScale`. -/

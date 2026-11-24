@@ -49,7 +49,9 @@ private partial def withFields {α : Type} (ty source : Lean.Expr)
 
 /-- The value and its projections are computed together, including erased proof fields. -/
 structure Packed where
+  /-- The telescope's values packed by products, dependent pairs and subtypes. -/
   value : Lean.Expr
+  /-- The telescope's values, proofs included, as projections of a term of the packed type. -/
   unpack : Lean.Expr → MetaM (Array Lean.Expr)
 
 /-- Close a telescope using products, dependent pairs, and proof-erasing subtypes. -/

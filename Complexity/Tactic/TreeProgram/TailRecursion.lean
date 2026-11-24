@@ -278,6 +278,9 @@ open Internal (HasProgramInO)
 
 /-- A measured loop separates per-round work from its single terminal call. -/
 declare_syntax_cat sourceMeasuredLoop
+/-- The `loop` method: the `test`, `next` and `finish` callbacks of a tail loop, an invariant
+between the input and each reached state, a measure that every round decreases, and growth bounds
+for one round (`step`), the terminal call (`stop`) and space, as in `HasProgramInO.tail_loop`. -/
 syntax "loop" " (" &"test" " := " term ")" " (" &"next" " := " term ")"
   " (" &"finish" " := " term ")" " (" &"invariant" " := " term ")"
   " (" &"measure" " := " term ")" " (" &"step" " := " term ")"

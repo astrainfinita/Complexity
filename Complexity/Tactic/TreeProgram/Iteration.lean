@@ -340,6 +340,8 @@ theorem iteratePeak_lift_le (p : ρ × α → ℕ) (n : ℕ) (e : ρ) (a : α) :
 
 end Lift
 
+/-- The test of the counted iteration: whether the counter, read through its binary digits, is
+nonzero. -/
 def Iteration.continues {α : Type*} (x : ℕ × α) := !x.1.bits.isEmpty
 
 theorem Iteration.continues_eq_true {α : Type*} (x : ℕ × α) :

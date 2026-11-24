@@ -864,6 +864,8 @@ private partial def sourceSearch (session : Search.Session)
   finish result
 
 open Lean Meta Elab Tactic Mathlib.Meta.FunProp in
+/-- Run `action` with the scoped declarations of `Complexity.TreeProgram.Source` activated, and of
+the namespaces `scope` resolves to when it is given. -/
 def withSourceSpecs {α : Type} (scope : Option Ident) (action : TacticM α) : TacticM α := do
   pushScope
   try
@@ -965,6 +967,9 @@ private def proveSource (scope : Option Ident := none) (replacement : Option Ter
 
 /-- A recursion method supplies ordinary callbacks and a decreasing measure. -/
 declare_syntax_cat sourceRecursion
+/-- The `recursion` method: the callbacks of a `Recursion`, its measure, and a proof that every
+recursive call decreases the measure; the equations `finish_eq` and `resume_eq` are left as
+goals. -/
 syntax "recursion" " (" &"test" " := " term ")" " (" &"next" " := " term ")"
   " (" &"finish" " := " term ")" " (" &"resume" " := " term ")"
   " (" &"measure" " := " term ")" " (" &"decreases" " := " term ")" : sourceRecursion
@@ -1120,6 +1125,9 @@ private def modelFunPropCore (disch : Option (TSyntax ``Lean.Parser.Tactic.disch
   setGoals (left ++ originalGoals.drop 1)
 
 open Lean Elab Tactic in
+/-- Reduce a `HasProgramIn` goal or a model time-space bound to its implementation goal, closed by
+`translate`; the obligations left and the growth goals pass through `dischargeGrowth` with `disch`.
+On failure the state is restored. -/
 def modelFunProp (disch : Option (TSyntax ``Lean.Parser.Tactic.discharger))
     (translate : TacticM (List Lean.MVarId)) : TacticM Unit := do
   let saved ← saveState

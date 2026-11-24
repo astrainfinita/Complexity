@@ -21,12 +21,17 @@ theorem _root_.Nat.hasProgramIn_bits :
     HasProgramIn Nat.bits (fun v => pure v) IsO(fun _ => 0) IsO(fun _ => 0) :=
   HasProgramInO.toHasProgramIn <| .of_encode (g := id) (fun _ => rfl) HasProgramInO.identity
 
+/-- Whether the lowest remaining bit is `false`, so that the borrow of the decrement passes it. -/
 def borrowContinues (x : List Bool × List Bool) : Bool :=
   match x.1 with | false :: _ => true | _ => false
 
+/-- Pass the lowest remaining bit, which the borrow turns into `true` in the reversed
+accumulator. -/
 def borrowStep (x : List Bool × List Bool) : List Bool × List Bool :=
   match x.1 with | _ :: xs => (xs, true :: x.2) | [] => x
 
+/-- End the decrement loop: the accumulated bits followed by the decrement of the remaining bits,
+which are empty or start with `true`. -/
 def borrowFinish (x : List Bool × List Bool) : List Bool :=
   x.2.reverse ++ match x.1 with
     | true :: xs => if xs.isEmpty then [] else false :: xs
@@ -42,6 +47,8 @@ theorem hasProgramIn_borrowStep :
   abstract_hole program using programBorrowStep
   fill_hole program in source_fun_prop
 
+/-- The decrement loop as a source function: the reversed accumulator followed by the decrement of
+the remaining bits; `BitList.decrement` is the case of an empty accumulator. -/
 def borrow (x : List Bool × List Bool) := x.2.reverse ++ BitList.decrement x.1
 
 theorem hasProgramIn_borrowFinish :
@@ -53,6 +60,7 @@ theorem hasProgramIn_borrowFinish :
 attribute [scoped program] hasProgramIn_borrowContinues hasProgramIn_borrowStep
   hasProgramIn_borrowFinish
 
+/-- The invariant of the decrement loop: a reached state holds no more bits than the input. -/
 def borrowInvariant (x y : List Bool × List Bool) : Prop :=
   y.1.length + y.2.length ≤ x.1.length + x.2.length
 
@@ -113,15 +121,19 @@ theorem _root_.Nat.hasProgramIn_pred :
 attribute [scoped program] Nat.hasProgramIn_bits BitList.hasProgramIn_decrement
   Nat.hasProgramIn_pred
 
+/-- Whether both remaining summands still have a bit. -/
 def addContinues (x : Bool × List Bool × List Bool × List Bool) : Bool :=
   !x.2.1.isEmpty && !x.2.2.1.isEmpty
 
+/-- Add the lowest bits of both summands and the carry, pushing the sum bit onto the reversed
+accumulator. -/
 def addStep (x : Bool × List Bool × List Bool × List Bool) :=
   match x with
   | (c, a :: xs, b :: ys, acc) =>
       ((a && b) || (c && (a || b)), xs, ys, (xor (xor a b) c) :: acc)
   | _ => x
 
+/-- Add the carry bit to a bit string. -/
 def carryFinish (x : Bool × List Bool) :=
   if x.1 then BitList.increment x.2 else x.2
 
@@ -134,10 +146,14 @@ theorem hasProgramIn_carryFinish :
 attribute [local program] hasProgramIn_carryFinish
 
 
+/-- End the addition loop: the accumulated bits followed by the remaining summand with the carry
+added. -/
 def addFinish (x : Bool × List Bool × List Bool × List Bool) :=
   let rest := if x.2.1.isEmpty then x.2.2.1 else x.2.1
   x.2.2.2.reverse ++ carryFinish (x.1, rest)
 
+/-- The addition loop as a source function: the reversed accumulator followed by the sum of the
+remaining summands with the carry. -/
 def addResult (x : Bool × List Bool × List Bool × List Bool) :=
   x.2.2.2.reverse ++ BitList.addCarry x.1 x.2.1 x.2.2.1
 
@@ -183,6 +199,7 @@ theorem hasProgramIn_addFinish :
 attribute [local program] hasProgramIn_addFinish
 
 
+/-- The number of bits held by an addition state, which the loop does not increase. -/
 def addCount (x : Bool × List Bool × List Bool × List Bool) : ℕ :=
   x.2.1.length + x.2.2.1.length + x.2.2.2.length
 
@@ -230,9 +247,12 @@ theorem hasProgramIn_add :
       (by rintro ⟨m, n⟩; simp [addResult, BitList.addCarry_bits, encode_nat_tree])
       (by source_fun_prop)
 
+/-- Whether one of the compared bit strings still has a bit. -/
 def leContinues (x : Bool × List Bool × List Bool) :=
   !(x.2.1.isEmpty && x.2.2.isEmpty)
 
+/-- Consume the lowest remaining bits, updating the comparison of the consumed low digits as
+`BitList.leAux` does. -/
 def leStep (x : Bool × List Bool × List Bool) :=
   match x with
   | (c, [], b :: ys) => (b || c, [], ys)
@@ -240,6 +260,7 @@ def leStep (x : Bool × List Bool × List Bool) :=
   | (c, a :: xs, b :: ys) => ((if a == b then c else b), xs, ys)
   | _ => x
 
+/-- The comparison loop as a source function: `BitList.leAux` on the state. -/
 def leResult (x : Bool × List Bool × List Bool) := BitList.leAux x.1 x.2.1 x.2.2
 
 theorem hasProgramIn_leContinues :
@@ -263,6 +284,7 @@ theorem hasProgramIn_leStep :
 attribute [local program] hasProgramIn_leStep
 
 
+/-- The number of bits left in a comparison state, which the loop decreases. -/
 def compareCount (x : Bool × List Bool × List Bool) : ℕ :=
   x.2.1.length + x.2.2.length
 

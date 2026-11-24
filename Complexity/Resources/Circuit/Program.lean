@@ -61,6 +61,8 @@ theorem accumulateGate_size (input : CNF ℕ ×
     ⌜accumulateGate input⌝ₜ.size + 1 = ⌜gateClauses input.2⌝ₜ.size + ⌜input.1⌝ₜ.size := by
   simpa [accumulateGate] using size_encode_list_append (gateClauses input.2).reverse input.1
 
+/-- The loop state of the Tseitin transformation: the remaining circuit with its number of
+available wires, and the reversed clause accumulator. -/
 abbrev TseitinState := (Σ n, Circuit .booleanAlgebra n 1) × CNF ℕ
 
 /-- Finish an output state with its final clause and the accumulated clauses. -/

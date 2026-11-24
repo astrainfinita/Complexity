@@ -28,12 +28,17 @@ open Internal (HasProgramInO)
 
 /-- A source recursion equation, including the work performed after the recursive return. -/
 structure Recursion {α : Type*} {β : α → Type*} (f : (x : α) → β x) where
+  /-- Whether the input makes the recursive call. -/
   test : α → Bool
+  /-- The argument of the recursive call. -/
   next : α → α
+  /-- The result on an input that makes no recursive call. -/
   finish : (x : {x // test x = false}) → β x.val
+  /-- The result on an input that makes the recursive call, from the value that call returns. -/
   resume : (x : {x // test x = true}) → β (next x.val) → β x.val
   finish_eq : ∀ x, finish x = f x.val
   resume_eq : ∀ x, resume x (f (next x.val)) = f x.val
+  /-- A measure that every recursive call decreases. -/
   measure : α → ℕ
   decreases : ∀ x, test x = true → measure (next x) < measure x
 
@@ -495,9 +500,13 @@ def roundTime (bc bs : Bounds α) (br : Bounds r.Return) (x : α) : ℕ :=
     bs.time x + bc.time (r.next x) + br.time ⟨⟨x, h⟩, f (r.next x)⟩ + 16
   else 0
 
+/-- The unique terminal computation: the finish time with its overhead when the test fails, and zero
+otherwise. -/
 def stopTime (bd : Bounds {x // r.test x = false}) (x : α) : ℕ :=
   if h : r.test x = false then bd.time ⟨x, h⟩ + 2 else 0
 
+/-- The largest callback tree at one state, excluding the recursive tail: of `test`, `next` and
+`resume` when the test holds, and of `test` and `finish` otherwise. -/
 def localPeak (bc bs : Bounds α) (bd : Bounds {x // r.test x = false})
     (br : Bounds r.Return) (x : α) : ℕ :=
   if h : r.test x = true then
