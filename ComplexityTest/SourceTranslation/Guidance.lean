@@ -369,4 +369,24 @@ example {α : Type*} [UniqueEncoding Tree α] {f : α → Bool}
 example {α : Type*} [UniqueEncoding Tree α] :=
   (by source_fun_prop : HasProgramInO (fun y : α × Bool ↦ bif y.2 then some y.1 else none) _ _ _)
 
+-- Records a limit (plan W91): `List.headD` has no selected implementation. `BitList.toTree` reads
+-- the top of its stack by a program of its own with a `match`. If this starts to succeed, that
+-- program is no longer needed.
+/-- error: source translation: `List.headD` needs a selected implementation -/
+#guard_msgs (substring := true) in
+example := (by source_fun_prop : HasProgramInO (fun stack : List Tree => stack.headD .nil) _ _ _)
+
+-- Records a limit (plan W87): a `match` on the result of a fold leaves the peak open, as the codes
+-- of the pattern variables are not related to the result; the fold alone, and a `match` on the
+-- input, are closed. `BitList.toTree` reads the top of its stack by a program of its own for this.
+-- If this starts to succeed, that program is no longer needed.
+/--
+error: unsolved goals
+case peak
+-/
+#guard_msgs (substring := true) in
+example := (by source_fun_prop : HasProgramInO (fun xs : List Bool =>
+    match xs.foldl (fun acc b => b :: acc) [] with | b :: _ => b | [] => false) _
+  (fun xs => ⌜xs⌝ₜ.size) (fun xs => ⌜xs⌝ₜ.size))
+
 end ComplexityTest.SourceTranslation.Guidance

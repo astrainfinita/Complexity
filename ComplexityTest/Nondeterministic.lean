@@ -9,6 +9,7 @@ import all Init.Data.List.Scan.Basic
 import Complexity.Classes.Nondeterministic.Basic
 import Complexity.Resources.Nondeterministic.Basic
 import Complexity.Resources.StackMachine.TuringMachine
+import Complexity.Classes.StackMachine.TuringMachine
 import Mathlib.Logic.Equiv.Bool
 import Complexity.Control.Controller.Binary
 meta import Complexity.Models.TuringMachine.Nondeterministic.Basic
@@ -131,6 +132,24 @@ example : ∃ t, TimeSpaceModel.ntm.NDecidableWithin (fun _ : List Bool => True)
 example : ∃ c, TimeSpaceModel.ntm.NDecidableWithin (fun _ : List Bool => True) (fun _ => 3)
     (fun _ => c * (2 * 0 + 1)) :=
   guess_spec.nDecidableWithin.toStack_of_ntm.toNTM
+
+-- Guards the class equalities read off the bridges: the decision of `guess` moves to `.nstack` in
+-- each nondeterministic class, the space classes with an eventually positive bound.
+example : (fun _ : List Bool => True) ∈ NTIME .nstack (fun _ => 3) := by
+  rw [StackMachine.ntime_eq_ntm]
+  exact guess_size_spec.mem_ntime
+
+example : (fun _ : List Bool => True) ∈ NTISP .nstack (fun _ => 3) (fun _ => 1) := by
+  rw [StackMachine.ntisp_eq_ntm _ _ (DominatedAtTop.refl _)]
+  exact guess_size_spec.mem_ntisp_of_dominated (DominatedAtTop.refl _) Dominated.zero.atTop
+
+example : (fun _ : List Bool => True) ∈ NSPACE .nstack (fun _ => 1) := by
+  rw [StackMachine.nspace_eq_ntm _ (DominatedAtTop.refl _)]
+  exact guess_size_spec.mem_nspace_of_dominated Dominated.zero.atTop
+
+example : (fun _ : List Bool => True) ∈ NP .nstack := by
+  rw [StackMachine.np_eq_ntm]
+  exact NP.of_isPoly guess_size_spec.mem_ntime (.const 3)
 
 -- The two branches visit [-1,0] and [0,1]: each uses two cells.
 def splitHeads : NTM (Fin 1) (Option Bool) Bool where
