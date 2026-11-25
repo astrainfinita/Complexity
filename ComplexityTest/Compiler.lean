@@ -141,7 +141,8 @@ example (x : Tree) (q : ℕ) :
         c.configSup StackMachine.Cfg.mass ≤ Simulation.spaceBound 2 (x.size + 2) ∧
         3 * (Cfg.mk (TreeMachine.input (1 : Fin 2) x)).mass + 1 + q ≤ t)
       (fun _ c t ↦ c.last = Simulation.Program.loadedCfg 1 x ∧
-        c.configSup StackMachine.Cfg.mass ≤ Simulation.spaceBound 2 (x.size + 2) ∧ q ≤ t) () := by
+        c.configSup StackMachine.Cfg.mass ≤ Simulation.spaceBound 2 (x.size + 2) ∧
+        3 * (Cfg.mk (TreeMachine.input (1 : Fin 2) x)).mass + q ≤ t) () := by
   have hm : ∀ j ≤ 0,
       ((once .nop).runFrom (true, Cfg.mk (input (1 : Fin 2) x)) j).2.mass ≤ x.size + 2 := by
     intro j hj

@@ -10,7 +10,7 @@ import Complexity.Resources.StackMachine.Program
 
 set_option experimental.vcgen true
 
-open Complexity Std.WP
+open Complexity Std.WP BinaryChoice
 open Complexity.StackMachine (Cfg)
 open Complexity.StackMachine.Program
 
@@ -24,12 +24,6 @@ A binary-choice stack program accepts the inputs with a bit `true` by guessing i
 -/
 
 namespace ProgramChoiceIndexTest
-
-/-- A fair binary choice of a Boolean. -/
-def coin : BinaryChoice Bool := fun i ↦ i == 1
-
-theorem mem_returns_coin (v : Bool) : v ∈ returns (monadLift coin : Multiset Bool) := by
-  cases v <;> simp [coin]
 
 /-- At an input symbol, guess whether this is the position, mark stack `0` when the guess falls on
 a `true`, and advance; at the right boundary, stop. -/
@@ -171,5 +165,46 @@ example {p : RawWord Bool → Prop} (prog : StackMachine.Program Multiset (Fin 1
     (TimeSpaceModel.stackWith Multiset Multiset).NDecidableWithinByCode p t
       (fun a r ↦ Fintype.card (Fin 1) * t a r) :=
   nDecidableWithinByCode_of_spec prog t hall hany
+
+/-! ## Records of limits of `vcgen` met by the guess of a bit string -/
+
+/-- Push `true` when `c` holds, then `false`. -/
+def pushIf (c : Bool) : StackMachine.Program Id (Fin 1) Bool Unit := do
+  if c then push 0 true else pure ()
+  push 0 false
+
+-- Records a limit: an `if` statement followed by further statements elaborates to a join point
+-- `have __do_jp := …`, for which `vcgen` has no rule, with or without an `else`. `recordBit`
+-- branches inside the tree action, `build (if x then .pair tmp tmp tmp else .nop)`, rather than on
+-- a statement; this form was chosen for the limit while `spec_recordBit` was proved by `vcgen`.
+-- `spec_recordBit` now composes the four `spec_build` steps by hand and does not meet the limit.
+-- If this starts to succeed, a program branching on a statement can be proved by `vcgen`.
+example (c : Bool) (xs : Array Bool) (s₀ : Cfg (Fin 1) Bool xs) :
+    Triple ((pushIf c).verify (semantics xs)) (fun s b ↦ s = s₀ ∧ b = 3) (fun _ _ _ ↦ True)
+      () := by
+  unfold pushIf
+  fail_if_success vcgen
+  cases c
+  all_goals
+    simp only [Bool.false_eq_true, ↓reduceIte]
+    vcgen
+    all_goals simp_all
+
+/-- `pushIf` without the `else`. -/
+def pushIfThen (c : Bool) : StackMachine.Program Id (Fin 1) Bool Unit := do
+  if c then push 0 true
+  push 0 false
+
+-- Records the same limit for an `if` statement without an `else`.
+example (c : Bool) (xs : Array Bool) (s₀ : Cfg (Fin 1) Bool xs) :
+    Triple ((pushIfThen c).verify (semantics xs)) (fun s b ↦ s = s₀ ∧ b = 3) (fun _ _ _ ↦ True)
+      () := by
+  unfold pushIfThen
+  fail_if_success vcgen
+  cases c
+  all_goals
+    simp only [Bool.false_eq_true, ↓reduceIte]
+    vcgen
+    all_goals simp_all
 
 end ProgramChoiceIndexTest

@@ -11,7 +11,7 @@ import Complexity.Models.StackMachine.Program.Basic
 
 set_option experimental.vcgen true
 
-open Complexity Std.WP
+open Complexity Std.WP BinaryChoice
 open Complexity.StackMachine (Cfg)
 open Complexity.StackMachine.Program
 
@@ -45,7 +45,7 @@ def verifier (n : ℕ) : StackMachine.Program BinaryChoice (Fin 1) Bool Bool := 
   prep.ofId
   let _ ← Program.loop idle (fun i : Fin (n + 1) ↦
     if h : i.val < n then do
-      let c ← choose fun j : Fin 2 ↦ j == 1
+      let c ← choose coin
       push 0 c
       pure (.inl ⟨i.val + 1, by omega⟩)
     else pure (.inr (0 : Fin 1))) 0
@@ -74,7 +74,7 @@ theorem verifier_any (n : ℕ) (hn : 0 < n) (xs : Array Bool) (s₀ : Cfg (Fin 1
     Triple ((verifier n).verifyWith Multiset .any (semantics xs))
       (fun s b ↦ s = s₀ ∧ b = 3 * n + 3) (fun ok _ _ ↦ ok = true) () := by
   unfold verifier
-  vcgen [spec_choose_any (F := BinaryChoice) (m := Multiset) (fun j ↦ j == 1) true (by simp)]
+  vcgen [spec_choose_any coin true (mem_returns_coin true)]
     invariants
   | inv1 => fun i t c ↦ c = 3 * (n - i) + 2 ∧ (n ≤ i.val → (t.stacks 0).head? = some true)
   case vc6 =>
@@ -98,6 +98,39 @@ example (n : ℕ) (hn : 0 < n) (xs : List Bool) :
       ∃ e t, cfg = (.inr e, t) ∧ ∃ b ≤ 3 * n + 3, (verifier n).result e = true :=
   Program.Syntax.ExecWithinWith.runFromWith_compile eval idle
     ((verifier_any n hn _ _).le_wp (Cfg.init (Fin 1) xs) _ ⟨rfl, rfl⟩)
+
+/-- Two choices of the same Boolean. -/
+def twoCoins : StackMachine.Program BinaryChoice (Fin 1) Bool (Bool × Bool) := do
+  let a ← choose coin
+  let b ← choose coin
+  pure (a, b)
+
+-- Records a limit: under `MonadQuant.any`, `vcgen` selects a rule `spec_choose_any coin v` by the
+-- program `choose coin` alone, so two choices of the same `coin` cannot be given different values;
+-- here the first rule is used for both. `guessStep` therefore makes its second choice, the bit, in
+-- the separate definition `guessBit` with its own specification. If this starts to succeed,
+-- `guessBit` can be inlined into `guessStep`. Without it, the general rule `spec_choose` leaves the
+-- quantifier of the first choice, after which the second is supplied.
+example (xs : Array Bool) (s₀ : Cfg (Fin 1) Bool xs) :
+    Triple (twoCoins.verifyWith Multiset .any (semantics xs)) (fun s b ↦ s = s₀ ∧ b = 2)
+      (fun r _ _ ↦ r = (true, false)) () := by
+  unfold twoCoins
+  fail_if_success
+    vcgen [spec_choose_any coin true (mem_returns_coin true),
+      spec_choose_any coin false (mem_returns_coin false)]
+    all_goals
+      cases_type* And
+      subst_vars
+    all_goals first | rfl | omega
+  vcgen [spec_choose]
+  obtain ⟨hs, hb⟩ := ‹_ ∧ _›
+  refine ⟨by omega, true, mem_returns_coin true,
+    (?_ : Triple _ (fun s b ↦ s = s₀ ∧ b = 1) _ ()).le_wp _ _ ⟨hs, by omega⟩⟩
+  vcgen [spec_choose_any coin false (mem_returns_coin false)]
+  all_goals
+    cases_type* And
+    subst_vars
+  all_goals first | rfl | omega
 
 /-- A deterministic program choosing from the single alternative of a choice of shape `Id`. -/
 def pickTrue : StackMachine.Program Id (Fin 1) Bool Unit := do

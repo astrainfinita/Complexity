@@ -9,6 +9,8 @@ import Complexity.Control.BinaryChoice.Basic
 meta import Complexity.Control.BinaryChoice.Basic
 import Complexity.Models.TreeMachine.Deterministic
 meta import Complexity.Models.TreeMachine.Deterministic
+import Complexity.Models.TreeMachine.Rename
+meta import Complexity.Models.TreeMachine.Rename
 meta import Complexity.Models.TreeMachine.Cost
 meta import Complexity.Models.TreeMachine.Basic
 meta import Complexity.Models.TreeMachine.Configuration
@@ -65,6 +67,20 @@ def c : Bool × Cfg 3 := (grow.q₀, Cfg.mk ![b, a, Tree.nil])
 #guard (grow.runHistoryFrom c 20).snd.actionSum Action.sizeCost = 7
 #guard (grow.runHistoryFrom c 20).length = 1
 #guard (grow.runHistoryFrom c 20).snd.configSup Cfg.mass = 13
+
+-- `rename` runs `grow` on the registers `3, 0, 1` of four: register `0` plays register `1` of
+-- `grow`, and the register `2` outside the image keeps its tree.
+def renamed : TreeMachine Id 4 Bool := grow.rename ![3, 0, 1]
+
+#guard (renamed.runFrom (false, Cfg.mk ![a, b, b, Tree.nil]) 1).2.regs 0 = Tree.pair a a
+#guard (renamed.runFrom (false, Cfg.mk ![a, b, b, Tree.nil]) 1).2.regs 2 = b
+
+-- Guards `runFrom_rename` on a concrete machine: the run of the renamed machine is the run of
+-- `grow` placed by `Cfg.extend`, so a register outside the image keeps its tree at every step.
+example (σ : Fin 4 → Tree) (r : Bool × Cfg 3) (n : ℕ) :
+    (renamed.runFrom (r.1, r.2.extend ![3, 0, 1] σ) n).2.regs 2 = σ 2 := by
+  rw [renamed, runFrom_rename grow σ (by decide)]
+  exact Cfg.extend_regs_of_notMem_range _ σ (by decide)
 
 -- Reading an empty source costs one even when it replaces a larger destination.
 def shrink : TreeMachine Id 3 Bool where
