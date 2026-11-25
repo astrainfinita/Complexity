@@ -11,7 +11,7 @@ open Complexity.TreeProgram.Source.Internal (HasProgramInO)
 namespace ComplexityTest.SourceTranslation.Certified
 
 -- The rules and the implementations the library selects with `program` (`List.reverse`,
--- `List.append`, the projections) are registered for `fun_prop` in the scope opened above.
+-- `List.append`, the projections) are registered for `fun_prop` globally.
 
 theorem hasProgramIn_reverse : HasProgramIn (List.reverse : List Bool → List Bool) hole(⊢ program)
     IsO(fun xs => ⌜xs⌝ₜ.size) IsO(fun xs => ⌜xs⌝ₜ.size) := by

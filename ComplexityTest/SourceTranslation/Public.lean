@@ -23,8 +23,11 @@ example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop :
     _ _ _)
 
 -- A scoped interpretation is selectable from the importing module.
-example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop using Guidance.ReverseByCases :
-  TreeProgram.Source.Internal.HasProgramInO (List.reverse (α := α)) _ _ _)
+example := (by source_fun_prop :
+  TreeProgram.Source.Internal.HasProgramInO Guidance.Scoped.custom (fun v => pure v) _ _)
+
+example := (by source_fun_prop using Guidance.Scoped :
+  TreeProgram.Source.Internal.HasProgramInO Guidance.Scoped.custom Guidance.programRetainSlow _ _)
 
 namespace ComplexityTest.SourceTranslation.Public
 

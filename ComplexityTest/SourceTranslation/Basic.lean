@@ -52,6 +52,9 @@ example {α : Type*} [UniqueEncoding Tree α] :
   hasProgramIn_reverseTwice.toHasProgramInO.mono (Dominated.of_le_mul 2 fun xs => by simp; omega)
     (Dominated.of_le fun xs => by simp)
 
+example := (by source_fun_prop :
+  HasProgramInO Complexity.Tree.root Complexity.Tree.programRoot (fun _ => 1) (fun t => t.size))
+
 section BranchTranslation
 
 -- Equal field paths must not identify different callback implementations or growths.

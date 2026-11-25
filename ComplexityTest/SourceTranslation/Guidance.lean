@@ -7,6 +7,25 @@ import Complexity.Tactic.TreeProgram.Primitives
 
 noncomputable section
 
+namespace ComplexityTest.SourceTranslation.Guidance
+
+-- Guards that a second program of a function the library selects one for is rejected also where
+-- the namespace `Complexity.TreeProgram.Source` is not open, hence before the `open` below (plan
+-- W71). This registration was once accepted silently, while translations went on using the
+-- library's program; if it starts to succeed again, the uniqueness check misses the library's
+-- selected implementations.
+theorem reverse_eq_reverse_reverse_reverse :
+    List.reverse (α := Bool) = fun xs => xs.reverse.reverse.reverse := by
+  funext xs; simp
+
+/--
+error: `program` already has a selected implementation of List.reverse: List.hasProgramIn_reverse; choose another one at a call with a local hypothesis or `via`
+-/
+#guard_msgs in
+attribute [program] reverse_eq_reverse_reverse_reverse
+
+end ComplexityTest.SourceTranslation.Guidance
+
 open Complexity TreeProgram.Source
 open TreeProgram.Source.Internal (HasProgramInO)
 
