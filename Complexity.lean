@@ -10,13 +10,17 @@ public import Complexity.Classes.Functions.Basic
 public import Complexity.Classes.Functions.Encoding
 public import Complexity.Classes.Nondeterministic.Basic
 public import Complexity.Classes.Nondeterministic.Deterministic
+public import Complexity.Classes.Nondeterministic.TreeVerifier
 public import Complexity.Classes.Nondeterministic.Verifier
 public import Complexity.Classes.Reductions.Basic
 public import Complexity.Classes.StackMachine.TuringMachine
 public import Complexity.Classes.TreeFunctions.Composition
 public import Complexity.Classes.TreeFunctions.Decompile
+public import Complexity.Classes.TreeFunctions.Fuel
 public import Complexity.Classes.TreeFunctions.Guard
+public import Complexity.Classes.TreeFunctions.ToTree
 public import Complexity.Classes.TreeFunctions.UnitTime
+public import Complexity.Classes.TreeFunctions.ValidCode
 public import Complexity.Classes.TreeSimulation
 public import Complexity.Classes.TreeTuringSimulation
 public import Complexity.Control.BinaryChoice.Basic
@@ -136,6 +140,7 @@ public import Complexity.Models.TuringMachine.Program.Specification.Configuratio
 public import Complexity.Models.TuringMachine.Program.Specification.History
 public import Complexity.Problems.CircuitSAT.Basic
 public import Complexity.Problems.CircuitSAT.KSAT
+public import Complexity.Problems.CircuitSAT.Membership
 public import Complexity.Problems.KSAT.Basic
 public import Complexity.Problems.KSAT.Membership
 public import Complexity.Problems.KSAT.Verifier

@@ -191,9 +191,15 @@ theorem hasProgramIn_tseitinLoop :
 
 attribute [program] hasProgramIn_tseitinLoop
 
-@[local program] theorem tseitin_source :
-    (fun input : Σ n, Circuit .booleanAlgebra n 1 => input.2.tseitin) =
-      (fun input => tseitinLoop input []) := (funext tseitinLoop_nil).symm
+/-- The Tseitin transformation is the loop from an empty accumulator: quadratic time and peak. It
+is stated on the dependent pair `Σ n, Circuit .booleanAlgebra n 1`, so that the function, and its
+growths, do not depend on the number of inputs `n`. -/
+@[program] theorem _root_.Complexity.Circuit.hasProgramIn_tseitin :
+    HasProgramIn (fun input : Σ n, Circuit .booleanAlgebra n 1 => input.2.tseitin)
+      hole(⊢ program) IsO(fun x => ⌜x⌝ₜ.size ^ 2) IsO(fun x => ⌜x⌝ₜ.size ^ 2) := by
+  abstract_hole program using programTseitin
+  fill_hole program in source_fun_prop via (fun input => tseitinLoop input [])
+  case source_eq => exact funext fun input => (tseitinLoop_nil input).symm
 
 theorem _root_.Complexity.Circuit.tseitin_fp :
     (fun input : Σ n, Circuit .booleanAlgebra n 1 => input.2.tseitin) ∈ FP .sizeCostTree := by

@@ -6,6 +6,7 @@ Authors: Yuyang Zhao
 module
 
 public import Complexity.Classes.Deterministic
+public import Complexity.Classes.Nondeterministic.Basic
 public import Complexity.Resources.StackMachine.TuringMachine
 
 /-!
@@ -72,5 +73,42 @@ theorem dspace_eq_tm (S : ℕ → ℕ) (hS : DominatedAtTop (fun _ ↦ 1) S) :
 
 theorem p_eq_tm : P (α := α) .stack = P .tm :=
   congrArg DecisionClass fp_eq_tm
+
+/-- Constant-factor simulations of every branch identify every nondeterministic time class. -/
+theorem ntime_eq_ntm (T : ℕ → ℕ) :
+    NTIME (α := α) .nstack T = NTIME .ntm T := by
+  apply Set.Subset.antisymm
+  · rintro p ⟨t, ⟨s, h⟩, ht⟩
+    obtain ⟨c, h⟩ := TimeSpaceModel.NDecidableWithinByCode.toNTM h
+    exact ⟨t, ⟨fun n => c * (s n + 1), h⟩, ht⟩
+  · rintro p ⟨t, ⟨s, h⟩, ht⟩
+    exact ⟨t, ⟨fun n => 2 * s n, TimeSpaceModel.NDecidableWithinByCode.toStack_of_ntm h⟩, ht⟩
+
+/-- Both simulations preserve simultaneous time and eventually positive space bounds on every
+branch. -/
+theorem ntisp_eq_ntm (T S : ℕ → ℕ) (hS : DominatedAtTop (fun _ ↦ 1) S) :
+    NTISP (α := α) .nstack T S = NTISP .ntm T S := by
+  apply Set.Subset.antisymm
+  · rintro p ⟨t, s, h, ht, hs⟩
+    obtain ⟨c, h⟩ := TimeSpaceModel.NDecidableWithinByCode.toNTM h
+    exact ⟨t, fun n => c * (s n + 1), h, ht, (hs.add_same hS).const_mul_left c⟩
+  · rintro p ⟨t, s, h, ht, hs⟩
+    exact ⟨t, fun n => 2 * s n, TimeSpaceModel.NDecidableWithinByCode.toStack_of_ntm h, ht,
+      hs.const_mul_left 2⟩
+
+/-- Eventually positive nondeterministic space classes agree. -/
+theorem nspace_eq_ntm (S : ℕ → ℕ) (hS : DominatedAtTop (fun _ ↦ 1) S) :
+    NSPACE (α := α) .nstack S = NSPACE .ntm S := by
+  apply Set.Subset.antisymm
+  · rintro p ⟨s, ⟨t, h⟩, hs⟩
+    exact NTISP.subset_space ((ntisp_eq_ntm t S hS).subset
+      (h.mem_ntisp_of_dominated (DominatedAtTop.refl _) hs))
+  · rintro p ⟨s, ⟨t, h⟩, hs⟩
+    exact NTISP.subset_space ((ntisp_eq_ntm t S hS).superset
+      (h.mem_ntisp_of_dominated (DominatedAtTop.refl _) hs))
+
+/-- Stack and Turing machines decide the same predicates in nondeterministic polynomial time. -/
+theorem np_eq_ntm : NP (α := α) .nstack = NP .ntm :=
+  Set.iUnion_congr fun _ ↦ ntime_eq_ntm _
 
 end Complexity.StackMachine

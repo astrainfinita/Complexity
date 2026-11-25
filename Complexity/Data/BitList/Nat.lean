@@ -135,4 +135,23 @@ theorem leAux_eq (c : Bool) (xs ys : List Bool) :
       cases a <;> cases b <;> cases c <;> simp
       all_goals omega
 
+/-- The binary digits of natural numbers are the lists of Booleans whose last element, if any, is
+`true`. -/
+theorem exists_bits_eq_iff : ∀ {xs : List Bool},
+    (∃ n : ℕ, n.bits = xs) ↔ xs.getLast?.getD true = true
+  | [] => ⟨fun _ => rfl, fun _ => ⟨0, Nat.zero_bits⟩⟩
+  | [b] => by
+    refine ⟨fun ⟨n, hn⟩ => ?_, fun (h : b = true) => ⟨1, h ▸ Nat.one_bits⟩⟩
+    have h := toNat_bits n
+    rw [hn] at h
+    cases b
+    · simp only [toNat_cons, Bool.toNat_false, toNat_nil] at h
+      simp [← h] at hn
+    · rfl
+  | b :: c :: xs => by
+    rw [List.getLast?_cons_cons, ← exists_bits_eq_iff]
+    refine ⟨fun ⟨n, hn⟩ => ⟨n.div2, by rw [Nat.div2_bits_eq_tail, hn, List.tail_cons]⟩,
+      fun ⟨m, hm⟩ => ⟨Nat.bit b m, ?_⟩⟩
+    rw [Nat.bits_append_bit m b fun h => by simp [h] at hm, hm]
+
 end Complexity.BitList

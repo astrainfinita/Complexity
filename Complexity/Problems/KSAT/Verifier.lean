@@ -22,6 +22,11 @@ namespace Complexity.KSAT
 def verify (k : ℕ) (x : KCNF k ℕ × List ℕ) : Bool :=
   x.1.val.eval fun v => x.2.contains v
 
+/-- A formula is satisfiable when some witness passes. -/
+theorem verify_sound {k : ℕ} {f : KCNF k ℕ} {w : List ℕ} (h : verify k (f, w) = true) :
+    KSAT k f :=
+  ⟨fun v => w.contains v, h⟩
+
 /-- A formula is satisfiable exactly when some witness passes that lists only its variables, in
 the order of their occurrences. -/
 theorem exists_verify_iff {k : ℕ} (f : KCNF k ℕ) :
@@ -34,6 +39,6 @@ theorem exists_verify_iff {k : ℕ} (f : KCNF k ℕ) :
     have : l.atom ∈ f.val.atoms := CNF.mem_atoms.2 ⟨clause, hc, l, hl, rfl⟩
     cases h : x l.atom <;> simp [List.mem_filter, this, h]
   · rintro ⟨w, -, hw⟩
-    exact ⟨fun v => w.contains v, hw⟩
+    exact verify_sound hw
 
 end Complexity.KSAT

@@ -23,6 +23,8 @@ size-charged tree model. The clause-width certificate requires no additional com
 
 namespace Complexity.CircuitSAT
 
+open TreeProgram.Source
+
 /-- A circuit is satisfiable exactly when its Tseitin translation is satisfiable. -/
 theorem iff_ksat {n : ℕ} (c : Circuit .booleanAlgebra n 1) :
     CircuitSAT ⟨n, c⟩ ↔ KSAT 3 ⟨c.tseitin, c.tseitin_width⟩ := by
@@ -40,10 +42,19 @@ def toKSAT (input : Σ n, Circuit .booleanAlgebra n 1) : KCNF 3 ℕ :=
 theorem toKSAT_correct (input : Σ n, Circuit .booleanAlgebra n 1) :
     CircuitSAT input ↔ KSAT 3 (toKSAT input) := iff_ksat input.2
 
-/-- The reduction has the code of the Tseitin formula. -/
+/-- The reduction has the code of the Tseitin formula, quadratic in the code of the circuit. -/
+@[dominated] theorem size_encode_toKSAT_le (input : Σ n, Circuit .booleanAlgebra n 1) :
+    ⌜toKSAT input⌝ₜ.size ≤ 8 * ⌜input⌝ₜ.size ^ 2 :=
+  input.2.size_encode_tseitin_le
+
+/-- The reduction is the Tseitin transformation: quadratic time and peak. -/
+@[program] theorem hasProgramIn_toKSAT : HasProgramIn toKSAT hole(⊢ program)
+    IsO(fun x => ⌜x⌝ₜ.size ^ 2) IsO(fun x => ⌜x⌝ₜ.size ^ 2) := by
+  abstract_hole program using programToKSAT
+  fill_hole program in source_fun_prop
+
 theorem toKSAT_fp : toKSAT ∈ FP .sizeCostTree := by
-  obtain ⟨d, t, ⟨s, h⟩, ht⟩ := FP.mem_iff_exists_fdtime.mp Circuit.tseitin_fp
-  exact FP.mem_iff_exists_fdtime.mpr ⟨d, t, ⟨s, h.of_encode fun _ => rfl⟩, ht⟩
+  model_fun_prop
 
 theorem polytimeManyOneReducible_ksat :
     PolytimeManyOneReducible .sizeCostTree CircuitSAT (KSAT 3) :=

@@ -12,13 +12,15 @@ public import Complexity.Tactic.TreeProgram.Library
 public import Complexity.Classes.Functions.Encoding
 public import Complexity.Classes.TreeFunctions.UnitTime
 public import Complexity.Classes.TreeFunctions.Composition
+public import Complexity.Classes.TreeFunctions.ValidCode
+public import Complexity.Classes.Nondeterministic.TreeVerifier
 
 /-! # A polynomial-time tree program for the sparse `k`-SAT verifier
 
 The program checks every clause for a satisfied literal, looking each variable up by scanning the
 witness list and comparing binary numbers. Its time is polynomial in the code of the formula and
 the witness, and its peak linear. The formula is evaluated under the assignment as a callback, by
-the rule `HasProgramInO.cnfEval`.
+the rule `HasProgramInO.cnfEval`. With it, `KSAT.mem_np` puts `k`-SAT in `NP .ntm`.
 -/
 
 @[expose] public section
@@ -70,5 +72,14 @@ polynomial in the code of the formula and the witness, and a linear peak. -/
 /-- The verifier is polynomial-time in the size-charged tree model. -/
 theorem verify_fp (k : ℕ) : verify k ∈ FP .sizeCostTree := by
   model_fun_prop
+
+/-- `k`-SAT is in nondeterministic polynomial time: a witness lists the variables assigned `true`,
+and a satisfiable formula has one listing only its own variables. -/
+theorem mem_np (k : ℕ) : KSAT k ∈ NP .ntm :=
+  NP.of_verifier (TreeMachine.dom_decode_list_mem_p TreeMachine.dom_decode_nat_mem_p)
+    (P.of_decides (verify_fp k) fun _ => Iff.rfl) (fun f => ⌜f⌝ₜ.size) .refl
+    (fun _ _ h => verify_sound h) fun f hf => by
+      obtain ⟨w, hw, hv⟩ := (exists_verify_iff f).1 hf
+      exact ⟨w, hw.size_encode_le.trans f.val.size_encode_atoms_le, hv⟩
 
 end Complexity.KSAT
