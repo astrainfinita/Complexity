@@ -27,7 +27,7 @@ namespace Complexity.TreeProgram.Source
 open Internal (HasProgramInO)
 
 -- The implementations stated with the rules, registered once `program` is defined.
-attribute [scoped program] List.hasProgramIn_reverse List.hasProgramIn_append Prod.hasProgramIn_fst
+attribute [program] List.hasProgramIn_reverse List.hasProgramIn_append Prod.hasProgramIn_fst
   Prod.hasProgramIn_snd Sigma.hasProgramIn_fst Sigma.hasProgramIn_snd BitList.hasProgramIn_increment
 
 theorem _root_.Bool.hasProgramIn_not :
@@ -88,7 +88,7 @@ theorem _root_.List.hasProgramIn_isEmpty {α : Type*} [UniqueEncoding Tree α] :
   abstract_hole program using programIsEmpty
   fill_hole program in source_fun_prop
 
-attribute [scoped program] Bool.hasProgramIn_not hasProgramIn_boolAnd hasProgramIn_boolOr
+attribute [program] Bool.hasProgramIn_not hasProgramIn_boolAnd hasProgramIn_boolOr
   hasProgramIn_boolXor hasProgramIn_boolBeq List.hasProgramIn_isEmpty
 
 /-- Testing a tree's root is testing the list of its spine for emptiness. -/
@@ -103,6 +103,8 @@ theorem _root_.Complexity.Tree.hasProgramIn_root :
       (Dominated.const_of_pos 2 fun _ => Nat.one_pos)
       ((Dominated.of_le fun t => by rw [Tree.encode_spine]).max_same
         (Dominated.one fun t => Tree.size_pos _))
+
+attribute [program] Tree.hasProgramIn_root
 
 /-- Root tests at fixed paths of the input's code select one of the given programs. -/
 theorem exists_hasProgramInO_dispatch {α β : Type*} [UniqueEncoding Tree α]

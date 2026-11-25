@@ -863,14 +863,13 @@ private partial def sourceSearch (session : Search.Session)
   finish result
 
 open Lean Meta Elab Tactic Mathlib.Meta.FunProp in
-/-- Run `action` with the scoped declarations of `Complexity.TreeProgram.Source` activated, and of
-the namespaces `scope` resolves to when it is given. -/
+/-- Run `action` with the scoped declarations of the namespaces `scope` resolves to activated, when
+it is given. The library's implementations and rules are global and need no activation. -/
 def withSourceSpecs {α : Type} (scope : Option Ident) (action : TacticM α) : TacticM α := do
+  let some scope := scope | action
   pushScope
   try
-    activateScoped `Complexity.TreeProgram.Source
-    if let some scope := scope then
-      for ns in ← resolveNamespace scope do activateScoped ns
+    for ns in ← resolveNamespace scope do activateScoped ns
     action
   finally
     popScope
@@ -883,7 +882,8 @@ private def sourceContext : MetaM Mathlib.Meta.FunProp.Context := do
 
 open Lean Meta Elab Tactic Mathlib.Meta.FunProp in
 /-- Certify a callback named in a method syntax completely, sharing the method's session.
-The source rules in scope are those activated by `withSourceSpecs`. -/
+The source rules in scope include those of the namespace named by `using`, activated by
+`withSourceSpecs`. -/
 def certifyCallback (session : Search.Session) (method name : Name) (callback : Lean.Expr) :
     TacticM Lean.Expr := do
   if callback.hasExprMVar then

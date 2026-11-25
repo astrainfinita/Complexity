@@ -149,6 +149,6 @@ theorem Internal.HasProgramInO.unroll {ρ : Type} [UniqueEncoding Tree ρ]
       (fun x => max (q x) (hasProgramIn_unroll.peak ⟨n x, step x, t x⟩)) :=
   h.comp_dependent hasProgramIn_unroll.hasProgramInO
 
-attribute [scoped fun_prop] HasProgramInO.unroll
+attribute [fun_prop] HasProgramInO.unroll
 
 end Complexity.TreeProgram.Source

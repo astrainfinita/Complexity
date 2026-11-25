@@ -57,7 +57,7 @@ theorem hasProgramIn_borrowFinish :
   fill_hole program in source_fun_prop
 
 
-attribute [scoped program] hasProgramIn_borrowContinues hasProgramIn_borrowStep
+attribute [local program] hasProgramIn_borrowContinues hasProgramIn_borrowStep
   hasProgramIn_borrowFinish
 
 /-- The invariant of the decrement loop: a reached state holds no more bits than the input. -/
@@ -118,7 +118,7 @@ theorem _root_.Nat.hasProgramIn_pred :
       (Dominated.of_le fun n => by simp [size_encode_bits])
       (Dominated.of_le fun n => by simp [size_encode_bits])
 
-attribute [scoped program] Nat.hasProgramIn_bits BitList.hasProgramIn_decrement
+attribute [program] Nat.hasProgramIn_bits BitList.hasProgramIn_decrement
   Nat.hasProgramIn_pred
 
 /-- Whether both remaining summands still have a bit. -/
@@ -348,7 +348,7 @@ theorem hasProgramIn_lt :
   apply Bool.eq_iff_iff.mpr
   simp [leResult, BitList.leAux_eq]
 
-attribute [scoped program] hasProgramIn_add hasProgramIn_ble hasProgramIn_lt
+attribute [program] hasProgramIn_add hasProgramIn_ble hasProgramIn_lt
 
 /-- Addition of one by the program of the addition; its growth is stated once here. -/
 theorem hasProgramIn_addOne :
@@ -361,7 +361,7 @@ theorem _root_.Nat.hasProgramIn_succ :
     HasProgramIn Nat.succ programAddOne IsO(fun n => ⌜n⌝ₜ.size) IsO(fun n => ⌜n⌝ₜ.size) :=
   hasProgramIn_addOne
 
-attribute [scoped program] hasProgramIn_addOne Nat.hasProgramIn_succ
+attribute [program] hasProgramIn_addOne Nat.hasProgramIn_succ
 
 theorem hasProgramIn_natBeq :
     HasProgramIn (fun x : ℕ × ℕ => Nat.beq x.1 x.2) hole(⊢ program) IsO(fun x => ⌜x⌝ₜ.size)
@@ -373,6 +373,6 @@ theorem hasProgramIn_natBeq :
     apply Bool.eq_iff_iff.mpr
     simp [Nat.le_antisymm_iff]
 
-attribute [scoped program] hasProgramIn_natBeq
+attribute [program] hasProgramIn_natBeq
 
 end Complexity.TreeProgram.Source

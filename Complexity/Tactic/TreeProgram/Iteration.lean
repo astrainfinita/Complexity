@@ -458,6 +458,6 @@ theorem Internal.HasProgramInO.iterate_with {ρ α : Type*} [UniqueEncoding Tree
     simp only [hiter, max_le_iff, size_encode_prod] at hlift ⊢
     omega
 
-attribute [scoped fun_prop] HasProgramInO.iterate HasProgramInO.iterate_with
+attribute [fun_prop] HasProgramInO.iterate HasProgramInO.iterate_with
 
 end Complexity.TreeProgram.Source

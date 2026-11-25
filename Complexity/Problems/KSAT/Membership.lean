@@ -52,7 +52,7 @@ theorem Internal.HasProgramInO.cnfEval {ρ α : Type*} [UniqueEncoding Tree ρ]
   · simp only [foldr_max_max]
     dominated
 
-attribute [scoped fun_prop] HasProgramInO.cnfEval
+attribute [fun_prop] HasProgramInO.cnfEval
 
 end Complexity.TreeProgram.Source
 

@@ -777,7 +777,7 @@ theorem Internal.HasProgramInO.ite_prop {c : α → Prop} [DecidablePred c]
 
 end Branch
 
-attribute [scoped fun_prop] HasProgramInO.ite_prop
+attribute [fun_prop] HasProgramInO.ite_prop
 
 /-- Captured source values travel with the accumulator in one fixed program. -/
 theorem Internal.HasProgramInO.foldl_with {ρ α β : Type*}
@@ -867,9 +867,9 @@ theorem Internal.HasProgramInO.map_with {ρ α β : Type*}
       (fun p => (@Sigma.encode_mk ρ (fun _ => α) _ _ p.1 p.2).symm))).mono
     (Dominated.refl _) (Dominated.of_le fun e => by simp only [Sigma.encode_mk, le_refl])
 
-attribute [scoped fun_prop] HasProgramInO.identity HasProgramInO.comp HasProgramInO.map
+attribute [fun_prop] HasProgramInO.identity HasProgramInO.comp HasProgramInO.map
   HasProgramInO.pair HasProgramInO.unit HasProgramInO.ite HasProgramInO.foldl
-attribute [scoped fun_prop] HasProgramInO.foldl_with
+attribute [fun_prop] HasProgramInO.foldl_with
   HasProgramInO.map_dependent_with HasProgramInO.map_with
 
 /-- Fold callbacks share one coefficient across all environments and reachable states.

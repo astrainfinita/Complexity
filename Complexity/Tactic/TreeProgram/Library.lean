@@ -24,7 +24,7 @@ theorem _root_.List.hasProgramIn_tail {α : Type*} [UniqueEncoding Tree α] :
   abstract_hole program using programTail
   fill_hole program in source_fun_prop
 
-attribute [scoped program] List.hasProgramIn_tail
+attribute [program] List.hasProgramIn_tail
 
 /-- Whether the indexed lookup continues: the list is nonempty and the index, read through its
 binary digits, is nonzero. -/
@@ -120,7 +120,7 @@ theorem _root_.List.hasProgramIn_getElem? {γ : Type*} [UniqueEncoding Tree γ] 
     hasProgramIn_lookup.toHasProgramInO).mono ?_ ?_ <;>
     dominated
 
-attribute [scoped program] List.hasProgramIn_getElem?
+attribute [program] List.hasProgramIn_getElem?
 
 /-- The code of an optional value's content, or the empty tree. -/
 def someValue {β : Type*} [UniqueEncoding Tree β] : Option β → Tree
@@ -133,7 +133,7 @@ theorem hasProgramIn_someValue {β : Type*} [UniqueEncoding Tree β] :
   abstract_hole program using programSomeValue
   fill_hole program in source_fun_prop
 
-attribute [scoped program] hasProgramIn_someValue
+attribute [program] hasProgramIn_someValue
 
 /-! A table has the code of its vector (`encode_fin_function_vector`), and a vector that of its
 list (`encode_vector`). The search computes a table through them, by these equations and the list
@@ -279,7 +279,7 @@ theorem _root_.List.hasProgramIn_range :
   fill_hole program in source_fun_prop via (fun n => rangeLoop (n, []))
   case source_eq => funext n; simp [rangeLoop]
 
-attribute [scoped program] List.hasProgramIn_range
+attribute [program] List.hasProgramIn_range
 
 theorem hasProgramIn_lengthStep {α : Type*} [UniqueEncoding Tree α] :
     HasProgramIn (fun x : ℕ × α => x.1 + 1) hole(⊢ program)
@@ -344,7 +344,7 @@ theorem _root_.List.hasProgramIn_length {α : Type*} [UniqueEncoding Tree α] :
       (hasProgramIn_lengthStep.toHasProgramInO.foldl (f := fun n (_ : α) => n + 1)))).mono ?_ ?_
   all_goals dominated
 
-attribute [scoped program] List.hasProgramIn_length
+attribute [program] List.hasProgramIn_length
 
 /-- The conjunction of a list of Booleans, by a left fold without short-circuiting. -/
 theorem _root_.List.hasProgramIn_and : HasProgramIn List.and hole(⊢ program)
@@ -372,7 +372,7 @@ theorem _root_.List.hasProgramIn_or : HasProgramIn List.or hole(⊢ program)
     | nil => simp
     | cons x bs ih => intro c; simp [← ih, Bool.or_assoc]
 
-attribute [scoped program] List.hasProgramIn_and List.hasProgramIn_or
+attribute [program] List.hasProgramIn_and List.hasProgramIn_or
 
 /-- A check of every element of a list is computed as the conjunction of the mapped list: the
 predicate is a callback of the map, so it may capture values. -/

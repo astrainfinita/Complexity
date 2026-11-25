@@ -182,7 +182,7 @@ theorem Internal.HasProgramInO.relabel {ρ : Type} [UniqueEncoding Tree ρ]
       (fun x => max (p x) (hasProgramIn_relabelFn.peak ⟨n x, m x, k x, c x, w x⟩)) :=
   h.comp_dependent hasProgramIn_relabelFn.hasProgramInO
 
-attribute [scoped fun_prop] HasProgramInO.relabel
+attribute [fun_prop] HasProgramInO.relabel
 
 /-- The arguments of `Circuit.comp`. -/
 @[tree_encoding]
@@ -312,7 +312,7 @@ theorem Internal.HasProgramInO.circuitComp {ρ : Type} [UniqueEncoding Tree ρ]
       (fun x => max (p x) (hasProgramIn_compFn.peak ⟨n x, m x, k x, c x, d x⟩)) :=
   h.comp_dependent hasProgramIn_compFn.hasProgramInO
 
-attribute [scoped fun_prop] HasProgramInO.circuitComp
+attribute [fun_prop] HasProgramInO.circuitComp
 
 /-- Selecting the outputs of a circuit computed by a selected implementation. -/
 theorem Internal.HasProgramInO.mapOutputs {ρ : Type} [UniqueEncoding Tree ρ] {n m k : ρ → ℕ}
@@ -325,7 +325,7 @@ theorem Internal.HasProgramInO.mapOutputs {ρ : Type} [UniqueEncoding Tree ρ] {
       (fun x => max (p x) (hasProgramIn_compFn.peak ⟨n x, m x, k x, c x, .outputs (f x)⟩)) :=
   h.comp_dependent hasProgramIn_compFn.hasProgramInO
 
-attribute [scoped fun_prop] HasProgramInO.mapOutputs
+attribute [fun_prop] HasProgramInO.mapOutputs
 
 /-- The arguments of `Circuit.keepWires`. -/
 @[tree_encoding]
@@ -443,7 +443,7 @@ theorem Internal.HasProgramInO.keepWires {ρ : Type} [UniqueEncoding Tree ρ]
       (fun x => max (s x) (hasProgramIn_keepWiresFn.peak ⟨p x, n x, m x, c x, w x⟩)) :=
   h.comp_dependent hasProgramIn_keepWiresFn.hasProgramInO
 
-attribute [scoped fun_prop] HasProgramInO.keepWires
+attribute [fun_prop] HasProgramInO.keepWires
 
 /-- The argument of `Circuit.keepInputs`. -/
 @[tree_encoding]
@@ -478,6 +478,6 @@ theorem Internal.HasProgramInO.keepInputs {ρ : Type} [UniqueEncoding Tree ρ]
       (fun x => max (p x) (hasProgramIn_keepFn.peak ⟨n x, m x, c x⟩)) :=
   h.comp_dependent hasProgramIn_keepFn.hasProgramInO
 
-attribute [scoped fun_prop] HasProgramInO.keepInputs
+attribute [fun_prop] HasProgramInO.keepInputs
 
 end Complexity.TreeProgram.Source
