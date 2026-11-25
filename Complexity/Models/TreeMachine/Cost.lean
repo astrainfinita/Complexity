@@ -27,6 +27,9 @@ variable {k : ℕ}
 /-- Total expanded tree size in the register bank, including one node for each `nil`. -/
 def Cfg.mass (c : Cfg k) : ℕ := ∑ i, Tree.size (c.regs i)
 
+/-- The mass is the sum of the register sizes. -/
+theorem Cfg.mass_eq_sum (c : Cfg k) : c.mass = ∑ i, (c.regs i).size := rfl
+
 /-- The other registers each contribute one empty leaf to the initial mass. -/
 theorem sum_size_input (i : Fin k) (a : Tree) :
     (∑ j, (input i a j).size) = a.size + (k - 1) := by
@@ -54,6 +57,21 @@ def Action.sizeCost (o : Action k) (c : Cfg k) : ℕ :=
   | .nop => 1
   | .left _ j | .right _ j => (c.regs j).size
   | .pair _ j l => (Tree.pair (c.regs j) (c.regs l)).size
+
+/-- A `nop` costs one. -/
+@[simp] theorem Action.sizeCost_nop (c : Cfg k) : (Action.nop : Action k).sizeCost c = 1 := rfl
+
+/-- A left projection costs the size of its source. -/
+@[simp] theorem Action.sizeCost_left (i j : Fin k) (c : Cfg k) :
+    (Action.left i j).sizeCost c = (c.regs j).size := rfl
+
+/-- A right projection costs the size of its source. -/
+@[simp] theorem Action.sizeCost_right (i j : Fin k) (c : Cfg k) :
+    (Action.right i j).sizeCost c = (c.regs j).size := rfl
+
+/-- Pairing costs the size of its result. -/
+@[simp] theorem Action.sizeCost_pair (i j l : Fin k) (c : Cfg k) :
+    (Action.pair i j l).sizeCost c = (Tree.pair (c.regs j) (c.regs l)).size := rfl
 
 /-- Every active instruction incurs a positive charge. -/
 theorem Action.sizeCost_pos (o : Action k) (c : Cfg k) : 0 < o.sizeCost c := by

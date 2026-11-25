@@ -8,6 +8,7 @@ module
 public import Complexity.Models.TreeMachine.Simulation.Init
 public import Complexity.Models.StackMachine.Program.Correctness
 public import Complexity.Models.TreeMachine.Deterministic
+public import Complexity.Models.TreeMachine.Rename
 
 /-! # Linear time and space simulation through local stack operations -/
 
@@ -38,7 +39,8 @@ theorem macro_space_le {xs : Array Bool} (c : StackMachine.Cfg (Work k) Bool xs)
     _ = _ := by
       simp [spaceBound, Nat.add_mul, Nat.mul_add, Nat.mul_comm, Nat.mul_left_comm, Nat.add_comm]
 
-/-- Simulate a source run, charging creation and amortizing destination erasure.
+/-- Simulate a source run, charging creation and amortizing destination erasure. The credits of
+the final bank remain, as for `spec_build`.
 Histories retain the peak across macros; no internal macro invariant is required. -/
 theorem spec_loop {xs : Array Bool} (M : TreeMachine Id k Q)
     (r : Q × Cfg k) (c₀ : StackMachine.Cfg (Work k) Bool xs) (n s q : ℕ)
@@ -50,7 +52,8 @@ theorem spec_loop {xs : Array Bool} (M : TreeMachine Id k Q)
         40 * (M.runHistoryFrom r n).snd.actionSum Action.sizeCost +
           3 * r.2.mass + 1 + q ≤ b)
       (fun _ h b ↦ h.last = bank c₀ (M.runFrom r n).2.regs ∧
-        h.configSup StackMachine.Cfg.mass ≤ spaceBound k s ∧ q ≤ b) () := by
+        h.configSup StackMachine.Cfg.mass ≤ spaceBound k s ∧ 3 * (M.runFrom r n).2.mass + q ≤ b)
+      () := by
   let W := fun j ↦ (M.runHistoryFrom r j).snd.actionSum Action.sizeCost
   let I : Q → History (StackMachine.Cfg (Work k) Bool xs)
       (StackMachine.Action (Work k) Bool) → ℕ → Prop := fun v h b ↦
@@ -108,6 +111,54 @@ theorem spec_loop {xs : Array Bool} (M : TreeMachine Id k Q)
       vcgen
       exact ⟨hc, hS, by omega⟩
 
+/-- `spec_loop` for time alone: the history served only the space bound. -/
+theorem spec_loop_time {xs : Array Bool} (M : TreeMachine Id k Q) (r : Q × Cfg k)
+    (c₀ : StackMachine.Cfg (Work k) Bool xs) (n q : ℕ) (hw : c₀.stacks = contents r.2.regs)
+    (hh : M.Halted (M.runFrom r n)) (hn : ∀ j < n, ¬M.Halted (M.runFrom r j)) :
+    Triple ((Program.loopOn idle (body M) r.1).verify (semantics xs))
+      (fun c b ↦ c = c₀ ∧
+        40 * (M.runHistoryFrom r n).snd.actionSum Action.sizeCost + 3 * r.2.mass + 1 + q ≤ b)
+      (fun _ c b ↦ c = bank c₀ (M.runFrom r n).2.regs ∧ 3 * (M.runFrom r n).2.mass + q ≤ b)
+      () := by
+  let s := (M.runHistoryFrom r n).snd.configSup Cfg.mass
+  have hm (j : ℕ) (hj : j ≤ n) : (M.runFrom r j).2.mass ≤ s :=
+    M.config_le_configSup_runHistoryFrom Cfg.mass r hj
+  refine Complexity.Program.spec_simulate (fun h c ↦ c = h.last) (by rintro h _ rfl; rfl)
+    (by rintro a h _ rfl; simp) (spec_loop M r c₀ n s q hw hh hn hm)
+    (fun c b ⟨hc, hb⟩ ↦ ⟨History.nil c, ⟨hc, ?_, hb⟩, rfl⟩)
+    (by rintro a h _ b rfl ⟨h₁, -, h₂⟩; exact ⟨h₁, h₂⟩)
+  rw [History.configSup_nil, hc, ← bank_self c₀ r.2.regs hw, mass_bank]
+  exact (hm 0 (Nat.zero_le n)).trans (Nat.le_mul_of_pos_left s (by omega))
+
+/-- Run `M` on the registers `e i` of the bank, which hold the initial bank of `M` on `x`. The
+result is in the register `e 0` and the other registers keep their trees. -/
+theorem spec_loopOn_rename {xs : Array Bool} {l : ℕ} [NeZero l] (M : TreeMachine Id l Q)
+    {e : Fin l → Fin k} (he : e.Injective) {x y : Tree} {t s : ℕ} (h : M.ComputesWithin x y t s)
+    (c : StackMachine.Cfg (Work k) Bool xs) (σ : Fin k → Tree) (hσ : σ ∘ e = input 0 x)
+    (q : ℕ) :
+    Triple ((Program.loopOn idle (body (M.rename e)) M.q₀).verify (semantics xs))
+      (fun c' b ↦ c' = bank c σ ∧ 40 * t + 3 * ∑ j, (σ j).size + 1 + q ≤ b)
+      (fun _ c' b ↦ ∃ σ' : Fin k → Tree, c' = bank c σ' ∧ σ' (e 0) = y ∧
+        (∀ j, j ∉ Set.range e → σ' j = σ j) ∧ 3 * ∑ j, (σ' j).size + q ≤ b) () := by
+  obtain ⟨n, -, hh, hy, ht, -⟩ := h.exists_haltsAt
+  have hσ' : (M.init x).2.extend e σ = ⟨σ⟩ :=
+    Cfg.extend_eq he (by rw [hσ, Controller.init_snd, hasConfig_init, Cfg.init_regs])
+  have hl := spec_loop_time (M.rename e) ((M.init x).1, (M.init x).2.extend e σ) (bank c σ) n q
+    (by simp only [hσ', bank_stacks]) (by rw [runFrom_rename M σ he]; exact hh.1)
+    (fun j hj ↦ by rw [runFrom_rename M σ he]; exact hh.2 j hj)
+  rw [actionSum_rename M σ he, runFrom_rename M σ he, ← Controller.runHistory, ← Controller.run,
+    hσ', Controller.init_fst, bank_bank] at hl
+  constructor
+  rintro c' b ⟨rfl, hb⟩
+  refine (Triple.entails_wp_of_post hl ?_) _ b ⟨rfl, ?_⟩
+  · rintro _ c'' b' ⟨rfl, hq⟩
+    refine ⟨_, rfl, ?_, fun j hj ↦ ?_, by rwa [Cfg.mass_eq_sum] at hq⟩
+    · rw [Cfg.extend_regs_apply he]
+      exact hy
+    · exact Cfg.extend_regs_of_notMem_range _ σ hj
+  · simp only [Cfg.mass_eq_sum]
+    omega
+
 end Program
 
 open StackMachine.Program TreeMachine.Simulation.Program Work Std.WP
@@ -163,6 +214,7 @@ theorem Program.spec_program (M : TreeMachine Id k Q)
   have hout := h.output_size_le_mass_add_time
   unfold program
   vcgen [hi, hl, ho]
+  all_goals clear hi hl he ho
   all_goals simp_all [d, timeBound, Controller.run, Controller.runHistory, loadedCfg,
     StackMachine.Cfg.mass] <;> omega
 

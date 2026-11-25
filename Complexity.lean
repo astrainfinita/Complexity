@@ -10,6 +10,7 @@ public import Complexity.Classes.Functions.Basic
 public import Complexity.Classes.Functions.Encoding
 public import Complexity.Classes.Nondeterministic.Basic
 public import Complexity.Classes.Nondeterministic.Deterministic
+public import Complexity.Classes.Nondeterministic.Verifier
 public import Complexity.Classes.Reductions.Basic
 public import Complexity.Classes.StackMachine.TuringMachine
 public import Complexity.Classes.TreeFunctions.Composition
@@ -111,11 +112,14 @@ public import Complexity.Models.TreeMachine.Language.Semantics
 public import Complexity.Models.TreeMachine.Language.Verification
 public import Complexity.Models.TreeMachine.Program.Basic
 public import Complexity.Models.TreeMachine.Program.Resources
+public import Complexity.Models.TreeMachine.Rename
 public import Complexity.Models.TreeMachine.Simulation.Bank
 public import Complexity.Models.TreeMachine.Simulation.Basic
 public import Complexity.Models.TreeMachine.Simulation.Build
 public import Complexity.Models.TreeMachine.Simulation.Correctness
+public import Complexity.Models.TreeMachine.Simulation.Guess
 public import Complexity.Models.TreeMachine.Simulation.Init
+public import Complexity.Models.TreeMachine.Simulation.Verifier
 public import Complexity.Models.TreeMachine.StackProgram
 public import Complexity.Models.TuringMachine.Basic
 public import Complexity.Models.TuringMachine.Configuration

@@ -124,6 +124,12 @@ def input (i : Fin k) (a : Tree) : Fin k → Tree :=
     input i a j = Tree.nil := by
   simp [input, h]
 
+/-- Along an injective map of register indices, the input in register `e i` reads as the input in
+register `i`. -/
+theorem input_comp {e : Fin k → Fin l} (he : e.Injective) (i : Fin k) (a : Tree) :
+    input (e i) a ∘ e = input i a :=
+  Function.update_comp_eq_of_injective _ he i a
+
 /-- Registers other than the selected destination retain their values. -/
 theorem Action.regs_apply_of_ne (o : Action k) (c : Cfg k) {i : Fin k} (h : o.dst ≠ some i) :
     (apply o c).regs i = c.regs i :=

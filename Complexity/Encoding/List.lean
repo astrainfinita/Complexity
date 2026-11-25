@@ -70,6 +70,12 @@ theorem size_encode_list_le {α : Type*} [UniqueEncoding Tree α] (xs : List α)
   simp only [Nat.mul_add, Nat.mul_one]
   omega
 
+/-- A list of units stores two nodes per element and a final leaf. -/
+theorem size_encode_list_unit (xs : List Unit) : ⌜xs⌝ₜ.size = 2 * xs.length + 1 := by
+  simp only [size_encode_list, size_encode_unit, List.map_const', List.sum_replicate,
+    Nat.nsmul_eq_mul, Nat.mul_one]
+  omega
+
 /-- Concatenation replaces the first list's final leaf with the second list. -/
 @[dominated] theorem size_encode_list_append {α : Type*} [UniqueEncoding Tree α] (xs ys : List α) :
     ⌜xs ++ ys⌝ₜ.size + 1 = ⌜xs⌝ₜ.size + ⌜ys⌝ₜ.size := by

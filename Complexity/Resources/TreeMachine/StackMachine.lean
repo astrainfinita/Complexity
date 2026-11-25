@@ -8,7 +8,6 @@ module
 public import Complexity.Resources.TreeMachine.Basic
 public import Complexity.Resources.StackMachine.Basic
 public import Complexity.Models.TreeMachine.Simulation.Correctness
-public import Mathlib.Data.Fintype.EquivFin
 
 /-! # Serialized tree computations on stack machines -/
 
@@ -42,10 +41,8 @@ theorem _root_.Complexity.TimeSpaceModel.ComputableWithinBySize.toStack_of_tree
     (h : TimeSpaceModel.sizeCostTree.ComputableWithinBySize f t s) :
     ∃ c : ℕ, TimeSpaceModel.stack.ComputableWithinBySize f
       (fun n => c * (t n + n)) (fun n => c * s n) := by
-  classical
   obtain ⟨R, ⟨k, hk, Q, hQ, M, rfl⟩, h⟩ := h
-  let : Fintype Q := Fintype.ofFinite Q
-  let : FinEnum Q := FinEnum.ofEquiv (Fin (Fintype.card Q)) (Fintype.equivFin Q)
+  let : FinEnum Q := FinEnum.ofFinite Q
   refine ⟨42 * (k + 4) + 1, _, ⟨_, inferInstance, _, inferInstance, compiler M, rfl⟩,
     h.toRawWord fun {_ x _} hrun => (computesWithin M hrun).mono ?_ ?_⟩ <;>
     simp only [TimeSpaceModel.sizeCostTree_inputSize, TimeSpaceModel.stack_inputSize,
@@ -59,15 +56,13 @@ theorem _root_.Complexity.TimeSpaceModel.ComputableIn.toStack_of_tree
     {f : α → β} {t s : α → ℕ}
     (h : TimeSpaceModel.sizeCostTree.ComputableIn f IsO(t) IsO(s)) :
     TimeSpaceModel.stack.ComputableIn f IsO(fun a => t a + s a) IsO(s) := by
-  classical
   obtain ⟨u, v, h, hu, hv⟩ := h
   obtain ⟨k, hk, Q, hQ, M, h⟩ := computableWithin_iff.mp h
   have hpos (a : α) : 0 < v a := by
     obtain ⟨r, hr⟩ := e.exists_code a
     obtain ⟨_, _, hrun⟩ := h a r hr
     exact r.size_pos.trans_le hrun.input_size_le_space
-  let : Fintype Q := Fintype.ofFinite Q
-  let : FinEnum Q := FinEnum.ofEquiv (Fin (Fintype.card Q)) (Fintype.equivFin Q)
+  let : FinEnum Q := FinEnum.ofFinite Q
   exact ⟨_, _, h.toStack.computableWithin,
     (Dominated.of_le_mul _ fun a => timeBound_le (hpos a)).trans (hu.add hv),
     hv.const_mul_left _⟩

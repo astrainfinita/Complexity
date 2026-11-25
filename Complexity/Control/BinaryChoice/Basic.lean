@@ -61,5 +61,12 @@ instance : MonadQuant.PureLift BinaryChoice Multiset .any where
     ⟨fun ⟨b, hb, h⟩ ↦ (by simpa using Multiset.mem_coe.1 hb : b = a) ▸ h,
       fun h ↦ ⟨a, Multiset.mem_coe.2 (by simp), h⟩⟩
 
+/-- The choice of a Boolean: `false` and `true`. -/
+def coin : BinaryChoice Bool := fun i ↦ i == 1
+
+/-- Each Boolean is a possible result of `coin`. -/
+theorem mem_returns_coin (v : Bool) : v ∈ returns (monadLift coin : Multiset Bool) := by
+  cases v <;> simp [coin]
+
 end BinaryChoice
 end Complexity

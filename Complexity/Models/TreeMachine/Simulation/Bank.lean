@@ -29,7 +29,8 @@ def body (M : TreeMachine Id k Q) (q : Q) : StackMachine.Program Id (Work k) Boo
     build a.2
     pure (.inl a.1)
 
-private theorem spec_roots (c : StackMachine.Cfg (Work k) Bool xs)
+/-- Reading the roots of the registers takes one transition and changes nothing. -/
+theorem spec_roots (c : StackMachine.Cfg (Work k) Bool xs)
     (ρ : Fin k → Complexity.Tree) (hw : c.stacks = contents ρ) (n : ℕ) (hn : 0 < n) :
     Triple (roots.verify (semantics xs))
       (fun s t ↦ s = c ∧ t = n)

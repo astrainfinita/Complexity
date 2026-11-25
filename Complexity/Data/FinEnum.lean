@@ -75,3 +75,10 @@ instance (priority := 1100) Vector.instFinEnumDirect {α : Type*} [FinEnum α] {
       invFun := Vector.ofFn
       left_inv := fun _ ↦ Vector.ofFn_getElem
       right_inv := by intro f; funext i; simp only [Vector.getElem_ofFn] }
+
+/-- An enumeration of a finite type through an equivalence with `Fin` chosen noncomputably, for
+proofs that need `FinEnum` where only `Finite` is known. Not an instance. -/
+@[instance_reducible]
+noncomputable def FinEnum.ofFinite (α : Type*) [Finite α] : FinEnum α :=
+  let := Fintype.ofFinite α
+  FinEnum.ofEquiv (Fin (Fintype.card α)) (Fintype.equivFin α)
