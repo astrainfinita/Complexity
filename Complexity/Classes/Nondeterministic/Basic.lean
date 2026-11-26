@@ -6,7 +6,7 @@ Authors: Yuyang Zhao
 module
 
 public import Complexity.Resources.TimeSpaceModel.Nondeterministic
-public import Complexity.Asymptotics.Polynomial
+public import Complexity.Asymptotics.Nat
 
 /-!
 # Nondeterministic complexity classes

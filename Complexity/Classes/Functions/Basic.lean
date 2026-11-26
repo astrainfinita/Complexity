@@ -6,7 +6,7 @@ Authors: Yuyang Zhao
 module
 
 public import Complexity.Resources.TimeSpaceModel.Basic
-public import Complexity.Asymptotics.Polynomial
+public import Complexity.Asymptotics.Nat
 
 /-! # Function complexity classes
 

@@ -14,13 +14,15 @@ public import Complexity.Classes.TreeFunctions.ToTree
 /-!
 # Nondeterministic polynomial time from a verifier
 
-`NP.of_verifier`: a predicate is in `NP .ntm` when it holds exactly where some witness of code size
-polynomial in the input satisfies a relation decided in polynomial time on tree machines, provided
-the codes of the witness type are recognized in polynomial time. The relation is guarded into a
-relation on trees (`TreeMachine.p_guard`); a tree is guessed as a bit string read by
-`BitList.toTree` (`nstack_of_tree_verifier`), with fuel from the polynomial bound
-(`TreeMachine.exists_fuel_mem_fp`), by the stack machine of `nstack_of_bits_verifier`; the stack
-machine is simulated by a Turing machine (`StackMachine.np_eq_ntm`).
+`NP.of_verifier`: a predicate `p` is in `NP .ntm` given a polynomial-time relation `R` on tree
+machines that is sound for `p` without a witness-length restriction (`∀ a w, R (a, w) → p a`) and
+complete with witnesses of code size within a polynomial bound `b`, provided the codes of the
+witness type are recognized in polynomial time. The unrestricted soundness hypothesis is needed
+because `TreeMachine.exists_fuel_mem_fp` only gives `b a ≤ (fuel a).length`, so guessed witnesses
+may exceed `b a`. The relation is guarded into a relation on trees (`TreeMachine.p_guard`); a tree
+is guessed as a bit string read by `BitList.toTree` (`nstack_of_tree_verifier`) by the stack
+machine of `nstack_of_bits_verifier`; the stack machine is simulated by a Turing machine
+(`StackMachine.np_eq_ntm`).
 -/
 
 @[expose] public section
@@ -31,9 +33,9 @@ open TreeProgram TreeProgram.Source
 
 variable {α : Type*} [UniqueEncoding Tree α]
 
-/-- A predicate holding exactly where some tree of size within a polynomial bound satisfies a
-relation decided in polynomial time is in nondeterministic polynomial time on stack machines. The
-machine guesses the bit string of the tree's prefix code. -/
+/-- A predicate is in `NP .nstack` given a polynomial-time relation on trees that is sound for all
+trees (`hsound`) and complete with trees of size within a polynomial bound `b` (`hcomplete`). The
+machine guesses the bit string of a tree's prefix code up to a polynomial-time fuel bounding `b`. -/
 theorem nstack_of_tree_verifier {p : α → Prop} {R : α × Tree → Prop} (hR : R ∈ P .sizeCostTree)
     (b : α → ℕ) (hb : IsPoly (fun a => ⌜a⌝ₜ.size) b) (hsound : ∀ a t, R (a, t) → p a)
     (hcomplete : ∀ a, p a → ∃ t : Tree, t.size ≤ b a ∧ R (a, t)) :
@@ -49,9 +51,9 @@ theorem nstack_of_tree_verifier {p : α → Prop} {R : α × Tree → Prop} (hR 
   · simpa using ht.trans (hle a)
   · simpa only [Function.comp_apply, BitList.toTree_encodeTree] using (hRV _).2 hr
 
-/-- A predicate holding exactly where some witness of code size within a polynomial bound satisfies
-a relation decided in polynomial time on tree machines is in nondeterministic polynomial time on
-Turing machines, when the codes of the witness type are recognized in polynomial time. -/
+/-- A predicate is in `NP .ntm` given a polynomial-time relation on tree machines that is sound for
+all witnesses (`hsound`) and complete with witnesses of code size within a polynomial bound `b`
+(`hcomplete`), when the codes of the witness type are recognized in polynomial time. -/
 theorem NP.of_verifier {W : Type*} [UniqueEncoding Tree W] {p : α → Prop}
     (hW : (fun t : Tree => (decode W t).Dom) ∈ P .sizeCostTree)
     {R : α × W → Prop} (hR : R ∈ P .sizeCostTree)
