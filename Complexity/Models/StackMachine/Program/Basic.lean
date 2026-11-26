@@ -55,15 +55,7 @@ namespace Program
 
 variable {F : Type → Type} {κ Γ : Type}
 
-/-- A control-only action still consumes one transition. -/
-def idle : Action κ Γ where
-  inputMove := 0
-  work := fun _ ↦ .nop
-  output := none
-
-@[simp] theorem idle_apply {xs : Array Γ} (c : Cfg κ Γ xs) :
-    apply (idle (κ := κ) (Γ := Γ)) c = c := by
-  apply Cfg.ext <;> simp [idle, funext_iff, StackMachine.Op.apply]
+export Action (idle)
 
 /-- Interpret an instruction as a local action and its observed result. -/
 def eval : (o : Op κ Γ) → (Option Γ × (κ → Option Γ)) → Action κ Γ × o.Result

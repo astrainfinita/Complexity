@@ -7,6 +7,7 @@ module
 
 public import Mathlib.Control.Monad.Basic
 public import Mathlib.Logic.Function.Iterate
+public import Mathlib.Data.Fin.Tuple.Basic
 public import Complexity.Control.MonadReturns
 
 /-!
@@ -73,6 +74,17 @@ theorem forall_mem_runN [MonadReturns m] (f : α → m α) {P : ℕ → α → P
     exact hstep n b (ih b hb) c hc
 
 end Lawful
+
+/-- If one step can return exactly the successors `step a i`, then `n` steps can return exactly
+the endpoints of the label sequences of length `n`. -/
+theorem mem_returns_runN_iff [MonadReturns m] {ι : Type*} (f : α → m α) (step : α → ι → α)
+    (hstep : ∀ a b, b ∈ returns (f a) ↔ ∃ i, step a i = b) (a b : α) (n : ℕ) :
+    b ∈ returns (runN f n a) ↔ ∃ is : Fin n → ι, (List.ofFn is).foldl step a = b := by
+  induction n generalizing a with
+  | zero => simp [mem_returns_pure_iff, eq_comm]
+  | succ n ih =>
+    simp only [runN_succ, mem_returns_bind_iff, hstep, ih, Fin.exists_fin_succ_pi, List.ofFn_succ,
+      Fin.cons_zero, Fin.cons_succ, List.foldl_cons, exists_exists_eq_and]
 
 theorem runN_id (f : α → α) (n : ℕ) (a : α) : (runN (m := Id) (pure ∘ f) n a).run = f^[n] a := by
   induction n generalizing a with

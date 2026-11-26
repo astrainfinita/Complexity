@@ -66,7 +66,7 @@ private theorem drainAction_drained (c : Cfg κ Γ xs) (i : κ) (targets : κ �
     (semantics xs)
     (fun j s ↦ s = drained c i targets ((c.stacks i).take j) ((c.stacks i).drop j))
     (fun s ↦ s = drained c i targets (c.stacks i) []) (c.stacks i).length 2 1 q
-    (by intro j hj s hs; simpa only [semantics_act, idle_apply] using hs)
+    (by intro j hj s hs; simpa only [semantics_act, apply_idle] using hs)
     (by
       intro j hj q
       have ha := drainAction_drained c i targets ((c.stacks i).take j)

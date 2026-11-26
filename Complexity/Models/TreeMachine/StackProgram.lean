@@ -66,7 +66,7 @@ include hc hsc in
         b = q) () := by
     apply Program.spec_repeatUntilWith_nop idle (scanBody source saved counter)
       (semantics xs) I _ ()
-    · exact idle_apply
+    · exact apply_idle
     · rintro s b ⟨fs, p, hf, rfl, hp, hb⟩
       cases fs with
       | nil => contradiction

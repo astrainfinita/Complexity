@@ -8,7 +8,7 @@ module
 public import Mathlib.Basic.Sign.Defs
 public import Mathlib.Data.Fin.Basic
 
-/-! # Bounded read-only input head movement -/
+/-! # Bounded read-only input head movement and reading -/
 
 @[expose] public section
 
@@ -34,5 +34,15 @@ theorem movePos_right_boundary {n : ℕ} :
     movePos (⟨n + 1, by omega⟩ : Fin (n + 2)) 1 = ⟨n + 1, by omega⟩ := by
   apply Fin.ext
   simp [movePos]
+
+/-- The symbol at a head position, counting the left boundary as `0`; both boundaries read
+`none`. -/
+def read {Γ : Type*} (xs : Array Γ) : ℕ → Option Γ
+  | 0 => none
+  | n + 1 => xs[n]?
+
+@[simp] theorem read_zero {Γ : Type*} (xs : Array Γ) : read xs 0 = none := rfl
+
+@[simp] theorem read_succ {Γ : Type*} (xs : Array Γ) (n : ℕ) : read xs (n + 1) = xs[n]? := rfl
 
 end Complexity.Input

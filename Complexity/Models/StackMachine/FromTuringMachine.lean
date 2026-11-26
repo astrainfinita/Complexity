@@ -27,25 +27,21 @@ namespace Complexity.TM
 
 namespace Stack
 
-/-- The first track distinguishes blank from nonblank; the second carries its bit. -/
-def bit (v : Option Bool) (track : Bool) : Bool :=
-  if track then v.getD false else v.isSome
-
 /-- Decode the nonblank flag and data bit at the stack tops. -/
 def symbol (top : Bool → Option Bool) : Option Bool :=
   if top false == some true then top true else none
 
 @[simp] theorem symbol_map (v : Option (Option Bool)) :
-    symbol (fun b ↦ v.map (fun w ↦ bit w b)) = v.getD none := by
+    symbol (fun b ↦ v.map (fun w ↦ StackMachine.OptionBool.toBits w b)) = v.getD none := by
   cases v with
   | none => rfl
-  | some v => cases v <;> simp [symbol, bit]
+  | some v => cases v <;> simp [symbol]
 
 /-- Select the local update for one side and one bit track. -/
 def op (dir : SignType) (v : Option Bool) (side track : Bool) : StackMachine.Op Bool :=
   match dir, side with
   | .neg, false | .pos, true => .pop
-  | .neg, true | .pos, false => .push (bit v track)
+  | .neg, true | .pos, false => .push (StackMachine.OptionBool.toBits v track)
   | .zero, _ => .nop
 
 end Stack
@@ -93,8 +89,8 @@ structure Rep (V : κ → NonemptyInterval ℤ)
   input_eq : d.2.inputPos.val = c.2.inputPos.val
   output_eq : d.2.output = c.2.output.filterMap id
   tapes : ∀ i, ∃ l r : List (Option Bool),
-    (∀ b, d.2.stacks (i, false, b) = l.map (fun v ↦ bit v b)) ∧
-    (∀ b, d.2.stacks (i, true, b) = r.map (fun v ↦ bit v b)) ∧
+    (∀ b, d.2.stacks (i, false, b) = l.map (fun v ↦ StackMachine.OptionBool.toBits v b)) ∧
+    (∀ b, d.2.stacks (i, true, b) = r.map (fun v ↦ StackMachine.OptionBool.toBits v b)) ∧
     StackMachine.Tape.Rep (c.2.workTapes i) (c.2.workPos i) l (d.1.2 i) r ∧
     (V i).fst ≤ c.2.workPos i - l.length ∧ c.2.workPos i + r.length ≤ (V i).snd
 

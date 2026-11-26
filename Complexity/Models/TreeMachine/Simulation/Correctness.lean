@@ -68,8 +68,8 @@ theorem spec_loop {xs : Array Bool} (M : TreeMachine Id k Q)
     · simpa only [Controller.runFrom_zero, bank_self c₀ r.2.regs hw] using hc
     · simpa [W] using hb
   · intro v h b hv
-    simpa only [I, historySemantics_act, History.apply_def, History.last_snoc, idle_apply,
-      History.configSup_snoc, sup_eq_left.mpr
+    simpa only [I, historySemantics_act, History.apply_def, History.last_snoc,
+      StackMachine.apply_idle, History.configSup_snoc, sup_eq_left.mpr
         (h.config_le_configSup StackMachine.Cfg.mass h.last_mem_configs)] using hv
   · rintro v h b ⟨j, hj, hv, hc, hs, ht⟩
     omega

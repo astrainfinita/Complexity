@@ -41,11 +41,8 @@ def Cfg.mass {xs : Array Γ} (c : Cfg κ Γ xs) : ℕ :=
 theorem Cfg.mass_apply_le {xs : Array Γ} (c : Cfg κ Γ xs) (a : Action κ Γ) :
     (apply a c).mass ≤ c.mass + Fintype.card κ := by
   calc
-    (apply a c).mass ≤ ∑ i, ((c.stacks i).length + 1) := by
-      apply Finset.sum_le_sum
-      intro i _
-      cases h : a.work i <;> simp [h, Op.apply]
-      omega
+    (apply a c).mass ≤ ∑ i, ((c.stacks i).length + 1) :=
+      Finset.sum_le_sum fun i _ ↦ (a.work i).length_apply_le _
     _ = c.mass + Fintype.card κ := by simp [Cfg.mass, Finset.sum_add_distrib]
 
 theorem configSup_mass_le {xs : Array Γ} (h : Controller.History (Cfg κ Γ xs) (Action κ Γ)) :

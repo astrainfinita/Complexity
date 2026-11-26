@@ -82,3 +82,7 @@ proofs that need `FinEnum` where only `Finite` is known. Not an instance. -/
 noncomputable def FinEnum.ofFinite (α : Type*) [Finite α] : FinEnum α :=
   let := Fintype.ofFinite α
   FinEnum.ofEquiv (Fin (Fintype.card α)) (Fintype.equivFin α)
+
+@[simp] theorem FinEnum.length_toList (α : Type*) [FinEnum α] :
+    (FinEnum.toList α).length = FinEnum.card α := by
+  simp [FinEnum.toList]

@@ -6,13 +6,16 @@ Authors: Yuyang Zhao
 module
 
 public import Complexity.Models.Circuit.Composition
+public import Complexity.ModelTheory.Term
 
 /-!
 # Circuits and first-order terms
 
 Every designated output has a term with the same interpretation. Unfolding may duplicate shared
 subexpressions, so the size of these terms is not a circuit-size measure. Conversely, `ofTerm`
-compiles an expression tree to a single-output circuit; it does not identify equal subterms.
+compiles an expression tree to a single-output circuit with one gate per function-symbol occurrence
+(`size_ofTerm`), `ofTerms` compiles one term per output without sharing equal subterms, and
+`ofTermsEquiv` compiles terms indexed by arbitrary finite types through equivalences with `Fin`.
 -/
 
 @[expose] public section
@@ -46,12 +49,46 @@ def ofTerm : L.Term (Fin n) → Circuit L n 1
   | var _ => rfl
   | func op args ih => simp [ofTerm, ih, Term.realize]
 
-@[simp] theorem size_ofTerm_var (i : Fin n) :
+theorem size_ofTerm_var (i : Fin n) :
     (ofTerm (Term.var i : L.Term (Fin n))).size = 0 := rfl
 
-/-- Term compilation counts each occurrence, including repeated equal subterms. -/
-@[simp] theorem size_ofTerm_func {k : ℕ} (op : L.Functions k)
+theorem size_ofTerm_func {k : ℕ} (op : L.Functions k)
     (args : Fin k → L.Term (Fin n)) :
     (ofTerm (.func op args)).size = (∑ i, (ofTerm (args i)).size) + 1 := by simp [ofTerm]
+
+/-- Term compilation counts each occurrence, including repeated equal subterms. -/
+@[simp] theorem size_ofTerm (t : L.Term (Fin n)) : (ofTerm t).size = t.numFuncs := by
+  induction t with
+  | var i => rfl
+  | func op args ih => simp [size_ofTerm_func, ih]
+
+/-- Compile one term for each output. Equal subterms, also across outputs, are not shared. -/
+def ofTerms (t : Fin m → L.Term (Fin n)) : Circuit L n m :=
+  bundle fun j => ofTerm (t j)
+
+@[simp] theorem eval_ofTerms [L.Structure M] (t : Fin m → L.Term (Fin n)) (x : Fin n → M) :
+    (ofTerms t).eval x = fun j => (t j).realize x := by
+  simp [ofTerms]
+
+@[simp] theorem size_ofTerms (t : Fin m → L.Term (Fin n)) :
+    (ofTerms t).size = ∑ j, (t j).numFuncs := by
+  simp [ofTerms]
+
+variable {α β : Type*}
+
+/-- Compile one term for each output, with the variables numbered by `eIn` and the outputs by
+`eOut`. -/
+def ofTermsEquiv (eIn : α ≃ Fin n) (eOut : β ≃ Fin m) (t : β → L.Term α) : Circuit L n m :=
+  ofTerms fun j => (t (eOut.symm j)).relabel eIn
+
+@[simp] theorem eval_ofTermsEquiv [L.Structure M] (eIn : α ≃ Fin n) (eOut : β ≃ Fin m)
+    (t : β → L.Term α) (x : Fin n → M) :
+    (ofTermsEquiv eIn eOut t).eval x = (fun b => (t b).realize (x ∘ eIn)) ∘ eOut.symm := by
+  simp [ofTermsEquiv, Function.comp_def]
+
+@[simp] theorem size_ofTermsEquiv [Fintype β] (eIn : α ≃ Fin n) (eOut : β ≃ Fin m)
+    (t : β → L.Term α) : (ofTermsEquiv eIn eOut t).size = ∑ b, (t b).numFuncs := by
+  simp only [ofTermsEquiv, size_ofTerms, Term.numFuncs_relabel]
+  exact Equiv.sum_comp eOut.symm (fun b => (t b).numFuncs)
 
 end Complexity.Circuit

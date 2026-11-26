@@ -72,7 +72,7 @@ theorem guessIndex_all (xs : List Bool) :
   all_goals
     cases_type* And
     subst_vars
-    simp only [semantics_act, idle_apply] at *
+    simp only [semantics_act, StackMachine.apply_idle] at *
   all_goals first | omega | (try simp_all [idle, Input.movePos, StackMachine.Op.apply])
   all_goals (try omega)
   · decide

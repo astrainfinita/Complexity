@@ -59,9 +59,7 @@ private theorem observe_loaded {xs : List Γ} (c : Cfg κ Γ xs.toArray) (i : κ
     (p r : List Γ) (h : p ++ r = xs) :
     (observe (loaded c i p) : Option Γ × (κ → Option Γ)).1 = r.head? := by
   have hp : p.length ≤ xs.length := by rw [← h, List.length_append]; omega
-  change (match min (p.length + 1) (xs.length + 1) with
-    | 0 => none | n + 1 => xs.toArray[n]?) = r.head?
-  rw [Nat.min_eq_left (by omega)]
+  simp only [observe_def, loaded, Nat.min_eq_left (Nat.add_le_add_right hp 1), Input.read_succ]
   simp only [List.getElem?_toArray, ← h, List.getElem?_append_right le_rfl, Nat.sub_self]
   cases r <;> rfl
 
@@ -83,7 +81,7 @@ private theorem loadAction_loaded {xs : List Γ} (c : Cfg κ Γ xs.toArray) (i :
     (semantics xs.toArray)
     (fun j s ↦ s = loaded c i (xs.take j)) (fun s ↦ s = loaded c i xs)
     xs.length 2 1 q
-    (by intro j hj s hs; simpa only [semantics_act, idle_apply] using hs)
+    (by intro j hj s hs; simpa only [semantics_act, apply_idle] using hs)
     (by
       intro j hj q
       have hp : xs.take j ++ xs[j] :: xs.drop (j + 1) = xs := by
@@ -167,7 +165,7 @@ omit [FinEnum Γ] in
     (semantics xs)
     (fun j s ↦ s = emitted c i ((c.stacks i).take j) ((c.stacks i).drop j))
     (fun s ↦ s = emitted c i (c.stacks i) []) (c.stacks i).length 2 1 q
-    (by intro j hj s hs; simpa only [semantics_act, idle_apply] using hs)
+    (by intro j hj s hs; simpa only [semantics_act, apply_idle] using hs)
     (by
       intro j hj q
       have hp := List.take_succ_eq_append_getElem hj

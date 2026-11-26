@@ -51,11 +51,14 @@ def Op.apply : Op Γ → List Γ → List Γ
   | .push a, s => a :: s
   | .pop, s => s.tail
 
+/-- An operation grows a stack by at most one symbol. -/
+theorem Op.length_apply_le (o : Op Γ) (s : List Γ) : (o.apply s).length ≤ s.length + 1 := by
+  cases o <;> simp [Op.apply]
+  omega
+
 @[simps]
 instance : Controller.Observe (Cfg κ Γ xs) (Option Γ × (κ → Option Γ)) where
-  observe c := (match c.inputPos.val with
-    | 0 => none
-    | n + 1 => xs[n]?, fun i ↦ (c.stacks i).head?)
+  observe c := (Input.read xs c.inputPos.val, fun i ↦ (c.stacks i).head?)
 
 @[simps]
 instance : Controller.Apply (Cfg κ Γ xs) (Action κ Γ) where
@@ -65,6 +68,15 @@ instance : Controller.Apply (Cfg κ Γ xs) (Action κ Γ) where
       output := match a.output with
         | none => c.output
         | some v => c.output.push v }
+
+/-- The action leaving a configuration unchanged; it still consumes one transition. -/
+def Action.idle : Action κ Γ where
+  inputMove := 0
+  work _ := .nop
+  output := none
+
+@[simp] theorem apply_idle (c : Cfg κ Γ xs) : apply (Action.idle : Action κ Γ) c = c := by
+  apply Cfg.ext <;> simp [Action.idle, funext_iff, Op.apply]
 
 /-- Replace one stack, preserving the input head and the output. -/
 @[simps -fullyApplied]

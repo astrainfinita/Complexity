@@ -5,6 +5,7 @@ Authors: Yuyang Zhao
 -/
 module
 
+public import Complexity.ModelTheory.Term
 public import Mathlib.ModelTheory.Semantics
 public import Mathlib.Order.Hom.BoundedLattice
 
@@ -165,6 +166,23 @@ theorem realize_top (v : α → B) : Term.realize v (⊤ : booleanAlgebra.Term �
   simp [top_def, constantMap]
 
 end
+
+@[simp] theorem numFuncs_inf (x y : booleanAlgebra.Term α) :
+    (x ⊓ y).numFuncs = x.numFuncs + y.numFuncs + 1 := by
+  simp [inf_def]
+
+@[simp] theorem numFuncs_sup (x y : booleanAlgebra.Term α) :
+    (x ⊔ y).numFuncs = x.numFuncs + y.numFuncs + 1 := by
+  simp [sup_def]
+
+@[simp] theorem numFuncs_compl (x : booleanAlgebra.Term α) : xᶜ.numFuncs = x.numFuncs + 1 := by
+  simp [compl_def]
+
+@[simp] theorem numFuncs_bot : (⊥ : booleanAlgebra.Term α).numFuncs = 1 := by
+  simp [bot_def]
+
+@[simp] theorem numFuncs_top : (⊤ : booleanAlgebra.Term α).numFuncs = 1 := by
+  simp [top_def]
 
 /-- Interpret the language of Boolean algebras using the five operations already on `B`. -/
 @[instance_reducible]

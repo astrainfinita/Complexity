@@ -24,6 +24,7 @@ public import Complexity.Classes.TreeFunctions.ValidCode
 public import Complexity.Classes.TreeSimulation
 public import Complexity.Classes.TreeTuringSimulation
 public import Complexity.Control.BinaryChoice.Basic
+public import Complexity.Control.BinaryChoice.Path
 public import Complexity.Control.BinaryChoice.Probability
 public import Complexity.Control.Controller.Basic
 public import Complexity.Control.Controller.Binary
@@ -77,7 +78,9 @@ public import Complexity.Encoding.Tree
 public import Complexity.Encoding.TreeSize
 public import Complexity.Encoding.Vector
 public import Complexity.ModelTheory.Algebra.BooleanAlgebra.Basic
+public import Complexity.ModelTheory.Algebra.BooleanAlgebra.Function
 public import Complexity.ModelTheory.Algebra.BooleanAlgebra.TreeEncoding
+public import Complexity.ModelTheory.Term
 public import Complexity.Models.Circuit.Basic
 public import Complexity.Models.Circuit.Compile
 public import Complexity.Models.Circuit.Composition
@@ -88,6 +91,7 @@ public import Complexity.Models.Circuit.Tseitin
 public import Complexity.Models.Circuit.Unroll
 public import Complexity.Models.Input
 public import Complexity.Models.StackMachine.Basic
+public import Complexity.Models.StackMachine.Circuit
 public import Complexity.Models.StackMachine.Configuration
 public import Complexity.Models.StackMachine.Deterministic
 public import Complexity.Models.StackMachine.FromTuringMachine
