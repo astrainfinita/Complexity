@@ -9,6 +9,8 @@ public import Complexity.Resources.TimeSpaceModel.Basic
 public import Complexity.Encoding.RawWord
 public import Complexity.Models.StackMachine.Deterministic
 public import Complexity.Control.BinaryChoice.Basic
+import Complexity.Models.StackMachine.Reindex
+import Mathlib.Data.Fintype.EquivFin
 
 /-!
 # Time and space complexity on stack machines
@@ -18,7 +20,8 @@ number of symbols on the work stacks, excluding the read-only input and append-o
 
 The model is stated once for every choice shape and interpretation, `TimeSpaceModel.stackWith`;
 `TimeSpaceModel.stack` is its deterministic instance and `TimeSpaceModel.nstack` its instance with
-binary choices on `Multiset`.
+binary choices on `Multiset`. `TimeSpaceModel.mem_behaviors_stackWith_iff_exists_fin` normalizes
+any behavior to a machine indexed by `Fin k` work stacks and `Fin q` control states.
 -/
 
 @[expose] public section
@@ -53,6 +56,24 @@ by which every branch has halted. This is the instance of `TimeSpaceModel.stackW
 choices interpreted in `Multiset`. -/
 def _root_.Complexity.TimeSpaceModel.nstack : TimeSpaceModel Multiset (RawWord Bool) :=
   TimeSpaceModel.stackWith BinaryChoice Multiset
+
+/-- Every behavior of `TimeSpaceModel.stackWith F m` is realized by a machine whose work stacks
+and control states are indexed by `Fin k` and `Fin q`. -/
+theorem _root_.Complexity.TimeSpaceModel.mem_behaviors_stackWith_iff_exists_fin
+    {F m : Type → Type*} [Functor F] [Monad m]
+    [LawfulMonad m] [MonadLiftT F m] [LawfulFunctorLiftT F m] [MonadReturns m]
+    {R : RawWord Bool → m (RawWord Bool) → ℕ → ℕ → Prop} :
+    R ∈ (TimeSpaceModel.stackWith F m).behaviors ↔
+      ∃ (k q : ℕ) (M : StackMachine F (Fin k) Bool (Fin q)),
+        R = fun xs ys ↦ M.ComputesWithinWith m xs.toList (RawWord.toList <$> ys) := by
+  constructor
+  · rintro ⟨κ, hκ, Q, hQ, M, rfl⟩
+    have := Fintype.ofFinite Q
+    refine ⟨Fintype.card κ, Fintype.card Q, M.reindex (Fintype.equivFin κ) (Fintype.equivFin Q), ?_⟩
+    funext xs ys t s
+    simp only [computesWithinWith_reindex_iff]
+  · rintro ⟨k, q, M, rfl⟩
+    exact ⟨Fin k, inferInstance, Fin q, inferInstance, M, rfl⟩
 
 section InputBudgets
 
