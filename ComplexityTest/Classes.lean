@@ -246,6 +246,17 @@ example : (id : Unit → Unit) ∉ FDTISP resourceTradeoff (fun _ => 0) (fun _ =
     simp only [mul_zero] at ht
     omega
 
+-- Nonunique tree interpretations lift to stack-machine classes without a separate raw encoding.
+private inductive Redundant where | value
+
+private instance : Encoding Tree Redundant where
+  decode _ := pure .value
+  exists_code a := by cases a; exact ⟨.nil, Part.mem_some _⟩
+
+example (h : (id : Redundant → Redundant) ∈ FP .sizeCostTree) :
+    (id : Redundant → Redundant) ∈ FP .stack :=
+  TreeMachine.fp_subset_stack h
+
 end Nonunique
 
 -- Keep the old, fully expanded definitions here as semantic regression specifications.

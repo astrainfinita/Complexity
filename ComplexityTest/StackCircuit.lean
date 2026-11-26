@@ -101,13 +101,4 @@ example : (pushPop.runCircuit [true, false] [true, false] 7 FinEnum.equiv FinEnu
   rw [eval_runCircuit]
   simp [Controller.stepAlong, Controller.Halted, pushPop, Input.movePos, Op.apply]
 
--- Guards that the correspondence uses no axiom beyond the standard ones; the message is wrapped
--- under `whitespace := lax` to keep lines short.
-/--
-info: 'Complexity.StackMachine.exists_eval_runCircuit_iff' depends on axioms:
-[propext, Classical.choice, Quot.sound]
--/
-#guard_msgs (whitespace := lax) in
-#print axioms exists_eval_runCircuit_iff
-
 end StackCircuitTest

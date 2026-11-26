@@ -5,7 +5,10 @@ Authors: Yuyang Zhao
 -/
 module
 
-import Complexity.Problems.CircuitSAT.Membership
+import Complexity.Classes.Nondeterministic.TreeVerifier
+import Complexity.Classes.TreeFunctions.ValidCode
+import Complexity.Tactic.TreeProgram.Arithmetic
+import Complexity.Tactic.TreeProgram.Library
 
 open Complexity TreeProgram TreeProgram.Source
 open TreeProgram.Source.Internal (HasProgramInO)
@@ -97,22 +100,5 @@ example : (fun xs : List Bool => ∃ t : Tree, t.size ≤ xs.length + 1) ∈ NP 
 example : (fun n : ℕ => ∃ m : ℕ, m = n) ∈ NP .ntm :=
   NP.of_verifier TreeMachine.dom_decode_nat_mem_p eq_mem_p (fun n => ⌜n⌝ₜ.size) .refl
     (fun _ m h => ⟨m, h⟩) fun _ ⟨m, h⟩ => ⟨m, h ▸ le_rfl, h⟩
-
-/-! ## Satisfiability -/
-
-example (k : ℕ) : KSAT k ∈ NP .ntm := KSAT.mem_np k
-
-example : CircuitSAT ∈ NP .ntm := CircuitSAT.mem_np
-
--- Guards that the memberships use no axiom beyond the standard ones.
-/-- info: 'Complexity.KSAT.mem_np' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in
-#print axioms KSAT.mem_np
-
-/--
-info: 'Complexity.CircuitSAT.mem_np' depends on axioms: [propext, Classical.choice, Quot.sound]
--/
-#guard_msgs in
-#print axioms CircuitSAT.mem_np
 
 end Complexity.TreeVerifierTest

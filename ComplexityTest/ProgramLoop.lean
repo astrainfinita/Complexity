@@ -20,6 +20,11 @@ def model : Program.Semantics Unit Unit Unit (fun _ : Unit ↦ Unit) Unit where
   observe _ := ()
   act _ s := s
 
+-- A successful primitive cannot be verified with a zero time budget.
+example (Q : Unit → Unit → ℕ → Prop) :
+    ¬(Program.perform (F := Id) ()).ExecWithin model () 0 Q := fun h ↦
+  Nat.lt_irrefl 0 (Program.Syntax.execWithinWith_step_iff.1 h).1
+
 def body (b : Bool) : Code (Bool ⊕ Unit) :=
   if b then pure (.inr ()) else pure (.inl true)
 
