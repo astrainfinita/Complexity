@@ -32,6 +32,10 @@ theorem congr {f : α → Bool} {p q : α → Prop} (h : Decides f p)
     (hp : ∀ a, p a ↔ q a) : Decides f q :=
   fun a => (h a).trans (hp a)
 
+theorem comp {f : α → β} {g : β → Bool} {q : β → Prop} (h : Decides g q) :
+    Decides (g ∘ f) (q ∘ f) :=
+  fun a => h (f a)
+
 end Decides
 
 end Complexity

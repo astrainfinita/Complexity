@@ -10,6 +10,7 @@ public import Complexity.Problems.CircuitSAT.Basic
 public import Complexity.Problems.KSAT.Basic
 public import Complexity.Resources.Circuit.Program
 public import Complexity.Classes.Functions.Encoding
+public import Complexity.Classes.Reductions.Basic
 public import Complexity.Classes.TreeFunctions.Composition
 public import Complexity.Classes.TreeFunctions.UnitTime
 
@@ -56,8 +57,8 @@ theorem toKSAT_correct (input : Σ n, Circuit .booleanAlgebra n 1) :
 theorem toKSAT_fp : toKSAT ∈ FP .sizeCostTree := by
   model_fun_prop
 
-theorem polytimeManyOneReducible_ksat :
-    PolytimeManyOneReducible .sizeCostTree CircuitSAT (KSAT 3) :=
+theorem manyOneReducible_ksat :
+    ManyOneReducible (FP .sizeCostTree) CircuitSAT (KSAT 3) :=
   ⟨toKSAT, toKSAT_fp, toKSAT_correct⟩
 
 end Complexity.CircuitSAT
