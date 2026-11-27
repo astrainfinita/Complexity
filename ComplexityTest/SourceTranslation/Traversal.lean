@@ -171,29 +171,23 @@ example {g : List ℕ → List ℕ} {pg : Value → Code Value}
     (IsPoly.refl.max hg.isPoly_peak).of_dominated hg.hasProgramInO.size_encode
   fill_hole program in source_fun_prop
 
--- Records a limit: an explicit degree of the time of a map whose callback costs grow with the
--- captured list has no rule of its own. The user bounds each callback by the input and sums the
--- bound; the linear peak is still settled by the rules. This proof should shrink when explicit
--- time bounds of sums get a rule, as the table sums have (`Dominated.sum_finRange_of_mul`; plan
--- W81).
+-- Guards the rule for an explicit degree of the time of a map whose callback costs grow with the
+-- captured list: each summand times the length is compared (`Dominated.list_sum_of_mul`; plan W81).
 example : HasProgramIn (fun x : List ℕ × List (List ℕ) => x.2.map (fun l => (x.1 ++ l).isEmpty))
     hole(⊢ program) IsO(fun x => ⌜x⌝ₜ.size ^ 2) IsO(fun x => ⌜x⌝ₜ.size) := by
   fill_hole program in source_fun_prop
-  all_goals dominated
-  refine (Dominated.list_sum (fun e : List ℕ × List (List ℕ) => e.2) _ (fun e _ => ⌜e⌝ₜ.size)
-    (by dominated)).trans ?_
-  simp only [List.map_const', List.sum_replicate, smul_eq_mul]
-  dominated
 
--- Records a limit: the rules are stated for lists of a fixed type, so a map over a list whose
--- element type depends on the input, as a list of indices into a table, keeps its sum and its
--- result to the user. Not settled at all now (plan W82).
-example : True := by
-  fail_if_success
-    have : HasProgramIn (fun x : Σ n, (Fin n → ℕ) × List (Fin n) => x.2.2.map x.2.1)
-        hole(⊢ program) (IsPoly fun x => ⌜x⌝ₜ.size) (IsPoly fun x => ⌜x⌝ₜ.size) := by
-      fill_hole program in source_fun_prop
-  trivial
+-- Guards `Dominated.size_encode_map_of_mul` for an explicit degree of the peak of a map whose
+-- outputs grow with a captured list (plan W81).
+example : HasProgramIn (fun x : List ℕ × List (List ℕ) => x.2.map (fun l => x.1 ++ l))
+    hole(⊢ program) IsO(fun x => ⌜x⌝ₜ.size ^ 2) IsO(fun x => ⌜x⌝ₜ.size ^ 2) := by
+  fill_hole program in source_fun_prop
+
+-- Guards the rules for a map over a list whose element type depends on the input, as a list of
+-- indices into a table: its sum and its result are settled (plan W82).
+example : HasProgramIn (fun x : Σ n, (Fin n → ℕ) × List (Fin n) => x.2.2.map x.2.1)
+    hole(⊢ program) (IsPoly fun x => ⌜x⌝ₜ.size) (IsPoly fun x => ⌜x⌝ₜ.size) := by
+  fill_hole program in source_fun_prop
 
 end MapGrowth
 

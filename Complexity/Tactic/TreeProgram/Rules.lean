@@ -1067,25 +1067,41 @@ end Prefix
 
 section Map
 
-variable {ε α β : Type*} [UniqueEncoding Tree β] {xs : ε → List α} {f : ε → α → β}
+variable {ε : Type*} {α β : ε → Type*} [∀ x, UniqueEncoding Tree (β x)]
+  {xs : (x : ε) → List (α x)} {f : (x : ε) → α x → β x}
 
 /-- The code of a mapped list is polynomial in a measure `s` of its input when the list's length
-is, and so are the codes of the images of the elements that occur. -/
+is, and so are the codes of the images of the elements that occur. The elements may have a type
+depending on the input. -/
 @[dominated_traversal] theorem IsPoly.size_encode_map {s : ε → ℕ}
     (hn : IsPoly s fun x => (xs x).length)
-    (h : IsPoly (fun z : {p : ε × α // p.2 ∈ xs p.1} => s z.1.1) fun z => ⌜f z.1.1 z.1.2⌝ₜ.size) :
+    (h : IsPoly (fun z : {p : Σ x, α x // p.2 ∈ xs p.1} => s z.1.1)
+      fun z => ⌜f z.1.1 z.1.2⌝ₜ.size) :
     IsPoly s fun x => ⌜(xs x).map (f x)⌝ₜ.size := by
   simpa only [size_encode_list, List.map_map, Function.comp_def, List.length_map] using
     ((IsPoly.list_sum (a := fun x y => ⌜f x y⌝ₜ.size) hn h).add hn).add (.const 1)
 
-variable [UniqueEncoding Tree α]
+/-- The code of a mapped list is within `g` when the list's length plus one is and the code of the
+image of each element that occurs, multiplied by the length, is. -/
+@[dominated_traversal mul] theorem Dominated.size_encode_map_of_mul {g : ε → ℕ}
+    (hn : Dominated (fun x => (xs x).length + 1) g)
+    (h : Dominated (fun z : {p : Σ x, α x // p.2 ∈ xs p.1} =>
+      (xs z.1.1).length * ⌜f z.1.1 z.1.2⌝ₜ.size) fun z => g z.1.1) :
+    Dominated (fun x => ⌜(xs x).map (f x)⌝ₜ.size) g := by
+  refine ((Dominated.list_sum_of_mul (a := fun x y => ⌜f x y⌝ₜ.size) h).add_same hn).mono_left
+    fun x => ?_
+  simp only [size_encode_list, List.map_map, Function.comp_def, List.length_map]
+  omega
+
+variable [∀ x, UniqueEncoding Tree (α x)]
 
 /-- A sum over a list is within `g` when the list's code is and the summand of each element that
 occurs is linear in the element's code. Summands that also grow with the environment add up to a
 product with the length, so they are not covered. -/
-@[dominated_traversal] theorem Dominated.list_sum_of_size_encode {a : ε → α → ℕ} {g : ε → ℕ}
-    (hxs : Dominated (fun x => ⌜xs x⌝ₜ.size) g)
-    (h : Dominated (fun z : {p : ε × α // p.2 ∈ xs p.1} => a z.1.1 z.1.2) fun z => ⌜z.1.2⌝ₜ.size) :
+@[dominated_traversal] theorem Dominated.list_sum_of_size_encode {a : (x : ε) → α x → ℕ}
+    {g : ε → ℕ} (hxs : Dominated (fun x => ⌜xs x⌝ₜ.size) g)
+    (h : Dominated (fun z : {p : Σ x, α x // p.2 ∈ xs p.1} => a z.1.1 z.1.2)
+      fun z => ⌜z.1.2⌝ₜ.size) :
     Dominated (fun x => ((xs x).map (a x)).sum) g :=
   ((Dominated.list_sum xs a (fun _ y => ⌜y⌝ₜ.size) h).trans
     (Dominated.of_le fun x => by rw [size_encode_list (xs x)]; omega)).trans hxs
@@ -1094,7 +1110,7 @@ product with the length, so they are not covered. -/
 each element that occurs is linear in the element's code. -/
 @[dominated_traversal] theorem Dominated.size_encode_map {g : ε → ℕ}
     (hxs : Dominated (fun x => ⌜xs x⌝ₜ.size) g)
-    (h : Dominated (fun z : {p : ε × α // p.2 ∈ xs p.1} => ⌜f z.1.1 z.1.2⌝ₜ.size)
+    (h : Dominated (fun z : {p : Σ x, α x // p.2 ∈ xs p.1} => ⌜f z.1.1 z.1.2⌝ₜ.size)
       fun z => ⌜z.1.2⌝ₜ.size) :
     Dominated (fun x => ⌜(xs x).map (f x)⌝ₜ.size) g := by
   refine (((Dominated.list_sum_of_size_encode (a := fun x y => ⌜f x y⌝ₜ.size) (.refl _) h).add_same

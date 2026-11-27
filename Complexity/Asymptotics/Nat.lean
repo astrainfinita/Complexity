@@ -142,6 +142,25 @@ theorem sum_finRange_of_mul {n : α → ℕ} {a : (x : α) → Fin (n x) → ℕ
       Nat.nsmul_eq_mul] at hs
     exact Nat.le_of_mul_le_mul_left hs hpos
 
+/-- A list sum is bounded by its target when the summand of every element that occurs, multiplied
+by the list length, is bounded by the same target. -/
+theorem list_sum_of_mul {ι : α → Type*} {xs : (x : α) → List (ι x)} {a : (x : α) → ι x → ℕ}
+    {g : α → ℕ} (h : Dominated (fun z : {p : Σ x, ι x // p.2 ∈ xs p.1} =>
+      (xs z.1.1).length * a z.1.1 z.1.2) (fun z => g z.1.1)) :
+    Dominated (fun x => ((xs x).map (a x)).sum) g := by
+  obtain ⟨C, hc⟩ := dominated_iff.mp h
+  refine of_le_mul C fun x => ?_
+  rcases Nat.eq_zero_or_pos (xs x).length with h0 | hpos
+  · simp [List.eq_nil_of_length_eq_zero h0]
+  · have hs : ((xs x).map fun y => (xs x).length * a x y).sum ≤
+        ((xs x).map fun _ => C * g x).sum :=
+      List.sum_le_sum fun y hy => by simpa only [Nat.nsmul_eq_mul] using hc ⟨⟨x, y⟩, hy⟩
+    have hmul (l : List (ι x)) :
+        (l.map fun y => (xs x).length * a x y).sum = (xs x).length * (l.map (a x)).sum := by
+      induction l <;> simp [*, Nat.mul_add]
+    simp only [hmul, List.map_const', List.sum_replicate, Nat.nsmul_eq_mul] at hs
+    exact Nat.le_of_mul_le_mul_left hs hpos
+
 /-- Dependent traversal uses one coefficient for all environments and callback arguments. -/
 theorem sum_map {ι : α → Type*} (xs : (x : α) → List (ι x))
     {a b : (x : α) → ι x → ℕ}
@@ -433,9 +452,9 @@ theorem sum_finRange {n : α → ℕ} {a : (x : α) → Fin (n x) → ℕ} (hn :
 
 /-- A sum over a list is polynomial when its length and the summands of the elements that occur
 are, the summands uniformly in the measure of their input. -/
-theorem list_sum {ι : Type*} {xs : α → List ι} {a : α → ι → ℕ}
+theorem list_sum {ι : α → Type*} {xs : (x : α) → List (ι x)} {a : (x : α) → ι x → ℕ}
     (hn : IsPoly s fun x => (xs x).length)
-    (h : IsPoly (fun z : {p : α × ι // p.2 ∈ xs p.1} => s z.1.1) fun z => a z.1.1 z.1.2) :
+    (h : IsPoly (fun z : {p : Σ x, ι x // p.2 ∈ xs p.1} => s z.1.1) fun z => a z.1.1 z.1.2) :
     IsPoly s fun x => ((xs x).map (a x)).sum := by
   obtain ⟨d, h⟩ := h
   refine (hn.mul ((IsPoly.refl.add (.const 1)).pow d)).of_dominated

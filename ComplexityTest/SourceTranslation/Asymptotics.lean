@@ -82,7 +82,7 @@ example (s : Finset ℕ) (a b : ℕ → ℕ → ℕ) (h : ∀ i ∈ s, Dominated
 
 -- Duplicates are counted, and the family coefficient covers every list length.
 example (xs : ℕ → List ℕ) (a b : ℕ → ℕ → ℕ)
-    (h : Dominated (fun z : {p : ℕ × ℕ // p.2 ∈ xs p.1} => a z.1.1 z.1.2)
+    (h : Dominated (fun z : {p : Σ _ : ℕ, ℕ // p.2 ∈ xs p.1} => a z.1.1 z.1.2)
       (fun z => b z.1.1 z.1.2)) :
     Dominated (fun x => ((xs x).map (a x)).sum) (fun x => ((xs x).map (b x)).sum) :=
   Dominated.list_sum xs a b h

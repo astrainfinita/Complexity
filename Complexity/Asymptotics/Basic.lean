@@ -137,13 +137,13 @@ theorem sum {ι : Type*} (s : α → Finset ι) (a b : α → ι → M)
   exact Finset.sum_le_sum (fun i hi => hc ⟨(x, i), hi⟩)
 
 /-- List traversal counts repeated elements; the witness still covers the entire callback family. -/
-theorem list_sum {ι : Type*} (xs : α → List ι) (a b : α → ι → M)
-    (h : Dominated (fun z : {p : α × ι // p.2 ∈ xs p.1} => a z.1.1 z.1.2)
+theorem list_sum {ι : α → Type*} (xs : (x : α) → List (ι x)) (a b : (x : α) → ι x → M)
+    (h : Dominated (fun z : {p : Σ x, ι x // p.2 ∈ xs p.1} => a z.1.1 z.1.2)
       (fun z => b z.1.1 z.1.2)) :
     Dominated (fun x => ((xs x).map (a x)).sum) (fun x => ((xs x).map (b x)).sum) := by
   obtain ⟨C, hc⟩ := dominated_iff.mp h
   refine dominated_iff.mpr ⟨C, fun x => ?_⟩
-  have bound (ys : List ι) (hy : ∀ i ∈ ys, a x i ≤ C • b x i) :
+  have bound (ys : List (ι x)) (hy : ∀ i ∈ ys, a x i ≤ C • b x i) :
       (ys.map (a x)).sum ≤ C • (ys.map (b x)).sum := by
     induction ys with
     | nil => simp
@@ -151,7 +151,7 @@ theorem list_sum {ι : Type*} (xs : α → List ι) (a b : α → ι → M)
       simp only [List.map_cons, List.sum_cons, nsmul_add]
       exact add_le_add (hy i (List.mem_cons_self ..))
         (ih (fun j hj => hy j (List.mem_cons_of_mem i hj)))
-  exact bound (xs x) (fun i hi => hc ⟨(x, i), hi⟩)
+  exact bound (xs x) (fun i hi => hc ⟨⟨x, i⟩, hi⟩)
 
 end Dominated
 
