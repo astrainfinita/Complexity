@@ -19,6 +19,9 @@ example := (by source_fun_prop : HasProgramInO
     (fun p : Σ x : (Σ n, Σ k, (Fin n → Fin k) × List (Fin n)), Fin x.1 =>
       (p.1.2.2.1 p.2).val) _ _ _)
 
+-- Polymorphic operations on `Option` compose across a dependent element type.
+example := (by source_fun_prop : HasProgramInO (fun x : Σ n, Option (Fin n) => someValue x.2) _ _ _)
+
 -- Closing the environment cannot turn pointwise implementations into one algorithm.
 example (f : ℕ → Bool → Bool) (program : ℕ → Value → Code Value) (t p : ℕ → Bool → ℕ)
     (_h : ∀ n, HasProgramInO (f n) (program n) (t n) (p n)) : True := by

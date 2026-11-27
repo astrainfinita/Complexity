@@ -45,6 +45,11 @@ instance {α : Type*} [UniqueEncoding Tree α] : UniqueEncoding Tree (Option α)
 @[simp] theorem encode_option_some {α : Type*} [UniqueEncoding Tree α] (a : α) :
     ⌜some a⌝ₜ = ⌜((), a)⌝ₜ := rfl
 
+/-- Pointwise representation changes preserve the representation of an optional value. -/
+theorem encode_option_map_of_encode {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
+    (f : α → β) (h : ∀ x, ⌜f x⌝ₜ = ⌜x⌝ₜ) (o : Option α) : ⌜o.map f⌝ₜ = ⌜o⌝ₜ := by
+  cases o <;> simp [encode_prod, h]
+
 /-- The code of a present value has two more nodes than the value's code. -/
 theorem size_encode_option_some {α : Type*} [UniqueEncoding Tree α] (a : α) :
     ⌜some a⌝ₜ.size = ⌜a⌝ₜ.size + 2 := by

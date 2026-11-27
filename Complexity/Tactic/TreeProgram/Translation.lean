@@ -575,8 +575,13 @@ private def viewRule (search : Lean.Expr → FunPropM (Option Result)) (goal : L
 
 open Lean Meta in
 /-- The value of codes corresponding to `e`, where `pattern` is the argument type of a fact: the
-entries at a type parameter of the fact become their codes, through lists and pairs. The value
-and the equation that its code is that of `e`. -/
+entries at a type parameter of the fact become their codes, through lists, optional values and
+pairs. The value and the equation that its code is that of `e`.
+
+Provisional per-container bridge: polymorphic `HasProgramIn` theorems quantify their hidden `IsO`
+constants inside the type parameter (`∀ β, ∃ C`), so dependent calls currently map containers to
+fixed `Tree`-valued containers to obtain a uniform constant. Revisit and remove special-case
+container handling once a general uniform-constant mechanism is chosen. -/
 private partial def codesView (pattern e : Lean.Expr) : MetaM (Option (Lean.Expr × Lean.Expr)) := do
   let pattern ← instantiateMVars pattern
   if pattern.isMVar then
@@ -586,13 +591,15 @@ private partial def codesView (pattern e : Lean.Expr) : MetaM (Option (Lean.Expr
     return some (e, ← mkEqRefl (← mkAppM ``encode #[mkConst ``Tree, e]))
   -- A fact matched by its head may be about another type with the same notation.
   let type ← whnfR (← inferType e)
-  if pattern.isAppOfArity ``List 1 then
-    unless type.isAppOfArity ``List 1 do return none
-    let some (view, equation) ← withLocalDeclD `a type.appArg! fun a => do
-        let some (v, h) ← codesView pattern.appArg! a | return none
-        return some ((← mkLambdaFVars #[a] v).eta, ← mkLambdaFVars #[a] h) | return none
-    return some (← mkAppM ``List.map #[view, e],
-      ← mkAppM ``encode_list_map_of_encode #[view, equation, e])
+  -- Lists and optional values map their entries to codes.
+  for (container, map, congr) in [(``List, ``List.map, ``encode_list_map_of_encode),
+      (``Option, ``Option.map, ``encode_option_map_of_encode)] do
+    if pattern.isAppOfArity container 1 then
+      unless type.isAppOfArity container 1 do return none
+      let some (view, equation) ← withLocalDeclD `a type.appArg! fun a => do
+          let some (v, h) ← codesView pattern.appArg! a | return none
+          return some ((← mkLambdaFVars #[a] v).eta, ← mkLambdaFVars #[a] h) | return none
+      return some (← mkAppM map #[view, e], ← mkAppM congr #[view, equation, e])
   if pattern.isAppOfArity ``Prod 2 then
     unless type.isAppOfArity ``Prod 2 do return none
     let some (v₁, h₁) ← codesView pattern.appFn!.appArg! (← mkAppM ``Prod.fst #[e]) | return none
