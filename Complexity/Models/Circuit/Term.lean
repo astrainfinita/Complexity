@@ -7,6 +7,7 @@ module
 
 public import Complexity.Models.Circuit.Composition
 public import Complexity.ModelTheory.Term
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
 
 /-!
 # Circuits and first-order terms
@@ -15,7 +16,8 @@ Every designated output has a term with the same interpretation. Unfolding may d
 subexpressions, so the size of these terms is not a circuit-size measure. Conversely, `ofTerm`
 compiles an expression tree to a single-output circuit with one gate per function-symbol occurrence
 (`size_ofTerm`), `ofTerms` compiles one term per output without sharing equal subterms, and
-`ofTermsEquiv` compiles terms indexed by arbitrary finite types through equivalences with `Fin`.
+`ofTermsEquiv` compiles terms indexed by arbitrary finite types through equivalences with `Fin`
+(with gate-count sum `size_ofTermsEquiv` and uniform bound `size_ofTermsEquiv_le`).
 -/
 
 @[expose] public section
@@ -90,5 +92,12 @@ def ofTermsEquiv (eIn : α ≃ Fin n) (eOut : β ≃ Fin m) (t : β → L.Term �
     (t : β → L.Term α) : (ofTermsEquiv eIn eOut t).size = ∑ b, (t b).numFuncs := by
   simp only [ofTermsEquiv, size_ofTerms, Term.numFuncs_relabel]
   exact Equiv.sum_comp eOut.symm (fun b => (t b).numFuncs)
+
+/-- A bound on every output term bounds the gate count by the number of outputs times it. -/
+theorem size_ofTermsEquiv_le {k : ℕ} (eIn : α ≃ Fin n) (eOut : β ≃ Fin m) {t : β → L.Term α}
+    (h : ∀ b, (t b).numFuncs ≤ k) : (ofTermsEquiv eIn eOut t).size ≤ m * k := by
+  simp only [ofTermsEquiv, size_ofTerms, Term.numFuncs_relabel]
+  exact (Finset.sum_le_card_nsmul _ _ _ fun j _ ↦ h (eOut.symm j)).trans_eq <| by
+    rw [Finset.card_univ, Fintype.card_fin, smul_eq_mul]
 
 end Complexity.Circuit

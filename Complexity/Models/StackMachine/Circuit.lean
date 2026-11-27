@@ -7,14 +7,12 @@ module
 
 public import Complexity.Models.StackMachine.Basic
 public import Complexity.Control.BinaryChoice.Path
-public import Complexity.Models.Circuit.Basic
 public import Complexity.Models.Circuit.Unroll
 public import Complexity.Models.Circuit.Term
-public import Complexity.ModelTheory.Algebra.BooleanAlgebra.Basic
 public import Complexity.ModelTheory.Algebra.BooleanAlgebra.Function
 public import Complexity.Data.FinEnum
-public import Mathlib.Logic.Equiv.Fin.Basic
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Complexity.Asymptotics.Basic
+import Complexity.Asymptotics.Nat
 
 /-!
 # Bounded runs of binary-choice stack machines as circuits
@@ -36,9 +34,11 @@ never exceed capacity `t`; `runCircuit` allocates `t + 1` cells per stack so the
 non-zero even when `t = 0`.
 
 The selection layer expands every Boolean function of the local view, so its size is exponential
-in the machine description but independent of the input. Wire and control-signal numberings are
-passed as parameters (`eW`, `eA`); `FinEnum.equiv` is available via the public `FinEnum` instances
-with exact cardinalities `RunCircuit.card_wire` and `RunCircuit.card_actionBit`.
+in the machine description but independent of the input. The public size bound
+`dominated_size_runCircuit` absorbs this machine-dependent factor into the coefficient of
+`Dominated`, yielding an `O((t + 1) * (xs.length + t + 1))` gate bound. Internal wire and
+control-signal types are numbered via their canonical `FinEnum` instances and kept module-private;
+only `runCircuit` and its evaluation, satisfiability, and gate-count theorems are public.
 -/
 
 namespace Complexity.StackMachine
@@ -110,7 +110,7 @@ theorem length_stack_foldl_stepAlong_le (M : StackMachine BinaryChoice κ Γ Q) 
 namespace RunCircuit
 
 /-- The wires of a configuration with input length `L` and stack capacity `T`. -/
-public inductive Wire (κ Q : Type*) (L T : ℕ) where
+inductive Wire (κ Q : Type*) (L T : ℕ) where
   /-- The control state is `q`. -/
   | state (q : Q)
   /-- The input head is at position `p`, counting the left blank as `0`. -/
@@ -118,7 +118,7 @@ public inductive Wire (κ Q : Type*) (L T : ℕ) where
   /-- Cell `j` of stack `i` is present (`isValue = false`), or holds `true` (`isValue = true`). -/
   | cell (i : Option κ) (j : Fin T) (isValue : Bool)
 
-public instance {L T : ℕ} [FinEnum κ] [FinEnum Q] : FinEnum (Wire κ Q L T) :=
+instance {L T : ℕ} [FinEnum κ] [FinEnum Q] : FinEnum (Wire κ Q L T) :=
   FinEnum.ofEquiv (Q ⊕ Fin (L + 2) ⊕ (Fin T × Option κ × Bool))
     { toFun
         | .state q => .inl q
@@ -132,13 +132,13 @@ public instance {L T : ℕ} [FinEnum κ] [FinEnum Q] : FinEnum (Wire κ Q L T) :
       right_inv := by rintro (q | p | ⟨j, i, v⟩) <;> rfl }
 
 /-- Number of configuration wires under the canonical `FinEnum` instance. -/
-public theorem card_wire [FinEnum κ] [FinEnum Q] (L T : ℕ) :
-    FinEnum.card (Wire κ Q L T) = FinEnum.card Q + (L + 2) + 2 * T * (FinEnum.card κ + 1) := by
+theorem card_wire [FinEnum κ] [FinEnum Q] (L T : ℕ) :
+    FinEnum.card (Wire κ Q L T) = FinEnum.card Q + (L + 2) + 2 * (FinEnum.card κ + 1) * T := by
   change FinEnum.card Q + ((L + 2) + T * ((FinEnum.card κ + 1) * 2)) = _
-  rw [Nat.mul_comm _ 2, ← Nat.mul_assoc, Nat.mul_comm T 2, ← Nat.add_assoc]
+  rw [Nat.mul_comm _ 2, Nat.mul_comm T, ← Nat.add_assoc]
 
 /-- The control signals of an action, read by the update layer. -/
-public inductive ActionBit (κ Q : Type*) where
+inductive ActionBit (κ Q : Type*) where
   /-- The next control state is `q`. -/
   | state (q : Q)
   /-- The input head moves left. -/
@@ -152,7 +152,7 @@ public inductive ActionBit (κ Q : Type*) where
   /-- The symbol pushed on stack `i`, or `false`. -/
   | symbol (i : Option κ)
 
-public instance [FinEnum κ] [FinEnum Q] : FinEnum (ActionBit κ Q) :=
+instance [FinEnum κ] [FinEnum Q] : FinEnum (ActionBit κ Q) :=
   FinEnum.ofEquiv (Q ⊕ Bool ⊕ (Option κ ⊕ Option κ ⊕ Option κ))
     { toFun
         | .state q => .inl q
@@ -170,14 +170,6 @@ public instance [FinEnum κ] [FinEnum Q] : FinEnum (ActionBit κ Q) :=
         | .inr (.inr (.inr (.inr i))) => .symbol i
       left_inv a := by cases a <;> rfl
       right_inv := by rintro (q | (_ | _) | i | i | i) <;> rfl }
-
-/-- Number of action control signals under the canonical `FinEnum` instance. -/
-public theorem card_actionBit [FinEnum κ] [FinEnum Q] :
-    FinEnum.card (ActionBit κ Q) = FinEnum.card Q + 3 * FinEnum.card κ + 5 := by
-  change FinEnum.card (Q ⊕ Bool ⊕ (Option κ ⊕ Option κ ⊕ Option κ)) = _
-  change FinEnum.card Q + (2 + ((FinEnum.card κ + 1) +
-    ((FinEnum.card κ + 1) + (FinEnum.card κ + 1)))) = _
-  omega
 
 /-- Wire values of a configuration. -/
 def cfgWires [DecidableEq Q] {xs : List Bool} (T : ℕ) (c : Q × Cfg κ Bool xs.toArray) :
@@ -227,11 +219,6 @@ def LocalBit.equivSum (κ : Type*) : LocalBit κ ≃ Bool ⊕ (κ × Bool) ⊕ U
   right_inv := by rintro (v | ⟨i, v⟩ | ⟨⟩) <;> rfl
 
 instance [FinEnum κ] : FinEnum (LocalBit κ) := FinEnum.ofEquiv _ (LocalBit.equivSum κ)
-
-theorem card_localBit [FinEnum κ] : FinEnum.card (LocalBit κ) = 2 * FinEnum.card κ + 3 := by
-  change FinEnum.card (Bool ⊕ (κ × Bool) ⊕ Unit) = _
-  change 2 + (FinEnum.card κ * 2 + 1) = _
-  omega
 
 /-- Decode a local view into an observation and a label. -/
 def LocalBit.decode (y : LocalBit κ → Bool) : (Option Bool × (κ → Option Bool)) × Fin 2 :=
@@ -487,7 +474,7 @@ theorem eval_stepCircuit [FinEnum κ] [FinEnum Q] (M : StackMachine BinaryChoice
     (hc : ∀ i, (c.2.stack i).length ≤ T) (b : Bool) :
     (stepCircuit M xs T eW eA).eval (Fin.snoc (cfgWires T c ∘ eW.symm) b) =
       cfgWires T (M.stepAlong c (finTwoEquiv.symm b)) ∘ eW.symm := by
-  have h1 : (Fin.snoc (cfgWires T c ∘ eW.symm) b : Fin (W + 1) → Bool) ∘ readInputs eW =
+  have h1 : Fin.snoc (cfgWires T c ∘ eW.symm) b ∘ readInputs eW =
       (Option.elim · b (cfgWires T c)) := by
     funext o
     cases o <;> simp [readInputs, finSuccEquivLast_symm_some]
@@ -505,14 +492,11 @@ theorem foldl_eval_stepCircuit [FinEnum κ] [FinEnum Q] (M : StackMachine Binary
   induction l generalizing c with
   | nil => rfl
   | cons b l ih =>
-    simp only [List.foldl_cons]
-    rw [eval_stepCircuit M xs T eW eA c
-      (fun i ↦ by have := hc i; rw [List.length_cons] at this; omega)]
-    apply ih
-    intro i
+    simp only [List.foldl_cons, List.length_cons] at hc ⊢
+    rw [eval_stepCircuit M xs T eW eA c (fun i ↦ by have := hc i; omega)]
+    refine ih _ fun i ↦ ?_
     have := hc i
     have := M.length_stack_stepAlong_le c (finTwoEquiv.symm b) i
-    simp only [List.length_cons] at *
     omega
 
 /-- The initial wire values as constants, followed by the labels. -/
@@ -574,49 +558,32 @@ theorem numFuncs_updateTerm_le (xs : List Bool) (T : ℕ) (w : Wire κ Q xs.leng
     have := h j.val v
     split_ifs <;> (try simp only [numFuncs_top, Term.numFuncs_var]) <;> omega
 
+/-- Total gate count of the selection layer; independent of input length and stack capacity. -/
+def selectSize [FinEnum κ] [FinEnum Q] (M : StackMachine BinaryChoice κ Bool Q) : ℕ :=
+  ∑ a : ActionBit κ Q, (selectBit M a).numFuncs
+
 /-- Every step has the same gate count: the input read is linear in the input length, the selection
-does not depend on the input, and every wire is updated by at most 14 gates. -/
+depends only on the machine (`selectSize M`), and every wire is updated by at most 14 gates. -/
 theorem size_stepCircuit_le [FinEnum κ] [FinEnum Q] (M : StackMachine BinaryChoice κ Bool Q)
     (xs : List Bool) (T : ℕ) [NeZero T] (eW : Wire κ Q xs.length T ≃ Fin W)
     (eA : ActionBit κ Q ≃ Fin A) :
-    (stepCircuit M xs T eW eA).size ≤ 6 * xs.length + 14 +
-      A * (FinEnum.card Q * (5 * 2 ^ (2 * FinEnum.card κ + 3)) + 1) + 14 * W := by
-  simp only [stepCircuit, readCircuit, selectCircuit, updateCircuit, size_comp, size_ofTermsEquiv]
-  have hread : (∑ o, (readTerm (κ := κ) (Q := Q) xs T o).numFuncs) = 6 * xs.length + 14 := by
-    simp only [Fintype.sum_sum_type, readTerm, Term.numFuncs_var, Finset.sum_const_zero,
-      numFuncs_oneHot, numFuncs_ofBool, Fintype.sum_bool, List.map_const', List.sum_replicate,
-      List.length_finRange, smul_eq_mul]
-    omega
-  have hselect : (∑ o, (selectTerm M xs T o).numFuncs) ≤
-      A * (FinEnum.card Q * (5 * 2 ^ (2 * FinEnum.card κ + 3)) + 1) := by
-    simp only [Fintype.sum_sum_type, selectTerm, selectBit, Term.numFuncs_var,
-      Finset.sum_const_zero, Nat.zero_add, Term.numFuncs_relabel, numFuncs_oneHot]
-    have hA : Fintype.card (ActionBit κ Q) = A := by simpa using Fintype.card_congr eA
-    calc _ ≤ ∑ _ : ActionBit κ Q,
-            (FinEnum.card Q * (5 * 2 ^ (2 * FinEnum.card κ + 3)) + 1) := by
-          refine Finset.sum_le_sum fun a _ ↦ Nat.add_le_add_right ?_ 1
-          refine (List.sum_le_length_nsmul _ (5 * 2 ^ (2 * FinEnum.card κ + 3))
-            (List.forall_mem_map.2 fun q _ ↦ ?_)).trans ?_
-          · have := numFuncs_shannon (FinEnum.toList (LocalBit κ)) fun y ↦
-              actionBits (M.selectAction q (LocalBit.decode y).1 (LocalBit.decode y).2) a
-            rw [FinEnum.length_toList, card_localBit] at this
-            omega
-          · simp
-      _ = _ := by simp [hA]
-  have hupdate : (∑ o : Wire κ Q xs.length T, (updateTerm xs T o).numFuncs) ≤ 14 * W := by
-    have hW : Fintype.card (Wire κ Q xs.length T) = W := by simpa using Fintype.card_congr eW
-    calc _ ≤ ∑ _ : Wire κ Q xs.length T, 14 :=
-          Finset.sum_le_sum fun w _ ↦ numFuncs_updateTerm_le xs T w
-      _ = _ := by simp [hW, Nat.mul_comm]
+    (stepCircuit M xs T eW eA).size ≤ 6 * xs.length + 14 + selectSize M + 14 * W := by
+  have : (updateCircuit xs T eW eA).size ≤ W * 14 :=
+    size_ofTermsEquiv_le _ _ (numFuncs_updateTerm_le xs T)
+  simp only [stepCircuit, readCircuit, selectCircuit, size_comp, size_ofTermsEquiv,
+    Fintype.sum_sum_type, readTerm, selectTerm, Term.numFuncs_var, Finset.sum_const_zero,
+    numFuncs_oneHot, numFuncs_ofBool, Fintype.sum_bool, List.map_const', List.sum_replicate,
+    List.length_finRange, smul_eq_mul, Term.numFuncs_relabel, selectSize]
   omega
 
 /-- The initialization has one constant gate per wire. -/
-theorem size_initCircuit [DecidableEq Q] (M : StackMachine BinaryChoice κ Bool Q) (xs : List Bool)
-    (T t : ℕ) (eW : Wire κ Q xs.length T ≃ Fin W) : (initCircuit M xs T t eW).size = W := by
-  let : Fintype (Wire κ Q xs.length T) := Fintype.ofEquiv _ eW.symm
-  simp only [initCircuit, size_ofTermsEquiv]
-  have hW : Fintype.card (Wire κ Q xs.length T) = W := by simpa using Fintype.card_congr eW
-  simpa [Fintype.sum_sum_type, initTerm] using hW
+theorem size_initCircuit [FinEnum κ] [FinEnum Q] (M : StackMachine BinaryChoice κ Bool Q)
+    (xs : List Bool) (T t : ℕ) (eW : Wire κ Q xs.length T ≃ Fin W) :
+    (initCircuit M xs T t eW).size = W := by
+  simp only [initCircuit, size_ofTermsEquiv, Fintype.sum_sum_type, initTerm, numFuncs_ofBool,
+    Term.numFuncs_var, Finset.sum_const, Finset.card_univ, smul_eq_mul, Nat.mul_one, Nat.mul_zero,
+    Nat.add_zero]
+  exact (Fintype.card_congr eW).trans (Fintype.card_fin W)
 
 /-- Acceptance reads the control state and the output cells. -/
 theorem size_acceptCircuit_le [FinEnum Q] (M : StackMachine BinaryChoice κ Bool Q) (xs : List Bool)
@@ -624,23 +591,13 @@ theorem size_acceptCircuit_le [FinEnum Q] (M : StackMachine BinaryChoice κ Bool
     (acceptCircuit M xs T w eW).size ≤ 3 * FinEnum.card Q + 6 * T + 3 := by
   simp only [acceptCircuit, size_ofTermsEquiv, Finset.univ_unique, Finset.sum_singleton, acceptTerm,
     numFuncs_inf, numFuncs_oneHot, numFuncs_ofBool, List.map_const', List.sum_replicate,
-    FinEnum.length_toList, smul_eq_mul]
+    FinEnum.length_toList, smul_eq_mul, apply_ite Term.numFuncs, numFuncs_bot]
   split_ifs
-  · have h := numFuncs_listInf_le (k := 5) (List.finRange T)
-      (fun j : Fin T ↦ listInf [false, true] fun v ↦
-        literal (Wire.cell (κ := κ) (Q := Q) (L := xs.length) none j v)
-          (OptionBool.toBits w.reverse[j.val]? v))
-      fun j _ ↦ by
-        have h' := numFuncs_listInf_le (k := 1) [false, true]
-          (fun v ↦ literal (Wire.cell (κ := κ) (Q := Q) (L := xs.length) none j v)
-            (OptionBool.toBits w.reverse[j.val]? v))
-          fun v _ ↦ numFuncs_literal_le _ _
-        simp only [List.length_cons, List.length_nil] at h'
-        omega
-    simp only [List.length_finRange] at h
+  · refine (Nat.add_le_add_right (Nat.add_le_add_left (numFuncs_listInf_le _ _ fun j _ ↦
+      numFuncs_listInf_le _ _ fun v _ ↦ numFuncs_literal_le _ _) _) _).trans ?_
+    simp only [List.length_finRange, List.length_cons, List.length_nil]
     omega
-  · simp only [numFuncs_bot]
-    omega
+  · omega
 
 end Size
 
@@ -651,27 +608,26 @@ end RunCircuit
 open RunCircuit in
 /-- A run of `t` steps on input `xs`, accepting when it has halted with output `w`. The inputs are
 the `t` labels; each stack has `t + 1` cells, one more than the run can fill. -/
-public def runCircuit [FinEnum κ] [FinEnum Q] {W A : ℕ} (M : StackMachine BinaryChoice κ Bool Q)
-    (xs w : List Bool) (t : ℕ) (eW : Wire κ Q xs.length (t + 1) ≃ Fin W)
-    (eA : ActionBit κ Q ≃ Fin A) : Circuit .booleanAlgebra t 1 :=
-  (initCircuit M xs (t + 1) t eW).comp
-    (((stepCircuit M xs (t + 1) eW eA).unroll t).comp (acceptCircuit M xs (t + 1) w eW))
+public def runCircuit [FinEnum κ] [FinEnum Q] (M : StackMachine BinaryChoice κ Bool Q)
+    (xs w : List Bool) (t : ℕ) : Circuit .booleanAlgebra t 1 :=
+  (initCircuit M xs (t + 1) t FinEnum.equiv).comp
+    (((stepCircuit M xs (t + 1) FinEnum.equiv FinEnum.equiv).unroll t).comp
+      (acceptCircuit M xs (t + 1) w FinEnum.equiv))
 
+open RunCircuit in
 /-- The circuit checks whether the endpoint along the labels has halted with output `w`. -/
-public theorem eval_runCircuit [FinEnum κ] [FinEnum Q] {W A : ℕ}
-    (M : StackMachine BinaryChoice κ Bool Q) (xs w : List Bool) (t : ℕ)
-    (eW : RunCircuit.Wire κ Q xs.length (t + 1) ≃ Fin W) (eA : RunCircuit.ActionBit κ Q ≃ Fin A)
-    (x : Fin t → Bool) :
-    (runCircuit M xs w t eW eA).eval x 0 =
+public theorem eval_runCircuit [FinEnum κ] [FinEnum Q]
+    (M : StackMachine BinaryChoice κ Bool Q) (xs w : List Bool) (t : ℕ) (x : Fin t → Bool) :
+    (runCircuit M xs w t).eval x 0 =
       let c := (List.ofFn (finTwoEquiv.symm ∘ x)).foldl M.stepAlong
         (M.init xs : Q × Cfg κ Bool xs.toArray)
       decide (M.Halted c ∧ c.2.output = w.toArray) := by
-  simp only [runCircuit, Circuit.eval_comp, RunCircuit.eval_initCircuit, Circuit.eval_unroll]
-  rw [RunCircuit.foldl_eval_stepCircuit M xs (t + 1) eW eA _ _
+  simp only [runCircuit, Circuit.eval_comp, eval_initCircuit, Circuit.eval_unroll]
+  rw [foldl_eval_stepCircuit M xs (t + 1) FinEnum.equiv FinEnum.equiv _ _
     (fun i ↦ by simp [List.length_ofFn])]
-  simp only [RunCircuit.acceptCircuit, Circuit.eval_ofTermsEquiv, Function.comp_apply,
+  simp only [acceptCircuit, Circuit.eval_ofTermsEquiv, Function.comp_apply,
     Function.comp_assoc, Equiv.symm_comp_self, Function.comp_id, ← List.map_ofFn, List.foldl_map]
-  rw [RunCircuit.realize_acceptTerm]
+  rw [realize_acceptTerm]
   have := M.length_stack_foldl_stepAlong_le ((List.ofFn x).map finTwoEquiv.symm)
     (M.init xs : Q × Cfg κ Bool xs.toArray) none
   simp only [Controller.init_snd, hasConfig_init, Cfg.stack_init, List.length_nil, List.length_map,
@@ -680,10 +636,9 @@ public theorem eval_runCircuit [FinEnum κ] [FinEnum Q] {W A : ℕ}
 
 /-- Some label sequence makes the circuit true exactly when some branch of the `t`-step run has
 halted with output `w`. -/
-public theorem exists_eval_runCircuit_iff [FinEnum κ] [FinEnum Q] {W A : ℕ}
-    (M : StackMachine BinaryChoice κ Bool Q) (xs w : List Bool) (t : ℕ)
-    (eW : RunCircuit.Wire κ Q xs.length (t + 1) ≃ Fin W) (eA : RunCircuit.ActionBit κ Q ≃ Fin A) :
-    (∃ x, (runCircuit M xs w t eW eA).eval x 0 = true) ↔
+public theorem exists_eval_runCircuit_iff [FinEnum κ] [FinEnum Q]
+    (M : StackMachine BinaryChoice κ Bool Q) (xs w : List Bool) (t : ℕ) :
+    (∃ x, (runCircuit M xs w t).eval x 0 = true) ↔
       ∃ c ∈ returns (M.runWith Multiset xs t), M.Halted c ∧ c.2.output = w.toArray := by
   simp only [eval_runCircuit, decide_eq_true_eq, Controller.mem_returns_runWith_multiset_iff]
   constructor
@@ -693,16 +648,28 @@ public theorem exists_eval_runCircuit_iff [FinEnum κ] [FinEnum Q] {W A : ℕ}
     refine ⟨finTwoEquiv ∘ bs, ?_⟩
     simpa [Function.comp_def] using h
 
-/-- The gate count of a `t`-step run circuit with `W` wires and `A` control signals. -/
-public theorem size_runCircuit_le [FinEnum κ] [FinEnum Q] {W A : ℕ}
-    (M : StackMachine BinaryChoice κ Bool Q) (xs w : List Bool) (t : ℕ)
-    (eW : RunCircuit.Wire κ Q xs.length (t + 1) ≃ Fin W) (eA : RunCircuit.ActionBit κ Q ≃ Fin A) :
-    (runCircuit M xs w t eW eA).size ≤ W + t * (6 * xs.length + 14 +
-      A * (FinEnum.card Q * (5 * 2 ^ (2 * FinEnum.card κ + 3)) + 1) + 14 * W) +
-      (3 * FinEnum.card Q + 6 * (t + 1) + 3) := by
-  simp only [runCircuit, Circuit.size_comp, Circuit.size_unroll, RunCircuit.size_initCircuit]
-  have := RunCircuit.size_acceptCircuit_le M xs (t + 1) w eW
-  have := Nat.mul_le_mul_left t (RunCircuit.size_stepCircuit_le M xs (t + 1) eW eA)
-  omega
+open RunCircuit in
+/-- For a fixed machine, the gate count of a `t`-step run circuit is
+`O((t + 1) * (xs.length + t + 1))`, with one coefficient for all triples `(xs, w, t)` of an input,
+a target output, and a step count. -/
+public theorem dominated_size_runCircuit [FinEnum κ] [FinEnum Q]
+    (M : StackMachine BinaryChoice κ Bool Q) :
+    Dominated (fun p : List Bool × List Bool × ℕ ↦ (runCircuit M p.1 p.2.1 p.2.2).size)
+      (fun p ↦ (p.2.2 + 1) * (p.1.length + p.2.2 + 1)) := by
+  let N (p : List Bool × List Bool × ℕ) := p.1.length + p.2.2 + 1
+  have hc (c : ℕ) : Dominated (fun _ ↦ c) N := .const_of_pos c fun _ ↦ Nat.succ_pos _
+  have hL : Dominated (fun p ↦ p.1.length) N := .of_le fun _ ↦ Nat.le_succ_of_le le_self_add
+  have hT : Dominated (fun p ↦ p.2.2 + 1) N := .of_le fun _ ↦ Nat.le_add_left _ _
+  have hW : Dominated (fun p ↦ FinEnum.card (Wire κ Q p.1.length (p.2.2 + 1))) N := by
+    simp only [card_wire, Dominated.add_iff, hc, hL, hT.const_mul_left, and_self]
+  have h1 {f} (h : Dominated f N) : Dominated f (fun p ↦ (p.2.2 + 1) * N p) :=
+    h.mono fun _ ↦ Nat.le_mul_of_pos_left _ (Nat.succ_pos _)
+  simp only [runCircuit, Circuit.size_comp, Circuit.size_unroll, size_initCircuit,
+    Dominated.add_iff]
+  refine ⟨h1 hW, .mul (g' := N) (.of_le fun p ↦ Nat.le_succ p.2.2) ?_, h1 ?_⟩
+  · refine .mono_left ?_ fun p ↦ size_stepCircuit_le M p.1 (p.2.2 + 1) _ _
+    simp only [Dominated.add_iff, hc, hL.const_mul_left, hW.const_mul_left, and_self]
+  · refine .mono_left ?_ fun p ↦ size_acceptCircuit_le M p.1 (p.2.2 + 1) p.2.1 _
+    simp only [Dominated.add_iff, hc, hT.const_mul_left, and_self]
 
 end Complexity.StackMachine
