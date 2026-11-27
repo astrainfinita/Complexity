@@ -144,6 +144,7 @@ public import Complexity.Models.TuringMachine.Program.Specification.Basic
 public import Complexity.Models.TuringMachine.Program.Specification.Configuration
 public import Complexity.Models.TuringMachine.Program.Specification.History
 public import Complexity.Problems.CircuitSAT.Basic
+public import Complexity.Problems.CircuitSAT.CookLevin
 public import Complexity.Problems.CircuitSAT.KSAT
 public import Complexity.Problems.CircuitSAT.Membership
 public import Complexity.Problems.KSAT.Basic

@@ -99,6 +99,18 @@ namespace NP
 theorem mem_iff_exists_ntime : p ∈ NP model ↔ ∃ d : ℕ, p ∈ NTIME model (fun n => n ^ d) :=
   Set.mem_iUnion
 
+/-- Nondeterministic polynomial time in the vocabulary of the program layer: some behavior
+decides `p` within a time budget that is polynomial in the code size at every size. -/
+theorem mem_iff_isPoly :
+    p ∈ NP model ↔ ∃ t s, model.NDecidableWithinBySize p t s ∧ IsPoly (fun n => n) t := by
+  rw [mem_iff_exists_ntime]
+  constructor
+  · rintro ⟨d, t, ⟨s, h⟩, ht⟩
+    exact ⟨t, s, h, isPoly_iff_exists_dominatedAtTop_pow.2 ⟨d, ht⟩⟩
+  · rintro ⟨t, s, h, ht⟩
+    obtain ⟨d, hd⟩ := isPoly_iff_exists_dominatedAtTop_pow.1 ht
+    exact ⟨d, t, ⟨s, h⟩, hd⟩
+
 /-- A time bound polynomial in the code size gives nondeterministic polynomial time. -/
 theorem of_isPoly {t : ℕ → ℕ} (h : p ∈ NTIME model t) (ht : IsPoly (fun n => n) t) :
     p ∈ NP model := by
