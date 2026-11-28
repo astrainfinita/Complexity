@@ -6,6 +6,7 @@ Authors: Yuyang Zhao
 module
 
 public import Complexity.Encoding.Vector
+public import Complexity.Encoding.FinVector
 public import Mathlib.Data.Fin.Basic
 public import Mathlib.Data.List.OfFn
 public import Mathlib.Data.List.FinRange
@@ -104,6 +105,43 @@ theorem encode_vector_ofFn {R α : Type*} [UniqueEncoding R (List α)] {n : ℕ}
     ⌜List.finRange n⌝ₜ = ⌜List.range n⌝ₜ := by
   rw [← List.map_coe_finRange_eq_range, ← List.ofFn_id]
   simpa only [List.map_ofFn] using (encode_fin_values (id : Fin n → Fin n)).symm
+
+/-- The vector of all indices is stored as the list of the numbers below its length. -/
+theorem encode_finVector_finRange [UniqueEncoding Tree ℕ] (n : ℕ) :
+    ⌜FinVector.finRange n⌝ₜ = ⌜List.range n⌝ₜ := by
+  rw [encode_finVector, ← encode_finRange]
+  rfl
+
+/-- Increasing the bound on stored indices does not traverse or change their codes. -/
+@[simp high, dominated_expand] theorem encode_finVector_map_castSucc [UniqueEncoding Tree ℕ]
+    {n k : ℕ} (v : FinVector (Fin k) n) : ⌜v.map Fin.castSucc⌝ₜ = ⌜v⌝ₜ :=
+  encode_finVector_map_of_encode Fin.castSucc (fun _ => rfl) v
+
+/-- Erasing the bounds of stored indices does not traverse or change their codes. -/
+@[simp high, dominated_expand] theorem encode_finVector_map_val [UniqueEncoding Tree ℕ] {n k : ℕ}
+    (v : FinVector (Fin k) n) : ⌜v.map Fin.val⌝ₜ = ⌜v⌝ₜ :=
+  encode_finVector_map_of_encode Fin.val (fun _ => rfl) v
+
+/-- An index stored in a vector, as a number, fits in the vector; `encode_fin` expands the index's
+code to that of the number. -/
+@[dominated] theorem size_encode_val_finVector_get_le [UniqueEncoding Tree ℕ] {n m : ℕ}
+    (v : FinVector (Fin m) n) (i : Fin n) : ⌜(v.get i).val⌝ₜ.size ≤ ⌜v⌝ₜ.size :=
+  size_encode_finVector_get_le v i
+
+/-- An index stored in a vector given by its entries, as a number, fits in the vector. Case
+analysis that exposes a vector as `FinVector.ofFn f` reduces its entries to `f i`, which
+`size_encode_val_finVector_get_le` no longer matches. -/
+@[dominated] theorem size_encode_val_apply_le_finVector_ofFn [UniqueEncoding Tree ℕ] {n m : ℕ}
+    (f : Fin n → Fin m) (i : Fin n) : ⌜(f i).val⌝ₜ.size ≤ ⌜FinVector.ofFn f⌝ₜ.size :=
+  size_encode_finVector_get_le (FinVector.ofFn f) i
+
+/-- A vector read through another vector at its entries stores one entry of the other vector for
+each of its own entries. -/
+@[dominated] theorem size_encode_finVector_map_get_le {α : Type*} [UniqueEncoding Tree ℕ]
+    [UniqueEncoding Tree α] {n k : ℕ} (w : FinVector α k) (v : FinVector (Fin k) n) :
+    ⌜v.map w.get⌝ₜ.size ≤ ⌜v⌝ₜ.size * (⌜w⌝ₜ.size + 1) + 1 :=
+  (size_encode_finVector_le _ ⌜w⌝ₜ.size fun i => size_encode_finVector_get_le w (v.get i)).trans
+    (Nat.add_le_add_right (Nat.mul_le_mul_right _ (card_le_size_encode_finVector v)) 1)
 
 /-- A represented tuple is also the list of its element codes, without a traversal. -/
 theorem encode_fin_function_codes {α : Type*} [UniqueEncoding Tree α] {n : ℕ}

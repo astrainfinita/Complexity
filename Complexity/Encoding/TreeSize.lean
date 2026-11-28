@@ -73,6 +73,16 @@ theorem size_encode_fin_table_le {n k : ℕ} (w : Fin n → Fin k) :
   have : n * (4 * k + 1 + 1) = 4 * (n * k) + 2 * n := by ring
   omega
 
+/-- A vector of indices below `k` stores at most `4 * k + 2` nodes for each entry. -/
+theorem size_encode_finVector_fin_le {n k : ℕ} (v : FinVector (Fin k) n) :
+    ⌜v⌝ₜ.size ≤ 4 * (n * k) + 2 * n + 1 := by
+  have hw := size_encode_finVector_le v (4 * k + 1) (fun i => by
+    have hi := (v.get i).isLt
+    simpa only [encode_fin] using (size_encode_nat_le (v.get i).val).trans
+      (by omega : 4 * (v.get i).val + 1 ≤ 4 * k + 1))
+  have : n * (4 * k + 1 + 1) = 4 * (n * k) + 2 * n := by ring
+  omega
+
 /-- Passing to exact-size fibers is needed only at a complexity-class boundary. -/
 theorem dominated_sizeEnvelope {α : Type*} [UniqueEncoding Tree α]
     {b : α → ℕ} {T : ℕ → ℕ} (h : Dominated b (fun x => T (encode Tree x).size)) :

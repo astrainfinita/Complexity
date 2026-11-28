@@ -68,6 +68,7 @@ public import Complexity.Encoding.Basic
 public import Complexity.Encoding.Bool
 public import Complexity.Encoding.Composition
 public import Complexity.Encoding.Fin
+public import Complexity.Encoding.FinVector
 public import Complexity.Encoding.List
 public import Complexity.Encoding.Nat
 public import Complexity.Encoding.Option

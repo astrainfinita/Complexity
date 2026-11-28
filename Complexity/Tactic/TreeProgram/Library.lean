@@ -165,6 +165,11 @@ theorem encode_fun_castSucc {n k : ℕ} (f : Fin n → Fin k) : ⌜fun i => (f i
 theorem encode_fun_val {n k : ℕ} (f : Fin n → Fin k) : ⌜fun i => (f i).val⌝ₜ = ⌜f⌝ₜ :=
   encode_fin_function_congr _ _ fun _ => rfl
 
+/-- An entry of a vector is read from the list of its entries at its index. -/
+theorem encode_finVector_get_eq_someValue {α : Type*} [UniqueEncoding Tree α] {n : ℕ}
+    (v : FinVector α n) (i : Fin n) : ⌜v.get i⌝ₜ = ⌜someValue v.toList[i.val]?⌝ₜ := by
+  simp [someValue]
+
 /-- An entry of a table is read from the list of entry codes at its index. The codes have one
 type for every table, even when the entries' type depends on the input. -/
 theorem encode_apply_eq_someValue {α : Type*} [UniqueEncoding Tree α] {n : ℕ} (f : Fin n → α)
@@ -178,8 +183,8 @@ theorem encode_apply_eq_someValue {α : Type*} [UniqueEncoding Tree α] {n : ℕ
 
 attribute [source_view] Vector.ofFn_fin_snoc Vector.ofFn_fin_append Vector.ofFn_addCases
   encode_fun_castSucc encode_fun_val
--- After the views, which compute an entry without reading the table.
-attribute [source_view low] encode_apply_eq_someValue
+-- After specific views, which avoid reading the whole table.
+attribute [source_view low] encode_finVector_get_eq_someValue encode_apply_eq_someValue
 
 /-- Whether the counter of the range loop, read through its binary digits, is nonzero. -/
 def rangeContinues (x : ℕ × List ℕ) : Bool := !x.1.bits.isEmpty
@@ -472,5 +477,27 @@ theorem Internal.HasProgramInO.fin_comp {ρ : Type*} [UniqueEncoding Tree ρ]
       (fun e => t e + ⌜(⟨n e, k e, m e, f e, g e⟩ : FinCompInput)⌝ₜ.size ^ 3)
       (fun e => max (p e) (⌜(⟨n e, k e, m e, f e, g e⟩ : FinCompInput)⌝ₜ.size ^ 2)) :=
   h.comp_dependent hasProgramIn_finComp.toHasProgramInO
+
+/-- The arguments of reading a vector of indices through another vector. -/
+abbrev FinVectorLookupInput := Σ n, Σ k, Σ m, FinVector (Fin k) n × FinVector (Fin m) k
+
+/-- Read a vector of indices through another vector. -/
+theorem hasProgramIn_finVectorLookup :
+    HasProgramIn (fun x : FinVectorLookupInput => x.2.2.2.1.map x.2.2.2.2.get) hole(⊢ program)
+      IsO(fun x => ⌜x⌝ₜ.size ^ 3) IsO(fun x => ⌜x⌝ₜ.size ^ 2) := by
+  abstract_hole program using programFinVectorLookup
+  fill_hole program in source_fun_prop
+
+/-- Read a vector of indices through another vector, with the closed growth of the stored lookup.
+Callbacks inside a `match` can use this rule when `dominated` compares branch costs only pointwise
+and does not bound the sum of a map directly. -/
+theorem Internal.HasProgramInO.finVector_map_get {ρ : Type*} [UniqueEncoding Tree ρ]
+    {n k m : ρ → ℕ} {f : (e : ρ) → FinVector (Fin (k e)) (n e)}
+    {g : (e : ρ) → FinVector (Fin (m e)) (k e)} {q : Value → Code Value} {t p : ρ → ℕ}
+    (h : HasProgramInO (fun e => (⟨n e, k e, m e, f e, g e⟩ : FinVectorLookupInput)) q t p) :
+    HasProgramInO (fun e => (f e).map (g e).get) (fun v => q v >>= programFinVectorLookup)
+      (fun e => t e + ⌜(⟨n e, k e, m e, f e, g e⟩ : FinVectorLookupInput)⌝ₜ.size ^ 3)
+      (fun e => max (p e) (⌜(⟨n e, k e, m e, f e, g e⟩ : FinVectorLookupInput)⌝ₜ.size ^ 2)) :=
+  h.comp_dependent hasProgramIn_finVectorLookup.toHasProgramInO
 
 end Complexity.TreeProgram.Source

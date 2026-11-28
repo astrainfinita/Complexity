@@ -9,7 +9,11 @@ public import Complexity.Encoding.Tree
 
 /-! # Encodings of vectors
 
-A vector uses the list encoding of its entries; its length is supplied by its type. -/
+A vector uses the list encoding of its entries; its length is supplied by its type.
+
+Programs store fixed-length tables as `FinVector`s (`Complexity.Encoding.FinVector`). This encoding
+of core `Vector` remains for now only for the translation of `Fin`-function tables, which builds
+such tables as `Vector.ofFn`. -/
 
 @[expose] public section
 

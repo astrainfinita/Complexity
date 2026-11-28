@@ -29,7 +29,7 @@ namespace Complexity
 
 attribute [dominated_simp] size_encode_prod Sigma.encode_mk size_encode_unit List.length_reverse
   encode_fin_function_codes encode_vector_ofFn Vector.toList_ofFn Vector.length_toList
-  List.length_ofFn size_encode_ofFn
+  List.length_ofFn size_encode_ofFn FinVector.ofFn_get FinVector.getElem?_toList_val
 
 /- A value of a subtype written with its proof has the code of the value, so the size facts about
 the value apply. Only this form is rewritten: `UniqueEncoding.encode_subtype` would also turn the
@@ -46,6 +46,7 @@ growth; their sizes are the defining equations of `Tree.size`. -/
 attribute [dominated_expand] Tree.encode_self Tree.size_nil Tree.size_pair
 
 attribute [dominated] Tree.size_pos size_encode_bool_le Fin.isLt size_encode_fin_table_le
+  size_encode_finVector_fin_le
 
 /- The traversal rules of `Asymptotics`. For each kind they are tried in this order: a maximum over
 a list of the elements that occur before a maximum over a list of dependent elements, then a table

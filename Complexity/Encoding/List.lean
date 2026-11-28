@@ -106,6 +106,16 @@ theorem _root_.List.Sublist.size_encode_le {α : Type*} [UniqueEncoding Tree α]
   rw [size_encode_list]
   omega
 
+/-- The code of an entry of a list is a subtree of the list's code, at a path fixed by its index. -/
+theorem encode_list_getElem {α : Type*} [UniqueEncoding Tree α] (xs : List α) (i : ℕ)
+    (h : i < xs.length) : ⌜xs[i]⌝ₜ = ⌜xs⌝ₜ.subtree (List.replicate i true ++ [false]) := by
+  induction xs generalizing i with
+  | nil => simp at h
+  | cons x xs ih =>
+    cases i with
+    | zero => rfl
+    | succ i => exact ih i (by simpa using h)
+
 @[simp] theorem listLength_encode_unit : ⌜()⌝ₜ.listLength = 0 := rfl
 
 @[simp] theorem listLength_encode_prod {α β : Type*}
