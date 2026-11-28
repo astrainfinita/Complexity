@@ -115,7 +115,13 @@ example := (by source_fun_prop :
 
 def identityCircuit (n : ℕ) : Σ n, Circuit .booleanAlgebra n n := ⟨n, .id _ n⟩
 
-example := (by source_fun_prop using tabulate : HasProgramInO identityCircuit _ _ _)
+-- Records a limit: the wire tables of a circuit are `FinVector`s, which enumeration does not
+-- build, so a circuit whose wire table is a function literal has no translation even with it.
+-- Written as `Circuit.outputs (FinVector.finRange n).get`, the same circuit is translated.
+example : True := by
+  fail_if_success
+    have := (by source_fun_prop using tabulate : HasProgramInO identityCircuit _ _ _)
+  trivial
 
 def positions {α : Type*} (xs : List α) : List ℕ := List.ofFn (fun i : Fin xs.length => i.val)
 
@@ -126,13 +132,16 @@ def positions {α : Type*} (xs : List α) : List ℕ := List.ofFn (fun i : Fin x
 noncomputable example := (by source_fun_prop :
   HasProgramInO (fun xs : List Bool => (positions xs).reverse) _ _ _)
 
--- Ordinary constructors retain runtime dimensions and wire types.
 def complementLayer (xs : List Unit) : List (Σ n, Circuit .booleanAlgebra n 1) :=
   let n := xs.length
   List.ofFn (fun i : Fin n =>
     ⟨n, .ofGate FirstOrder.BooleanAlgebra.complFunc (fun _ => i)⟩)
 
-noncomputable example := (by source_fun_prop using tabulate : HasProgramInO complementLayer _ _ _)
+-- Records the same limit inside a generated table: the gates' wire tables are function literals.
+example : True := by
+  fail_if_success
+    have := (by source_fun_prop using tabulate : HasProgramInO complementLayer _ _ _)
+  trivial
 
 noncomputable example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop :
   HasProgramInO (positions (α := α)) _ _ _)

@@ -22,11 +22,12 @@ namespace Complexity.CNF
 
 /-- A gate's output-size estimate depends only on its ordinary clause definition. -/
 theorem size_encode_ofGate_le {α : Type*} [UniqueEncoding Tree α] {k : ℕ}
-    (op : FirstOrder.Language.booleanAlgebra.Functions k) (args : Fin k → α) (out : α) :
-    ⌜CNF.ofGate op args out⌝ₜ.size ≤ 4 * ⌜(⟨k, op, args, out⟩ :
-      Σ k, FirstOrder.Language.booleanAlgebra.Functions k × (Fin k → α) × α)⌝ₜ.size := by
-  change _ ≤ 4 * (1 + ⌜k⌝ₜ.size + (1 + ⌜op⌝ₜ.size + (1 + ⌜args⌝ₜ.size + ⌜out⌝ₜ.size)))
-  cases op <;> simp [CNF.ofGate, List.ofFn_succ] <;> omega
+    (op : FirstOrder.Language.booleanAlgebra.Functions k) (args : FinVector α k) (out : α) :
+    ⌜CNF.ofGate op args.get out⌝ₜ.size ≤ 4 * ⌜(⟨k, op, args, out⟩ :
+      Σ k, FirstOrder.Language.booleanAlgebra.Functions k × FinVector α k × α)⌝ₜ.size := by
+  simp only [Sigma.encode_mk, size_encode_prod]
+  obtain ⟨args⟩ := args
+  cases op <;> simp [CNF.ofGate, encode_finVector, List.ofFn_succ] <;> omega
 
 end Complexity.CNF
 
@@ -42,7 +43,7 @@ The pair `(n, c)` has the same encoding as the dependent pair used by `CircuitSA
   | outputs select =>
       have h := Nat.le_self_pow (by decide : 2 ≠ 0)
         ⌜(n, (outputs select : Circuit .booleanAlgebra n 1))⌝ₜ.size
-      simp [List.ofFn_succ] at *
+      simp [encode_finVector, List.ofFn_succ] at *
       omega
   | gate op args next =>
       have hn := size_encode_nat_succ_le n
@@ -51,10 +52,9 @@ The pair `(n, c)` has the same encoding as the dependent pair used by `CircuitSA
         omega
       have hg : ⌜CNF.ofGate op (Fin.val ∘ args) n⌝ₜ.size ≤
           4 * ⌜(n, gate op args next)⌝ₜ.size := by
-        have h := CNF.size_encode_ofGate_le op (Fin.val ∘ args) n
-        have hv : ⌜Fin.val ∘ args⌝ₜ.size = ⌜args⌝ₜ.size :=
-          congrArg Tree.size (encode_fin_values args)
-        simp only [Sigma.encode_mk, encode_gate, size_encode_prod, size_encode_unit, hv] at h ⊢
+        have h := CNF.size_encode_ofGate_le op ((FinVector.ofFn args).map Fin.val) n
+        simp only [FinVector.get_map, Sigma.encode_mk, encode_gate, encode_finVector_map_val,
+          size_encode_prod, size_encode_unit] at h ⊢
         omega
       have hi := next.size_encode_tseitin_le
       have ha := size_encode_list_append (CNF.ofGate op (Fin.val ∘ args) n) next.tseitin

@@ -153,6 +153,7 @@ public import Complexity.Problems.KSAT.Membership
 public import Complexity.Problems.KSAT.Verifier
 public import Complexity.Resources.Basic
 public import Complexity.Resources.Circuit.Basic
+public import Complexity.Resources.Circuit.Cases
 public import Complexity.Resources.Circuit.Compile
 public import Complexity.Resources.Circuit.Composition
 public import Complexity.Resources.Circuit.Program

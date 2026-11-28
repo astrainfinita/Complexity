@@ -302,7 +302,7 @@ example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop :
 
 -- Field access inside a registered call uses an automatically generated local certificate.
 def emitGate
-    (x : Σ k, FirstOrder.Language.booleanAlgebra.Functions k × (Fin k → ℕ) × ℕ) :
+    (x : Σ k, FirstOrder.Language.booleanAlgebra.Functions k × FinVector ℕ k × ℕ) :
     ℕ × CNF ℕ :=
   (x.2.2.2 + 1, gateClauses x)
 
@@ -310,7 +310,7 @@ example := (by source_fun_prop :
     HasProgramInO emitGate _ _ _)
 
 theorem emitGate_fdtisp : emitGate ∈ FDTISP .tree (fun n => n ^ 1) (fun n => n ^ 1) := by
-  let S (x : Σ k, FirstOrder.Language.booleanAlgebra.Functions k × (Fin k → ℕ) × ℕ) := ⌜x⌝ₜ.size
+  let S (x : Σ k, FirstOrder.Language.booleanAlgebra.Functions k × FinVector ℕ k × ℕ) := ⌜x⌝ₜ.size
   have hS x : 0 < S x := Tree.size_pos _
   have hn : Dominated (fun x => ⌜x.2.2.2⌝ₜ.size) S := Dominated.of_le fun x => by
     rcases x with ⟨k, op, args, n⟩; simp only [S, Sigma.encode_mk, size_encode_prod]; omega

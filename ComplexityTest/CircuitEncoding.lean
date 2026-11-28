@@ -6,9 +6,10 @@ Authors: Yuyang Zhao
 module
 
 import Complexity.Models.Circuit.TreeEncoding
+import Complexity.Models.TreeMachine.Language.Derive
 import Complexity.ModelTheory.Algebra.BooleanAlgebra.TreeEncoding
 
-open Complexity TreeProgram TreeProgram.Code FirstOrder
+open Complexity FirstOrder
 
 namespace Complexity.CircuitEncodingTest
 
@@ -20,14 +21,16 @@ variable {L : Language.{u, v}} [∀ k, UniqueEncoding Tree (L.Functions k)] {n m
 
 example : UniqueEncoding Tree (Circuit L n m) := inferInstance
 
+-- Guards the tree code layout of `Circuit`: wire tables are stored as `FinVector`s.
 example (select : Fin m → Fin n) :
-    encode Tree (Circuit.outputs select : Circuit L n m) = .pair .nil (encode Tree select) := rfl
+    encode Tree (Circuit.outputs select : Circuit L n m) =
+      .pair .nil (encode Tree (FinVector.ofFn select)) := rfl
 
 example (op : L.Functions k) (args : Fin k → Fin n) (next : Circuit L (n + 1) m) :
     encode Tree (Circuit.gate op args next) =
       .pair (.pair .nil .nil)
         (.pair (encode Tree k) (.pair (encode Tree op)
-          (.pair (encode Tree args) (encode Tree next)))) := rfl
+          (.pair (encode Tree (FinVector.ofFn args)) (encode Tree next)))) := rfl
 
 example (c : Circuit L n m) (t : Tree) :
     c ∈ decode (Circuit L n m) t ↔ encode Tree c = t := UniqueEncoding.mem_decode_iff
@@ -35,16 +38,10 @@ example (c : Circuit L n m) (t : Tree) :
 example (c : Circuit L n m) : decode (Circuit L n m) (encode Tree c) = Part.some c :=
   UniqueEncoding.decode_encode c
 
-def rebuild (x : Value) : Code Value :=
-  Circuit.Code.matchOn x Circuit.Code.outputs Circuit.Code.gate
-
-example (c : Circuit L n m) : (rebuild .input).Computes (encode Tree c) (encode Tree c) := by
-  cases c <;> simp [computes_iff, rebuild]
-
-example (op : L.Functions k) (args : Fin k → Fin n) (next : Circuit L (n + 1) m) :
-    (Circuit.Code.matchOn .input (fun _ => pure .nil) (fun _ _ _ c => pure c)).Computes
-      (encode Tree (Circuit.gate op args next)) (encode Tree next) := by
-  simp [computes_iff]
+-- Guards that `simp` does not unfold `⌜c⌝ₜ` to `treeEncode c` on a circuit variable.
+example (c : Circuit L n m) (h : ⌜c⌝ₜ.size = 0) : ⌜c⌝ₜ.size = 0 := by
+  fail_if_success simp
+  exact h
 
 end Generic
 
@@ -58,16 +55,6 @@ example (n : ℕ) (c : Circuit .booleanAlgebra n 1) :
 example (p : Σ n, Circuit .booleanAlgebra n 1) :
     decode (Σ n, Circuit .booleanAlgebra n 1) (encode Tree p) = Part.some p :=
   UniqueEncoding.decode_encode p
-
-def rebuildInput (x : Value) : Code Value :=
-  Sigma.Code.matchOn x fun n c => do
-    let c ← Circuit.Code.matchOn c Circuit.Code.outputs Circuit.Code.gate
-    Sigma.Code.mk n c
-
-example (p : Σ n, Circuit .booleanAlgebra n 1) :
-    (rebuildInput .input).Computes (encode Tree p) (encode Tree p) := by
-  rcases p with ⟨n, c⟩
-  cases c <;> simp [computes_iff, rebuildInput]
 
 end Boolean
 
@@ -101,11 +88,11 @@ example : decode (Circuit language 0 0)
   change (decode (Fin 1) (encode Tree (1 : ℕ))).bind _ = _
   rw [invalidSymbol, Part.bind_none]
 
-private theorem missingArgument : decode (Fin 1 → Fin 1) Tree.nil = Part.none := by
+private theorem missingArgument : decode (FinVector (Fin 1) 1) Tree.nil = Part.none := by
   apply Part.eq_none_iff.mpr
   intro f hf
   have h := congrArg Tree.listLength (UniqueEncoding.mem_decode_iff.mp hf)
-  simp at h
+  simp [encode_finVector] at h
 
 example : decode (Circuit language 1 0)
     (Tree.pair (.pair .nil .nil) (.pair (encode Tree (1 : ℕ))

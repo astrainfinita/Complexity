@@ -6,6 +6,7 @@ Authors: Yuyang Zhao
 module
 
 public import Complexity.Tactic.TreeProgram.Library
+public import Complexity.Resources.Circuit.Cases
 public import Complexity.Resources.Circuit.Tseitin
 
 /-! # A certified tree-machine implementation of the Tseitin transformation -/
@@ -20,11 +21,11 @@ open Internal (HasProgramInO)
 
 /-- The Tseitin clauses of a gate, its input wires and its output wire. -/
 def gateClauses {α : Type*}
-    (x : Σ k, FirstOrder.Language.booleanAlgebra.Functions k × (Fin k → α) × α) : CNF α :=
-  CNF.ofGate x.2.1 x.2.2.1 x.2.2.2
+    (x : Σ k, FirstOrder.Language.booleanAlgebra.Functions k × FinVector α k × α) : CNF α :=
+  CNF.ofGate x.2.1 x.2.2.1.get x.2.2.2
 
 theorem gateClauses_size_le {α : Type*} [UniqueEncoding Tree α]
-    (x : Σ k, FirstOrder.Language.booleanAlgebra.Functions k × (Fin k → α) × α) :
+    (x : Σ k, FirstOrder.Language.booleanAlgebra.Functions k × FinVector α k × α) :
     ⌜gateClauses x⌝ₜ.size ≤ 4 * ⌜x⌝ₜ.size := by
   rcases x with ⟨k, op, args, out⟩
   exact CNF.size_encode_ofGate_le op args out
@@ -38,12 +39,12 @@ theorem gateClauses_size_le {α : Type*} [UniqueEncoding Tree α]
 /-- Add a gate's clauses to the reversed clause accumulator. -/
 def accumulateGate
     (input : CNF ℕ ×
-      (Σ k, FirstOrder.Language.booleanAlgebra.Functions k × (Fin k → ℕ) × ℕ)) : CNF ℕ :=
+      (Σ k, FirstOrder.Language.booleanAlgebra.Functions k × FinVector ℕ k × ℕ)) : CNF ℕ :=
   (gateClauses input.2).foldl (fun acc clause => clause :: acc) input.1
 
 /-- Inputs of `accumulateGate`: the clause accumulator and one gate. -/
 abbrev AccumulateInput := CNF ℕ ×
-  (Σ k, FirstOrder.Language.booleanAlgebra.Functions k × (Fin k → ℕ) × ℕ)
+  (Σ k, FirstOrder.Language.booleanAlgebra.Functions k × FinVector ℕ k × ℕ)
 
 @[program] theorem hasProgramIn_accumulateGate :
     HasProgramIn accumulateGate hole(⊢ program) IsO(fun _ => 1) IsO(fun x => ⌜x⌝ₜ.size) := by
@@ -52,12 +53,12 @@ abbrev AccumulateInput := CNF ℕ ×
   have : Dominated (fun x : AccumulateInput => (gateClauses x.2).length) (fun _ => 1) :=
     Dominated.of_le_mul 3 (fun x => by
       simpa only [gateClauses, Nat.mul_one] using
-        CNF.length_ofGate_le x.2.2.1 x.2.2.2.1 x.2.2.2.2)
+        CNF.length_ofGate_le x.2.2.1 x.2.2.2.1.get x.2.2.2.2)
   fill_hole program in source_fun_prop (disch := dominated [gateClauses_size_le])
 
 /-- Output size is an ordinary property of the list fold, independent of its certification. -/
 theorem accumulateGate_size (input : CNF ℕ ×
-    (Σ k, FirstOrder.Language.booleanAlgebra.Functions k × (Fin k → ℕ) × ℕ)) :
+    (Σ k, FirstOrder.Language.booleanAlgebra.Functions k × FinVector ℕ k × ℕ)) :
     ⌜accumulateGate input⌝ₜ.size + 1 = ⌜gateClauses input.2⌝ₜ.size + ⌜input.1⌝ₜ.size := by
   simpa [accumulateGate] using size_encode_list_append (gateClauses input.2).reverse input.1
 
@@ -67,22 +68,13 @@ abbrev TseitinState := (Σ n, Circuit .booleanAlgebra n 1) × CNF ℕ
 
 /-- Finish an output state with its final clause and the accumulated clauses. -/
 def circuitFinish (input : TseitinState) : CNF ℕ :=
-  match input.1.2 with
-  | .outputs select => ([.pos (select 0).val] :: input.2).reverse
-  | .gate _ _ _ => input.2
+  input.1.2.casesFinVector (fun v _ => ([.pos (v.get 0).val] :: input.2).reverse)
+    fun _ _ _ _ => input.2
 
 /-- Remove the current gate while accumulating its clauses. -/
-def circuitStep (input : TseitinState) :
-    TseitinState :=
-  match input.1 with
-  | ⟨_, .outputs _⟩ => input
-  | ⟨n, .gate (k := k) op args next⟩ =>
-      (⟨n + 1, next⟩, accumulateGate (input.2, ⟨k, op, Fin.val ∘ args, n⟩))
-
-/-- Gate input values keep the code of the gate's wire table. -/
-theorem size_encode_val_comp {n k : ℕ} (args : Fin k → Fin n) :
-    ⌜Fin.val ∘ args⌝ₜ.size = ⌜args⌝ₜ.size := by
-  simpa only [encode_fin_function] using congrArg Tree.size (encode_fin_values args)
+def circuitStep (input : TseitinState) : TseitinState :=
+  input.1.2.casesFinVector (fun _ _ => input) fun {k} op v next _ =>
+    (⟨input.1.1 + 1, next⟩, accumulateGate (input.2, ⟨k, op, v.map Fin.val, input.1.1⟩))
 
 @[program] theorem hasProgramIn_circuitStep :
     HasProgramIn circuitStep hole(⊢ program) IsO(fun x => ⌜x.1⌝ₜ.size) IsO(fun x => ⌜x⌝ₜ.size) := by
@@ -90,19 +82,18 @@ theorem size_encode_val_comp {n k : ℕ} (args : Fin k → Fin n) :
   refine HasProgramInO.toHasProgramIn ?_
   fill_hole program in
     source_fun_prop (disch := dominated [accumulateGate_size, gateClauses_size_le,
-      size_encode_val_comp, size_encode_nat_succ_le])
+      size_encode_nat_succ_le])
 
 /-- Whether the circuit still has a gate to process. -/
 def circuitContinues (input : TseitinState) : Bool :=
-  match input.1.2 with
-  | .outputs _ => false
-  | .gate _ _ _ => true
+  input.1.2.casesFinVector (fun _ _ => false) fun _ _ _ _ => true
 
 /-- Generate Tseitin clauses using a reversed accumulator. -/
 def tseitinLoop : (Σ n, Circuit .booleanAlgebra n 1) → CNF ℕ → CNF ℕ
   | ⟨_, .outputs select⟩, acc => ([.pos (select 0).val] :: acc).reverse
   | ⟨n, .gate (k := k) op args next⟩, acc =>
-    tseitinLoop ⟨n + 1, next⟩ (accumulateGate (acc, ⟨k, op, Fin.val ∘ args, n⟩))
+    tseitinLoop ⟨n + 1, next⟩
+      (accumulateGate (acc, ⟨k, op, (FinVector.ofFn args).map Fin.val, n⟩))
 termination_by input _ => input.2.size
 
 theorem tseitinLoop_eq {n : ℕ} (c : Circuit .booleanAlgebra n 1) (acc : CNF ℕ) :
@@ -111,7 +102,7 @@ theorem tseitinLoop_eq {n : ℕ} (c : Circuit .booleanAlgebra n 1) (acc : CNF �
   | outputs select => simp [tseitinLoop, List.reverse_cons]
   | gate op args next =>
     rw [tseitinLoop, tseitinLoop_eq]
-    simp [accumulateGate, gateClauses, List.reverse_append, List.append_assoc]
+    simp [accumulateGate, gateClauses, FinVector.get_map, List.reverse_append, List.append_assoc]
 termination_by c.size
 
 theorem tseitinLoop_nil (input : Σ n, Circuit .booleanAlgebra n 1) :
@@ -162,7 +153,7 @@ theorem circuitStep_circuit_size_lt
   | outputs select => cases ht
   | gate op args next =>
     have := size_encode_nat_succ_le n
-    simp only [circuitStep, Sigma.encode_mk, size_encode_prod,
+    simp only [circuitStep, Circuit.casesFinVector_gate, Sigma.encode_mk, size_encode_prod,
       Circuit.encode_gate, size_encode_unit]
     omega
 

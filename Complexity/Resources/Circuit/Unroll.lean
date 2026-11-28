@@ -27,9 +27,12 @@ circuit, and the unfolding by `t` layers. -/
 abbrev UnrollState :=
   Σ n, Σ t, Circuit .booleanAlgebra (n + 1) n × Circuit .booleanAlgebra (n + t) n
 
-/-- Add one layer by `Circuit.unrollLayer`, counting it. -/
+/-- Add one layer, counting it: `Circuit.unrollLayer` with its wire tables as `FinVector`s. -/
 def unrollStep (x : UnrollState) : UnrollState :=
-  ⟨x.1, x.2.1 + 1, x.2.2.1, x.2.2.1.unrollLayer x.2.2.2⟩
+  ⟨x.1, x.2.1 + 1, x.2.2.1,
+    (x.2.2.2.relabel ((FinVector.finRange (x.1 + x.2.1)).map Fin.castSucc).get).keepInputs.comp
+      (x.2.2.1.relabel (((FinVector.finRange x.1).map (Fin.natAdd (x.1 + (x.2.1 + 1)))).push
+        (Fin.castAdd x.1 (Fin.last (x.1 + x.2.1)))).get)⟩
 
 theorem iterate_unrollStep (n : ℕ) (step : Circuit .booleanAlgebra (n + 1) n) (t : ℕ) :
     unrollStep^[t] ⟨n, 0, step, Circuit.id _ n⟩ = ⟨n, t, step, step.unroll t⟩ := by
@@ -46,19 +49,17 @@ def unrollStepScale (x : UnrollState) :=
 theorem hasProgramIn_unrollStep : HasProgramIn unrollStep hole(⊢ program)
     (IsPoly unrollStepScale) (IsPoly unrollStepScale) := by
   abstract_hole program using programUnrollStep
-  -- A layer is computed by the programs of the operations it composes.
   fill_hole program in
-    unfold unrollStep Circuit.unrollLayer
     source_fun_prop (disch := dominated [unrollStepScale, relabelScale, keepScale, compScale,
-      Circuit.size_relabel, Circuit.size_keepInputs, Circuit.size_comp]) using tabulate
+      Circuit.size_relabel, Circuit.size_keepInputs, Circuit.size_comp])
 
 /-- The arguments of `Circuit.unroll`: the width, the step circuit and the number of layers. -/
 abbrev UnrollInput := Σ n, Circuit .booleanAlgebra (n + 1) n × ℕ
 
 /-- Start the unfolding loop: the number of layers to add, and the state with no layer, holding the
-identity circuit. -/
+identity circuit, which outputs the `FinVector` of all inputs. -/
 def unrollInitial (x : UnrollInput) : ℕ × UnrollState :=
-  (x.2.2, ⟨x.1, 0, x.2.1, Circuit.id _ x.1⟩)
+  (x.2.2, ⟨x.1, 0, x.2.1, .outputs (FinVector.finRange x.1).get⟩)
 
 /-- The numeric scale of the growth of `Circuit.unroll`: the width, the number `t` of layers and
 `t + 1` times the gate count of the step. -/
@@ -74,8 +75,8 @@ theorem isPoly_size_unrollState :
 theorem hasProgramIn_unrollInitial : HasProgramIn unrollInitial hole(⊢ program)
     (IsPoly unrollScale) (IsPoly unrollScale) := by
   abstract_hole program using programUnrollInitial
-  fill_hole program in source_fun_prop
-    (disch := dominated [unrollScale, Circuit.size_id, Nat.add_one_mul]) using tabulate
+  fill_hole program in
+    source_fun_prop (disch := dominated [unrollScale, Circuit.size_outputs, Nat.add_one_mul])
 
 /-- The result projection is selected independently of its eventual budget. -/
 theorem hasProgramIn_unrollResult : HasProgramIn (fun x : UnrollState => x.2.2.2) hole(⊢ program)
@@ -126,8 +127,7 @@ theorem hasProgramIn_unroll : HasProgramIn (fun x : UnrollInput => x.2.1.unroll 
       ⌜unrollStep^[(unrollInitial x).1] (unrollInitial x).2⌝ₜ.size := by
     refine (isPoly_size_unrollState.comp (h := fun x => ⟨(x, x.2.2), le_rfl⟩) .refl).of_dominated
       (Dominated.of_le fun ⟨n, step, t⟩ => ?_)
-    dsimp only [unrollInitial]
-    rw [iterate_unrollStep]
+    exact (congrArg (fun s : UnrollState => ⌜s⌝ₜ.size) (iterate_unrollStep n step t)).le
   have := hiter.1
   have := hiter.2
   fill_hole program in

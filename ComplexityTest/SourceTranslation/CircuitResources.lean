@@ -20,7 +20,7 @@ namespace ComplexityTest.SourceTranslation.CircuitResources
 -- A new algorithm uses ordinary functions and saves an explicitly chosen implementation.
 -- Its model proof supplies clause count and output size, without internal certificates.
 def collect (input : CNF ℕ ×
-    (Σ k, FirstOrder.Language.booleanAlgebra.Functions k × (Fin k → ℕ) × ℕ)) : CNF ℕ :=
+    (Σ k, FirstOrder.Language.booleanAlgebra.Functions k × FinVector ℕ k × ℕ)) : CNF ℕ :=
   (gateClauses input.2).foldl (fun acc clause => clause :: acc) input.1
 
 open Complexity.TreeProgram.Source in
@@ -53,7 +53,7 @@ open Complexity.TreeProgram.Source in
 open Complexity.TreeProgram.Source.Internal (HasProgramInO) in
 example : True := by
   have := (by source_fun_prop : HasProgramInO (fun input : Option (CNF ℕ ×
-      (Σ k, FirstOrder.Language.booleanAlgebra.Functions k × (Fin k → ℕ) × ℕ)) =>
+      (Σ k, FirstOrder.Language.booleanAlgebra.Functions k × FinVector ℕ k × ℕ)) =>
       match input with | none => [] | some x => collect x) _ _ _)
   trivial
 
