@@ -10,10 +10,6 @@ noncomputable section
 
 open Complexity ComplexityTest.SourceTranslation
 
--- The built-in implementation scope needs no namespace-opening command.
-example := (by source_fun_prop using tabulate :
-  TreeProgram.Source.Internal.HasProgramInO (List.reverse (α := Bool)) _ _ _)
-
 -- Imported source equalities and a saved user choice are reused inside ordinary calls.
 example := (by source_fun_prop : TreeProgram.Source.Internal.HasProgramInO
     (fun xs : List Bool => some (Guidance.userReverse xs)) _ _ _)
@@ -26,7 +22,8 @@ example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop :
 example := (by source_fun_prop :
   TreeProgram.Source.Internal.HasProgramInO Guidance.Scoped.custom (fun v => pure v) _ _)
 
-example := (by source_fun_prop using Guidance.Scoped :
+open scoped Guidance.Scoped in
+example := (by source_fun_prop :
   TreeProgram.Source.Internal.HasProgramInO Guidance.Scoped.custom Guidance.programRetainSlow _ _)
 
 namespace ComplexityTest.SourceTranslation.Public

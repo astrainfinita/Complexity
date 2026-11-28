@@ -343,6 +343,17 @@ run_elab do
       (`ComplexityTest.SourceTranslation.Guidance.unsupportedChoice.sourceProgram).isPrefixOf name) then
     throwError "a failed source registration left a partial implementation"
 
+-- Guards the errors for a missing implementation: the instance behind a class method, here
+-- `Fin.add` behind `+` on indices, has no selected one, and a local function has no
+-- `HasProgramIn` hypothesis.
+/-- error: source translation: `Fin.add` needs a selected implementation -/
+#guard_msgs (substring := true) in
+example := (by source_fun_prop : HasProgramInO (fun x : Fin 3 × Fin 3 => x.1 + x.2) _ _ _)
+
+/-- error: source translation: `f` needs an implementation -/
+#guard_msgs (substring := true) in
+example (f : ℕ → ℕ) := (by source_fun_prop : HasProgramInO (fun n : ℕ => f n) _ _ _)
+
 -- Records a limit (plan W88): a free variable used as a constant has no implementation, though its
 -- program only writes its code (`HasProgramInO.const`); the translation asks for a local one. If
 -- this starts to succeed, the local function `c : Unit → γ` in `TreeMachine.fp_option_elim` is no

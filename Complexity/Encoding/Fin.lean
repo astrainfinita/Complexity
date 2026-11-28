@@ -5,7 +5,6 @@ Authors: Yuyang Zhao
 -/
 module
 
-public import Complexity.Encoding.Vector
 public import Complexity.Encoding.FinVector
 public import Mathlib.Data.Fin.Basic
 public import Mathlib.Data.List.OfFn
@@ -64,37 +63,6 @@ instance {R α : Type*} [c : UniqueEncoding R (List α)] {n : ℕ} :
 @[simp] theorem encode_fin_function {R α : Type*} [UniqueEncoding R (List α)] {n : ℕ}
     (f : Fin n → α) : encode R f = encode R (List.ofFn f) := rfl
 
-@[dominated] theorem size_encode_ofFn {α : Type*} [UniqueEncoding Tree α] {n : ℕ}
-    (f : Fin n → α) : ⌜List.ofFn f⌝ₜ.size = ⌜f⌝ₜ.size := rfl
-
-theorem encode_ofFn {R α : Type*} [UniqueEncoding R (List α)] {n : ℕ} (f : Fin n → α) :
-    encode R (List.ofFn f) = encode R f := rfl
-
-/-- A finite tuple has the code of its vector of values. -/
-theorem encode_fin_function_vector {R α : Type*} [UniqueEncoding R (List α)] {n : ℕ}
-    (f : Fin n → α) : encode R f = encode R (Vector.ofFn f) := by
-  rw [encode_fin_function, encode_vector, Vector.toList_ofFn]
-
-theorem encode_vector_ofFn {R α : Type*} [UniqueEncoding R (List α)] {n : ℕ} (f : Fin n → α) :
-    encode R (Vector.ofFn f) = encode R f :=
-  (encode_fin_function_vector f).symm
-
-@[dominated] theorem size_encode_vector_ofFn {α : Type*} [UniqueEncoding Tree α] {n : ℕ}
-    (f : Fin n → α) : ⌜Vector.ofFn f⌝ₜ.size = ⌜f⌝ₜ.size := by
-  rw [encode_vector_ofFn]
-
-/-- Appending a tuple entry uses the ordinary list representation. -/
-@[simp high] theorem encode_fin_snoc {α : Type*} [UniqueEncoding Tree α] {n : ℕ}
-    (f : Fin n → α) (a : α) : ⌜Fin.snoc f a⌝ₜ = ⌜List.ofFn f ++ [a]⌝ₜ := by
-  rw [encode_fin_function, List.ofFn_succ']
-  simp
-
-/-- Concatenated tuples store the entries of both, as the concatenated lists do. -/
-@[dominated] theorem size_encode_fin_append {α : Type*} [UniqueEncoding Tree α] {n m : ℕ}
-    (f : Fin n → α) (g : Fin m → α) : ⌜Fin.append f g⌝ₜ.size + 1 = ⌜f⌝ₜ.size + ⌜g⌝ₜ.size := by
-  simpa only [encode_fin_function, List.ofFn_fin_append] using
-    size_encode_list_append (List.ofFn f) (List.ofFn g)
-
 /-- Erasing bounds from a tuple of wire indices does not change its representation. -/
 @[simp high] theorem encode_fin_values [UniqueEncoding Tree ℕ] {n k : ℕ}
     (f : Fin k → Fin n) : ⌜List.ofFn (Fin.val ∘ f)⌝ₜ = ⌜List.ofFn f⌝ₜ := by
@@ -143,31 +111,6 @@ each of its own entries. -/
   (size_encode_finVector_le _ ⌜w⌝ₜ.size fun i => size_encode_finVector_get_le w (v.get i)).trans
     (Nat.add_le_add_right (Nat.mul_le_mul_right _ (card_le_size_encode_finVector v)) 1)
 
-/-- A represented tuple is also the list of its element codes, without a traversal. -/
-theorem encode_fin_function_codes {α : Type*} [UniqueEncoding Tree α] {n : ℕ}
-    (f : Fin n → α) : ⌜List.ofFn (fun i => ⌜f i⌝ₜ)⌝ₜ = ⌜f⌝ₜ := by
-  rw [encode_fin_function]
-  simpa only [List.map_ofFn, Function.comp_def] using
-    encode_list_map_of_encode (encode Tree) (fun _ : α => Tree.encode_self _) (List.ofFn f)
-
-/-- Pointwise equal element codes give the same stored finite table. -/
-theorem encode_fin_function_congr {α β : Type*}
-    [UniqueEncoding Tree α] [UniqueEncoding Tree β] {n : ℕ}
-    (f : Fin n → α) (g : Fin n → β) (h : ∀ i, ⌜f i⌝ₜ = ⌜g i⌝ₜ) : ⌜f⌝ₜ = ⌜g⌝ₜ := by
-  rw [← encode_fin_function_codes f, ← encode_fin_function_codes g]
-  simp only [h]
-
-/-- Increasing the bound on stored wire indices does not traverse or change their codes. -/
-@[simp high, dominated_expand] theorem encode_fin_castSucc [UniqueEncoding Tree ℕ] {n k : ℕ}
-    (f : Fin n → Fin k) :
-    ⌜Fin.castSucc ∘ f⌝ₜ = ⌜f⌝ₜ :=
-  encode_fin_function_congr _ _ fun _ => rfl
-
-/-- An entry of a table is part of the table's code. -/
-@[dominated] theorem size_encode_fin_apply_le {α : Type*} [UniqueEncoding Tree α] {n : ℕ}
-    (f : Fin n → α) (i : Fin n) : ⌜f i⌝ₜ.size ≤ ⌜f⌝ₜ.size :=
-  size_encode_le_list_of_mem (List.mem_ofFn.mpr ⟨i, rfl⟩)
-
 /-- The code of an entry of a table is a subtree of the table's code, at a path fixed by its
 index. -/
 theorem encode_fin_apply {α : Type*} [UniqueEncoding Tree α] {n : ℕ} (f : Fin n → α)
@@ -181,30 +124,10 @@ theorem encode_fin_apply {α : Type*} [UniqueEncoding Tree α] {n : ℕ} (f : Fi
     | zero => rfl
     | succ i => exact ih (fun j => f j.succ) i
 
-/-- An index stored in a table, as a number, fits in the table. -/
-@[dominated] theorem size_encode_val_apply_le [UniqueEncoding Tree ℕ] {n m : ℕ}
-    (f : Fin n → Fin m) (i : Fin n) :
-    ⌜(f i).val⌝ₜ.size ≤ ⌜f⌝ₜ.size :=
-  size_encode_fin_apply_le f i
-
-@[dominated] theorem card_le_size_encode_fin_function {α : Type*} [UniqueEncoding Tree α] {n : ℕ}
-    (f : Fin n → α) : n ≤ ⌜f⌝ₜ.size := by
-  simp only [encode_fin_function, size_encode_list, List.length_ofFn]
-  omega
-
 theorem size_encode_fin_function_le {α : Type*} [UniqueEncoding Tree α] {n : ℕ}
     (f : Fin n → α) (bound : ℕ) (h : ∀ i, ⌜f i⌝ₜ.size ≤ bound) :
     ⌜f⌝ₜ.size ≤ n * (bound + 1) + 1 := by
   simpa only [encode_fin_function, List.length_ofFn] using size_encode_list_le (List.ofFn f) bound
     (by simpa only [List.mem_ofFn, forall_exists_index, forall_apply_eq_imp_iff] using h)
-
-/-- A composed table stores one selected output for each entry of the first table. -/
-@[dominated] theorem size_encode_fin_comp_le {α : Type*} [UniqueEncoding Tree ℕ]
-    [UniqueEncoding Tree α] {n m : ℕ} (f : Fin n → Fin m) (g : Fin m → α) :
-    ⌜g ∘ f⌝ₜ.size ≤ ⌜f⌝ₜ.size * (⌜g⌝ₜ.size + 1) + 1 :=
-  (size_encode_fin_function_le (g ∘ f) ⌜g⌝ₜ.size
-    (fun i => size_encode_fin_apply_le g (f i))).trans
-      (Nat.add_le_add_right
-        (Nat.mul_le_mul_right _ (card_le_size_encode_fin_function f)) 1)
 
 end Complexity

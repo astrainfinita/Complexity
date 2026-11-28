@@ -14,12 +14,6 @@ public meta section
 
 namespace Complexity.TreeProgram.Source
 
-/-- Function rules tried after structural field extraction; priority only orders rules
-within the same stage. This label does not register a `fun_prop` theorem. -/
-initialize sourceFallbackAttr : Lean.LabelExtension ←
-  Lean.registerLabelAttr `source_fallback
-    "try this source function rule after structural field extraction"
-
 /-- Explicit source choices take precedence over default lambda implementations.
 Mathlib's lambda-rule registry does not retain theorem priorities. -/
 initialize sourceSavedImplementationExt : Lean.LabelExtension ← Lean.mkLabelExt

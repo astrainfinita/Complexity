@@ -9,7 +9,6 @@ public import Complexity.Encoding.TreeSize
 public import Complexity.Encoding.Option
 public import Complexity.Encoding.Sigma
 public import Complexity.Encoding.Fin
-public import Complexity.Encoding.Vector
 public import Complexity.Encoding.Bool
 public import Complexity.Encoding.Tree
 public import Complexity.Tactic.Dominated.Attr
@@ -28,8 +27,7 @@ those whose files do not import this one, among them the traversal rules of `Asy
 namespace Complexity
 
 attribute [dominated_simp] size_encode_prod Sigma.encode_mk size_encode_unit List.length_reverse
-  encode_fin_function_codes encode_vector_ofFn Vector.toList_ofFn Vector.length_toList
-  List.length_ofFn size_encode_ofFn FinVector.ofFn_get FinVector.getElem?_toList_val
+  List.length_ofFn FinVector.ofFn_get FinVector.getElem?_toList_val
 
 /- A value of a subtype written with its proof has the code of the value, so the size facts about
 the value apply. Only this form is rewritten: `UniqueEncoding.encode_subtype` would also turn the
@@ -45,12 +43,11 @@ attribute [dominated_expand] UniqueEncoding.encode_subtype encode_bool_true enco
 growth; their sizes are the defining equations of `Tree.size`. -/
 attribute [dominated_expand] Tree.encode_self Tree.size_nil Tree.size_pair
 
-attribute [dominated] Tree.size_pos size_encode_bool_le Fin.isLt size_encode_fin_table_le
-  size_encode_finVector_fin_le
+attribute [dominated] Tree.size_pos size_encode_bool_le Fin.isLt size_encode_finVector_fin_le
 
 /- The traversal rules of `Asymptotics`. For each kind they are tried in this order: a maximum over
-a list of the elements that occur before a maximum over a list of dependent elements, then a table
-sum, then a sum over a list of the elements that occur. -/
+a list of the elements that occur before a maximum over a list of dependent elements, then a sum
+over `List.finRange`, then a sum over a list of the elements that occur. -/
 attribute [dominated_traversal] Dominated.list_foldr_max_le Dominated.foldr_max_le
   IsPoly.list_foldr_max IsPoly.foldr_max IsPoly.sum_finRange IsPoly.list_sum
 attribute [dominated_traversal mul] Dominated.sum_finRange_of_mul Dominated.list_sum_of_mul

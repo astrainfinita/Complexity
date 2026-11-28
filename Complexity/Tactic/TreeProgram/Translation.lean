@@ -216,14 +216,13 @@ namespace Complexity.TreeProgram.Source
 open Internal (HasProgramInO)
 
 /-- Compose source-function implementations and their growth.
-`using ns` activates the namespace's scoped rules for this translation and its callbacks;
 `via g` translates `g` instead and leaves the equality with the source as a goal;
 `using recursion (…)` and `using loop (…)` compile the source by that method from the given
 callbacks, leaving the method's obligations as goals. The growth comparisons left are closed by
 `dominated` when it closes them completely, or by the discharger given as `(disch := tac)`,
 such as `(disch := dominated [f])`; the others remain as goals. -/
 syntax (name := sourceFunProp) "source_fun_prop" (Lean.Parser.Tactic.discharger)?
-  (" using " ident)? (" via " term)? : tactic
+  (" via " term)? : tactic
 
 open Lean Meta in
 /-- `proof` as a proof of `type`: itself when the types agree reducibly, otherwise an auxiliary
@@ -501,28 +500,15 @@ private def constructorRule (search : Lean.Expr → FunPropM (Option Result)) (g
       (← mkEqTrans proof (← mkAppM ``encode_prod #[first, tuple])) tagged
     return some ⟨← mkAppM ``HasProgramInO.of_tagged_fields #[T, ← mkLambdaFVars #[x] henc, chain]⟩
 
-open Lean Meta in
-/-- Whether the function applied in `e` is data: a local other than the input `x`, or a field. -/
-private def appliesData (x e : Lean.Expr) : MetaM Bool := do
-  let fn := e.getAppFn
-  if fn.isFVar || fn.isProj then return fn != x
-  let some name := fn.constName? | return false
-  let some info ← getProjectionFnInfo? name | return false
-  -- A class method is not a stored field.
-  return !info.fromClass && e.getAppNumArgs > info.numParams + 1
-
 open Lean Meta Mathlib.Meta.FunProp in
 /-- For a value `b` of a type with a `source_view` view `⌜y⌝ₜ = ⌜g y⌝ₜ`, such as an index, a
-subtype or a table (`List.ofFn`), the request for the value computed instead and the equation of
-their codes, which have the same program and growth. The view `g y` of a value `y` other than a
-function literal is computed as `y`. Otherwise `b` is computed as `w` by a `source_view` equation
-`⌜b⌝ₜ = ⌜w⌝ₜ`, or through its view `g b`: as the form of `g b` given by a `source_view` equation,
-or as `g b` itself when `g` has rules. A function literal is a table built pointwise, left to the
-enumeration rule; a projection of the input is stored, left to field extraction; an equation
-about an applied variable, such as a table read, applies to applied data only, a definition
-having its own implementation. Only reads are used if `reads`, and only the other equations
-otherwise. -/
-private def viewRequest? (goal : Lean.Expr) (reads : Bool) :
+subtype or a `FinVector`, the request for the value computed instead and the equation of their
+codes, which have the same program and growth. The view `g y` of a value `y` is computed as `y`.
+Otherwise `b` is computed as `w` by a `source_view` equation `⌜b⌝ₜ = ⌜w⌝ₜ`, or through its view
+`g b`: as the form of `g b` given by a `source_view` equation, or as `g b` itself when `g` has
+rules. A projection of the input is stored, left to field extraction. An equation whose left side
+applies a variable is not used. -/
+private def viewRequest? (goal : Lean.Expr) :
     MetaM (Option (Lean.Expr × Lean.Expr)) :=
   lambdaBoundedTelescope (goal.getArg! 4) 1 fun xs body => do
     let #[x] := xs | return none
@@ -532,23 +518,18 @@ private def viewRequest? (goal : Lean.Expr) (reads : Bool) :
       #[mkConst ``Tree, (goal.getArg! 1).beta #[x], (goal.getArg! 3).beta #[x], body]
     -- The equation `code = ⌜v⌝ₜ` for the value `v` computed instead.
     let field : MetaM (Option Lean.Expr) := do
-      if reads then return none
       let .app _ y := body | return none
-      if y.eta.isLambda then return none
       -- A proof or a type has no code.
       let some y ← (observing? (mkAppM ``encode #[mkConst ``Tree, y]) : MetaM _) | return none
-      rootEquation thms y true fun r h _ => do
+      rootEquation thms y true fun r h => do
         unless ← withReducible (isDefEq r.appArg! body) do return none
         return some (← mkExpectedTypeHint (← mkEqSymm h) (← mkEq code y))
     let form : MetaM (Option Lean.Expr) := do
       if ← Search.isProjectionOf x body then return none
-      rootEquation thms code true fun r h applied => do
-        if applied != reads then return none
+      rootEquation thms code true fun r h => do
         let w := r.appArg!
-        unless w.isApp && w.appArg! == body do
-          if applied && !(← appliesData x body) then return none
-          return some h
-        if let some h' ← rootEquation thms w false fun _ h' _ => return some h' then
+        unless w.isApp && w.appArg! == body do return some h
+        if let some h' ← rootEquation thms w false fun _ h' => return some h' then
           return some (← mkEqTrans h (← mkCongrArg r.appFn! h'))
         let some name := w.getAppFn.constName? | return none
         -- The field of a constructor; its equations have no key, being reduced in the index.
@@ -565,11 +546,11 @@ private def viewRequest? (goal : Lean.Expr) (reads : Bool) :
     return some (next, ← mkLambdaFVars #[x] h)
 
 open Lean Meta Mathlib.Meta.FunProp in
-/-- A value with a view is computed through it (`viewRequest?`), with the same program and growth.
-Reads, the equations about an applied variable, are tried after stored subtrees are extracted. -/
-private def viewRule (search : Lean.Expr → FunPropM (Option Result)) (goal : Lean.Expr)
-    (reads := false) : FunPropM (Option Result) := do
-  let some (next, h) ← viewRequest? goal reads | return none
+/-- A value with a view is computed through it (`viewRequest?`), with the same program and growth:
+the request `viewRequest?` gives is searched, and its result transported along the equation. -/
+private def viewRule (search : Lean.Expr → FunPropM (Option Result)) (goal : Lean.Expr) :
+    FunPropM (Option Result) := do
+  let some (next, h) ← viewRequest? goal | return none
   let some r ← search next | return none
   return some ⟨← mkAppM ``HasProgramInO.of_encode #[h, r.proof]⟩
 
@@ -771,11 +752,7 @@ private partial def sourceSearch (session : Search.Session)
   -- Rules recursively use this driver, including callbacks; no preliminary scan is needed.
   let data ← getFunctionData? f defaultUnfoldPred
   let result ← match data with
-    | .lam f => do
-      let target := goal.setArg decl.funArgId f
-      if let some r ← Search.lambdaRules search decl .pi target then return some r
-      -- A function literal is a table built pointwise, through its view.
-      Search.attempt (viewRule search target)
+    | .lam f => Search.lambdaRules search decl .pi (goal.setArg decl.funArgId f)
     | .letE f => Search.letRule search decl (goal.setArg decl.funArgId f) f
     | .data d => withLCtx d.lctx d.insts do
       let target := goal.setArg decl.funArgId (← d.toExpr)
@@ -784,12 +761,6 @@ private partial def sourceSearch (session : Search.Session)
         if let some r ← Search.lambdaRules search decl .const target then return some r
       let candidates ← Search.functionTheorems decl d
       let env ← getEnv
-      let rules (fallback : Bool) : FunPropM (Option Result) := do
-        for rule in candidates do
-          if Search.isFallback env rule != fallback then continue
-          if let some result ← Search.functionRules search decl target d #[rule] then
-            return some result
-        return none
       -- This driver owns every stage; queries and certificate adapters do not schedule work.
       let info? ← match d.fn with
         | .const name _ => pure (some (← getConstInfo name))
@@ -799,7 +770,7 @@ private partial def sourceSearch (session : Search.Session)
       if info?.any (·.isCtor) then
         if let some r ← Search.attempt (assembleRule goal (target.getArg! decl.funArgId)) then
           return some r
-      if let some r ← rules false then return some r
+      if let some r ← Search.functionRules search decl target d candidates then return some r
       -- A `match` on a part of the input is eliminated by its type's elimination rule.
       if let .const name _ := d.fn then
         if (← getMatcherInfo? name).isSome || isCasesOnLike env name || isRecCore env name then
@@ -811,7 +782,6 @@ private partial def sourceSearch (session : Search.Session)
       -- A value with a view is computed through it.
       if let some r ← Search.attempt (viewRule search target) then return some r
       if let some name := encodedCall then
-        if let some r ← rules true then return some r
         session.reject ancestors (Search.recursionMessage name)
         return none
       -- So is a definition whose value is such a constructor, after its selected implementations;
@@ -821,15 +791,10 @@ private partial def sourceSearch (session : Search.Session)
           if let some r ← Search.attempt (assembleRule goal (target.getArg! decl.funArgId)) then
             return some r
         if let some r ← Search.attempt (constructorRule search target) then return some r
-      -- Subcall specifications need structural decomposition before their fallback rules:
-      -- otherwise lookup of a composite table can recursively request rebuilding that table.
-      if let some r ← rules true then return some r
-      -- A table is read after stored subtrees are extracted.
-      if let some r ← Search.attempt (viewRule search target (reads := true)) then return some r
       -- An encoder describes representation; unfolding it does not select an algorithm.
       if d.fn.isConstOf ``UniqueEncoding.encode then
         session.reject ancestors m!"source translation: no implementation for the encoded result; \
-          select a rule scope with `using`, or register a function equality with `[program]`"
+          register a function equality with `[program]`"
         return none
       let decomposition ← d.decomposition
       if let .failed := decomposition then
@@ -870,27 +835,13 @@ private partial def sourceSearch (session : Search.Session)
   finish result
 
 open Lean Meta Elab Tactic Mathlib.Meta.FunProp in
-/-- Run `action` with the scoped declarations of the namespaces `scope` resolves to activated, when
-it is given. The library's implementations and rules are global and need no activation. -/
-def withSourceSpecs {α : Type} (scope : Option Ident) (action : TacticM α) : TacticM α := do
-  let some scope := scope | action
-  pushScope
-  try
-    for ns in ← resolveNamespace scope do activateScoped ns
-    action
-  finally
-    popScope
-
-open Lean Meta Elab Tactic Mathlib.Meta.FunProp in
 private def sourceContext : MetaM Mathlib.Meta.FunProp.Context := do
   let tactic ← `(tactic| first | with_reducible assumption | infer_param)
   let config := { maxSteps := source.maxSteps.get (← getOptions) : Mathlib.Meta.FunProp.Config }
   return { disch := tacticToDischarge tactic, config }
 
 open Lean Meta Elab Tactic Mathlib.Meta.FunProp in
-/-- Certify a callback named in a method syntax completely, sharing the method's session.
-The source rules in scope include those of the namespace named by `using`, activated by
-`withSourceSpecs`. -/
+/-- Certify a callback named in a method syntax completely, sharing the method's session. -/
 def certifyCallback (session : Search.Session) (method name : Name) (callback : Lean.Expr) :
     TacticM Lean.Expr := do
   if callback.hasExprMVar then
@@ -931,9 +882,8 @@ def withComposedLocals (translate : TacticM (List MVarId)) : TacticM (List MVarI
 
 open Lean Meta Elab Tactic Mathlib.Meta.FunProp in
 /-- Translate the main `HasProgramInO` goal and return the remaining obligations. -/
-private def proveSource (scope : Option Ident := none) (replacement : Option Term := none) :
-    TacticM (List MVarId) :=
-    withComposedLocals <| withSourceSpecs scope <| withMainContext do
+private def proveSource (replacement : Option Term := none) : TacticM (List MVarId) :=
+    withComposedLocals <| withMainContext do
   let goal ← getMainGoal
   let saved ← saveState
   let session ← Search.Session.create
@@ -981,9 +931,8 @@ syntax "recursion" " (" &"test" " := " term ")" " (" &"next" " := " term ")"
   " (" &"measure" " := " term ")" " (" &"decreases" " := " term ")" : sourceRecursion
 
 open Lean Meta Elab Tactic Mathlib.Meta.FunProp in
-private def proveRecursion (method : TSyntax `sourceRecursion) (scope : Option Ident := none) :
-    TacticM (List MVarId) :=
-    withComposedLocals <| withSourceSpecs scope <| withMainContext do
+private def proveRecursion (method : TSyntax `sourceRecursion) : TacticM (List MVarId) :=
+    withComposedLocals <| withMainContext do
   let `(sourceRecursion| recursion (test := $test) (next := $next)
     (finish := $finish) (resume := $resume) (measure := $measure) (decreases := $decreases)) :=
     method | throwUnsupportedSyntax
@@ -1142,39 +1091,37 @@ def modelFunProp (disch : Option (TSyntax ``Lean.Parser.Tactic.discharger))
 
 open Lean Meta Elab Tactic in
 elab_rules : tactic
-  | `(tactic| source_fun_prop $[$disch]? $[using $scope:ident]? $[via $replacement]?) => do
+  | `(tactic| source_fun_prop $[$disch]? $[via $replacement]?) => do
     -- Growth predicates are met by the translated growths.
     if (← instantiateMVars (← getMainTarget)).consumeMData.isAppOf ``HasProgramIn then
-      return ← modelFunProp disch (proveSource scope replacement)
-    let obligations ← dischargeGrowth disch (← proveSource scope replacement)
+      return ← modelFunProp disch (proveSource replacement)
+    let obligations ← dischargeGrowth disch (← proveSource replacement)
     setGoals (obligations ++ (← getGoals))
 
 /-- Reduce a model time-space bound of a source function to its translation and arithmetic goals;
 the options and methods are those of `source_fun_prop`, and the growth comparisons left are
 discharged as there. -/
 syntax (name := modelFunPropStx) "model_fun_prop" (Lean.Parser.Tactic.discharger)?
-  (" using " ident)? (" via " term)? : tactic
+  (" via " term)? : tactic
 
 open Lean Elab Tactic in
 elab_rules : tactic
-  | `(tactic| model_fun_prop $[$disch]? $[using $scope:ident]? $[via $replacement]?) =>
-    modelFunProp disch (proveSource scope replacement)
+  | `(tactic| model_fun_prop $[$disch]? $[via $replacement]?) =>
+    modelFunProp disch (proveSource replacement)
 
 @[tactic_alt modelFunPropStx]
-syntax "model_fun_prop" (Lean.Parser.Tactic.discharger)? " using " sourceRecursion
-  (" using " ident)? : tactic
+syntax "model_fun_prop" (Lean.Parser.Tactic.discharger)? " using " sourceRecursion : tactic
 @[tactic_alt sourceFunProp]
-syntax "source_fun_prop" (Lean.Parser.Tactic.discharger)? " using " sourceRecursion
-  (" using " ident)? : tactic
+syntax "source_fun_prop" (Lean.Parser.Tactic.discharger)? " using " sourceRecursion : tactic
 
 open Lean Elab Tactic in
 elab_rules : tactic
-  | `(tactic| model_fun_prop $[$disch]? using $method:sourceRecursion $[using $scope:ident]?) =>
-    modelFunProp disch (proveRecursion method scope)
-  | `(tactic| source_fun_prop $[$disch]? using $method:sourceRecursion $[using $scope:ident]?) => do
+  | `(tactic| model_fun_prop $[$disch]? using $method:sourceRecursion) =>
+    modelFunProp disch (proveRecursion method)
+  | `(tactic| source_fun_prop $[$disch]? using $method:sourceRecursion) => do
     if (← instantiateMVars (← getMainTarget)).consumeMData.isAppOf ``HasProgramIn then
-      return ← modelFunProp disch (proveRecursion method scope)
-    let obligations ← dischargeGrowth disch (← proveRecursion method scope)
+      return ← modelFunProp disch (proveRecursion method)
+    let obligations ← dischargeGrowth disch (← proveRecursion method)
     setGoals (obligations ++ (← getGoals))
 open Lean Meta in
 private def withSourceEncodings (parameters : List Lean.Expr) (action : MetaM Unit) :
@@ -1212,8 +1159,8 @@ private def checkUniqueProgram (name : Name) : MetaM Unit := do
 
 /-- Select the program of a function for later translations: either a named implementation, or
 the implementation of an equality's right-hand side for its left-hand side. Local and scoped
-registrations use `fun_prop`; `using ns` selects rules for an equality. -/
-syntax (name := programAttribute) "program" (" using " ident)? : attr
+registrations use `fun_prop`. -/
+syntax (name := programAttribute) "program" : attr
 
 open Lean Meta Elab Tactic Mathlib.Meta.FunProp in
 initialize registerBuiltinAttribute {
@@ -1223,11 +1170,9 @@ initialize registerBuiltinAttribute {
   add := fun name stx kind => MetaM.run' do
     let saved ← getEnv
     try
-      let `(attr| program $[using $scope:ident]?) := stx | throwUnsupportedSyntax
+      let `(attr| program) := stx | throwUnsupportedSyntax
       let info ← getConstInfo name
       if ← forallTelescope info.type fun _ type => return type.isAppOf ``HasProgramIn then
-        if scope.isSome then
-          throwError "`program using` selects rules for a function equality"
         -- `fun_prop` takes declarations concluding `HasProgramInO`: an unexported one restates it.
         let certificate ← forallTelescope info.type fun parameters _ => withoutExporting do
           let some result ← composedProgram?
@@ -1245,8 +1190,6 @@ initialize registerBuiltinAttribute {
         return
       if ← forallTelescope info.type fun _ type =>
           return type.isAppOfArity ``HasProgramInO 8 then
-        if scope.isSome then
-          throwError "`program using` selects rules for a function equality"
         checkUniqueProgram name
         sourceSavedImplementationExt.add name kind
         addTheorem name kind
@@ -1266,7 +1209,7 @@ initialize registerBuiltinAttribute {
           let goal ← mkFreshExprSyntheticOpaqueMVar (← programGoal g)
           let action : TermElabM Unit := do
             discard <| Tactic.run goal.mvarId! do
-              discard <| proveSource scope
+              discard <| proveSource
           discard <| action.run {} {}
           let proof ← instantiateMVars goal
           if proof.hasExprMVar || proof.hasSorry then

@@ -77,7 +77,6 @@ public import Complexity.Encoding.RawWord
 public import Complexity.Encoding.Sigma
 public import Complexity.Encoding.Tree
 public import Complexity.Encoding.TreeSize
-public import Complexity.Encoding.Vector
 public import Complexity.ModelTheory.Algebra.BooleanAlgebra.Basic
 public import Complexity.ModelTheory.Algebra.BooleanAlgebra.Function
 public import Complexity.ModelTheory.Algebra.BooleanAlgebra.TreeEncoding

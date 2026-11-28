@@ -9,15 +9,14 @@ open Complexity TreeProgram Complexity.TreeProgram.Source
 open Complexity.TreeProgram.Source.Internal (HasProgramInO)
 namespace ComplexityTest.SourceTranslation.Dependent
 
--- A dependent callback borrows a represented table from its full runtime environment.
-example {α : Type*} [UniqueEncoding Tree α] :=
-  (by source_fun_prop : HasProgramInO (fun p : Σ x : (Σ n, (Fin n → α) × List (Fin n)), Fin x.1 =>
-    p.1.2.1 p.2) _ _ _)
+-- A dependent callback borrows a represented vector from its full runtime environment.
+example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop : HasProgramInO
+    (fun p : Σ x : (Σ n, FinVector α n × List (Fin n)), Fin x.1 => p.1.2.1.get p.2) _ _ _)
 
 -- Both indices must survive closure, including the dependency in the result's type.
 example := (by source_fun_prop : HasProgramInO
-    (fun p : Σ x : (Σ n, Σ k, (Fin n → Fin k) × List (Fin n)), Fin x.1 =>
-      (p.1.2.2.1 p.2).val) _ _ _)
+    (fun p : Σ x : (Σ n, Σ k, FinVector (Fin k) n × List (Fin n)), Fin x.1 =>
+      (p.1.2.2.1.get p.2).val) _ _ _)
 
 -- Polymorphic operations on `Option` compose across a dependent element type.
 example := (by source_fun_prop : HasProgramInO (fun x : Σ n, Option (Fin n) => someValue x.2) _ _ _)
@@ -33,6 +32,11 @@ example : HasProgramIn (fun x : Σ n, Σ m, FinVector (Fin m) n × Fin n =>
     (x.2.2.1.get x.2.2.2).val) hole(⊢ p) IsO(fun x => ⌜x⌝ₜ.size ^ 2) IsO(fun x => ⌜x⌝ₜ.size) := by
   abstract_hole p using programFinVectorDynamicGetGuard
   fill_hole p in source_fun_prop
+
+def shiftWire (x : ℕ × (Σ n, Fin n)) := (Fin.natAdd x.1 x.2.2).val
+
+-- Guards the view `Fin.val_natAdd`: the value of a shifted index is a sum of numbers.
+example := (by source_fun_prop : HasProgramInO shiftWire _ _ _)
 
 -- A selected implementation of a definition with a `source_view` rewrite is not bypassed by
 -- `assembly?` inside a constructor (including after a `source_view` rewrite step).

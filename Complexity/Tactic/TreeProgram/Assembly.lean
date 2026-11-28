@@ -178,10 +178,10 @@ open Internal (HasProgramInO)
 
 open Lean Meta in
 /-- The first equation of `thms` rewriting `e` at the root only, to an encoding if `encoding` (and
-to an application of `rhsHead?` if given), that `accept` takes, given the right side, the equation
-and whether the left side applies a variable. -/
+to an application of `rhsHead?` if given), that `accept` takes, given the right side and the
+equation. An equation whose left side applies a variable is skipped. -/
 def rootEquation {α : Type} (thms : SimpTheorems) (e : Lean.Expr) (encoding : Bool)
-    (accept : Lean.Expr → Lean.Expr → Bool → MetaM (Option α))
+    (accept : Lean.Expr → Lean.Expr → MetaM (Option α))
     (rhsHead? : Option Name := none) : MetaM (Option α) := do
   let candidates ← thms.post.getMatch e
   for thm in candidates.qsort (·.priority > ·.priority) do
@@ -192,12 +192,12 @@ def rootEquation {α : Type} (thms : SimpTheorems) (e : Lean.Expr) (encoding : B
     if let some head := rhsHead? then
       unless r.isAppOf head do continue
     let arg := if encoding || l.isAppOfArity ``UniqueEncoding.encode 4 then l.appArg! else l
-    let applied := arg.isApp && arg.getAppFn.isMVar
+    if arg.isApp && arg.getAppFn.isMVar then continue
     unless ← isDefEq l e do continue
     let r ← instantiateMVars r
     let proof ← instantiateMVars (mkAppN value args)
     if r.hasMVar || proof.hasMVar || r == e then continue
-    if let some a ← accept r (← mkExpectedTypeHint proof (← mkEq e r)) applied then return some a
+    if let some a ← accept r (← mkExpectedTypeHint proof (← mkEq e r)) then return some a
   return none
 
 open Lean Meta in
@@ -223,7 +223,7 @@ def constructorEncoding (body : Lean.Expr) :
       return none
     let some (r, proof) ← rootEquation (← getSimpTheorems)
         (← mkAppOptM ``encode #[mkConst ``Tree, type, inst, mkAppN head ys]) true
-        fun r h _ => return some (r, h) |
+        fun r h => return some (r, h) |
       return none
     let substitute (e : Lean.Expr) := do return (← mkLambdaFVars ys e).beta fields
     return some (← substitute proof, ← (tupleComponents r.appArg!).mapM fun c => do
@@ -243,13 +243,12 @@ private partial def literalPath? (e : Lean.Expr) : MetaM (Option (List Bool)) :=
 
 open Lean Meta in
 /-- The structure value `b` that `e` is a field of, with the structure's `T.encode_field` fact. -/
-private def structureLink? (e : Lean.Expr) :
-    MetaM (Option (Lean.Expr × Name × Array Lean.Expr)) := do
+private def structureLink? (e : Lean.Expr) : MetaM (Option (Lean.Expr × Name)) := do
   let field (s : Name) (i : Nat) (b : Lean.Expr) := do
     let some field := (getStructureFields (← getEnv) s)[i]? | return none
     let fact := s ++ .mkSimple s!"encode_{field}"
     unless (← getEnv).contains fact do return none
-    return some (b, fact, #[b])
+    return some (b, fact)
   match e with
   | .proj s i b => field s i b
   | .app .. =>
@@ -261,20 +260,11 @@ private def structureLink? (e : Lean.Expr) :
   | _ => return none
 
 open Lean Meta in
-/-- An entry of a finite table at a closed index, with `encode_fin_apply`. -/
-private def finApplyLink? (e : Lean.Expr) :
-    MetaM (Option (Lean.Expr × Name × Array Lean.Expr)) := do
-  let .app t i := e | return none
-  let .forallE _ domain _ _ ← whnf (← inferType t) | return none
-  unless (← whnfR domain).isAppOfArity ``Fin 1 && !i.hasFVar && !i.hasMVar do return none
-  return some (t, ``encode_fin_apply, #[t, i])
-
-open Lean Meta in
 /-- The path in the code of the input `x` to the code of `e`, a field of a field of `x`, with the
 equation `⌜e⌝ₜ = code.subtree path`, where `code` is the code of `x`. Each link comes from a
-structure's `T.encode_field`, a registered `source_view` subtree equation `⌜e⌝ₜ = ⌜b⌝ₜ.subtree p`
-with a literal path (at most `viewFuel` steps), or a closed-index table lookup
-`encode_fin_apply`. -/
+structure's `T.encode_field` or a registered `source_view` subtree equation
+`⌜e⌝ₜ = ⌜b⌝ₜ.subtree p` with a literal path (at most `viewFuel` steps), such as a read of a
+`FinVector` at a closed index (`encode_finVector_get_apply`). -/
 private partial def fieldPath? (x code e : Lean.Expr) (encoded? : Option Lean.Expr := none)
     (visited : Array Lean.Expr := #[]) (viewFuel : Nat := 8) :
     MetaM (Option (List Bool × Lean.Expr)) := do
@@ -298,18 +288,15 @@ private partial def fieldPath? (x code e : Lean.Expr) (encoded? : Option Lean.Ex
     let proof ← mkEqTrans hf (← mkEqTrans along append)
     let subtree := mkApp2 (mkConst ``Tree.subtree) code (toExpr (path ++ p))
     return some (path ++ p, ← mkExpectedTypeHint proof (← mkEq lhs subtree))
-  let viaLink (b : Lean.Expr) (fact : Name) (values : Array Lean.Expr) :
-      MetaM (Option (List Bool × Lean.Expr)) := do
+  let viaLink (b : Lean.Expr) (fact : Name) : MetaM (Option (List Bool × Lean.Expr)) := do
     let some (path, h) ← fieldPath? x code b (visited := visited) (viewFuel := viewFuel) |
       return none
     let some (_, outer, _) := (← inferType h).eq? | return none
     let factConst ← mkConstWithFreshMVarLevels fact
     let (args, _, type) ← forallMetaTelescopeReducing (← inferType factConst)
     let some (_, _, rhs) := type.eq? | return none
-    let explicit := args.extract (args.size - values.size) args.size
-    unless ← (explicit.zip values).allM (fun (a, v) => isDefEq a v) <&&>
-        isDefEq rhs.appFn!.appArg! outer do
-      return none
+    let some value := args.back? | return none
+    unless ← isDefEq value b <&&> isDefEq rhs.appFn!.appArg! outer do return none
     for arg in args do
       unless ← arg.mvarId!.isAssigned do
         arg.mvarId!.assign (← synthInstance (← inferType arg))
@@ -317,8 +304,8 @@ private partial def fieldPath? (x code e : Lean.Expr) (encoded? : Option Lean.Ex
     let some (_, lhs, rhs) := (← inferType hf).eq? | return none
     let some p ← literalPath? rhs.appArg! | return none
     extend path h hf outer lhs p
-  if let some (b, fact, values) ← structureLink? e then
-    if let some res ← viaLink b fact values then return some res
+  if let some (b, fact) ← structureLink? e then
+    if let some res ← viaLink b fact then return some res
   if viewFuel > 0 then
     if let some ext ← getSimpExtension? `source_view then
       let encoded? ← match encoded? with
@@ -326,8 +313,7 @@ private partial def fieldPath? (x code e : Lean.Expr) (encoded? : Option Lean.Ex
         | none => observing? (mkAppM ``encode #[mkConst ``Tree, e])
       if let some encoded := encoded? then
         let res ← rootEquation (← ext.getTheorems) encoded false (rhsHead? := some ``Tree.subtree)
-          fun r hf applied => do
-            if applied then return none
+          fun r hf => do
             unless r.isAppOfArity ``Tree.subtree 2 do return none
             let outer := r.appFn!.appArg!
             unless outer.isAppOfArity ``UniqueEncoding.encode 4 do return none
@@ -340,12 +326,10 @@ private partial def fieldPath? (x code e : Lean.Expr) (encoded? : Option Lean.Ex
             unless ← isDefEq outer outerH do return none
             extend path h hf outerH encoded p
         if res.isSome then return res
-  if let some (b, fact, values) ← finApplyLink? e then
-    return ← viaLink b fact values
   return none
 
 open Lean Meta in
-/-- The value of a source function at its input, which may itself be a function, as a table. -/
+/-- The value of a source function at its input, which may itself be a function. -/
 private def atInput {γ : Type} (f : Lean.Expr) (k : Lean.Expr → Lean.Expr → MetaM γ) :
     MetaM γ := do
   if f.isLambda then lambdaBoundedTelescope f 1 fun xs body => k xs[0]! body
@@ -460,8 +444,7 @@ private partial def assembly? (x code e : Lean.Expr) (root := false)
     if ← hasSelectedImplementation name then return none
   if viewFuel > 0 then
     if let some ext ← getSimpExtension? `source_view then
-      let res ← rootEquation (← ext.getTheorems) encoded true fun r h applied => do
-        if applied then return none
+      let res ← rootEquation (← ext.getTheorems) encoded true fun r h => do
         let w := r.appArg!
         let isWrapper := (w.isApp && w.appArg! == e) ||
           match w with | .proj _ _ b => b == e | _ => false

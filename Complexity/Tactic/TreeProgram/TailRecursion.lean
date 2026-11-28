@@ -286,15 +286,13 @@ syntax "loop" " (" &"test" " := " term ")" " (" &"next" " := " term ")"
   " (" &"measure" " := " term ")" " (" &"step" " := " term ")"
   " (" &"stop" " := " term ")" " (" &"space" " := " term ")" : sourceMeasuredLoop
 @[tactic_alt modelFunPropStx]
-syntax "model_fun_prop" (Lean.Parser.Tactic.discharger)? " using " sourceMeasuredLoop
-  (" using " ident)? : tactic
+syntax "model_fun_prop" (Lean.Parser.Tactic.discharger)? " using " sourceMeasuredLoop : tactic
 @[tactic_alt sourceFunProp]
-syntax "source_fun_prop" (Lean.Parser.Tactic.discharger)? " using " sourceMeasuredLoop
-  (" using " ident)? : tactic
+syntax "source_fun_prop" (Lean.Parser.Tactic.discharger)? " using " sourceMeasuredLoop : tactic
 
 open Lean Meta Elab Tactic in
-private def proveMeasuredLoop (method : TSyntax `sourceMeasuredLoop) (scope : Option Ident) :
-    TacticM (List MVarId) := withComposedLocals <| withSourceSpecs scope <| withMainContext do
+private def proveMeasuredLoop (method : TSyntax `sourceMeasuredLoop) :
+    TacticM (List MVarId) := withComposedLocals <| withMainContext do
   let `(sourceMeasuredLoop| loop (test := $test) (next := $next) (finish := $finish)
     (invariant := $inv) (measure := $measure) (step := $step) (stop := $stop) (space := $peak)) :=
     method | throwUnsupportedSyntax
@@ -344,13 +342,12 @@ private def proveMeasuredLoop (method : TSyntax `sourceMeasuredLoop) (scope : Op
 
 open Lean Elab Tactic in
 elab_rules : tactic
-  | `(tactic| source_fun_prop $[$disch]? using $method:sourceMeasuredLoop
-      $[using $scope:ident]?) => do
+  | `(tactic| source_fun_prop $[$disch]? using $method:sourceMeasuredLoop) => do
     if (← instantiateMVars (← getMainTarget)).consumeMData.isAppOf ``HasProgramIn then
-      return ← modelFunProp disch (proveMeasuredLoop method scope)
-    let obligations ← dischargeGrowth disch (← proveMeasuredLoop method scope)
+      return ← modelFunProp disch (proveMeasuredLoop method)
+    let obligations ← dischargeGrowth disch (← proveMeasuredLoop method)
     setGoals (obligations ++ (← getGoals))
-  | `(tactic| model_fun_prop $[$disch]? using $method:sourceMeasuredLoop $[using $scope:ident]?) =>
-    modelFunProp disch (proveMeasuredLoop method scope)
+  | `(tactic| model_fun_prop $[$disch]? using $method:sourceMeasuredLoop) =>
+    modelFunProp disch (proveMeasuredLoop method)
 
 end Complexity.TreeProgram.Source

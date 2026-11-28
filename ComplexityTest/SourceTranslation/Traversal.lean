@@ -184,8 +184,8 @@ example : HasProgramIn (fun x : List ℕ × List (List ℕ) => x.2.map (fun l =>
   fill_hole program in source_fun_prop
 
 -- Guards the rules for a map over a list whose element type depends on the input, as a list of
--- indices into a table: its sum and its result are settled (plan W82).
-example : HasProgramIn (fun x : Σ n, (Fin n → ℕ) × List (Fin n) => x.2.2.map x.2.1)
+-- indices into a vector: its sum and its result are settled.
+example : HasProgramIn (fun x : Σ n, FinVector ℕ n × List (Fin n) => x.2.2.map x.2.1.get)
     hole(⊢ program) (IsPoly fun x => ⌜x⌝ₜ.size) (IsPoly fun x => ⌜x⌝ₜ.size) := by
   fill_hole program in source_fun_prop
 
@@ -253,9 +253,9 @@ end AllAnyGrowth
 
 section DependentMap
 
--- A runtime table and its indices share the same runtime length; the table is captured once.
+-- A runtime vector and its indices share the same runtime length; the vector is captured once.
 example := (by source_fun_prop :
-  HasProgramInO (fun x : Σ n, (Fin n → ℕ) × List (Fin n) => x.2.2.map x.2.1) _ _ _)
+  HasProgramInO (fun x : Σ n, FinVector ℕ n × List (Fin n) => x.2.2.map x.2.1.get) _ _ _)
 
 -- Pointwise choices must never masquerade as one implementation for all runtime lengths.
 example (f : (n : ℕ) → Fin n → Bool) (program : ℕ → Value → Code Value)

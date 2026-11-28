@@ -182,32 +182,17 @@ private theorem hasProgramInO_secondary :
   abstract_hole program using programSecondary
   fill_hole program in
     exact Prod.hasProgramIn_fst.toHasProgramInO
-private theorem hasProgramInO_fallback :
-    HasProgramInO stored hole(⊢ program) (fun _ => 1) (fun x => ⌜x⌝ₜ.size) := by
-  abstract_hole program using programFallback
-  fill_hole program in
-    exact Prod.hasProgramIn_fst.toHasProgramInO
-
-attribute [local source_fallback] hasProgramInO_fallback
 
 open Lean Meta Mathlib.Meta.FunProp in
 run_elab do
   addTheorem ``hasProgramInO_preferred .local 20
   addTheorem ``hasProgramInO_secondary .local 10
-  addTheorem ``hasProgramInO_fallback .local 2000
 
 -- Ordinary registered rules precede structural projection, independent of their numeric cost.
 example := (by source_fun_prop : HasProgramInO stored programRebuilt _ _)
 
 example : (programRebuilt Value.input).build 1 |>.2.1 ≠
     ((programSecondary Value.input).build 1).2.1 := by decide
-
-section
-attribute [local source_fallback] hasProgramInO_preferred hasProgramInO_secondary
-
--- Fallback rules do not displace a structural projection.
-example := (by source_fun_prop : HasProgramInO stored Value.left _ _)
-end
 
 end RuleStages
 

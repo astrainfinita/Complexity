@@ -9,7 +9,6 @@ public import Complexity.Encoding.TreeSize
 public import Complexity.Encoding.Option
 public import Complexity.Encoding.Sigma
 public import Complexity.Encoding.Fin
-public import Complexity.Encoding.Vector
 public import Complexity.Encoding.FinVector
 public import Complexity.Encoding.Bool
 public import Complexity.Encoding.Tree
@@ -28,14 +27,13 @@ by their constructors `nil` and `pair` (`Tree.caseView`). -/
 namespace Complexity
 
 attribute [source_view] Fin.val_castSucc Fin.val_castAdd Fin.val_natAdd Fin.val_succ Fin.val_last
-  Fin.val_zero Vector.toList_push Vector.toList_append FinVector.toList_push FinVector.toList_append
-  FinVector.toList_map encode_finVector_get_apply encode_finVector_finRange
-  encode_finVector_map_castSucc encode_finVector_map_val encode_ofFn encode_fin_function_codes
-  Tree.encode_encode Tree.encode_pair Tree.encode_spine
+  Fin.val_zero FinVector.toList_push FinVector.toList_append FinVector.toList_map
+  encode_finVector_get_apply encode_finVector_finRange encode_finVector_map_castSucc
+  encode_finVector_map_val Tree.encode_encode Tree.encode_pair Tree.encode_spine
 
 -- The views have a variable on the left; the more specific equations come first.
-attribute [source_view low] encode_fin UniqueEncoding.encode_subtype encode_fin_function_vector
-  encode_vector encode_finVector UniqueEncoding.encode_eqRec
+attribute [source_view low] encode_fin UniqueEncoding.encode_subtype encode_finVector
+  UniqueEncoding.encode_eqRec
 
 open TreeProgram in
 /-- Raw trees, with the identity encoding, as the constructors `nil` and `pair`. -/

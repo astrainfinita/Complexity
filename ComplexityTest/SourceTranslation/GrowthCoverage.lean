@@ -119,27 +119,19 @@ example : True := by
 
 end Branch
 
-section Table
+section Vector
 
--- Records a limit: a tabulated table has its time settled, a sum over the table, but its peak
--- holds the code of the table, which has no rule (plan W82).
-example : True := by
-  fail_if_success
-    have : HasProgramIn (fun x : Σ n, Fin n → Bool => Vector.ofFn (fun i => !x.2 i))
-        hole(⊢ program) (IsPoly fun x => ⌜x⌝ₜ.size) (IsPoly fun x => ⌜x⌝ₜ.size) := by
-      fill_hole program in source_fun_prop using tabulate
-  trivial
-
--- Reading a stored table at a stored index: polynomial, and within the square of the code.
-example : HasProgramIn (fun x : Σ n, (Fin n → ℕ) × Fin n => x.2.1 x.2.2) hole(⊢ program)
+-- Reading a stored vector at a stored index: polynomial, in time within the square of the code
+-- and in peak within the code.
+example : HasProgramIn (fun x : Σ n, FinVector ℕ n × Fin n => x.2.1.get x.2.2) hole(⊢ program)
     (IsPoly fun x => ⌜x⌝ₜ.size) (IsPoly fun x => ⌜x⌝ₜ.size) := by
   fill_hole program in source_fun_prop
 
-example : HasProgramIn (fun x : Σ n, (Fin n → ℕ) × Fin n => x.2.1 x.2.2) hole(⊢ program)
-    IsO(fun x => ⌜x⌝ₜ.size ^ 2) IsO(fun x => ⌜x⌝ₜ.size ^ 2) := by
+example : HasProgramIn (fun x : Σ n, FinVector ℕ n × Fin n => x.2.1.get x.2.2) hole(⊢ program)
+    IsO(fun x => ⌜x⌝ₜ.size ^ 2) IsO(fun x => ⌜x⌝ₜ.size) := by
   fill_hole program in source_fun_prop
 
-end Table
+end Vector
 
 section Library
 

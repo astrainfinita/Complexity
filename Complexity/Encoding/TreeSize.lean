@@ -63,16 +63,6 @@ theorem Dominated.size_encode_nat {α : Type*} {f g : α → ℕ}
   ((h.const_mul_left 4).add_same (Dominated.const_of_pos 1 hg)).mono_left
     fun x => size_encode_nat_le (f x)
 
-/-- A table of indices below `k` stores at most `4 * k + 2` nodes for each entry. -/
-theorem size_encode_fin_table_le {n k : ℕ} (w : Fin n → Fin k) :
-    ⌜w⌝ₜ.size ≤ 4 * (n * k) + 2 * n + 1 := by
-  have hw := size_encode_fin_function_le w (4 * k + 1) (fun i => by
-    have hi := (w i).isLt
-    simpa only [encode_fin] using (size_encode_nat_le (w i).val).trans
-      (by omega : 4 * (w i).val + 1 ≤ 4 * k + 1))
-  have : n * (4 * k + 1 + 1) = 4 * (n * k) + 2 * n := by ring
-  omega
-
 /-- A vector of indices below `k` stores at most `4 * k + 2` nodes for each entry. -/
 theorem size_encode_finVector_fin_le {n k : ℕ} (v : FinVector (Fin k) n) :
     ⌜v⌝ₜ.size ≤ 4 * (n * k) + 2 * n + 1 := by

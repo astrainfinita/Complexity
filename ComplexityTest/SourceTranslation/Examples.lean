@@ -45,23 +45,24 @@ example : HasProgramInO (fun xs : List Bool => let _ys := xs.reverse; xs) hole(�
 
 -- Match existing operations instead of generating arbitrary new append expressions.
 example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop :
-    HasProgramInO (fun x : Σ n, (Fin n → α) × Fin n => x.2.1 x.2.2) _ _ _)
+    HasProgramInO (fun x : Σ n, FinVector α n × Fin n => x.2.1.get x.2.2) _ _ _)
 
 example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop :
     HasProgramInO (fun x : List α × ℕ => x.1[x.2]?) _ _ _)
 
 example := (by source_fun_prop :
-    HasProgramInO (fun x : Σ n, (Fin n → List Bool) × Fin n => (x.2.1 x.2.2).reverse) _ _ _)
+    HasProgramInO (fun x : Σ n, FinVector (List Bool) n × Fin n => (x.2.1.get x.2.2).reverse)
+      _ _ _)
 
 example {α : Type*} [UniqueEncoding Tree α] (n : ℕ) := (by source_fun_prop :
-    HasProgramInO (fun x : (Fin n → α) × Fin n => x.1 x.2) _ _ _)
+    HasProgramInO (fun x : FinVector α n × Fin n => x.1.get x.2) _ _ _)
 
-example := (by source_fun_prop :
-    HasProgramInO (fun x : Σ n, Σ k, (Fin n → Fin k) × Fin n => (x.2.2.1 x.2.2.2).val) _ _ _)
+example := (by source_fun_prop : HasProgramInO
+    (fun x : Σ n, Σ k, FinVector (Fin k) n × Fin n => (x.2.2.1.get x.2.2.2).val) _ _ _)
 
 -- A compound Fin.val specification also composes with ordinary arithmetic.
-example := (by source_fun_prop :
-    HasProgramInO (fun x : Σ n, Σ k, (Fin n → Fin k) × Fin n => (x.2.2.1 x.2.2.2).val + 1) _ _ _)
+example := (by source_fun_prop : HasProgramInO
+    (fun x : Σ n, Σ k, FinVector (Fin k) n × Fin n => (x.2.2.1.get x.2.2.2).val + 1) _ _ _)
 
 -- Indices and subtypes are stored as their values; fields and constructors are those values.
 example := (by source_fun_prop :
@@ -73,52 +74,35 @@ example := (by source_fun_prop :
     HasProgramInO (fun n : ℕ => (⟨n, n.lt_succ_self⟩ : Fin (n + 1))) (fun v => pure v)
       (fun _ => 0) (fun _ => 0))
 
-def liftWires (x : Σ n, Σ k, Fin n → Fin k) : Σ n, Σ k, Fin n → Fin k :=
-  ⟨x.1 + 1, x.2.1 + 1, Circuit.liftInputs x.2.2⟩
+def liftWires (x : Σ n, Σ k, FinVector (Fin k) n) : Σ n, Σ k, FinVector (Fin k) n :=
+  ⟨x.1 + 1, x.2.1 + 1, .ofFn (Circuit.liftInputs x.2.2.get)⟩
 
-private theorem encode_liftWires (x : Σ n, Σ k, Fin n → Fin k) :
-    ⌜liftWires x⌝ₜ = ⌜(x.1 + 1, x.2.1 + 1, List.ofFn (Fin.val ∘ x.2.2) ++ [x.2.1])⌝ₜ := by
-  rcases x with ⟨n, k, f⟩
-  have he : ⌜Circuit.liftInputs f⌝ₜ = ⌜List.ofFn (Fin.val ∘ f) ++ [k]⌝ₜ := by
-    rw [encode_fin_function, ← encode_fin_values (Circuit.liftInputs f)]
-    simp only [Circuit.liftInputs, Fin.comp_snoc]
-    rw [List.ofFn_succ']
-    simp [Function.comp_def]
+private theorem encode_liftWires (x : Σ n, Σ k, FinVector (Fin k) n) :
+    ⌜liftWires x⌝ₜ = ⌜(x.1 + 1, x.2.1 + 1, (x.2.2.map Fin.val).push x.2.1)⌝ₜ := by
+  rcases x with ⟨n, k, v⟩
+  have he : ⌜FinVector.ofFn (Circuit.liftInputs v.get)⌝ₜ = ⌜(v.map Fin.val).push k⌝ₜ := by
+    rw [← encode_finVector_map_val]
+    congr 1
+    ext i
+    cases i using Fin.lastCases <;>
+      simp [Circuit.liftInputs, FinVector.get_map, FinVector.get_push]
   simp only [liftWires, Sigma.encode_mk, encode_prod, he]
 
--- An implementation obtained through an encoding equation is selected like any other one. The
--- two size facts erase the bounds of wire indices, which `dominated` does not know by itself.
+-- An implementation obtained through an encoding equation is selected like any other one.
 theorem hasProgramIn_liftWires : HasProgramIn liftWires hole(⊢ program)
     IsO(fun x => ⌜x⌝ₜ.size) IsO(fun x => ⌜x⌝ₜ.size) := by
   abstract_hole program using programLiftWires
-  have hlist {n k : ℕ} (f : Fin n → Fin k) : ⌜List.ofFn (Fin.val ∘ f)⌝ₜ.size = ⌜f⌝ₜ.size := by
-    rw [encode_fin_values, encode_fin_function]
-  have hfun {n k : ℕ} (f : Fin n → Fin k) : ⌜Fin.val ∘ f⌝ₜ.size = ⌜f⌝ₜ.size := by
-    rw [encode_fin_function, hlist]
   refine HasProgramInO.toHasProgramIn ?_
   fill_hole program in
     refine (HasProgramInO.of_encode encode_liftWires (by source_fun_prop :
-      HasProgramInO (fun x : Σ n, Σ k, Fin n → Fin k =>
-        (x.1 + 1, x.2.1 + 1, List.ofFn (Fin.val ∘ x.2.2) ++ [x.2.1])) _ _ _)).mono ?_ ?_
-  all_goals dominated [hlist, hfun]
+      HasProgramInO (fun x : Σ n, Σ k, FinVector (Fin k) n =>
+        (x.1 + 1, x.2.1 + 1, (x.2.2.map Fin.val).push x.2.1)) _ _ _)).mono ?_ ?_
+  all_goals dominated
 
 -- `Circuit.liftInputs` has no implementation, so this succeeds only through the selection.
 attribute [local program] hasProgramIn_liftWires in
 example := (by source_fun_prop :
     HasProgramIn liftWires programLiftWires IsO(fun x => ⌜x⌝ₜ.size) IsO(fun x => ⌜x⌝ₜ.size))
-
-example {α : Type*} [UniqueEncoding Tree α] := (by source_fun_prop :
-    HasProgramInO (fun x : Σ n, Fin n → α => List.ofFn x.2) _ _ _)
-
-example (_f : ℕ → Bool) : True := by
-  fail_if_success have := (by source_fun_prop :
-    HasProgramInO (fun n : ℕ => List.ofFn (fun i : Fin n => _f i.val)) _ _ _)
-  trivial
-
-example {α β : Type*} [UniqueEncoding Tree α] [UniqueEncoding Tree β]
-    {n : α → ℕ} {f : (x : α) → Fin (n x) → β}
-    {q : Value → Code Value} {t p : α → ℕ} (hf : HasProgramInO f q t p) := (by source_fun_prop :
-    HasProgramInO (fun x => List.ofFn (f x)) _ _ _)
 
 -- The output index is computed at runtime; the continuation remains typed in the source.
 example := (by source_fun_prop :

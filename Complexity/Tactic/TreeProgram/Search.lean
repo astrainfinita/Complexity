@@ -116,12 +116,6 @@ def functionTheorems (decl : FunPropDecl) (data : FunctionData) :
     | _ => pure #[]
   return locals ++ (globals.toList.mergeSort (fun a b => a.priority ≥ b.priority)).toArray
 
-/-- A rule's purpose is independent of its numerical priority. -/
-def isFallback (env : Environment) (rule : FunctionTheorem) : Bool :=
-  match rule.thmOrigin with
-  | .decl name => (sourceFallbackAttr.getState env).contains name
-  | .fvar _ => false
-
 /-- Whether `e` is `x` or a projection of it. -/
 partial def isProjectionOf (x e : Expr) : MetaM Bool := do
   if e == x then return true
