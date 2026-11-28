@@ -24,9 +24,10 @@ initialize sourceFallbackAttr : Lean.LabelExtension ←
 Mathlib's lambda-rule registry does not retain theorem priorities. -/
 initialize sourceSavedImplementationExt : Lean.LabelExtension ← Lean.mkLabelExt
 
-/-- Views `⌜x⌝ₜ = ⌜x.1⌝ₜ` of a structure stored as its data field, such as `Fin` and subtypes, and
-equations `(f a).1 = v` for the field of an operation. The source translation computes a value of
-such a type as its field. -/
+/-- Views `⌜x⌝ₜ = ⌜w⌝ₜ` equating a value's tree code with another value's (such as `Fin`, subtypes,
+vectors, or zero-cost rewrites), field equations `g (f a) = v`, and constant-path subtree
+equations `⌜e⌝ₜ = ⌜b⌝ₜ.subtree path`. The source translation computes or extracts values through
+these equations without changing their codes. -/
 register_simp_attr source_view
 
 end Complexity.TreeProgram.Source

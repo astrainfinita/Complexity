@@ -177,18 +177,21 @@ namespace Complexity.TreeProgram.Source
 open Internal (HasProgramInO)
 
 open Lean Meta in
-/-- The first equation of `thms` rewriting `e` at the root only, to an encoding if `encoding`,
-that `accept` takes, given the right side, the equation and whether the left side applies a
-variable. -/
+/-- The first equation of `thms` rewriting `e` at the root only, to an encoding if `encoding` (and
+to an application of `rhsHead?` if given), that `accept` takes, given the right side, the equation
+and whether the left side applies a variable. -/
 def rootEquation {α : Type} (thms : SimpTheorems) (e : Lean.Expr) (encoding : Bool)
-    (accept : Lean.Expr → Lean.Expr → Bool → MetaM (Option α)) : MetaM (Option α) := do
+    (accept : Lean.Expr → Lean.Expr → Bool → MetaM (Option α))
+    (rhsHead? : Option Name := none) : MetaM (Option α) := do
   let candidates ← thms.post.getMatch e
   for thm in candidates.qsort (·.priority > ·.priority) do
     let value ← thm.getValue
     let (args, _, type) ← forallMetaTelescopeReducing (← inferType value)
     let some (_, l, r) := type.eq? | continue
     if encoding && !r.isAppOfArity ``UniqueEncoding.encode 4 then continue
-    let arg := if encoding then l.appArg! else l
+    if let some head := rhsHead? then
+      unless r.isAppOf head do continue
+    let arg := if encoding || l.isAppOfArity ``UniqueEncoding.encode 4 then l.appArg! else l
     let applied := arg.isApp && arg.getAppFn.isMVar
     unless ← isDefEq l e do continue
     let r ← instantiateMVars r
@@ -239,10 +242,9 @@ private partial def literalPath? (e : Lean.Expr) : MetaM (Option (List Bool)) :=
   return none
 
 open Lean Meta in
-/-- The value `b` that `e` is a field of, with the fact stating the code of `e` as a subtree of the
-code of `b` and the fact's arguments at `e`: a structure's field by the structure's
-`T.encode_field`, or an entry of a table at a closed index by `encode_fin_apply`. -/
-private def fieldLink? (e : Lean.Expr) : MetaM (Option (Lean.Expr × Name × Array Lean.Expr)) := do
+/-- The structure value `b` that `e` is a field of, with the structure's `T.encode_field` fact. -/
+private def structureLink? (e : Lean.Expr) :
+    MetaM (Option (Lean.Expr × Name × Array Lean.Expr)) := do
   let field (s : Name) (i : Nat) (b : Lean.Expr) := do
     let some field := (getStructureFields (← getEnv) s)[i]? | return none
     let fact := s ++ .mkSimple s!"encode_{field}"
@@ -250,53 +252,97 @@ private def fieldLink? (e : Lean.Expr) : MetaM (Option (Lean.Expr × Name × Arr
     return some (b, fact, #[b])
   match e with
   | .proj s i b => field s i b
-  | .app t i =>
+  | .app .. =>
     if let some name := e.getAppFn.constName? then
       if let some info ← getProjectionFnInfo? name then
         if !info.fromClass && e.getAppNumArgs == info.numParams + 1 then
           return ← field (← getConstInfoCtor info.ctorName).induct info.i e.appArg!
-    let .forallE _ domain _ _ ← whnf (← inferType t) | return none
-    unless (← whnfR domain).isAppOfArity ``Fin 1 && !i.hasFVar && !i.hasMVar do return none
-    return some (t, ``encode_fin_apply, #[t, i])
+    return none
   | _ => return none
 
 open Lean Meta in
+/-- An entry of a finite table at a closed index, with `encode_fin_apply`. -/
+private def finApplyLink? (e : Lean.Expr) :
+    MetaM (Option (Lean.Expr × Name × Array Lean.Expr)) := do
+  let .app t i := e | return none
+  let .forallE _ domain _ _ ← whnf (← inferType t) | return none
+  unless (← whnfR domain).isAppOfArity ``Fin 1 && !i.hasFVar && !i.hasMVar do return none
+  return some (t, ``encode_fin_apply, #[t, i])
+
+open Lean Meta in
 /-- The path in the code of the input `x` to the code of `e`, a field of a field of `x`, with the
-equation `⌜e⌝ₜ = code.subtree path`, where `code` is the code of `x`. Each link's fact is stated
-at the code of the enclosing value as computed so far. -/
-private partial def fieldPath? (x code e : Lean.Expr) :
+equation `⌜e⌝ₜ = code.subtree path`, where `code` is the code of `x`. Each link comes from a
+structure's `T.encode_field`, a registered `source_view` subtree equation `⌜e⌝ₜ = ⌜b⌝ₜ.subtree p`
+with a literal path (at most `viewFuel` steps), or a closed-index table lookup
+`encode_fin_apply`. -/
+private partial def fieldPath? (x code e : Lean.Expr) (encoded? : Option Lean.Expr := none)
+    (visited : Array Lean.Expr := #[]) (viewFuel : Nat := 8) :
     MetaM (Option (List Bool × Lean.Expr)) := do
   let e := e.consumeMData
+  unless e.containsFVar x.fvarId! do return none
+  if visited.contains e then return none
+  let visited := visited.push e
   if e == x then
     let subtree := mkApp2 (mkConst ``Tree.subtree) code (toExpr ([] : List Bool))
     return some ([], ← mkExpectedTypeHint (← mkEqRefl code) (← mkEq code subtree))
-  let some (b, fact, values) ← fieldLink? e | return none
-  let some (path, h) ← fieldPath? x code b | return none
-  let some (_, outer, _) := (← inferType h).eq? | return none
-  let factConst ← mkConstWithFreshMVarLevels fact
-  let (args, _, type) ← forallMetaTelescopeReducing (← inferType factConst)
-  let some (_, _, rhs) := type.eq? | return none
-  let explicit := args.extract (args.size - values.size) args.size
-  unless ← (explicit.zip values).allM (fun (a, v) => isDefEq a v) <&&>
-      isDefEq rhs.appFn!.appArg! outer do
-    return none
-  for arg in args do
-    unless ← arg.mvarId!.isAssigned do
-      arg.mvarId!.assign (← synthInstance (← inferType arg))
-  let hf ← instantiateMVars (mkAppN factConst args)
-  let some (_, lhs, rhs) := (← inferType hf).eq? | return none
-  let some p ← literalPath? rhs.appArg! | return none
-  let pE := toExpr p
-  let hf ← mkExpectedTypeHint hf (← mkEq lhs (mkApp2 (mkConst ``Tree.subtree) outer pE))
-  if path.isEmpty then return some (p, hf)
-  -- `⌜e⌝ₜ = (code.subtree path).subtree p = code.subtree (path ++ p)`
-  let pathE := toExpr path
-  let along ← mkCongrArg (← withLocalDeclD `t (mkConst ``Tree) fun t =>
-    mkLambdaFVars #[t] (mkApp2 (mkConst ``Tree.subtree) t pE)) h
-  let append ← mkEqSymm (mkApp3 (mkConst ``Tree.subtree_append) code pathE pE)
-  let proof ← mkEqTrans hf (← mkEqTrans along append)
-  let subtree := mkApp2 (mkConst ``Tree.subtree) code (toExpr (path ++ p))
-  return some (path ++ p, ← mkExpectedTypeHint proof (← mkEq lhs subtree))
+  let extend (path : List Bool) (h hf outer lhs : Lean.Expr) (p : List Bool) :
+      MetaM (Option (List Bool × Lean.Expr)) := do
+    let pE := toExpr p
+    let hf ← mkExpectedTypeHint hf (← mkEq lhs (mkApp2 (mkConst ``Tree.subtree) outer pE))
+    if path.isEmpty then return some (p, hf)
+    -- `⌜e⌝ₜ = (code.subtree path).subtree p = code.subtree (path ++ p)`
+    let pathE := toExpr path
+    let along ← mkCongrArg (← withLocalDeclD `t (mkConst ``Tree) fun t =>
+      mkLambdaFVars #[t] (mkApp2 (mkConst ``Tree.subtree) t pE)) h
+    let append ← mkEqSymm (mkApp3 (mkConst ``Tree.subtree_append) code pathE pE)
+    let proof ← mkEqTrans hf (← mkEqTrans along append)
+    let subtree := mkApp2 (mkConst ``Tree.subtree) code (toExpr (path ++ p))
+    return some (path ++ p, ← mkExpectedTypeHint proof (← mkEq lhs subtree))
+  let viaLink (b : Lean.Expr) (fact : Name) (values : Array Lean.Expr) :
+      MetaM (Option (List Bool × Lean.Expr)) := do
+    let some (path, h) ← fieldPath? x code b (visited := visited) (viewFuel := viewFuel) |
+      return none
+    let some (_, outer, _) := (← inferType h).eq? | return none
+    let factConst ← mkConstWithFreshMVarLevels fact
+    let (args, _, type) ← forallMetaTelescopeReducing (← inferType factConst)
+    let some (_, _, rhs) := type.eq? | return none
+    let explicit := args.extract (args.size - values.size) args.size
+    unless ← (explicit.zip values).allM (fun (a, v) => isDefEq a v) <&&>
+        isDefEq rhs.appFn!.appArg! outer do
+      return none
+    for arg in args do
+      unless ← arg.mvarId!.isAssigned do
+        arg.mvarId!.assign (← synthInstance (← inferType arg))
+    let hf ← instantiateMVars (mkAppN factConst args)
+    let some (_, lhs, rhs) := (← inferType hf).eq? | return none
+    let some p ← literalPath? rhs.appArg! | return none
+    extend path h hf outer lhs p
+  if let some (b, fact, values) ← structureLink? e then
+    if let some res ← viaLink b fact values then return some res
+  if viewFuel > 0 then
+    if let some ext ← getSimpExtension? `source_view then
+      let encoded? ← match encoded? with
+        | some enc => pure (some enc)
+        | none => observing? (mkAppM ``encode #[mkConst ``Tree, e])
+      if let some encoded := encoded? then
+        let res ← rootEquation (← ext.getTheorems) encoded false (rhsHead? := some ``Tree.subtree)
+          fun r hf applied => do
+            if applied then return none
+            unless r.isAppOfArity ``Tree.subtree 2 do return none
+            let outer := r.appFn!.appArg!
+            unless outer.isAppOfArity ``UniqueEncoding.encode 4 do return none
+            let b := outer.appArg!
+            let some p ← literalPath? r.appArg! | return none
+            let some (path, h) ← fieldPath? x code b (encoded? := some outer) (visited := visited)
+                (viewFuel := viewFuel - 1) |
+              return none
+            let some (_, outerH, _) := (← inferType h).eq? | return none
+            unless ← isDefEq outer outerH do return none
+            extend path h hf outerH encoded p
+        if res.isSome then return res
+  if let some (b, fact, values) ← finApplyLink? e then
+    return ← viaLink b fact values
+  return none
 
 open Lean Meta in
 /-- The value of a source function at its input, which may itself be a function, as a table. -/
@@ -311,10 +357,19 @@ def fieldRule (goal : Lean.Expr) : MetaM (Option Result) := do
   let #[α, β, instα, instβ, f, _, _, _] := goal.getAppArgs | return none
   atInput f fun x body => do
     let code ← mkAppOptM ``encode #[mkConst ``Tree, α, instα, x]
-    let body := body.headBeta
+    let body := body.headBeta.consumeMData
     -- The code of a field, as a tree, has the field's code.
-    let body := if body.isAppOfArity ``UniqueEncoding.encode 4 then body.appArg! else body
-    let some (path, h) ← fieldPath? x code body | return none
+    let (body, encoded?) ←
+      if body.isAppOfArity ``UniqueEncoding.encode 4 then
+        pure (body.appArg!, some body)
+      else
+        let ty := β.beta #[x]
+        let inst := instβ.beta #[x]
+        if !ty.hasMVar && !inst.hasMVar then
+          pure (body, some (← mkAppOptM ``encode #[mkConst ``Tree, ty, inst, body]))
+        else
+          pure (body, none)
+    let some (path, h) ← fieldPath? x code body (encoded? := encoded?) | return none
     -- The input itself is not a read.
     if path.isEmpty then return none
     return some ⟨← mkAppOptM ``HasProgramInO.subtree
@@ -366,40 +421,62 @@ private def hasSelectedImplementation (name : Name) : MetaM Bool := do
 
 open Lean Meta in
 /-- An assembly of the code of `e` from the code `code` of the input `x`, with the equation
-`A.eval code = ⌜e⌝ₜ`: a field of a field of the input is read, a closed value is a constant, and a
-constructor assembles its fields by its encoding equation. A definition whose value is a
+`A.eval code = ⌜e⌝ₜ`: a field of a field of the input is read, a closed value is a constant, a
+constructor assembles its fields by its encoding equation, and a value with a registered
+`source_view` code equation `⌜e⌝ₜ = ⌜w⌝ₜ` is assembled through `w`. A definition whose value is a
 constructor is unfolded at the `root`, where its selected implementations have been tried, and
 inside only if it has none; otherwise the search computes it by them. -/
-private partial def assembly? (x code e : Lean.Expr) (root := false) :
-    MetaM (Option (Lean.Expr × Lean.Expr)) := do
-  let encoded ← mkAppM ``encode #[mkConst ``Tree, e]
+private partial def assembly? (x code e : Lean.Expr) (root := false)
+    (encoded? : Option Lean.Expr := none) (visited : Array Lean.Expr := #[])
+    (viewFuel : Nat := 8) : MetaM (Option (Lean.Expr × Lean.Expr)) := do
+  let e := e.consumeMData
+  if visited.contains e then return none
+  let visited := visited.push e
+  let encoded ← match encoded? with
+    | some enc => pure enc
+    | none => mkAppM ``encode #[mkConst ``Tree, e]
   let stated (A proof : Lean.Expr) := do
     return some (A, ← mkExpectedTypeHint proof
       (← mkEq (mkApp2 (mkConst ``Assembly.eval) code A) encoded))
   if !e.hasFVar && !e.hasMVar then
     let A := mkApp (mkConst ``Assembly.const) encoded
     return ← stated A (← mkEqRefl encoded)
-  if let some (path, h) ← fieldPath? x code e then
+  if let some (path, h) ← fieldPath? x code e (encoded? := some encoded) then
     return ← stated (mkApp (mkConst ``Assembly.read) (toExpr path)) (← mkEqSymm h)
   if e.isAppOfArity ``Prod.mk 4 then
-    let some (A₁, h₁) ← assembly? x code e.appFn!.appArg! | return none
-    let some (A₂, h₂) ← assembly? x code e.appArg! | return none
+    let some (A₁, h₁) ← assembly? x code e.appFn!.appArg! (visited := visited)
+        (viewFuel := viewFuel) | return none
+    let some (A₂, h₂) ← assembly? x code e.appArg! (visited := visited)
+        (viewFuel := viewFuel) | return none
     return ← stated (mkApp2 (mkConst ``Assembly.pair) A₁ A₂)
       (← mkCongr (← mkCongrArg (mkConst ``Tree.pair) h₁) h₂)
-  let some (proof, _) ← constructorEncoding e |
-    -- A definition whose value is a constructor application is unfolded once, as by
-    -- `constructorRule`.
-    if !root then
-      let some name := e.getAppFn.constName? | return none
-      if ← hasSelectedImplementation name then return none
-    let some value ← withTransparency .default <| unfoldDefinition? e | return none
-    let value := value.headBeta
-    unless ← isConstructorApp value do return none
-    let some (A, h) ← assembly? x code value | return none
-    stated A h
-  let some (_, _, tuple) := (← inferType proof).eq? | return none
-  let some (A, h) ← assembly? x code tuple.appArg! | return none
-  stated A (← mkEqTrans h (← mkEqSymm proof))
+  if let some (proof, _) ← constructorEncoding e then
+    let some (_, _, tuple) := (← inferType proof).eq? | return none
+    let some (A, h) ← assembly? x code tuple.appArg! (encoded? := some tuple)
+        (visited := visited) (viewFuel := viewFuel) | return none
+    return ← stated A (← mkEqTrans h (← mkEqSymm proof))
+  if !root then
+    let some name := e.getAppFn.constName? | return none
+    if ← hasSelectedImplementation name then return none
+  if viewFuel > 0 then
+    if let some ext ← getSimpExtension? `source_view then
+      let res ← rootEquation (← ext.getTheorems) encoded true fun r h applied => do
+        if applied then return none
+        let w := r.appArg!
+        let isWrapper := (w.isApp && w.appArg! == e) ||
+          match w with | .proj _ _ b => b == e | _ => false
+        if isWrapper then return none
+        let some (A, hw) ← assembly? x code w (encoded? := some r) (visited := visited)
+            (viewFuel := viewFuel - 1) | return none
+        stated A (← mkEqTrans hw (← mkEqSymm h))
+      if res.isSome then return res
+  -- A definition whose value is a constructor application is unfolded once, as by
+  -- `constructorRule`.
+  let some value ← withTransparency .default <| unfoldDefinition? e | return none
+  let value := value.headBeta
+  unless ← isConstructorApp value do return none
+  let some (A, h) ← assembly? x code value (visited := visited) (viewFuel := viewFuel) | return none
+  stated A h
 
 open Lean Meta Mathlib.Meta.FunProp in
 /-- A constructor of values at hand is built in one step by its assembly (`HasProgramInO.assemble`),
